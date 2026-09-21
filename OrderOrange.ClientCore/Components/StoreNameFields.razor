@@ -1,0 +1,129 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+@inject IDialogService Dialogs
+
+@* The business name in every tongue — Arabic always stands in the form; every
+   other language (English included) is added by choice and can be removed. *@
+
+<div class="nf">
+    @foreach (var language in Visible)
+    {
+        var lang = language;
+        <div class="d-flex align-center" style="gap: 8px;">
+            <div class="nm-row @(lang.Code == "ar" ? "req" : "")" style="flex: 1;">
+                @if (AddressIcon)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.Place" Class="nf-loc" />
+                }
+                else
+                {
+                    <img class="pf-flag" src="https://flagcdn.com/w40/@(FlagOf(lang.Code)).png" alt="" />
+                }
+                <MudTextField Value="@ValueOf(lang.Code)" T="string"
+                              ValueChanged="@(v => SetName(lang.Code, v))"
+                              Label="@(lang.NativeName + (lang.Code == "ar" && RequireArabic ? " *" : $" — {Lang["nm.optional"]}"))"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </div>
+            @if (!Lead.Contains(lang.Code))
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => RemoveLanguage(lang.Code))" />
+            }
+        </div>
+    }
+    @if (Remaining.Any())
+    {
+        <button type="button" class="nf-more" @onclick="OpenLanguageDialog">
+            <MudIcon Icon="@Icons.Material.Filled.Translate" Style="width:15px;height:15px;" />
+            @Lang["nf.addLang"]
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter] public Dictionary<string, string> Value { get; set; } = [];
+    [Parameter] public bool RequireArabic { get; set; } = true;
+    [Parameter] public bool AddressIcon { get; set; }
+    [Parameter] public EventCallback<Dictionary<string, string>> ValueChanged { get; set; }
+
+    // Only Arabic stands in the form by itself — every other tongue, English
+    // included, is added by choice from the dialog.
+    private static readonly string[] Lead = ["ar"];
+    private readonly HashSet<string> _added = [];
+    private bool _seeded;
+
+    protected override void OnParametersSet()
+    {
+        if (_seeded) return;
+        _seeded = true;
+        // Names that arrived filled (a resume, an edit) claim their rows at once.
+        foreach (var code in Value.Keys.Where(k => !Lead.Contains(k))) _added.Add(code);
+    }
+
+    private IEnumerable<LanguageService.LanguageOption> Ordered =>
+        LanguageService.SupportedLanguages
+            .OrderBy(l => l.Code switch { "ar" => 0, "en" => 1, _ => 2 });
+
+    private IEnumerable<LanguageService.LanguageOption> Visible =>
+        Ordered.Where(l => Lead.Contains(l.Code) || _added.Contains(l.Code));
+
+    private IEnumerable<LanguageService.LanguageOption> Remaining =>
+        Ordered.Where(l => !Lead.Contains(l.Code) && !_added.Contains(l.Code));
+
+    private string ValueOf(string code) => Value.GetValueOrDefault(code, "");
+
+    private async Task OpenLanguageDialog()
+    {
+        var parameters = new DialogParameters<LanguagePickDialog>
+        {
+            { d => d.Options, Remaining.ToList() },
+            { d => d.Value, Value },
+            { d => d.AddressIcon, AddressIcon },
+        };
+        var dialog = await Dialogs.ShowAsync<LanguagePickDialog>(null, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result?.Canceled == false && result.Data is Dictionary<string, string> filled)
+        {
+            // Only what was actually TYPED comes back — each filled tongue takes
+            // its own inline row in the form, value and all.
+            var next = new Dictionary<string, string>(Value);
+            foreach (var pair in filled)
+            {
+                next[pair.Key] = pair.Value;
+                _added.Add(pair.Key);
+            }
+            Value = next;
+            await ValueChanged.InvokeAsync(next);
+        }
+    }
+
+    private async Task RemoveLanguage(string code)
+    {
+        _added.Remove(code);
+        if (Value.ContainsKey(code))
+        {
+            var next = new Dictionary<string, string>(Value);
+            next.Remove(code);
+            Value = next;
+            await ValueChanged.InvokeAsync(next);
+        }
+    }
+
+    private async Task SetName(string code, string? name)
+    {
+        var next = new Dictionary<string, string>(Value);
+        if (string.IsNullOrWhiteSpace(name)) next.Remove(code);
+        else next[code] = name.Trim();
+        Value = next;
+        await ValueChanged.InvokeAsync(next);
+    }
+
+    /// <summary>Each tongue borrows its best-known flag for the row icon.</summary>
+    private static string FlagOf(string code) => code switch
+    {
+        "en" => "gb", "ar" => "om", "fa" => "ir", "ur" => "pk", "hi" => "in",
+        "tr" => "tr", "fr" => "fr", "es" => "es", "de" => "de", "ru" => "ru",
+        "it" => "it", "pt" => "pt", "zh" => "cn", "ja" => "jp", _ => "un",
+    };
+}

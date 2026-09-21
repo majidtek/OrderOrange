@@ -1,0 +1,19 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+
+<div class="d-flex flex-column align-center justify-center pa-10" style="gap: 8px;">
+    <div style="font-size: 44px;">@Emoji</div>
+    <MudText Typo="Typo.subtitle1">@(string.IsNullOrEmpty(Title) ? Lang["common.nothingHere"] : Title)</MudText>
+    @if (Subtitle is not null)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">@Subtitle</MudText>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public string Emoji { get; set; } = "🍽️";
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -1,0 +1,160 @@
+﻿@page "/materials/capacity"
+@using OrderOrange.RestaurantWeb.Services
+@inject ApiClient Api
+@inject LanguageService L
+
+@* With today's shelf, how many of each dish can the kitchen actually make?
+   Recipe × stock, floor of the weakest ingredient — and NAME that bottleneck,
+   because "47 portions" matters less than "saffron is what stops you at 47". *@
+
+<PageTitle>Partner — Capacity</PageTitle>
+
+<PageHeader Title="@L["cap.title"]" Subtitle="@L["cap.sub"]" />
+
+@if (_menu is null || _recipes is null || _materials is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="cp2-top">
+        <div class="pu-sum">
+            <span class="ic">🍽️</span>
+            <div><b>@Rows.Count(r => r.Possible > 0)</b><small>@L["cap.ready"]</small></div>
+        </div>
+        <div class="pu-sum @(Rows.Any(r => r.Possible == 0) ? "late" : "")">
+            <span class="ic">🚫</span>
+            <div><b>@Rows.Count(r => r.Possible == 0)</b><small>@L["cap.blocked"]</small></div>
+        </div>
+        <div class="pu-sum warn">
+            <span class="ic">⚠️</span>
+            <div><b>@Rows.Count(r => r.Possible is > 0 and < 10)</b><small>@L["cap.low"]</small></div>
+        </div>
+    </div>
+
+    <div class="cn-chips">
+        <button type="button" class="@(_filter == "all" ? "on" : "")" @onclick="@(() => _filter = "all")">@L["rv.all"]</button>
+        <button type="button" class="@(_filter == "blocked" ? "on" : "")" @onclick="@(() => _filter = "blocked")">🚫 @L["cap.blocked"]</button>
+        <button type="button" class="@(_filter == "low" ? "on" : "")" @onclick="@(() => _filter = "low")">⚠️ @L["cap.low"]</button>
+    </div>
+
+    @if (Visible.Count == 0)
+    {
+        <EmptyState Emoji="🧑‍🍳" Title="@L["cap.none"]" Subtitle="@L["cap.noneSub"]" />
+    }
+    else
+    {
+        <div class="cp2-grid">
+            @foreach (var row in Visible)
+            {
+                var open = _openId == row.Item.Id;
+                <article class="cp2-card @(row.Possible == 0 ? "out" : row.Possible < 10 ? "low" : "ok")">
+                    <button type="button" class="hd" @onclick="@(() => _openId = open ? 0 : row.Item.Id)">
+                        @if (FoodPhoto.ForDish(row.Item.Name) is string photo)
+                        {
+                            <img class="ph" src="@photo" alt="@row.Item.Name" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="ph em">🍽️</span>
+                        }
+                        <div class="tx">
+                            <b>@row.Item.NameFor(L.Locale)</b>
+                            <small class="mf-ltr">@Fmt.Rial(row.Item.FinalPrice)</small>
+                        </div>
+                        <div class="big">
+                            <b class="mf-ltr">@(row.Possible == 0 ? "0" : $"×{row.Possible}")</b>
+                            <small>@L["cap.portions"]</small>
+                        </div>
+                    </button>
+
+                    @if (row.Bottleneck is { } bottleneck)
+                    {
+                        <div class="bn">
+                            <span class="tag @(row.Possible == 0 ? "bad" : "")">
+                                @(row.Possible == 0 ? "🚫" : "🧨") @L["cap.limitedBy"] <b>@bottleneck.Material.Name</b>
+                            </span>
+                            <small class="mf-ltr">
+                                +1 @L[$"mat.unit.{bottleneck.Material.Unit}"] → +@bottleneck.PerUnit @L["cap.portions"]
+                            </small>
+                        </div>
+                    }
+
+                    @if (open)
+                    {
+                        <div class="det">
+                            @foreach (var line in row.Lines)
+                            {
+                                <div class="ln @(line == row.Bottleneck ? "min" : "")">
+                                    <span class="nm">@line.Material.Name</span>
+                                    <span class="need mf-ltr">@line.Amount.ToString("0.##") @L[$"mat.unit.{line.Material.Unit}"]/@L["cap.p1"]</span>
+                                    <span class="have mf-ltr">📦 @line.Material.Quantity.ToString("0.##")</span>
+                                    <span class="can mf-ltr">→ ×@line.CanMake</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </article>
+            }
+        </div>
+    }
+}
+
+@code {
+    private List<MenuCategoryDto>? _menu;
+    private AllRecipesDto? _recipes;
+    private StoreMaterialsDto? _materials;
+
+    private string _filter = "all";
+    private int _openId;
+
+    private sealed record CapLine(StoreMaterialDto Material, decimal Amount, int CanMake)
+    {
+        /// <summary>Portions one more UNIT of this material unlocks — the buy hint.</summary>
+        public decimal PerUnit => Amount <= 0 ? 0 : Math.Round(1m / Amount, 1);
+    }
+    private sealed record CapRow(MenuItemDto Item, int Possible, List<CapLine> Lines, CapLine? Bottleneck);
+
+    /// <summary>Each dish alone against the full shelf — the honest per-dish ceiling.</summary>
+    private List<CapRow> Rows
+    {
+        get
+        {
+            var rows = new List<CapRow>();
+            foreach (var item in (_menu ?? []).SelectMany(c => c.Items))
+            {
+                if (!_recipes!.ByMenuItem.TryGetValue(item.Id, out var recipe) || recipe.Lines.Count == 0)
+                    continue;
+
+                var lines = new List<CapLine>();
+                foreach (var line in recipe.Lines)
+                {
+                    var material = _materials!.Items.FirstOrDefault(m => m.Id == line.MaterialId);
+                    if (material is null || line.Amount <= 0) continue;
+                    lines.Add(new CapLine(material, line.Amount, (int)Math.Floor(material.Quantity / line.Amount)));
+                }
+                if (lines.Count == 0) continue;
+
+                var bottleneck = lines.MinBy(l => l.CanMake);
+                rows.Add(new CapRow(item, bottleneck!.CanMake, lines.OrderBy(l => l.CanMake).ToList(),
+                    bottleneck with { CanMake = bottleneck.CanMake }));
+            }
+            // Problems first: the blocked dish is tonight's phone call, not a footnote.
+            return rows.OrderBy(r => r.Possible).ToList();
+        }
+    }
+
+    private List<CapRow> Visible => Rows.Where(r => _filter switch
+    {
+        "blocked" => r.Possible == 0,
+        "low" => r.Possible is > 0 and < 10,
+        _ => true,
+    }).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _menu = await Api.GetMyMenuBasicAsync() ?? [];
+        _recipes = await Api.GetRecipesAsync() ?? new AllRecipesDto([]);
+        _materials = await Api.GetMaterialsAsync();
+    }
+}

@@ -1,0 +1,1593 @@
+﻿@using OrderOrange.RestaurantWeb.Services
+@inject ApiClient Api
+@inject OrderOrange.RestaurantWeb.Services.ReceiptPrinter Printer
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@* The partner's order assistant: the owner types "2 pizza table 2" (in any of the
+   app's languages, any digit script) and the bot rings it onto that table's real
+   invoice — the same OpenTab/AddTabLines calls the POS itself makes. *@
+
+@* There is no floating button any more. The assistant is opened from the spark in the
+   app bar, which is always in the same place, never lands on top of the sidebar, and
+   cannot drift off the edge of the screen the way a corner-anchored FAB did. *@
+
+@if (_open)
+{
+    <div class="pb-veil" @onclick="@(() => _open = false)"></div>
+    <div class="pb-panel">
+        <div class="pb-head">
+            <span class="pb-ava">🤖</span>
+            <div class="pb-head-tx">
+                <b>@L["pbot.name"]</b>
+                <small>@L["pbot.sub"]</small>
+            </div>
+            <button type="button" class="pb-x" @onclick="@(() => _open = false)">✕</button>
+        </div>
+
+        <div class="pb-body" id="pb-scroll">
+            @foreach (var m in _messages)
+            {
+                <div class="pb-msg @(m.FromBot ? "bot" : "me")">
+                    @if (m.FromBot)
+                    {
+                        <span class="pb-mini">🤖</span>
+                    }
+                    <div class="pb-stack">
+                    @if (m.Text is not null)
+                    {
+                        <div class="pb-bubble">@m.Text</div>
+                    }
+                    @if (m.Card is { } card)
+                    {
+                        <div class="pb-card">
+                            <div class="pb-card-title">🧾 @L["pbot.confirmTitle"]</div>
+                            @foreach (var line in card.Lines)
+                            {
+                                <div class="pb-line">
+                                    <span class="q">@line.Qty</span>
+                                    <span class="n">@line.Name</span>
+                                    <b class="p mf-ltr">@Fmt.Rial(line.Total)</b>
+                                </div>
+                            }
+                            <div class="pb-card-foot">
+                                <span class="pb-tbl">🍽️ @L["pbot.table"] @card.TableName</span>
+                                <b class="mf-ltr">@Fmt.Rial(card.Total)</b>
+                            </div>
+                        </div>
+                    }
+                    @if (m.Rows.Count > 0)
+                    {
+                        <div class="pb-rows">
+                            @foreach (var row in m.Rows)
+                            {
+                                <div class="pb-row">
+                                    <span class="tbl">@row.Pill</span>
+                                    <div class="mid">
+                                        <b>@row.Title</b>
+                                        <small>@row.Meta</small>
+                                    </div>
+                                    <span class="badge mf-ltr">@row.Badge</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (m.Chips.Count > 0)
+                    {
+                        <div class="pb-chips">
+                            @foreach (var chip in m.Chips)
+                            {
+                                var c = chip;
+                                <button type="button" class="pb-chip @(c.Payload == "confirm" ? "main" : "")"
+                                        @onclick="@(() => OnChipAsync(c.Payload, c.Label))">@c.Label</button>
+                            }
+                        </div>
+                    }
+                    </div>
+                </div>
+            }
+            @if (_busy)
+            {
+                <div class="pb-msg bot"><div class="pb-bubble pb-typing"><i></i><i></i><i></i></div></div>
+            }
+        </div>
+
+        <div class="pb-input">
+            <input type="text" placeholder="@L["pbot.placeholder"]" @bind="_input" @bind:event="oninput"
+                   @onkeydown="OnKeyAsync" />
+            <button type="button" class="pb-send" disabled="@(_busy || string.IsNullOrWhiteSpace(_input))"
+                    @onclick="SendAsync">➤</button>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed record Chip(string Label, string Payload);
+    private sealed record CardLine(int Qty, string Name, decimal Total);
+    private sealed record Card(List<CardLine> Lines, string TableName, decimal Total);
+
+    /// <summary>One structured row in a list answer (a reservation, a menu section…).</summary>
+    private sealed record Row(string Pill, string Title, string Meta, string Badge);
+
+    private sealed class Msg
+    {
+        public bool FromBot;
+        public string? Text;
+        public List<Chip> Chips = [];
+        public Card? Card;
+        public List<Row> Rows = [];
+    }
+
+    private readonly List<Msg> _messages = [];
+    private bool _open;
+    private bool _busy;
+    private string _input = "";
+
+    private List<MenuCategoryDto>? _menu;
+    private List<StoreTableDto> _tables = [];
+
+    // the order being assembled
+    private readonly List<(MenuItemDto Item, int Qty)> _draft = [];
+    private StoreTableDto? _draftTable;
+
+    /// <summary>
+    /// The language the OWNER is typing in, which is not always the language the portal
+    /// is set to. A shop may run its interface in Farsi while the evening manager types
+    /// Arabic; answering that person in Farsi is the assistant ignoring them.
+    ///
+    /// It is sticky on purpose. Once someone has written a full sentence in Arabic, their
+    /// next message might be a bare "5" or a dish name with no language signal at all —
+    /// the conversation should stay in Arabic rather than snapping back mid-exchange.
+    /// </summary>
+    private string? _replyLocale;
+
+    /// <summary>Bot copy, in the language of the conversation rather than of the chrome.</summary>
+    private string TT(string key) => LanguageService.Translate(_replyLocale ?? L.Locale, key);
+
+    // ── what was just asked, so "and yesterday?" and "show me more" mean something ──
+
+    private PosBotNlu.Ask? _lastAsk;
+    private string? _lastSubject;
+    private string? _lastRaw;
+
+    /// <summary>Set when the last answer was one of the order parser's period questions
+    /// (revenue, best sellers) rather than one of the business questions.</summary>
+    private PosBotNlu.Intent? _lastPeriodIntent;
+
+    /// <summary>During a follow-up, the sentence the PERIOD should be read from — the new
+    /// message — while the question itself comes from the old one.</summary>
+    private string? _periodOverride;
+
+    /// <summary>Opened from the app bar as well as from its own floating button, so the
+    /// assistant is one click away on every page rather than only the dashboard.
+    ///
+    /// The explicit re-render matters: when the FAB is pressed Blazor re-renders this
+    /// component as part of dispatching the event, but a call arriving from the layout
+    /// mutates state behind the renderer's back and would leave the panel closed.</summary>
+    public async Task OpenAsync()
+    {
+        await OpenBot();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OpenBot()
+    {
+        _open = true;
+        if (_menu is null)
+        {
+            _menu = await Api.GetMyMenuBasicAsync() ?? [];
+            _tables = await Api.GetTablesAsync() ?? [];
+        }
+        if (_messages.Count == 0)
+        {
+            var hello = new Msg { FromBot = true, Text = TT("pbot.hi") };
+            // Example chips built from the store's own menu — tappable, real.
+            var sample = _menu.SelectMany(c => c.Items).FirstOrDefault();
+            var table = _tables.FirstOrDefault(t => !t.IsOccupied) ?? _tables.FirstOrDefault();
+            if (sample is not null && table is not null)
+                hello.Chips.Add(new Chip($"2 {sample.NameFor(L.Locale)} — {TT("pbot.table")} {table.Name}",
+                    $"ex:2 {sample.NameFor(L.Locale)} {TT("pbot.table")} {table.Name}"));
+            var second = _menu.SelectMany(c => c.Items).Skip(6).FirstOrDefault();
+            if (second is not null)
+                hello.Chips.Add(new Chip($"1 {second.NameFor(L.Locale)}", $"ex:1 {second.NameFor(L.Locale)}"));
+            _messages.Add(hello);
+        }
+    }
+
+    private void Bot(string text, params Chip[] chips) =>
+        _messages.Add(new Msg { FromBot = true, Text = text, Chips = [.. chips] });
+
+    /// <summary>New message → the conversation keeps its newest line in view.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try { await JS.InvokeVoidAsync("mfPos.scrollBottom", "#pb-scroll"); } catch { }
+        if (_open)
+        {
+            // The phone keyboard hides the bottom of the screen — lift the panel above it.
+            try { await JS.InvokeVoidAsync("mfPos.keyboardAware", ".pb-panel"); } catch { }
+            try { await JS.InvokeVoidAsync("mfPos.draggable", ".pb-panel", ".pb-head", "oo-pbot-pos"); } catch { }
+        }
+    }
+
+    private async Task OnChipAsync(string payload, string label)
+    {
+        var parts = payload.Split(':', 2);
+        switch (parts[0])
+        {
+            case "ex": _input = parts[1]; await SendAsync(); break;
+            case "tbl":
+                _draftTable = _tables.FirstOrDefault(t => t.Id == int.Parse(parts[1]));
+                _messages.Add(new Msg { FromBot = false, Text = label });
+                ShowDraft();
+                break;
+            case "add":
+            {
+                var item = _menu!.SelectMany(c => c.Items).FirstOrDefault(i => i.Id == int.Parse(parts[1]));
+                if (item is not null)
+                {
+                    _messages.Add(new Msg { FromBot = false, Text = item.NameFor(L.Locale) });
+                    _draft.Add((item, _pendingQty ?? 1));
+                    _pendingQty = null;
+                    ShowDraft();
+                }
+                break;
+            }
+            case "confirm": await PlaceAsync(); break;
+            case "cancel":
+                _draft.Clear(); _draftTable = null;
+                Bot(TT("pbot.cancelled"));
+                break;
+            case "opentbl":
+            {
+                _messages.Add(new Msg { FromBot = false, Text = label });
+                var table = _tables.FirstOrDefault(t => t.Id == int.Parse(parts[1]));
+                if (table is not null) await OpenTableAsync(table);
+                break;
+            }
+            case "billtbl":
+            {
+                _messages.Add(new Msg { FromBot = false, Text = label });
+                await ShowTableBillAsync(int.Parse(parts[1]));
+                break;
+            }
+            case "closetbl":
+            {
+                _messages.Add(new Msg { FromBot = false, Text = label });
+                var bits = parts[1].Split(':');
+                PosBotNlu.PayKind? pay = bits.Length > 1
+                    ? bits[1] == "card" ? PosBotNlu.PayKind.Card : PosBotNlu.PayKind.Cash
+                    : null;
+                await CloseTableAsync(int.Parse(bits[0]), pay);
+                break;
+            }
+            case "booktbl":
+            {
+                _messages.Add(new Msg { FromBot = false, Text = label });
+                var table = _tables.FirstOrDefault(t => t.Id == int.Parse(parts[1]));
+                if (table is not null && _booking is { } b)
+                {
+                    _booking = (table.Id, table.Name, b.At, b.Guests);
+                    ContinueBooking();
+                }
+                break;
+            }
+            case "booktime":
+            {
+                _messages.Add(new Msg { FromBot = false, Text = label });
+                if (_booking is { } b)
+                {
+                    var at = DateTime.Today.AddHours(int.Parse(parts[1]));
+                    if (at <= DateTime.Now) at = at.AddDays(1);
+                    _booking = (b.TableId, b.TableName, at, b.Guests);
+                    ContinueBooking();
+                }
+                break;
+            }
+            case "bookgo":
+                _messages.Add(new Msg { FromBot = false, Text = label });
+                await ConfirmBookingAsync();
+                break;
+            case "bookno":
+                _booking = null;
+                Bot(TT("pbot.cancelled"));
+                break;
+            case "nav": Nav.NavigateTo(parts[1]); break;
+            // Flipping the open sign from the chip the status answer offered.
+            case "shop": await ShopToggleAsync(parts[1] == "open"); break;
+        }
+    }
+
+    /// <summary>Enter sends. Awaited properly — a discarded task never re-renders.</summary>
+    private async Task OnKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SendAsync();
+    }
+
+    private async Task SendAsync()
+    {
+        var text = _input.Trim();
+        if (text.Length == 0 || _busy) return;
+        _input = "";
+        var mark = _messages.Count;          // everything added past here is the answer
+        _messages.Add(new Msg { FromBot = false, Text = text });
+        _busy = true;
+        StateHasChanged();
+        try { await UnderstandAsync(text); }
+        catch { Bot(L["common.wentWrong"]); }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+            LogTurn(text, mark);
+        }
+    }
+
+    /// <summary>One id per sitting, so the report shows conversations rather than loose lines.</summary>
+    private readonly string _session = Guid.NewGuid().ToString("N");
+
+    /// <summary>
+    /// Files the exchange for the assistant report. Fire-and-forget: the till must never
+    /// wait on bookkeeping, and a failed log must never look like a broken assistant.
+    /// </summary>
+    private void LogTurn(string text, int mark)
+    {
+        var reply = string.Join(" ", _messages.Skip(mark + 1)
+            .Where(m => m.FromBot && !string.IsNullOrWhiteSpace(m.Text))
+            .Select(m => m.Text));
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Api.LogBotChatAsync(new BotChatLogRequest(
+                    _session, "pos", text, reply, "/pos", L.Locale));
+            }
+            catch { }
+        });
+    }
+
+    // ────────────────────────── understanding ──────────────────────────
+
+    private int? _pendingQty;
+
+    /// <summary>"کل میزها" asked for everything — list answers stop truncating.</summary>
+    private bool _showAll;
+
+    private async Task UnderstandAsync(string raw)
+    {
+        await Task.Delay(250);   // a beat of "thinking" reads better than instant
+
+        // Answer in the language they wrote in. Null means the message carried no signal
+        // (a bare number, an emoji), and the conversation keeps whatever it was already in.
+        if (PosBotNlu.DetectLocale(raw, L.Locale) is { } spoken) _replyLocale = spoken;
+
+        // "switch to Arabic" — before every other reading, because a language name is a
+        // short word that a fuzzy dish matcher would happily mistake for food.
+        if (LanguagePick.Resolve(raw) is { } wanted) { await SwitchLanguageAsync(wanted); return; }
+
+        // Arithmetic and the clock come before everything else, and both are strict about
+        // claiming a sentence: a sum must be arithmetic from end to end, and a clock
+        // question needs an actual date or time noun. Neither can swallow an order.
+        if (PosBotNlu.TryCalculate(raw) is { Ok: true } sum) { ShowSum(sum); return; }
+        if (PosBotNlu.DetectClock(raw) is var clock && clock != PosBotNlu.Clock.None)
+        {
+            ShowClock(clock);
+            return;
+        }
+
+        _showAll = PosBotNlu.WantsAll(raw);
+
+        // A word aimed at a pending booking is an answer, not a new request.
+        if (_booking is not null)
+        {
+            if (PosBotNlu.IsConfirm(raw)) { await ConfirmBookingAsync(); return; }
+            if (PosBotNlu.IsCancel(raw)) { _booking = null; Bot(TT("pbot.cancelled")); return; }
+        }
+
+        // A word aimed at the pending card is an answer, not a new order.
+        if (_draft.Count > 0)
+        {
+            if (PosBotNlu.IsConfirm(raw)) { await PlaceAsync(); return; }
+            if (PosBotNlu.IsCancel(raw))
+            {
+                _draft.Clear();
+                _draftTable = null;
+                Bot(TT("pbot.cancelled"));
+                return;
+            }
+            // "نوشابه رو حذف کن" — surgery on the pending order, not a new one.
+            if (PosBotNlu.WantsRemove(raw)) { RemoveFromDraft(raw); return; }
+        }
+
+        // Beyond ordering: the assistant runs the floor and answers its questions.
+        // Questions about the BUSINESS — stock, staff, salaries, money owed, reputation,
+        // traffic, the open sign. This pass declines everything the order parser owns, so
+        // it is safe to run first and cheap when it finds nothing.
+        var asked = PosBotNlu.DetectAsk(raw);
+        if (asked.Kind != PosBotNlu.Ask.None)
+        {
+            // Remember it, so the next "and yesterday?" has something to repeat. The two
+            // follow-up kinds are excluded on purpose — they are not questions of their
+            // own, and remembering one would make the memory point at itself.
+            if (asked.Kind is not (PosBotNlu.Ask.SamePeriodAgain or PosBotNlu.Ask.MoreOfTheSame))
+            {
+                _lastAsk = asked.Kind;
+                _lastSubject = asked.Subject;
+                _lastRaw = raw;
+                _lastPeriodIntent = null;
+            }
+            await AnswerAsync(asked, raw);
+            return;
+        }
+
+        switch (PosBotNlu.DetectIntent(raw))
+        {
+            case PosBotNlu.Intent.OpenTable: await OpenTableFlowAsync(raw); return;
+            case PosBotNlu.Intent.CloseTable: await CloseTableFlowAsync(raw); return;
+            case PosBotNlu.Intent.Tables: TablesFlow(); return;
+            case PosBotNlu.Intent.Reserved: await ReservedFlowAsync(); return;
+            case PosBotNlu.Intent.FreeTables: FreeTablesFlow(); return;
+            case PosBotNlu.Intent.BusyTables: BusyTablesFlow(); return;
+            case PosBotNlu.Intent.Revenue: _lastAsk = null; _lastPeriodIntent = PosBotNlu.Intent.Revenue; await RevenueFlowAsync(raw); return;
+            case PosBotNlu.Intent.LiveOrders: await LiveOrdersFlowAsync(); return;
+            case PosBotNlu.Intent.TableBill: await TableBillFlowAsync(raw); return;
+            case PosBotNlu.Intent.Help: HelpFlow(); return;
+            case PosBotNlu.Intent.Greeting: Bot(TT("pbot.hi")); HelpFlow(); return;
+            case PosBotNlu.Intent.Thanks: Bot(TT("pbot.yw")); return;
+            case PosBotNlu.Intent.Menu: MenuFlow(); return;
+            case PosBotNlu.Intent.MakeReservation: BookingFlow(raw); return;
+            case PosBotNlu.Intent.TopItems: _lastAsk = null; _lastPeriodIntent = PosBotNlu.Intent.TopItems; await TopItemsFlowAsync(); return;
+        }
+
+        var command = PosBotNlu.Parse(raw);
+        if (command.Table is not null)
+        {
+            _draftTable = ResolveTable(command.Table);
+            if (_draftTable is null)
+            {
+                Bot(string.Format(TT("pbot.noSuchTable"), command.Table), FreeTableChips());
+                return;
+            }
+        }
+
+        if (command.Items.Count == 0 && _draftTable is not null) { ShowDraft(); return; }
+        if (command.Items.Count == 0) { Bot(TT("pbot.hi")); return; }
+
+        // "قهوه داریم؟" asks about AVAILABILITY — answer with the item, don't order it.
+        if (PosBotNlu.LooksLikeQuestion(raw) && command.Table is null && command.Items.Count == 1)
+        {
+            var (hit, _) = MatchItem(command.Items[0].Query);
+            if (hit is not null)
+            {
+                Bot(string.Format(TT("pbot.haveIt"), hit.NameFor(L.Locale), Fmt.Money(hit.FinalPrice)),
+                    new Chip($"➕ {hit.NameFor(L.Locale)}", $"add:{hit.Id}"),
+                    new Chip($"📋 {L["nav.products"]}", "nav:/products"));
+                return;
+            }
+        }
+
+        // "یه نوشابه هم اضافه کن" grows the pending order; anything else replaces it.
+        if (!(_draft.Count > 0 && PosBotNlu.WantsAppend(raw)))
+            _draft.Clear();
+        foreach (var want in command.Items)
+        {
+            var (best, close) = MatchItem(want.Query);
+            if (best is not null)
+            {
+                _draft.Add((best, want.Qty));
+            }
+            else if (close.Count > 0 && !PosBotNlu.LooksLikeQuestion(raw))
+            {
+                // "Did you mean…" only makes sense for something that WAS an order.
+                _pendingQty = want.Qty;
+                Bot(string.Format(TT("pbot.didYouMean"), want.Query),
+                    close.Take(3).Select(i => new Chip(i.NameFor(L.Locale), $"add:{i.Id}")).ToArray());
+                return;
+            }
+            else
+            {
+                // A question that reached the menu matcher was never an order —
+                // answer with what the assistant CAN do instead of "not on the menu".
+                if (PosBotNlu.LooksLikeQuestion(raw)) { HelpFlow(); return; }
+                Bot(string.Format(TT("pbot.notFound"), want.Query));
+                return;
+            }
+        }
+        ShowDraft();
+    }
+
+    private void ShowDraft()
+    {
+        if (_draft.Count == 0) { Bot(TT("pbot.hi")); return; }
+        if (_draftTable is null)
+        {
+            Bot(TT("pbot.whichTable"), FreeTableChips());
+            return;
+        }
+
+        var lines = _draft.Select(d => new CardLine(d.Qty, d.Item.NameFor(L.Locale), d.Item.FinalPrice * d.Qty)).ToList();
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Card = new Card(lines, _draftTable.Name, lines.Sum(l => l.Total)),
+            Chips =
+            [
+                new Chip($"✅ {TT("pbot.confirm")}", "confirm"),
+                new Chip($"✕ {L["common.cancel"]}", "cancel"),
+            ],
+        });
+    }
+
+    private Chip[] FreeTableChips() =>
+        _tables.Where(t => !t.IsOccupied).Take(6)
+            .Concat(_tables.Where(t => t.IsOccupied).Take(2))
+            .Take(6)
+            .Select(t => new Chip($"🍽️ {t.Name}", $"tbl:{t.Id}"))
+            .ToArray();
+
+    private async Task PlaceAsync()
+    {
+        if (_draft.Count == 0 || _draftTable is null) return;
+        _busy = true;
+        StateHasChanged();
+        try
+        {
+            // Exactly the till's own path: the table's running invoice, or a fresh walk-in.
+            var tab = await Api.GetTabForTableAsync(_draftTable.Id);
+            if (tab is null)
+            {
+                var (opened, error) = await Api.OpenTabAsync(new OpenTabRequest(_draftTable.Id, null, L["pos.walkin"]));
+                if (opened is null) { Bot(error ?? L["common.saveFail"]); return; }
+                tab = opened;
+            }
+            var items = _draft.Select(d => new PlaceOrderItem(d.Item.Id, d.Qty, null)).ToList();
+            var (updated, addError) = await Api.AddTabLinesAsync(tab.Id, new AddTabLinesRequest(items));
+            if (updated is null) { Bot(addError ?? L["common.saveFail"]); return; }
+
+            var tableName = _draftTable.Name;
+            var posUrl = $"/pos/{_draftTable.Id}";
+            _draft.Clear();
+            _draftTable = null;
+            _tables = await Api.GetTablesAsync() ?? _tables;
+
+            Bot(string.Format(TT("pbot.done"), tableName, updated.Id),
+                new Chip($"🧾 {TT("pbot.openPos")}", $"nav:{posUrl}"),
+                new Chip($"➕ {TT("pbot.another")}", "cancel"));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ───────────────────── open / close / floor status ─────────────────────
+
+    private async Task OpenTableFlowAsync(string raw)
+    {
+        var (token, _) = PosBotNlu.ExtractTable(raw);
+        var table = token is null ? null : ResolveTable(token);
+        if (table is null)
+        {
+            Bot(TT("pbot.whichOpen"), _tables.Where(t => !t.IsOccupied).Take(6)
+                .Select(t => new Chip($"🍽️ {t.Name}", $"opentbl:{t.Id}")).ToArray());
+            return;
+        }
+        await OpenTableAsync(table);
+    }
+
+    private async Task OpenTableAsync(StoreTableDto table)
+    {
+        var existing = await Api.GetTabForTableAsync(table.Id);
+        if (existing is not null)
+        {
+            Bot(string.Format(TT("pbot.alreadyOpen"), table.Name, existing.Id),
+                new Chip($"🧾 {TT("pbot.openPos")}", $"nav:/pos/{table.Id}"),
+                new Chip($"💵 {TT("pbot.closeIt")}", $"closetbl:{table.Id}"));
+            return;
+        }
+        var (opened, error) = await Api.OpenTabAsync(new OpenTabRequest(table.Id, null, L["pos.walkin"]));
+        if (opened is null) { Bot(error ?? L["common.saveFail"]); return; }
+        _tables = await Api.GetTablesAsync() ?? _tables;
+        Bot(string.Format(TT("pbot.opened"), table.Name, opened.Id),
+            new Chip($"🧾 {TT("pbot.openPos")}", $"nav:/pos/{table.Id}"),
+            new Chip($"➕ {TT("pbot.another")}", "cancel"));
+    }
+
+    private async Task CloseTableFlowAsync(string raw)
+    {
+        var (token, _) = PosBotNlu.ExtractTable(raw);
+        var pay = PosBotNlu.DetectPay(raw);
+        var table = token is null ? null : ResolveTable(token);
+        if (table is null)
+        {
+            var busy = _tables.Where(t => t.IsOccupied).Take(6).ToArray();
+            if (busy.Length == 0) { Bot(TT("pbot.nothingOpen")); return; }
+            Bot(TT("pbot.whichClose"), busy
+                .Select(t => new Chip($"🍽️ {t.Name}", $"closetbl:{t.Id}{(pay is null ? "" : pay == PosBotNlu.PayKind.Cash ? ":cash" : ":card")}"))
+                .ToArray());
+            return;
+        }
+        await CloseTableAsync(table.Id, pay);
+    }
+
+    private async Task CloseTableAsync(int tableId, PosBotNlu.PayKind? pay)
+    {
+        var table = _tables.FirstOrDefault(t => t.Id == tableId);
+        if (table is null) return;
+        var tab = await Api.GetTabForTableAsync(tableId);
+        if (tab is null)
+        {
+            Bot(string.Format(TT("pbot.notOpen"), table.Name));
+            return;
+        }
+        if (pay is null)
+        {
+            // The money question deserves an explicit answer, not a default.
+            Bot(string.Format(TT("pbot.howPay"), table.Name),
+                new Chip($"💵 {TT("pbot.cash")}", $"closetbl:{tableId}:cash"),
+                new Chip($"💳 {TT("pbot.card")}", $"closetbl:{tableId}:card"));
+            return;
+        }
+
+        var method = pay == PosBotNlu.PayKind.Card ? PaymentMethod.CardOnDelivery : PaymentMethod.CashOnDelivery;
+        var (order, error) = await Api.CloseTabAsync(tab.Id, new CloseTabRequest(method, MarkPaid: true));
+        if (order is null) { Bot(error ?? L["common.saveFail"]); return; }
+        await Printer.PrintAsync(order);
+        _tables = await Api.GetTablesAsync() ?? _tables;
+        Bot(string.Format(TT("pbot.closed"), table.Name, order.Number, Fmt.Money(order.Total)),
+            new Chip($"➕ {TT("pbot.another")}", "cancel"));
+    }
+
+    /// <summary>The floor at a glance: counts plus the busy tables as tappable chips.</summary>
+    private void TablesFlow()
+    {
+        var free = _tables.Count(t => !t.IsOccupied);
+        var busy = _tables.Count(t => t.IsOccupied);
+        Bot(string.Format(TT("pbot.floor"), free, busy),
+            _tables.Where(t => t.IsOccupied).Take(6)
+                .Select(t => new Chip($"💵 {t.Name}", $"closetbl:{t.Id}"))
+                .ToArray());
+    }
+
+    // ───────────────────── floor questions, answered like a manager ─────────────────────
+
+    /// <summary>"Which tables are reserved?" — today's bookings, from the real book.</summary>
+    private async Task ReservedFlowAsync()
+    {
+        var reservations = (await Api.GetReservationsAsync() ?? [])
+            .Where(r => r.Status is not ("cancelled" or "rejected"))
+            .OrderBy(r => r.At)
+            .Take(6)
+            .ToList();
+        if (reservations.Count == 0)
+        {
+            // An empty book isn't a dead end — the busy tables are the next-best answer.
+            var busyNow = _tables.Where(t => t.IsOccupied).Take(6).ToArray();
+            Bot(TT("pbot.noReservations") + (busyNow.Length > 0 ? "\n" + string.Format(TT("pbot.busyTitle"), busyNow.Length) : ""),
+                busyNow.Select(t => new Chip($"💵 {t.Name}", $"closetbl:{t.Id}"))
+                    .Append(new Chip($"📅 {L["nav.reservations"]}", "nav:/reservations"))
+                    .ToArray());
+            return;
+        }
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = string.Format(TT("pbot.resTitle"), reservations.Count),
+            Rows = reservations.Select(r => new Row(
+                $"🍽️ {r.TableName}",
+                r.Name,
+                $"👥 {r.Guests}" + (r.Status == "confirmed" ? " · ✓" : ""),
+                r.At.Date == DateTime.Today ? r.At.ToString("HH:mm") : r.At.ToString("ddd HH:mm"))).ToList(),
+            Chips = [new Chip($"📅 {L["nav.reservations"]}", "nav:/reservations")],
+        });
+    }
+
+    private void FreeTablesFlow()
+    {
+        var free = _tables.Where(t => !t.IsOccupied).ToList();
+        if (free.Count == 0) { Bot(string.Format(TT("pbot.freeTitle"), 0)); return; }
+        // The answer IS the list — a proper card, with open-chips as the follow-up.
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = string.Format(TT("pbot.freeList"), free.Count),
+            Rows = free.Take(_showAll ? 40 : 10).Select(t => new Row(
+                $"🍽️ {t.Name}",
+                TT("pbot.freeOne"),
+                t.Floor,
+                $"👥 {t.Seats}")).ToList(),
+            Chips = free.Take(4).Select(t => new Chip($"🍽️ {t.Name}", $"opentbl:{t.Id}")).ToList(),
+        });
+    }
+
+    private void BusyTablesFlow()
+    {
+        var busy = _tables.Where(t => t.IsOccupied).OrderBy(t => t.OccupiedAt).ToList();
+        if (busy.Count == 0) { Bot(TT("pbot.nothingOpen")); return; }
+        // The answer IS the list — who sits where since when; settling stays a chip away.
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = string.Format(TT("pbot.busyList"), busy.Count),
+            Rows = busy.Take(_showAll ? 40 : 10).Select(t => new Row(
+                $"🍽️ {t.Name}",
+                t.GuestName ?? t.CustomerName ?? L["pos.walkin"],
+                $"👥 {t.Seats}" + (t.Floor.Length > 0 ? $" · {t.Floor}" : ""),
+                t.OccupiedAt is { } at ? at.ToString("HH:mm") : "—")).ToList(),
+            Chips = busy.Take(4).Select(t => new Chip($"💵 {t.Name}", $"closetbl:{t.Id}")).ToList(),
+        });
+    }
+
+    /// <summary>"How were sales today / yesterday / this week?" — same history Reports uses.</summary>
+    private async Task RevenueFlowAsync(string raw)
+    {
+        var period = PosBotNlu.DetectPeriod(raw);
+        var history = await Api.GetRestaurantHistoryAsync(0, 500) ?? [];
+        var (from, to, labelKey) = period switch
+        {
+            PosBotNlu.Period.Yesterday => (DateTime.Today.AddDays(-1), DateTime.Today, "pbot.yesterday"),
+            PosBotNlu.Period.Week => (DateTime.Today.AddDays(-6), DateTime.Today.AddDays(1), "pbot.thisweek"),
+            PosBotNlu.Period.Month => (DateTime.Today.AddDays(-29), DateTime.Today.AddDays(1), "pbot.thismonth"),
+            _ => (DateTime.Today, DateTime.Today.AddDays(1), "pbot.today"),
+        };
+        var slice = history.Where(o => o.PlacedAt >= from && o.PlacedAt < to && o.Status == OrderStatus.Delivered).ToList();
+        Bot($"{L[labelKey]} — " + string.Format(TT("pbot.revenue"), slice.Count, Fmt.Money(slice.Sum(o => o.Total))),
+            new Chip($"📊 {L["nav.reports"]}", "nav:/reports"));
+    }
+
+    /// <summary>"پرفروش‌ترین غذا؟" — the last 30 days' leaderboard as medal rows.</summary>
+    private async Task TopItemsFlowAsync()
+    {
+        var history = await Api.GetRestaurantHistoryAsync(0, 500) ?? [];
+        var top = history
+            .Where(o => o.Status == OrderStatus.Delivered && o.PlacedAt >= DateTime.Today.AddDays(-29))
+            .SelectMany(o => o.Items)
+            .GroupBy(i => i.Name)
+            .Select(g => (Name: g.Key, Qty: g.Sum(i => i.Quantity), Money: g.Sum(i => i.UnitPrice * i.Quantity)))
+            .OrderByDescending(x => x.Qty)
+            .Take(5)
+            .ToList();
+        if (top.Count == 0) { Bot(TT("pbot.noData")); return; }
+        var medals = new[] { "🥇", "🥈", "🥉", "4", "5" };
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = TT("pbot.topTitle"),
+            Rows = top.Select((x, i) => new Row(medals[i], x.Name, $"×{x.Qty}", Fmt.Money(x.Money))).ToList(),
+            Chips = [new Chip($"📊 {L["nav.reports"]}", "nav:/reports")],
+        });
+    }
+
+    // ────────────────────────── booking a table ──────────────────────────
+
+    private (int TableId, string TableName, DateTime? At, int Guests)? _booking;
+
+    /// <summary>"میز ۶ رو برای ساعت ۸ رزرو کن ۴ نفر" — book it, asking only for what's missing.</summary>
+    private void BookingFlow(string raw)
+    {
+        var (token, _) = PosBotNlu.ExtractTable(raw);
+        var table = token is null ? null : ResolveTable(token);
+        var guests = PosBotNlu.ExtractGuests(raw) ?? 2;
+        DateTime? at = null;
+        if (PosBotNlu.ExtractTime(raw) is (int h, int m))
+        {
+            at = DateTime.Today.AddHours(h).AddMinutes(m);
+            if (at <= DateTime.Now) at = at.Value.AddDays(1);   // that time already passed → tomorrow
+        }
+        if (table is null)
+        {
+            _booking = (0, "", at, guests);
+            Bot(TT("pbot.bookWhichTable"), _tables.Take(8).Select(t => new Chip($"🍽️ {t.Name}", $"booktbl:{t.Id}")).ToArray());
+            return;
+        }
+        _booking = (table.Id, table.Name, at, guests);
+        ContinueBooking();
+    }
+
+    private void ContinueBooking()
+    {
+        if (_booking is not { } b) return;
+        if (b.At is null)
+        {
+            Bot(TT("pbot.bookWhen"),
+                new[] { 18, 19, 20, 21 }.Select(h => new Chip($"🕗 {h}:00", $"booktime:{h}")).ToArray());
+            return;
+        }
+        Bot(string.Format(TT("pbot.bookConfirm"), b.TableName, b.At.Value.ToString(b.At.Value.Date == DateTime.Today ? "HH:mm" : "ddd HH:mm"), b.Guests),
+            new Chip($"✅ {TT("pbot.bookIt")}", "bookgo"),
+            new Chip($"❌ {L["common.cancel"]}", "bookno"));
+    }
+
+    private async Task ConfirmBookingAsync()
+    {
+        if (_booking is not { TableId: > 0, At: not null } b) { ContinueBooking(); return; }
+        var (reservation, error) = await Api.CreateReservationAsync(
+            new OwnerReserveRequest(b.TableId, null, b.Guests, b.At.Value));
+        _booking = null;
+        if (reservation is null)
+        {
+            Bot(string.Format(TT("pbot.bookFailed"), error ?? ""), new Chip($"📅 {L["nav.reservations"]}", "nav:/reservations"));
+            return;
+        }
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = string.Format(TT("pbot.booked"), reservation.TableName),
+            Rows = [new Row($"🍽️ {reservation.TableName}", reservation.Name,
+                $"👥 {reservation.Guests} · ✓",
+                reservation.At.Date == DateTime.Today ? reservation.At.ToString("HH:mm") : reservation.At.ToString("ddd HH:mm"))],
+            Chips = [new Chip($"📅 {L["nav.reservations"]}", "nav:/reservations")],
+        });
+    }
+
+    /// <summary>"نوشابه رو حذف کن" — take matching lines off the pending order.</summary>
+    private void RemoveFromDraft(string raw)
+    {
+        var command = PosBotNlu.Parse(raw);
+        var removed = false;
+        foreach (var want in command.Items.Where(w => w.Query.Length > 0))
+        {
+            var query = want.Query;
+            var hit = _draft.FirstOrDefault(d =>
+                PosBotNlu.Fold(d.Item.NameFor(L.Locale)).Contains(query) ||
+                PosBotNlu.Fold(d.Item.Name).Contains(query) ||
+                MatchItem(query).Best?.Id == d.Item.Id);
+            if (hit.Item is not null) { _draft.Remove(hit); removed = true; }
+        }
+        if (!removed) { Bot(string.Format(TT("pbot.notFound"), string.Join(" ", command.Items.Select(i => i.Query)))); return; }
+        if (_draft.Count == 0) { _draftTable = null; Bot(TT("pbot.cancelled")); return; }
+        ShowDraft();
+    }
+
+    /// <summary>"How many orders right now?" — the live board, summarized.</summary>
+    private async Task LiveOrdersFlowAsync()
+    {
+        var board = await Api.GetRestaurantBoardAsync() ?? [];
+        var fresh = board.Count(o => o.Status == OrderStatus.Pending);
+        var kitchen = board.Count(o => o.Status is OrderStatus.Accepted or OrderStatus.Preparing);
+        var moving = board.Count(o => o.Status is OrderStatus.Ready or OrderStatus.PickedUp or OrderStatus.OnTheWay);
+        Bot(string.Format(TT("pbot.liveOrders"), fresh, kitchen, moving),
+            new Chip($"🧾 {L["nav.liveorders"]}", "nav:/orders"));
+    }
+
+    /// <summary>"What has table 2 spent?" — the running invoice as a card, with settle chips.</summary>
+    private async Task TableBillFlowAsync(string raw)
+    {
+        var (token, _) = PosBotNlu.ExtractTable(raw);
+        var table = token is null ? null : ResolveTable(token);
+        if (table is null)
+        {
+            var busy = _tables.Where(t => t.IsOccupied).Take(6).ToArray();
+            if (busy.Length == 0) { Bot(TT("pbot.nothingOpen")); return; }
+            Bot(TT("pbot.whichBill"), busy.Select(t => new Chip($"🧾 {t.Name}", $"billtbl:{t.Id}")).ToArray());
+            return;
+        }
+        await ShowTableBillAsync(table.Id);
+    }
+
+    private async Task ShowTableBillAsync(int tableId)
+    {
+        var table = _tables.FirstOrDefault(t => t.Id == tableId);
+        if (table is null) return;
+        var tab = await Api.GetTabForTableAsync(tableId);
+        if (tab is null) { Bot(string.Format(TT("pbot.notOpen"), table.Name)); return; }
+
+        var lines = tab.Lines.Select(l => new CardLine(l.Quantity, l.Name, l.UnitPrice * l.Quantity)).ToList();
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Card = new Card(lines, table.Name, tab.Total),
+            Chips =
+            [
+                new Chip($"💵 {TT("pbot.cash")}", $"closetbl:{tableId}:cash"),
+                new Chip($"💳 {TT("pbot.card")}", $"closetbl:{tableId}:card"),
+                new Chip($"🧾 {TT("pbot.openPos")}", $"nav:/pos/{tableId}"),
+            ],
+        });
+    }
+
+    /// <summary>The menu at a glance: sections as rows, item counts as badges.</summary>
+    private void MenuFlow()
+    {
+        var cats = _menu ?? [];
+        if (cats.Count == 0)
+        {
+            Bot(TT("pbot.help"));
+            return;
+        }
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = string.Format(TT("pbot.menuTitle"), cats.Count, cats.Sum(c => c.Items.Count)),
+            Rows = cats.Take(8).Select(c => new Row("📂", c.NameFor(L.Locale), "", c.Items.Count.ToString())).ToList(),
+            Chips = [new Chip($"📋 {L["nav.products"]}", "nav:/products")],
+        });
+    }
+
+    /// <summary>What the assistant can do — as tappable, real examples.</summary>
+    private void HelpFlow()
+    {
+        var sample = _menu?.SelectMany(c => c.Items).FirstOrDefault();
+        var free = _tables.FirstOrDefault(t => !t.IsOccupied);
+        var busy = _tables.FirstOrDefault(t => t.IsOccupied);
+        var chips = new List<Chip>();
+        if (sample is not null && free is not null)
+            chips.Add(new Chip($"➕ 2 {sample.NameFor(L.Locale)} {TT("pbot.table")} {free.Name}",
+                $"ex:2 {sample.NameFor(L.Locale)} {TT("pbot.table")} {free.Name}"));
+        if (free is not null) chips.Add(new Chip($"🍽️ {TT("pbot.exOpen")} {free.Name}", $"opentbl:{free.Id}"));
+        if (busy is not null) chips.Add(new Chip($"💵 {TT("pbot.exClose")} {busy.Name}", $"closetbl:{busy.Id}"));
+        chips.Add(new Chip($"📊 {TT("pbot.exRevenue")}", "ex:" + TT("pbot.exRevenue")));
+        chips.Add(new Chip($"📅 {TT("pbot.exReserved")}", "ex:" + TT("pbot.exReserved")));
+        // The business questions are worth advertising: nobody guesses that a chat box
+        // knows what is running out of stock unless it says so.
+        chips.Insert(0, new Chip($"✨ {TT("pbot.exBriefing")}", "ex:" + TT("pbot.exBriefing")));
+        chips.Add(new Chip($"⚠️ {TT("pbot.exStock")}", "ex:" + TT("pbot.exStock")));
+        chips.Add(new Chip($"🟢 {TT("pbot.exOnline")}", "ex:" + TT("pbot.exOnline")));
+        chips.Add(new Chip($"👥 {TT("pbot.exCustomers")}", "ex:" + TT("pbot.exCustomers")));
+        chips.Add(new Chip($"🧾 {TT("pbot.exOwed")}", "ex:" + TT("pbot.exOwed")));
+        Bot(TT("pbot.help"), chips.ToArray());
+    }
+
+    // ══════════════ answers about the business (parser: PosBotNlu.DetectAsk) ══════════════
+    //
+    // Each of these reads the same endpoints the corresponding PAGE reads, so the number
+    // the assistant says and the number the owner sees if they go and look are the same
+    // number. None of them invent a figure, and every one offers the page as a chip —
+    // an answer in a chat bubble is a starting point, not a replacement for the report.
+
+    private async Task AnswerAsync(PosBotNlu.Asked asked, string raw)
+    {
+        switch (asked.Kind)
+        {
+            case PosBotNlu.Ask.StockLevel: await StockLevelAsync(asked.Subject!); return;
+            case PosBotNlu.Ask.StockLow: await StockLowAsync(); return;
+            case PosBotNlu.Ask.StaffCount: await StaffCountAsync(); return;
+            case PosBotNlu.Ask.TeamOnline: await TeamOnlineAsync(); return;
+            case PosBotNlu.Ask.Payroll: await PayrollAsync(); return;
+            case PosBotNlu.Ask.TopCustomers: await CustomersAsync(top: true, raw); return;
+            case PosBotNlu.Ask.CustomerCount: await CustomersAsync(top: false, raw); return;
+            case PosBotNlu.Ask.Rating: await RatingAsync(); return;
+            case PosBotNlu.Ask.BillsUnpaid: await BillsAsync(); return;
+            case PosBotNlu.Ask.Visits: await VisitsAsync(raw); return;
+            case PosBotNlu.Ask.StoreStatus: await ShopStatusAsync(); return;
+            case PosBotNlu.Ask.StoreOpen: await ShopToggleAsync(wantOpen: true); return;
+            case PosBotNlu.Ask.StoreClose: await ShopToggleAsync(wantOpen: false); return;
+            case PosBotNlu.Ask.Deliveries: await DeliveriesAsync(); return;
+            case PosBotNlu.Ask.AvgOrder: await SalesShapeAsync(raw, average: true); return;
+            case PosBotNlu.Ask.Cancelled: await SalesShapeAsync(raw, average: false); return;
+            case PosBotNlu.Ask.WorstItems: await WorstItemsAsync(raw); return;
+            case PosBotNlu.Ask.Navigate: NavigateFlow(asked.Subject!); return;
+            case PosBotNlu.Ask.Briefing: await BriefingAsync(); return;
+            case PosBotNlu.Ask.CustomerSpend: await CustomerSpendAsync(asked.Subject!, raw); return;
+            case PosBotNlu.Ask.OrderStatus: await OrderStatusAsync(asked.Subject!); return;
+            case PosBotNlu.Ask.SamePeriodAgain: await RepeatAsync(raw); return;
+            case PosBotNlu.Ask.MoreOfTheSame: await MoreAsync(); return;
+            case PosBotNlu.Ask.Report: await ReportAsync(asked.Subject, raw); return;
+        }
+    }
+
+    /// <summary>
+    /// "give me a report on X". Every report in the portal is reachable from here: the
+    /// assistant names the one it matched, says the headline figure so the answer is
+    /// useful on its own, and hands over the page — which is where Excel and A4 live.
+    /// With no topic named it lists what there is, because "give me a report" is a
+    /// reasonable thing to say and guessing which one would be worse than asking.
+    /// </summary>
+    private async Task ReportAsync(string? topic, string raw)
+    {
+        // Each report carries its name in the reply language AND in English. Someone may
+        // type "report on products" while the portal — and therefore the label — is in
+        // Farsi; matching only the localised title would send them to the wrong report.
+        (string Key, string Href, string Emoji)[] catalogue =
+        [
+            ("nav.sales", "/reports", "📊"),
+            ("prep.title", "/reports/products", "🍽️"),
+            ("crep.title", "/reports/customers", "👥"),
+            ("billrep.title", "/bills/report", "🧾"),
+            ("salrep.title", "/staff/salary-report", "💸"),
+            ("cons.title", "/materials/report", "📦"),
+            ("vis.title", "/visits", "📈"),
+            ("ua.title", "/team-activity", "📡"),
+        ];
+
+        var reports = catalogue
+            .Select(c => (Label: TT(c.Key), English: LanguageService.Translate("en", c.Key), c.Href, c.Emoji))
+            .ToArray();
+
+        // Nothing named: offer the shelf of reports rather than picking one.
+        if (string.IsNullOrWhiteSpace(topic))
+        {
+            _messages.Add(new Msg
+            {
+                FromBot = true,
+                Text = TT("pbot.whichReport"),
+                Chips = reports.Select(r => new Chip($"{r.Emoji} {r.Label}", $"nav:{r.Href}")).ToArray().ToList(),
+            });
+            return;
+        }
+
+        // Subject words first — they are unambiguous and language-aware in a way a title
+        // match is not. "products" must reach the product report even when its title
+        // reads «گزارش محصولات», and "stock" must reach the consumption report whose
+        // title mentions neither word.
+        var folded = PosBotNlu.Fold(topic);
+        var hit =
+            PosBotNlu.MentionsProducts(folded) ? reports[1]
+            : PosBotNlu.MentionsCustomers(folded) ? reports[2]
+            : PosBotNlu.MentionsStock(folded) ? reports[5]
+            : PosBotNlu.MentionsPeople(folded) ? reports[4]
+            : PosBotNlu.MentionsMoneyOwed(folded) ? reports[3]
+            : reports
+                .Select(r => (R: r, M: Fuzzy.Best(topic, r.Label, r.English)))
+                .Where(x => x.M.Ok)
+                .OrderByDescending(x => x.M.Score)
+                .Select(x => x.R)
+                .FirstOrDefault();
+
+        // Nothing recognised: sales is the report an owner means by default.
+        if (hit.Href is null) hit = reports[0];
+
+        // A headline figure, so the reply is worth something before they tap anything.
+        var period = PeriodKey(PosBotNlu.DetectPeriod(raw));
+        var headline = "";
+        if (hit.Href == "/reports" || hit.Href == "/reports/products" || hit.Href == "/reports/customers")
+        {
+            var sales = await Api.GetMySalesReportAsync(period);
+            if (sales is not null)
+                headline = string.Format(TT("pbot.reportHead"), sales.Orders, Fmt.Money(sales.Revenue));
+        }
+
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = string.Format(TT("pbot.reportIs"), hit.Label)
+                   + (headline.Length > 0 ? " " + headline : ""),
+            Chips =
+            [
+                new Chip($"{hit.Emoji} {TT("pbot.openReport")}", $"nav:{hit.Href}"),
+                new Chip($"📗 {TT("exp.excel")}", $"nav:{hit.Href}"),
+            ],
+        });
+    }
+
+    /// <summary>
+    /// Changes the whole portal's language, not merely the reply. Asking an assistant to
+    /// "switch to Arabic" means the app, and changing only the chat bubbles would be a
+    /// strange half-measure.
+    ///
+    /// The confirmation is written in the NEW language — it is the first proof that the
+    /// change took — and the conversation's own reply language is pinned to it too, so a
+    /// later message with no language signal stays where the owner just put it.
+    /// </summary>
+    private async Task SwitchLanguageAsync(string code)
+    {
+        if (L.Locale == code)
+        {
+            _replyLocale = code;
+            Bot(string.Format(LanguageService.Translate(code, "pbot.langAlready"),
+                LanguagePick.NativeName(code)));
+            return;
+        }
+
+        await L.SetLocaleAsync(code);
+        _replyLocale = code;
+        Bot(string.Format(LanguageService.Translate(code, "pbot.langNow"),
+            LanguagePick.NativeName(code)));
+    }
+
+    /// <summary>
+    /// A sum, with its working shown. The result is written plainly rather than as money:
+    /// "2 + 2" is four of something, and guessing it is four rials would be worse than
+    /// saying nothing. A calculation that happens to look like a price gets a currency
+    /// chip instead, so the owner decides.
+    /// </summary>
+    private void ShowSum(PosBotNlu.Sum sum)
+    {
+        // Whole numbers print whole. Nobody wants "4.0000" back from "2 + 2".
+        var pretty = Math.Abs(sum.Value % 1) < 0.0000001
+            ? sum.Value.ToString("N0")
+            : sum.Value.ToString("0.####");
+
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = $"{sum.Expression} = {pretty}",
+            Rows =
+            [
+                new Row("🧮", pretty, sum.Expression, ""),
+            ],
+        });
+    }
+
+    /// <summary>
+    /// The date or the clock. The date answer carries a second calendar for readers who
+    /// use one — Jalali for Persian, Hijri for Arabic — because that is the number they
+    /// would actually write down.
+    /// </summary>
+    private void ShowClock(PosBotNlu.Clock kind)
+    {
+        var now = DateTime.Now;
+        var locale = _replyLocale ?? L.Locale;
+
+        var (text, pill, detail) = kind switch
+        {
+            PosBotNlu.Clock.Time => (
+                string.Format(TT("pbot.timeIs"), PosBotNlu.DescribeTime(now, locale)),
+                "🕒", PosBotNlu.DescribeDate(now, locale)),
+            PosBotNlu.Clock.Weekday => (
+                string.Format(TT("pbot.dayIs"), PosBotNlu.DescribeWeekday(now, locale)),
+                "📆", PosBotNlu.DescribeDate(now, locale)),
+            _ => (
+                string.Format(TT("pbot.dateIs"), PosBotNlu.DescribeDate(now, locale)),
+                "📅", PosBotNlu.DescribeTime(now, locale)),
+        };
+
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = text,
+            Rows = [new Row(pill, detail, "", "")],
+        });
+    }
+
+    /// <summary>
+    /// The whole shop in one message: money, the live board, the shelf, the people. This
+    /// is the answer to "how are we doing?", which is the question an owner actually asks
+    /// — not any one of the numbers below on its own.
+    /// </summary>
+    private async Task BriefingAsync()
+    {
+        var sales = await Api.GetMySalesReportAsync("day");
+        var board = await Api.GetRestaurantBoardAsync() ?? [];
+        var stock = await Api.GetMaterialsAsync();
+        var team = await Api.GetTeamActivityAsync() ?? [];
+
+        var rows = new List<Row>
+        {
+            new("💰", TT("pbot.brToday"),
+                string.Format(TT("pbot.brOrders"), sales?.Orders ?? 0),
+                Fmt.Money(sales?.Revenue ?? 0)),
+            new("🔥", TT("pbot.brLive"),
+                string.Format(TT("pbot.brPending"), board.Count(o => o.Status == OrderStatus.Pending)),
+                board.Count.ToString()),
+        };
+
+        if (stock is not null)
+            rows.Add(new Row(stock.OutCount > 0 ? "🚫" : stock.LowCount > 0 ? "⚠️" : "📦",
+                TT("mat.title"),
+                string.Format(TT("pbot.brStock"), stock.OutCount, stock.LowCount),
+                stock.Items.Count.ToString()));
+
+        rows.Add(new Row("👥", TT("ua.title"),
+            string.Format(TT("pbot.brOnline"), team.Count(t => t.IsOnline)),
+            team.Count.ToString()));
+
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = TT("pbot.briefing"),
+            Rows = rows,
+            Chips =
+            [
+                new Chip($"📊 {TT("nav.sales")}", "nav:/reports"),
+                new Chip($"🔥 {TT("nav.liveorders")}", "nav:/orders"),
+            ],
+        });
+    }
+
+    /// <summary>One named customer. The name is matched loosely, because nobody types a
+    /// full name the way it was entered.</summary>
+    private async Task CustomerSpendAsync(string name, string raw)
+    {
+        var period = PeriodKey(PosBotNlu.DetectPeriod(raw));
+        var page = await Api.GetMyCustomerReportAsync(period, name, 0, 50);
+        var hit = page?.Rows.FirstOrDefault();
+
+        if (hit is null)
+        {
+            // Widen the net before giving up: the period may simply be too narrow.
+            var wider = await Api.GetMyCustomerReportAsync("month", name, 0, 50);
+            hit = wider?.Rows.FirstOrDefault();
+            if (hit is null)
+            {
+                Bot(string.Format(TT("pbot.noSuchCustomer"), name),
+                    new Chip($"👥 {TT("crep.title")}", "nav:/reports/customers"));
+                return;
+            }
+        }
+
+        Bot(string.Format(TT("pbot.customerSpend"), hit.Name, Fmt.Money(hit.Total), hit.Orders),
+            new Chip($"👥 {TT("crep.title")}", "nav:/reports/customers"));
+    }
+
+    /// <summary>An order by its number, wherever it is — on the live board or in history.</summary>
+    private async Task OrderStatusAsync(string number)
+    {
+        var board = await Api.GetRestaurantBoardAsync() ?? [];
+        var hit = board.FirstOrDefault(o => o.Number.Contains(number, StringComparison.OrdinalIgnoreCase));
+
+        if (hit is null)
+        {
+            var history = await Api.GetRestaurantHistoryAsync(0, 200) ?? [];
+            hit = history.FirstOrDefault(o => o.Number.Contains(number, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (hit is null)
+        {
+            Bot(string.Format(TT("pbot.noSuchOrder"), number),
+                new Chip($"🔥 {TT("nav.liveorders")}", "nav:/orders"));
+            return;
+        }
+
+        Bot(string.Format(TT("pbot.orderIs"), hit.Number,
+                LanguageService.Translate(_replyLocale ?? L.Locale, "status." + hit.Status),
+                hit.CustomerName, Fmt.Money(hit.Total)),
+            new Chip($"🔥 {TT("nav.liveorders")}", "nav:/orders"));
+    }
+
+    /// <summary>
+    /// "and yesterday?" — the previous question again, over a different stretch of time.
+    /// Without the memory of what was just asked this is meaningless, so a follow-up with
+    /// nothing behind it says so rather than guessing.
+    /// </summary>
+    private async Task RepeatAsync(string raw)
+    {
+        if (_lastAsk is null && _lastPeriodIntent is null) { HelpFlow(); return; }
+
+        // The period comes from the NEW message; everything else from the old one.
+        _periodOverride = raw;
+        try
+        {
+            if (_lastAsk is { } ask) { await AnswerAsync(new PosBotNlu.Asked(ask, _lastSubject), raw); return; }
+            switch (_lastPeriodIntent)
+            {
+                case PosBotNlu.Intent.Revenue: await RevenueFlowAsync(raw); return;
+                case PosBotNlu.Intent.TopItems: await TopItemsFlowAsync(); return;
+                default: HelpFlow(); return;
+            }
+        }
+        finally { _periodOverride = null; }
+    }
+
+    /// <summary>"show me more" — the last answer again, with the list caps lifted.</summary>
+    private async Task MoreAsync()
+    {
+        if (_lastAsk is null) { HelpFlow(); return; }
+        _showAll = true;
+        await AnswerAsync(new PosBotNlu.Asked(_lastAsk.Value, _lastSubject), _lastRaw ?? "");
+    }
+
+    /// <summary>The shelf, one ingredient at a time. The name is matched the same loose
+    /// way dishes are, because nobody types "Basmati Rice 5kg" when they mean rice.</summary>
+    private async Task StockLevelAsync(string subject)
+    {
+        var stock = await Api.GetMaterialsAsync();
+        if (stock is null || stock.Items.Count == 0) { Bot(TT("pbot.noStock")); return; }
+
+        var needle = PosBotNlu.Fold(subject);
+        var hits = stock.Items
+            .Select(m => (M: m, Hay: PosBotNlu.Fold(m.Name)))
+            .Where(x => x.Hay.Contains(needle) || needle.Contains(x.Hay))
+            .OrderBy(x => x.Hay.Length)
+            .Select(x => x.M)
+            .ToList();
+
+        if (hits.Count == 0)
+        {
+            Bot(string.Format(TT("pbot.noMaterial"), subject),
+                new Chip($"📦 {L["mat.title"]}", "nav:/materials"));
+            return;
+        }
+
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = string.Format(TT("pbot.stockOf"), hits[0].Name),
+            Rows = hits.Take(_showAll ? 20 : 6).Select(m => new Row(
+                m.IsOut ? "🚫" : m.IsLow ? "⚠️" : "📦",
+                m.Name,
+                $"{m.Quantity:0.##} {m.Unit}" + (m.MinQuantity > 0 ? $" · {TT("pbot.min")} {m.MinQuantity:0.##}" : ""),
+                m.IsOut ? TT("pbot.outOf") : m.IsLow ? TT("pbot.lowStock") : "")).ToList(),
+            Chips = [new Chip($"📦 {L["mat.title"]}", "nav:/materials")],
+        });
+    }
+
+    /// <summary>Everything at or under its reorder level — the shopping list.</summary>
+    private async Task StockLowAsync()
+    {
+        var stock = await Api.GetMaterialsAsync();
+        if (stock is null || stock.Items.Count == 0) { Bot(TT("pbot.noStock")); return; }
+
+        var short_ = stock.Items.Where(m => m.IsOut || m.IsLow)
+            .OrderBy(m => m.IsOut ? 0 : 1).ThenBy(m => m.Quantity).ToList();
+
+        if (short_.Count == 0)
+        {
+            Bot(TT("pbot.stockFine"), new Chip($"📦 {L["mat.title"]}", "nav:/materials"));
+            return;
+        }
+
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = string.Format(TT("pbot.runningOut"), stock.OutCount, stock.LowCount),
+            Rows = short_.Take(_showAll ? 40 : 8).Select(m => new Row(
+                m.IsOut ? "🚫" : "⚠️", m.Name, $"{m.Quantity:0.##} {m.Unit}",
+                m.IsOut ? TT("pbot.outOf") : TT("pbot.lowStock"))).ToList(),
+            Chips =
+            [
+                new Chip($"🛒 {L["pur.title"]}", "nav:/materials/purchases"),
+                new Chip($"📦 {L["mat.title"]}", "nav:/materials"),
+            ],
+        });
+    }
+
+    private async Task StaffCountAsync()
+    {
+        var staff = await Api.GetStaffAsync("all", null);
+        if (staff is null) { Bot(TT("pbot.noData")); return; }
+        Bot(string.Format(TT("pbot.staffCount"), staff.ActiveCount, staff.Total,
+                Fmt.Money(staff.MonthlyPayroll)),
+            new Chip($"🧑‍🍳 {L["nav.staff"]}", "nav:/staff"));
+    }
+
+    /// <summary>Who is at a screen right now — the same three-minute window the activity
+    /// board uses, so the two never disagree.</summary>
+    private async Task TeamOnlineAsync()
+    {
+        var team = await Api.GetTeamActivityAsync();
+        if (team is null || team.Count == 0) { Bot(TT("pbot.noData")); return; }
+
+        var online = team.Where(t => t.IsOnline).ToList();
+        if (online.Count == 0)
+        {
+            Bot(TT("pbot.nobodyOnline"), new Chip($"📡 {L["ua.title"]}", "nav:/team-activity"));
+            return;
+        }
+
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = string.Format(TT("pbot.onlineNow"), online.Count, team.Count),
+            Rows = online.Take(_showAll ? 40 : 8).Select(t => new Row(
+                "🟢", t.FullName, t.CurrentPage ?? "", t.PagesToday.ToString())).ToList(),
+            Chips = [new Chip($"📡 {L["ua.title"]}", "nav:/team-activity")],
+        });
+    }
+
+    private async Task PayrollAsync()
+    {
+        var from = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        var report = await Api.GetSalaryReportAsync(from, DateTime.Today);
+        if (report is null) { Bot(TT("pbot.noData")); return; }
+        Bot(string.Format(TT("pbot.payroll"), Fmt.Money(report.Total), report.Payments),
+            new Chip($"📊 {L["nav.salaryReport"]}", "nav:/staff/salary-report"),
+            new Chip($"💸 {L["nav.paySalaries"]}", "nav:/staff/payroll"));
+    }
+
+    private async Task CustomersAsync(bool top, string raw)
+    {
+        var period = PeriodKey(PosBotNlu.DetectPeriod(raw));
+        var page = await Api.GetMyCustomerReportAsync(period, null, 0, 200);
+        if (page is null || page.Rows.Count == 0)
+        {
+            Bot(TT("pbot.noCustomers"), new Chip($"👥 {L["crep.title"]}", "nav:/reports/customers"));
+            return;
+        }
+
+        if (!top)
+        {
+            Bot(string.Format(TT("pbot.customerCount"), page.Total,
+                    Fmt.Money(page.Rows.Sum(c => c.Total))),
+                new Chip($"👥 {L["crep.title"]}", "nav:/reports/customers"));
+            return;
+        }
+
+        var medals = new[] { "🥇", "🥈", "🥉" };
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = TT("pbot.topCustomers"),
+            Rows = page.Rows.Take(_showAll ? 20 : 5).Select((c, i) => new Row(
+                i < 3 ? medals[i] : $"{i + 1}", c.Name,
+                string.Format(L["crep.ordersN"], c.Orders), Fmt.Money(c.Total))).ToList(),
+            Chips = [new Chip($"👥 {L["crep.title"]}", "nav:/reports/customers")],
+        });
+    }
+
+    private async Task RatingAsync()
+    {
+        var store = await Api.GetMyRestaurantAsync();
+        if (store is null) { Bot(TT("pbot.noData")); return; }
+        Bot(store.RatingCount == 0
+                ? TT("pbot.noRating")
+                : string.Format(TT("pbot.rating"), store.Rating.ToString("0.0"), store.RatingCount),
+            new Chip($"⭐ {L["nav.reviews"]}", "nav:/reviews"));
+    }
+
+    private async Task BillsAsync()
+    {
+        var bills = await Api.GetBillsAsync("all", "all", null, 0, 1);
+        if (bills is null) { Bot(TT("pbot.noData")); return; }
+        if (bills.UnpaidAmount <= 0)
+        {
+            Bot(TT("pbot.allPaid"), new Chip($"🧾 {L["nav.allBills"]}", "nav:/bills"));
+            return;
+        }
+        Bot(string.Format(TT("pbot.owed"), Fmt.Money(bills.UnpaidAmount), Fmt.Money(bills.OverdueAmount)),
+            new Chip($"🧾 {L["nav.allBills"]}", "nav:/bills"),
+            new Chip($"📊 {L["nav.billReport"]}", "nav:/bills/report"));
+    }
+
+    private async Task VisitsAsync(string raw)
+    {
+        var period = PeriodKey(PosBotNlu.DetectPeriod(raw));
+        var stats = await Api.GetMyVisitStatsAsync(period);
+        if (stats is null) { Bot(TT("pbot.noData")); return; }
+        Bot(string.Format(TT("pbot.visits"), stats.StoreVisits, stats.ProductViews),
+            new Chip($"📈 {L["nav.visits"]}", "nav:/visits"));
+    }
+
+    private async Task ShopStatusAsync()
+    {
+        var store = await Api.GetMyRestaurantAsync();
+        if (store is null) { Bot(TT("pbot.noData")); return; }
+        Bot(store.IsOpen ? TT("pbot.shopOpen") : TT("pbot.shopClosed"),
+            store.IsOpen
+                ? new Chip($"🔴 {TT("pbot.closeShop")}", "shop:close")
+                : new Chip($"🟢 {TT("pbot.openShop")}", "shop:open"));
+    }
+
+    /// <summary>Flips the open sign. Asking for the state it is already in is answered,
+    /// not toggled — "close the shop" twice must not reopen it.</summary>
+    private async Task ShopToggleAsync(bool wantOpen)
+    {
+        var store = await Api.GetMyRestaurantAsync();
+        if (store is null) { Bot(TT("pbot.noData")); return; }
+        if (store.IsOpen == wantOpen)
+        {
+            Bot(wantOpen ? TT("pbot.alreadyOpenShop") : TT("pbot.alreadyClosedShop"));
+            return;
+        }
+        var (ok, error) = await Api.ToggleOpenAsync();
+        Bot(ok ? (wantOpen ? TT("pbot.nowOpen") : TT("pbot.nowClosed"))
+               : error ?? L["common.wentWrong"]);
+    }
+
+    private async Task DeliveriesAsync()
+    {
+        var runs = await Api.GetMyDeliveriesAsync();
+        if (runs is null) { Bot(TT("pbot.noData")); return; }
+        Bot(string.Format(TT("pbot.deliveries"), runs.Count),
+            new Chip($"🛵 {L["nav.activeDeliveries"]}", "nav:/delivery"));
+    }
+
+    private async Task SalesShapeAsync(string raw, bool average)
+    {
+        var period = PeriodKey(PosBotNlu.DetectPeriod(raw));
+        var sales = await Api.GetMySalesReportAsync(period);
+        if (sales is null) { Bot(TT("pbot.noData")); return; }
+        Bot(average
+                ? string.Format(TT("pbot.avgOrder"), Fmt.Money(sales.AvgOrder), sales.Orders)
+                : string.Format(TT("pbot.cancelledN"), sales.Cancelled, sales.Orders),
+            new Chip($"📊 {L["nav.sales"]}", "nav:/reports"));
+    }
+
+    /// <summary>The bottom of the leaderboard. Only dishes that sold at ALL appear — a
+    /// dish with no sales is not a slow mover, it is a dish nobody has tried.</summary>
+    private async Task WorstItemsAsync(string raw)
+    {
+        var period = PeriodKey(PosBotNlu.DetectPeriod(raw));
+        var page = await Api.GetMyProductReportAsync(period, null, 0, 500);
+        if (page is null || page.Rows.Count == 0)
+        {
+            Bot(TT("pbot.noSales2"), new Chip($"📊 {L["prep.title"]}", "nav:/reports/products"));
+            return;
+        }
+        var tail = page.Rows.Where(p => p.Qty > 0).OrderBy(p => p.Qty).Take(_showAll ? 20 : 5).ToList();
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = TT("pbot.worstTitle"),
+            Rows = tail.Select(p => new Row("🐌", p.Name,
+                string.Format(L["prep.sold"], p.Qty), Fmt.Money(p.Revenue))).ToList(),
+            Chips = [new Chip($"📊 {L["prep.title"]}", "nav:/reports/products")],
+        });
+    }
+
+    /// <summary>"take me to the reports page" — the page is matched by name in whatever
+    /// language the portal is showing, so it works without a hard-coded route list.</summary>
+    private void NavigateFlow(string subject)
+    {
+        (string Label, string Href)[] pages =
+        [
+            (L["nav.pos"], "/pos"), (L["nav.liveorders"], "/orders"),
+            (L["nav.products"], "/menu"), (L["nav.tables"], "/tables"),
+            (L["nav.reservations"], "/reservations"), (L["nav.customers"], "/customers"),
+            (L["nav.sales"], "/reports"), (L["prep.title"], "/reports/products"),
+            (L["crep.title"], "/reports/customers"), (L["mat.title"], "/materials"),
+            (L["pur.title"], "/materials/purchases"), (L["nav.allBills"], "/bills"),
+            (L["nav.staff"], "/staff"), (L["nav.salaryReport"], "/staff/salary-report"),
+            (L["ua.title"], "/team-activity"), (L["nav.teamUsers"], "/team-users"),
+            (L["nav.reviews"], "/reviews"), (L["nav.visits"], "/visits"),
+            (L["nav.settings"], "/settings"),
+        ];
+
+        var hit = pages
+            .Select(p => (p, M: Fuzzy.Score(subject, p.Label)))
+            .Where(x => x.M.Ok)
+            .OrderByDescending(x => x.M.Score)
+            .Select(x => x.p)
+            .FirstOrDefault();
+
+        if (hit.Href is null) { HelpFlow(); return; }
+        Bot(string.Format(TT("pbot.opening"), hit.Label), new Chip($"➡️ {hit.Label}", $"nav:{hit.Href}"));
+    }
+
+    /// <summary>The assistant's period words in the shape the report endpoints want.
+    /// During a follow-up the period is read from the NEW message, not the repeated one.</summary>
+    private string PeriodKey(PosBotNlu.Period period) =>
+        (_periodOverride is null ? period : PosBotNlu.DetectPeriod(_periodOverride)) switch
+        {
+            PosBotNlu.Period.Week => "week",
+            PosBotNlu.Period.Month => "month",
+            _ => "day",
+        };
+
+    // ─────────── matching against the store's own menu (parser: PosBotNlu) ───────────
+
+    private StoreTableDto? ResolveTable(string token)
+    {
+        var folded = PosBotNlu.Fold(token);
+        return _tables.FirstOrDefault(t => PosBotNlu.Fold(t.Name) == folded)
+            ?? _tables.FirstOrDefault(t => PosBotNlu.Fold(t.Name).Contains(folded));
+    }
+
+    /// <summary>
+    /// The store's own menu is the vocabulary: every item is matched by its canonical
+    /// name AND all its translations, so "پیتزا", "pizza" or "كباب" all land.
+    /// </summary>
+    private (MenuItemDto? Best, List<MenuItemDto> Close) MatchItem(string query)
+    {
+        var qTokens = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (qTokens.Length == 0) return (null, []);
+
+        // A dish is named in a few words. A long phrase that reaches here is a
+        // sentence, and short tokens inside it ("می", "به") hit dish names by pure
+        // chance — offering food for it is how a question became a menu suggestion.
+        var meaty = qTokens.Where(t => t.Length >= 3).ToArray();
+        if (qTokens.Length > 4 && meaty.Length < 2) return (null, []);
+
+        var scored = new List<(MenuItemDto Item, int Hits, int HayLen)>();
+        foreach (var item in _menu!.SelectMany(c => c.Items).Where(i => i.IsAvailable))
+        {
+            var hay = PosBotNlu.Fold(item.Name + " " + string.Join(' ', item.Names?.Values ?? Enumerable.Empty<string>()));
+            var hits = qTokens.Count(t => t.Length >= 3 && hay.Contains(t));
+            // A two-letter token only counts when it IS the whole query ("چا", "ti").
+            if (hits == 0 && qTokens.Length == 1 && qTokens[0].Length == 2 && hay.Contains(qTokens[0])) hits = 1;
+            if (hits > 0) scored.Add((item, hits, hay.Length));
+        }
+        if (scored.Count == 0) return (null, []);
+
+        var full = scored.Where(s => s.Hits == qTokens.Length)
+                         .OrderBy(s => s.HayLen)
+                         .Select(s => s.Item)
+                         .ToList();
+        if (full.Count == 1) return (full[0], []);
+        if (full.Count > 1)
+        {
+            // Several items genuinely contain every word ("کباب") — the shortest name is
+            // the plain one, but offer the neighbours when they are truly different dishes.
+            var head = full[0];
+            var rivals = full.Skip(1).Take(3).ToList();
+            return rivals.Count > 0 && PosBotNlu.Fold(head.Name).Length + 6 < PosBotNlu.Fold(rivals[0].Name).Length
+                ? (head, [])
+                : (null, full.Take(4).ToList());
+        }
+        // Partial hits are only a suggestion when most of the query actually matched —
+        // one word out of five is noise, not a near-miss.
+        var best = scored.OrderByDescending(s => s.Hits).ThenBy(s => s.HayLen).ToList();
+        if (best[0].Hits * 2 < qTokens.Length) return (null, []);
+        return (null, best.Take(3).Select(s => s.Item).ToList());
+    }
+}

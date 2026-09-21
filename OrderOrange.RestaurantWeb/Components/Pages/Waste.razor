@@ -1,0 +1,291 @@
+@page "/waste"
+@using OrderOrange.Shared
+@inject ApiClient Api
+@inject AppState State
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+@* What the shop threw away. The shelf already says how much is left; this page exists to
+   say where the rest went, so the answer can be argued with. Recording is deliberately
+   two taps and a number — a page that is slow to use gets used once. *@
+
+<PageTitle>OrderOrange — @L["waste.title"]</PageTitle>
+
+<PageHeader Title="@L["waste.title"]" Subtitle="@L["waste.sub"]" />
+
+@if (_board is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="wa">
+        @* ---------------- what it cost ---------------- *@
+        <div class="wa-stats">
+            <div class="wa-stat lead">
+                <span class="lbl">@string.Format(L["waste.inDays"], _days)</span>
+                <b>@Fmt.Rial(_board.TotalCost)</b>
+                <span class="sub">@string.Format(L["waste.entries"], _board.TotalEntries)</span>
+            </div>
+            <div class="wa-stat">
+                <span class="lbl">@L["waste.shareOfStock"]</span>
+                <b class="@(_board.ShareOfStock >= 5 ? "bad" : "")">@_board.ShareOfStock.ToString("0.#")%</b>
+                <span class="sub">@L["waste.shareHint"]</span>
+            </div>
+            <div class="wa-stat">
+                <span class="lbl">@L["waste.biggestReason"]</span>
+                <b>@(TopReason is { } r ? L[$"waste.reason.{r.Reason}"] : "—")</b>
+                <span class="sub">@(TopReason is { } t ? Fmt.Money(t.Cost) : L["waste.nothingYet"])</span>
+            </div>
+            <div class="wa-range">
+                @foreach (var d in Ranges)
+                {
+                    var days = d;
+                    <button type="button" class="@(_days == days ? "on" : "")" @onclick="@(() => SetDays(days))">
+                        @string.Format(L["waste.days"], days)
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="wa-grid">
+            @* ---------------- record one ---------------- *@
+            <MudPaper Elevation="0" Class="wa-card wa-record">
+                <h3>@L["waste.recordTitle"]</h3>
+
+                <div class="wa-kind">
+                    <button type="button" class="@(_kind == "material" ? "on" : "")" @onclick="@(() => SetKind("material"))">
+                        @L["waste.material"]
+                    </button>
+                    <button type="button" class="@(_kind == "product" ? "on" : "")" @onclick="@(() => SetKind("product"))">
+                        @L["waste.product"]
+                    </button>
+                </div>
+
+                <MudAutocomplete T="Pick" Value="_picked" ValueChanged="OnPicked" SearchFunc="Search"
+                                 Label="@(_kind == "material" ? L["waste.pickMaterial"] : L["waste.pickProduct"])"
+                                 ToStringFunc="@(p => p?.Name ?? "")" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 Class="mt-3" Dense="true" ResetValueOnEmptyText="true" CoerceText="true" />
+
+                <div class="wa-qty mt-3">
+                    <MudNumericField @bind-Value="_quantity" Label="@L["waste.howMuch"]" Variant="Variant.Outlined"
+                                     Margin="Margin.Dense" Min="0" Step="0.5M" Class="flex-grow-1" />
+                    <span class="unit">@(_picked?.Unit ?? "")</span>
+                </div>
+
+                <div class="wa-hint">@L["waste.why"]</div>
+                <div class="wa-reasons">
+                    @foreach (var reason in WasteReasons.All)
+                    {
+                        var key = reason;
+                        <button type="button" class="@(_reason == key ? "on" : "")" @onclick="@(() => _reason = key)">
+                            @L[$"waste.reason.{key}"]
+                        </button>
+                    }
+                </div>
+
+                <MudTextField @bind-Value="_notes" Label="@L["waste.note"]" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Class="mt-3" MaxLength="300" />
+
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_error</MudAlert>
+                }
+                @if (_picked is { } p && _quantity > 0)
+                {
+                    <p class="wa-cost">@L["waste.thisCosts"] <b>@Fmt.Rial(p.UnitCost * _quantity)</b></p>
+                }
+
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+                           Class="mt-3" Disabled="@(_busy || _picked is null || _quantity <= 0 || _reason is null)"
+                           OnClick="Save">
+                    @(_busy ? L["common.saving"] : L["waste.record"])
+                </MudButton>
+                <p class="wa-foot">@L["waste.deducts"]</p>
+            </MudPaper>
+
+            @* ---------------- where it went ---------------- *@
+            <div class="wa-side">
+                <MudPaper Elevation="0" Class="wa-card">
+                    <h3>@L["waste.byReason"]</h3>
+                    @if (_board.ByReason.Count == 0)
+                    {
+                        <p class="wa-empty">@L["waste.nothingYet"]</p>
+                    }
+                    else
+                    {
+                        @foreach (var row in _board.ByReason)
+                        {
+                            <div class="wa-bar">
+                                <span class="nm">@L[$"waste.reason.{row.Reason}"]</span>
+                                <span class="track"><span class="fill" style="width:@Pct(row.Cost)%"></span></span>
+                                <span class="val">@Fmt.Money(row.Cost)</span>
+                            </div>
+                        }
+                    }
+                </MudPaper>
+
+                <MudPaper Elevation="0" Class="wa-card mt-3">
+                    <h3>@L["waste.topItems"]</h3>
+                    @if (_board.TopItems.Count == 0)
+                    {
+                        <p class="wa-empty">@L["waste.nothingYet"]</p>
+                    }
+                    else
+                    {
+                        <div class="wa-items">
+                            @foreach (var item in _board.TopItems)
+                            {
+                                <div class="wa-item">
+                                    <span class="nm">@item.Name</span>
+                                    <span class="qt">@Fmt.Amount(item.Quantity) @item.Unit</span>
+                                    <span class="val">@Fmt.Money(item.Cost)</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            </div>
+        </div>
+
+        @* ---------------- the log ---------------- *@
+        <MudPaper Elevation="0" Class="wa-card mt-3">
+            <h3>@L["waste.log"]</h3>
+            @if (_board.Entries.Count == 0)
+            {
+                <p class="wa-empty">@L["waste.logEmpty"]</p>
+            }
+            else
+            {
+                <div class="wa-log">
+                    @foreach (var entry in _board.Entries)
+                    {
+                        var e = entry;
+                        <div class="wa-row">
+                            <span class="rsn @e.Reason">@L[$"waste.reason.{e.Reason}"]</span>
+                            <span class="nm">
+                                @e.Name
+                                @if (!string.IsNullOrWhiteSpace(e.Notes))
+                                {
+                                    <small>@e.Notes</small>
+                                }
+                            </span>
+                            <span class="qt">@Fmt.Amount(e.Quantity) @e.Unit</span>
+                            <span class="val">@Fmt.Money(e.Cost)</span>
+                            <span class="who">@e.By · @e.At.ToString("dd MMM HH:mm")</span>
+                            <button type="button" class="undo" title="@L["waste.undo"]" @onclick="@(() => Undo(e))">↺</button>
+                        </div>
+                    }
+                </div>
+            }
+        </MudPaper>
+    </div>
+}
+
+@code {
+    /// <summary>What can be thrown away: a material off the shelf, or a finished dish.</summary>
+    private sealed record Pick(string Kind, int Id, string Name, string Unit, decimal UnitCost);
+
+    private static readonly int[] Ranges = [7, 30, 90];
+
+    private WasteBoardDto? _board;
+    private List<Pick> _materials = [];
+    private List<Pick> _products = [];
+    private string _kind = "material";
+    private Pick? _picked;
+    private decimal _quantity = 1;
+    private string? _reason;
+    private string _notes = "";
+    private string? _error;
+    private int _days = 30;
+    private bool _busy;
+
+    private WasteReasonTotalDto? TopReason => _board?.ByReason.FirstOrDefault();
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.Changed += OnLang;
+        await LoadPicksAsync();
+        await Reload();
+    }
+
+    private async Task LoadPicksAsync()
+    {
+        var materials = await Api.GetMaterialsAsync();
+        _materials = (materials?.Items ?? [])
+            .Select(m => new Pick("material", m.Id, m.Name, m.Unit, m.UnitCost)).ToList();
+
+        // Dishes are valued by what their materials cost, which the server works out; the
+        // list here only needs to let someone find the dish.
+        var menu = await Api.GetMyMenuBasicAsync() ?? [];
+        _products = menu.SelectMany(c => c.Items)
+            .Select(i => new Pick("product", i.Id, i.NameFor(L.Locale), "pcs", 0m)).ToList();
+    }
+
+    private async Task Reload() => _board = await Api.WasteBoardAsync(_days) ?? _board;
+
+    private async Task SetDays(int days)
+    {
+        _days = days;
+        await Reload();
+    }
+
+    private void SetKind(string kind)
+    {
+        _kind = kind;
+        _picked = null;
+    }
+
+    private Task<IEnumerable<Pick>> Search(string? text, CancellationToken _)
+    {
+        var source = _kind == "material" ? _materials : _products;
+        if (string.IsNullOrWhiteSpace(text)) return Task.FromResult(source.Take(30).AsEnumerable());
+        return Task.FromResult(source
+            .Where(p => p.Name.Contains(text, StringComparison.OrdinalIgnoreCase))
+            .Take(30).AsEnumerable());
+    }
+
+    private void OnPicked(Pick? pick) => _picked = pick;
+
+    /// <summary>Bar width against the biggest reason, so the chart always fills its track.</summary>
+    private string Pct(decimal cost)
+    {
+        var top = _board?.ByReason.FirstOrDefault()?.Cost ?? 0m;
+        return top <= 0 ? "0" : Math.Round(cost / top * 100m, 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private async Task Save()
+    {
+        if (_picked is not { } pick || _reason is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (ok, error) = await Api.RecordWasteAsync(
+                new RecordWasteRequest(pick.Kind, pick.Id, _quantity, _reason, _notes));
+            if (!ok) { _error = error ?? L["common.saveFail"]; return; }
+
+            Snackbar.Add(L["waste.recorded"], Severity.Success);
+            _picked = null;
+            _quantity = 1;
+            _notes = "";
+            _reason = null;
+            await LoadPicksAsync();     // the shelf moved
+            await Reload();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Undo(WasteEntryDto entry)
+    {
+        var (ok, error) = await Api.UndoWasteAsync(entry.Id);
+        if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        Snackbar.Add(L["waste.undone"], Severity.Info);
+        await LoadPicksAsync();
+        await Reload();
+    }
+
+    private void OnLang() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => L.Changed -= OnLang;
+}

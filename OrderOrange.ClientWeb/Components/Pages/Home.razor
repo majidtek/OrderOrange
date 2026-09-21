@@ -1,0 +1,913 @@
+﻿@page "/"
+@using OrderOrange.ClientWeb.Seo
+@inject ApiClient Api
+@inject AppState State
+@inject CartState Cart
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject LanguageService L
+@inject TableBrandState TableBrand
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+@inject IConfiguration Config
+@implements IDisposable
+
+<PageTitle>@L["seo.siteTitle"]</PageTitle>
+
+@* ---------- Hero: greeting, address, search ---------- *@
+<div class="mf-hero">
+    <div class="mf-hero-inner">
+        <h1 class="mf-seo-h1">@L["seo.homeH1"]</h1>
+        @* A guest has no saved addresses, and everything behind this pill needs an
+           account — so it stays away until there is someone to show it to. *@
+        @if (State.IsAuthenticated)
+        {
+            <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
+                <ActivatorContent>
+                    <div class="mf-address-pill">
+                        <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small" />
+                        @L["home.deliverTo"]: <b>@(_selectedAddress?.Label ?? L["home.chooseAddress"])</b>
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small" />
+                    </div>
+                </ActivatorContent>
+                <ChildContent>
+                    @foreach (var address in _addresses ?? [])
+                    {
+                        var a = address;
+                        <MudMenuItem Icon="@Icons.Material.Filled.Place" OnClick="@(() => SelectAddress(a))">
+                            <b>@a.Label</b> — @a.Area
+                        </MudMenuItem>
+                    }
+                    <MudDivider />
+                    <MudMenuItem Icon="@Icons.Material.Filled.Add" OnClick="@(() => Nav.NavigateTo("/addresses"))">@L["home.manageAddresses"]</MudMenuItem>
+                </ChildContent>
+            </MudMenu>
+        }
+        <MudText Typo="Typo.h4" Class="mt-3">@L[Greeting], @FirstName! <span class="mf-wave">👋</span></MudText>
+        <MudText Typo="Typo.body2" Style="opacity: .92;">@L["home.craving"]</MudText>
+
+        @* Business owners scroll past here too — a glassy animated door to the
+           partner portal, in their own language. *@
+        <a class="mf-partner-cta" href="https://orderorange.com/guide" target="_blank" rel="noopener">
+            <span class="ico">🏪</span>
+            <span class="tx">@L["home.partnerCta"]</span>
+            <span class="ar">➜</span>
+        </a>
+    </div>
+</div>
+
+<div class="mf-hero-search">
+    <div class="mf-search-trigger" @onclick="OpenSearch">
+        <span style="font-size: 18px;">✨</span>
+        <span class="flex-grow-1">@L["home.searchPlaceholder"]</span>
+        <MudIcon Icon="@Icons.Material.Filled.Search" Color="Color.Primary" />
+    </div>
+</div>
+
+@* ---------- Verticals: All / Food / Market / Pharmacy / Flowers / Shops ----------
+   "All" leads and is the landing state: the home page opens on every shop the platform
+   has, restaurants and markets together, rather than on restaurants alone. Picking a
+   vertical still narrows to it. *@
+<div class="mf-hscroll mt-4">
+    <div class="mf-cuisine-item @(_storeType is null ? "selected" : "")" @onclick="@(() => SelectVertical(null))">
+        <div class="mf-cuisine-circle"><Emoji Glyph="🛍️" /></div>
+        <span class="mf-cuisine-label">@L["home.allStores"]</span>
+    </div>
+    @foreach (var vertical in Verticals)
+    {
+        var v = vertical;
+        <div class="mf-cuisine-item @(_storeType == v.type ? "selected" : "")" @onclick="@(() => SelectVertical(v.type))">
+            <div class="mf-cuisine-circle">
+                <img class="cp" src="@VerticalPhoto(v.type)" alt="@L[v.labelKey]" loading="lazy" />
+            </div>
+            <span class="mf-cuisine-label">@L[v.labelKey]</span>
+        </div>
+    }
+</div>
+
+@* ---------- Vertical hero (market / pharmacy / flowers / shops) ---------- *@
+@if (_storeType is not null && _storeType != StoreType.Restaurant)
+{
+    var current = Verticals.First(v => v.type == _storeType);
+    <div class="mf-vert-hero mt-4" style="background: @VerticalGradient(_storeType.Value);">
+        <div class="mf-vert-hero-emoji"><Emoji Glyph="@current.emoji" /></div>
+        <div>
+            <MudText Typo="Typo.h5" Style="color:#fff; font-weight: 800;">@L[current.labelKey]</MudText>
+            <MudText Typo="Typo.body2" Style="color: rgba(255,255,255,.85);">
+                @(_lat is not null ? $"📍 {L["home.nearYou"]}{(_nearArea is null ? "" : $" · {_nearArea}")}" : L["home.deliverTo"])
+            </MudText>
+        </div>
+        <div class="mf-vert-hero-bubbles"><span>@current.emoji</span><span>@current.emoji</span><span>@current.emoji</span></div>
+    </div>
+}
+
+@* ---------- Cuisine circles (food, and the all-verticals landing view) ---------- *@
+@if (_cuisines is not null && _storeType is null or StoreType.Restaurant)
+{
+    @* Tap several cuisines to combine them; "All" clears the selection. *@
+    <div class="mf-hscroll mt-4">
+        <div class="mf-cuisine-item @(_selectedCuisineIds.Count == 0 && !_favoritesOnly ? "selected" : "")" @onclick="ClearFilters">
+            <div class="mf-cuisine-circle"><Emoji Glyph="🍽️" /></div>
+            <span class="mf-cuisine-label">@L["home.all"]</span>
+        </div>
+        <div class="mf-cuisine-item @(_favoritesOnly ? "selected" : "")" @onclick="ToggleFavoritesFilter">
+            <div class="mf-cuisine-circle"><Emoji Glyph="❤️" /></div>
+            <span class="mf-cuisine-label">@L["home.favorites"]</span>
+        </div>
+        @foreach (var cuisine in _cuisines)
+        {
+            var c = cuisine;
+            <div class="mf-cuisine-item @(_selectedCuisineIds.Contains(c.Id) ? "selected" : "")" @onclick="@(() => ToggleCuisine(c.Id))">
+                <div class="mf-cuisine-circle">
+                    <img class="cp" src="@FoodPhoto.ForRestaurant(c.Name, c.Id)" alt="@c.Name" loading="lazy" />
+                </div>
+                <span class="mf-cuisine-label">@L.Data("cuisine", c.Name)</span>
+            </div>
+        }
+    </div>
+}
+
+@* ---------- Promo carousel ---------- *@
+@if (_promos is { Count: > 0 })
+{
+    <div class="mf-hscroll mt-1">
+        @foreach (var (promo, index) in _promos.Select((p, i) => (p, i)))
+        {
+            var p = promo;
+            var days = p.ExpiresAt is { } end ? (int)Math.Ceiling((end - DateTime.Now).TotalDays) : (int?)null;
+            @* The image path is absolute: a relative url() inside a custom property
+               resolves against food.css's folder, not the page, so "img/..." would 404.
+               Keep this comment outside the tag — Razor treats a comment between
+               attributes as an attribute name and the render then throws. *@
+            <div class="mf-promo-card"
+                 style="--promo-img: url('/img/promos/@(PromoPhotos[index % PromoPhotos.Length])');">
+                <div class="mf-promo-top">
+                    <span class="mf-promo-pct">
+                        <b>@p.Percent.ToString("0.#")</b><i>%</i>
+                    </span>
+                    <span class="mf-promo-head">
+                        <span class="t">@L["promo.off"]</span>
+                        <span class="s">@((MarkupString)string.Format(L["promo.minOrder"], Fmt.Rial(p.MinOrder)))</span>
+                    </span>
+                </div>
+
+                @if (days is not null)
+                {
+                    <span class="mf-promo-clock @(days <= 3 ? "soon" : "")">
+                        @(days <= 0
+                            ? L["promo.lastDay"]
+                            : days == 1
+                                ? L["promo.oneDay"]
+                                : string.Format(L["promo.daysLeft"], days))
+                    </span>
+                }
+
+                @* Tapping the code copies it — the whole point of a promo code. *@
+                <button type="button" class="mf-promo-code @(_copiedCode == p.Code ? "done" : "")"
+                        @onclick="@(() => CopyCode(p.Code))">
+                    <span class="cd mf-ascii">@p.Code</span>
+                    <span class="ic">
+                        @if (_copiedCode == p.Code)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" />
+                        }
+                    </span>
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@* ---------- Suggested: the real shops, put forward before anything generated ----------
+   This strip is a hand-curated list (Suggested:RestaurantIds), so everything in it is
+   shown on every vertical — the ones matching the vertical being browsed simply lead.
+   Two earlier versions both hid things: nailing it to StoreType.Restaurant meant a real
+   SHOP could be featured and never render at all, and filtering to the current vertical
+   meant it rendered only for someone who already knew to open the Shops tab. If a shop is
+   worth featuring it is worth seeing on the page people actually land on. *@
+@if (_suggested is { Stores.Count: > 0 } sug && _selectedCuisineIds.Count == 0 && !_favoritesOnly)
+{
+    @* Configured order, exactly as written, on every vertical. Sorting matching store
+       types to the front sounded tidy but silently overrode that order — a shop featured
+       second in the config landed ninth on the food page, back off the edge of the strip
+       where it could not be seen. Position in this strip is the owner's decision. *@
+    var sugStores = sug.Stores;
+    var sugStoreIds = sugStores.Select(s => s.Id).ToHashSet();
+    var sugDishes = sug.Dishes.Where(d => sugStoreIds.Contains(d.RestaurantId)).ToList();
+
+    <div class="mf-section-title mf-sug-title">
+        <span class="mf-sug-spark">✨</span>
+        <MudText Typo="Typo.h6">@L["home.suggested"]</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mf-sug-sub">@L["home.suggestedSub"]</MudText>
+    </div>
+
+    @* The shops themselves first, as pills — the strip below is their food.
+       mf-hscroll opts the row into mf-scroll.js, so it gets the same arrows, edge fade
+       and drag-to-scroll as every other strip on this page. *@
+    <div class="mf-hscroll mf-sug-shops">
+        @foreach (var store in sugStores)
+        {
+            var s = store;
+            <button type="button" class="mf-sug-shop @(s.IsOpen ? "" : "shut")" @onclick="@(() => Open(s))">
+                @if (s.LogoPhoto is { Length: > 0 } sugLogo)
+                {
+                    <span class="em has-logo"><img src="@sugLogo" alt="@s.Name" loading="lazy" /></span>
+                }
+                else
+                {
+                    <span class="em">@s.LogoEmoji</span>
+                }
+                <span class="tx">
+                    <b>@StoreText.Name(s.Name, s.Names, L)</b>
+                    @* Primary cuisine only. A shop filed under three cuisines filled the
+                       whole line and pushed the delivery time out past the ellipsis, and
+                       on a card this size the time is the more useful half. The full list
+                       is on the shop's own page. *@
+                    <span>@StoreText.Cuisines(s.Cuisine, null, L) · ~@(s.AvgPrepMinutes + 15) @L["common.min"]</span>
+                </span>
+            </button>
+        }
+    </div>
+
+    @if (sugDishes.Count > 0)
+    {
+        <div class="mf-hscroll mf-deals mf-sug-dishes">
+            @foreach (var dish in sugDishes)
+            {
+                var d = dish;
+                <div class="mf-deal-card @(d.RestaurantIsOpen ? "" : "shut")" @onclick="@(() => OpenDeal(d))">
+                    <div class="mf-deal-photo">
+                        @if ((d.Photo ?? FoodPhoto.ForDish(d.Name) ?? FoodPhoto.ForRestaurant(d.RestaurantCuisine, d.RestaurantId)) is string sugPhoto)
+                        {
+                            <img src="@sugPhoto" alt="" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="em">@d.ImageEmoji</span>
+                        }
+                        @if (d.DiscountPercent > 0)
+                        {
+                            <span class="mf-deal-ribbon">-@d.DiscountPercent.ToString("0.#")%</span>
+                        }
+                        @if (!d.RestaurantIsOpen)
+                        {
+                            <span class="mf-deal-shut">@L["home.closed"]</span>
+                        }
+                    </div>
+                    <div class="mf-deal-body">
+                        <div class="nm">@L.Product(d.Name)</div>
+                        <div class="ven"><span class="e">@d.RestaurantLogoEmoji</span>@StoreText.Name(d.RestaurantName, L)</div>
+                        <div class="mf-price">
+                            <span class="now">@Fmt.Rial(d.FinalPrice)</span>
+                            @if (d.DiscountPercent > 0)
+                            {
+                                <span class="was">@Fmt.Rial(d.Price)</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+
+@* ---------- Order again ---------- *@
+@if (_orderAgain is { Count: > 0 } && _selectedCuisineIds.Count == 0 && !_favoritesOnly && _storeType == StoreType.Restaurant)
+{
+    @* A compact row of pills: one recent store should read as a shortcut, not as a
+       lone card stranded in an empty band. Wraps instead of scrolling. *@
+    <div class="mf-again">
+        <span class="mf-again-label">
+            <MudIcon Icon="@Icons.Material.Filled.Replay" Size="Size.Small" />
+            @L["home.orderAgain"]
+        </span>
+        @foreach (var restaurant in _orderAgain)
+        {
+            var r = restaurant;
+            <button type="button" class="mf-again-chip" @onclick="@(() => Open(r))">
+                @if (r.LogoPhoto is { Length: > 0 } againLogo)
+                {
+                    <span class="em has-logo"><img src="@againLogo" alt="@r.Name" loading="lazy" /></span>
+                }
+                else
+                {
+                    <span class="em">@r.LogoEmoji</span>
+                }
+                <span class="tx">
+                    <b>@StoreText.Name(r.Name, r.Names, L)</b>
+                    <span>~@(r.AvgPrepMinutes + 15) @L["common.min"]</span>
+                </span>
+            </button>
+        }
+    </div>
+}
+
+@* ---------- Restaurant grid ---------- *@
+<div class="mf-section-title" style="flex-wrap: nowrap;">
+    <MudIcon Icon="@(_lat is not null && !_favoritesOnly ? Icons.Material.Filled.NearMe : Icons.Material.Filled.Storefront)" Color="Color.Primary" />
+    <MudText Typo="Typo.h6" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        @(_favoritesOnly
+            ? L["home.yourFavorites"]
+            : _lat is not null
+                ? $"📍 {L["home.nearYou"]}{(_nearArea is null ? "" : $" · {_nearArea}")}"
+                : _storeType is null
+                    ? L["home.allStores"]
+                    : L["home.allRestaurants"])
+    </MudText>
+</div>
+<div class="mf-sort-row">
+    <MudChipSet T="string" SelectionMode="SelectionMode.SingleSelection" CheckMark="false"
+                SelectedValue="_sort" SelectedValueChanged="OnSortChanged">
+        <MudChip T="string" Value="@("recommended")" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["home.sortRecommended"]</MudChip>
+        <MudChip T="string" Value="@("rating")" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["home.sortTopRated"]</MudChip>
+        <MudChip T="string" Value="@("fastest")" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["home.sortFastest"]</MudChip>
+        <MudChip T="string" Value="@("fee")" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["home.sortLowestFee"]</MudChip>
+    </MudChipSet>
+</div>
+
+@if (_restaurants is null)
+{
+    <MudGrid Spacing="3">
+        @for (var i = 0; i < 6; i++)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="0" Outlined="true" Class="rounded-xl pa-0" Style="overflow: hidden;">
+                    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="96px" />
+                    <div class="pa-4">
+                        <MudSkeleton Width="60%" Height="28px" />
+                        <MudSkeleton Width="90%" />
+                        <MudSkeleton Width="40%" />
+                    </div>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+else if (_restaurants.Count == 0)
+{
+    <EmptyState Emoji="@(_favoritesOnly ? "💔" : "🔍")"
+                Title="@(_favoritesOnly ? L["home.noFavorites"] : L["home.noRestaurants"])"
+                Subtitle="@(_favoritesOnly ? L["home.noFavoritesHint"] : L["home.noRestaurantsHint"])" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        @foreach (var restaurant in _restaurants)
+        {
+            var r = restaurant;
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="2" Class="@($"mf-rest-card rounded-xl {(r.IsOpen ? "" : "mf-rest-closed")}")"
+                          Style="position: relative;">
+                    <div class="mf-fav-btn" @onclick="@(() => ToggleFavorite(r))" @onclick:stopPropagation="true">
+                        <MudIcon Icon="@(_favoriteIds.Contains(r.Id) ? Icons.Material.Filled.Favorite : Icons.Material.Outlined.FavoriteBorder)"
+                                 Color="@(_favoriteIds.Contains(r.Id) ? Color.Error : Color.Default)" Size="Size.Small" />
+                    </div>
+                    <div @onclick="@(() => Open(r))">
+                        <div style="position: relative;">
+                            @{
+                                // A store with REAL banner photos wears its own (the cached
+                                // /og/{id}.jpg is its first photo); stock slides otherwise.
+                                var cardSlides = r.HasPhotos
+                                    ? new List<string> { $"/og/{r.Id}.jpg" }
+                                    : FoodPhoto.SlidesForRestaurant(r.Cuisine, r.Id).Take(3).ToList();
+                            }
+                            <div class="mf-rest-banner @(cardSlides.Count > 1 ? $"slides n{cardSlides.Count}" : "")"
+                                 style="background: @r.BannerColor;">
+                                @for (var s = 0; s < cardSlides.Count; s++)
+                                {
+                                    <img class="bp gal" style="animation-delay: @(s * 4)s" src="@cardSlides[s]" alt="@r.Cuisine" loading="lazy" />
+                                }
+                            </div>
+                            <div class="mf-time-chip">⏱ @(r.AvgPrepMinutes + 15) min</div>
+                            @if (!r.IsOpen)
+                            {
+                                <div class="mf-closed-ribbon">@L["home.closed"]</div>
+                            }
+                        </div>
+                        <div class="pa-4 pt-5">
+                            <div class="d-flex align-center" style="gap: 8px;">
+                                <MudText Typo="Typo.h6" Class="flex-grow-1" Style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">@StoreText.Name(r.Name, r.Names, L)</MudText>
+                                @if (r.RatingCount > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text"
+                                             Icon="@Icons.Material.Filled.Star">@r.Rating.ToString("0.0")</MudChip>
+                                }
+                            </div>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2"
+                                     Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 40px;">
+                                @StoreText.Description(r.Description, L)
+                            </MudText>
+                            <div class="d-flex align-center flex-wrap" style="gap: 10px;">
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="oo-cuis-chip">@StoreText.Cuisines(r.Cuisine, r.Cuisines, L)</MudChip>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    <MudIcon Icon="@Icons.Material.Filled.Place" Size="Size.Small" Style="vertical-align: -3px;" />@StoreText.Area(r.Area, L)
+                                </MudText>
+                                @if (r.DistanceKm is not null)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Primary">
+                                        <MudIcon Icon="@Icons.Material.Filled.NearMe" Size="Size.Small" Style="vertical-align: -3px;" /><b>@r.DistanceKm km</b>
+                                    </MudText>
+                                }
+                                @if (r.DeliveryFee == 0)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mf-free-delivery">
+                                        <MudIcon Icon="@Icons.Material.Filled.DeliveryDining" Size="Size.Small" Style="vertical-align: -3px;" /> @L["home.freeDelivery"]</MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        <MudIcon Icon="@Icons.Material.Filled.DeliveryDining" Size="Size.Small" Style="vertical-align: -3px;" /> @Fmt.Rial(r.DeliveryFee)
+                                    </MudText>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    @* ---------- The dish tail ----------
+       Once the shop grid is exhausted the same scroll keeps going into individual items,
+       so someone who reaches the last shop lands on something to order rather than on the
+       end of the page. It only appears once there is something in it. *@
+    @if (_items is { Count: > 0 })
+    {
+        <div class="mf-section-title mt-6" style="flex-wrap: nowrap;">
+            <MudIcon Icon="@Icons.Material.Filled.RestaurantMenu" Color="Color.Primary" />
+            <MudText Typo="Typo.h6" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                @L["home.allItems"]
+            </MudText>
+        </div>
+        @* A GRID, not an .mf-hscroll — mf-scroll.js enhances every .mf-hscroll with scroll
+           arrows and snap points, which is wrong for something that wraps. *@
+        <div class="mf-item-grid">
+            @foreach (var item in _items)
+            {
+                var d = item;
+                <div class="mf-deal-card @(d.RestaurantIsOpen ? "" : "shut")" @onclick="@(() => OpenDeal(d))">
+                    <div class="mf-deal-photo">
+                        @if ((d.Photo ?? FoodPhoto.ForDish(d.Name) ?? FoodPhoto.ForRestaurant(d.RestaurantCuisine, d.RestaurantId)) is string itemPhoto)
+                        {
+                            <img src="@itemPhoto" alt="" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="em">@d.ImageEmoji</span>
+                        }
+                        @if (d.DiscountPercent > 0)
+                        {
+                            <span class="mf-deal-ribbon">-@d.DiscountPercent.ToString("0.#")%</span>
+                        }
+                        @if (!d.RestaurantIsOpen)
+                        {
+                            <span class="mf-deal-shut">@L["home.closed"]</span>
+                        }
+                    </div>
+                    @* Same body as the Offers strip above — .nm / .ven / .mf-price are the
+                       classes food.css actually styles. The first pass invented its own
+                       names, so none of the type rules applied and the dish name ran into
+                       the shop name. *@
+                    <div class="mf-deal-body">
+                        <div class="nm">@L.Product(d.Name)</div>
+                        <div class="ven"><span class="e">@d.RestaurantLogoEmoji</span>@StoreText.Name(d.RestaurantName, L)</div>
+                        <div class="mf-price">
+                            <span class="now">@Fmt.Rial(d.FinalPrice)</span>
+                            @if (d.DiscountPercent > 0)
+                            {
+                                <span class="was">@Fmt.Rial(d.Price)</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <InfiniteScroll OnLoadMore="LoadMore" HasMore="_hasMore" />
+
+    @* The other half of the product, at the foot of the page where a diner has finished
+       reading and a shop owner has not. Real headings and real links: this is the only
+       place on the home page that says out loud what OrderOrange is for a business. *@
+    <section class="mf-home-pos">
+        <h2>@L["home.posTitle"]</h2>
+        <p>@L["home.posBody"]</p>
+        <p class="links">
+            <a href="https://orderorange.com/guide">@L["home.posGuide"]</a>
+            <a href="@SeoSlugs.Pos">@L["home.posMore"]</a>
+        </p>
+    </section>
+}
+
+@code {
+    private static readonly string[] PromoGradients =
+    [
+        "linear-gradient(135deg, #FF5A00, #FF9A5C)",
+        "linear-gradient(135deg, #7B2FF7, #B06AFF)",
+        "linear-gradient(135deg, #0BA360, #3CBA92)",
+        "linear-gradient(135deg, #E0356B, #FF7BA9)"
+    ];
+
+    /// <summary>Real photography behind the promo cards (Pexels, free license) —
+    /// people first, then hero food shots.</summary>
+    private static readonly string[] PromoPhotos =
+    [
+        "p3184183.jpg",   // friends sharing a table
+        "p70497.jpg",     // burger and fries
+        "p1653877.jpg",   // pizza slice in hand
+        "p376464.jpg",    // caramel pancakes
+        "p2983101.jpg",   // gourmet double burger
+        "p1640777.jpg"    // healthy veggie bowl
+    ];
+
+    private List<RestaurantCardDto>? _restaurants;
+    private List<CuisineDto>? _cuisines;
+    private List<PromoDto>? _promos;
+    private List<AddressDto>? _addresses;
+    private List<RestaurantCardDto> _orderAgain = [];
+    private SuggestionsDto? _suggested;
+    private string? _copiedCode;
+    private HashSet<int> _favoriteIds = [];
+    private AddressDto? _selectedAddress;
+    private static readonly (StoreType type, string emoji, string labelKey)[] Verticals =
+    [
+        (StoreType.Restaurant, "🍔", "home.vFood"),
+        (StoreType.Grocery, "🛒", "home.vMarket"),
+        (StoreType.Pharmacy, "💊", "home.vPharmacy"),
+        (StoreType.Flowers, "💐", "home.vFlowers"),
+        (StoreType.Shop, "🛍️", "home.vShops")
+    ];
+
+    private static string VerticalPhoto(StoreType type) => type switch
+    {
+        StoreType.Grocery => "img/rest/grocery.jpg",
+        StoreType.Pharmacy => "img/rest/pharmacy.jpg",
+        StoreType.Flowers => "img/rest/flowers.jpg",
+        StoreType.Shop => "img/rest/shop.jpg",
+        _ => "img/rest/burger.jpg"
+    };
+
+    private static string VerticalGradient(StoreType type) => type switch
+    {
+        StoreType.Grocery => "linear-gradient(120deg, #1B8A4C, #52C782)",
+        StoreType.Pharmacy => "linear-gradient(120deg, #1565C0, #55A6F0)",
+        StoreType.Flowers => "linear-gradient(120deg, #C2185B, #F06CA0)",
+        StoreType.Shop => "linear-gradient(120deg, #6A1B9A, #AB63D6)",
+        _ => "linear-gradient(120deg, #FF5A00, #FF9A5C)"
+    };
+
+    private readonly HashSet<int> _selectedCuisineIds = [];
+    /// <summary>
+    /// Which vertical is being browsed. NULL is the landing state and means "all of them":
+    /// the home page opens on every shop the platform has, restaurants and markets
+    /// together, and narrows only when a vertical is tapped.
+    /// </summary>
+    private StoreType? _storeType;
+    private bool _favoritesOnly;
+    private string _sort = "recommended";
+
+    private async Task SelectVertical(StoreType? type)
+    {
+        _storeType = type;
+        _selectedCuisineIds.Clear();
+        _favoritesOnly = false;
+        _items = null;
+        _storesDone = false;
+        await Reload();
+    }
+
+    private string FirstName => State.FullName.Split(' ').FirstOrDefault() ?? State.FullName;
+
+    /// <summary>Set from the browser clock — the server may sit in another timezone.</summary>
+    private int? _localHour;
+
+    private string Greeting => (_localHour ?? DateTime.Now.Hour) switch
+    {
+        < 12 => "home.greetMorning",
+        < 17 => "home.greetAfternoon",
+        _ => "home.greetEvening"
+    };
+
+    // Filters and sorting now run on the server — with millions of stores the
+    // client only ever holds the pages the user has actually scrolled through.
+    private const int PageSize = 30;
+    private const int ItemPageSize = 24;
+    private bool _hasMore = true;
+    private bool _loadingMore;
+
+    /// <summary>The dish tail: what the home page shows once the shop grid is exhausted.</summary>
+    private List<DealDto>? _items;
+    private bool _storesDone;
+
+    // "Near you": browser position + Google reverse geocode of the area name.
+    private double? _lat;
+    private double? _lng;
+    private string? _nearArea;
+    private bool _locationAsked;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _locationAsked) return;
+        _locationAsked = true;
+        try
+        {
+            _localHour = await JS.InvokeAsync<int>("mfLocalHour");
+            StateHasChanged();
+        }
+        catch { /* greeting falls back to server time */ }
+        try
+        {
+            var pos = await JS.InvokeAsync<GeoPos?>("mfMap.position");
+            if (pos is { Lat: not 0 } or { Lng: not 0 })
+            {
+                _lat = pos!.Lat;
+                _lng = pos.Lng;
+                await Reload();
+                StateHasChanged();
+                _nearArea = await JS.InvokeAsync<string?>("mfMap.areaName",
+                    Config["GoogleMaps:ApiKey"] ?? "", pos.Lat, pos.Lng);
+                StateHasChanged();
+            }
+        }
+        catch { /* location is a nicety — the list already shows without it */ }
+    }
+
+    private sealed record GeoPos(double Lat, double Lng);
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.HomeReset += OnHomeReset;
+        // orderorange.com?id=siraj and orderorange.com?id=5000209 both open the shop —
+        // the form printed on QR sheets and shared in chat. A number is the store id; a
+        // word is its handle; an unknown id just leaves the visitor on the home page
+        // rather than stranding them on an error.
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+        // the Restaurants pill from another page lands here with ?v=food: restaurants only
+        if (query["v"] == "food") _storeType = StoreType.Restaurant;
+        if (query["id"] is { Length: > 0 } wanted)
+        {
+            var storeId = int.TryParse(wanted, out var byNumber) && byNumber > 0
+                ? byNumber
+                : (await Api.ResolveSlugAsync(wanted.Trim().ToLowerInvariant()))?.Id ?? 0;
+            if (storeId > 0)
+            {
+                // A table card scans as ?id=shop&t=N. That guest is SEATED — they get
+                // the table page (this store, its menu, its chat) and nothing else; the
+                // rest of the platform would only lead them away from their own table.
+                if (int.TryParse(query["t"], out var tno) && tno > 0 &&
+                    await Api.ResolveTableAsync(storeId, tno) is { } table)
+                {
+                    Nav.NavigateTo($"/reserve/{table.Code}", replace: true);
+                    return;
+                }
+                // Scanned the SHOP's own QR: the visit belongs to that shop. The ?qr
+                // marker rides along because THIS code may run during prerender, whose
+                // state dies — the store page reads the marker in the live circuit and
+                // dresses the bar in the shop's own logo and name.
+                Nav.NavigateTo(StorePath.For(storeId) + "?qr=1", replace: true);
+                return;
+            }
+        }
+
+        // Nothing waits for anything else. The page paints at once and each strip fills
+        // itself in as its own call lands — a slow "Suggested for you" used to hold the
+        // whole home page, shop grid and all, behind it.
+        _addresses = [];
+        Fill(async () => _cuisines = await Api.GetCuisinesAsync());
+        Fill(async () => _promos = await Api.GetPromosAsync());
+        Fill(async () => _suggested = await Api.GetSuggestionsAsync());
+        Fill(Reload);   // the shop grid — the page's main body
+
+        // Addresses, favourites and past orders belong to an account. Asking for them as
+        // a guest would only earn a 401, which the API client treats as a lost session.
+        if (State.IsAuthenticated)
+        {
+            Fill(async () =>
+            {
+                _addresses = await Api.GetAddressesAsync() ?? [];
+                _selectedAddress = Cart.PreferredAddressId is { } preferred
+                    ? _addresses.FirstOrDefault(a => a.Id == preferred) ?? _addresses.FirstOrDefault()
+                    : _addresses.FirstOrDefault();
+            });
+            Fill(async () => _favoriteIds = (await Api.GetFavoriteRestaurantIdsAsync() ?? []).ToHashSet());
+            Fill(LoadOrderAgain);
+        }
+    }
+
+    /// <summary>
+    /// Runs one piece of the page's data on its own and repaints when it arrives. A
+    /// failure leaves that strip empty rather than taking the page down with it.
+    /// </summary>
+    private void Fill(Func<Task> load) => _ = InvokeAsync(async () =>
+    {
+        try { await load(); }
+        catch { /* one strip missing is not a broken home page */ }
+        StateHasChanged();
+    });
+
+    private string? CuisineCsv => _selectedCuisineIds.Count == 0 ? null : string.Join(',', _selectedCuisineIds);
+
+    private async Task Reload()
+    {
+        _restaurants = null;
+        _items = null;
+        _storesDone = false;
+        _hasMore = true;
+        StateHasChanged();
+        _restaurants = await Api.BrowsePageAsync(_storeType, CuisineCsv, _sort, _favoritesOnly, 0, PageSize, null, _lat, _lng) ?? [];
+        // Even a short first page keeps _hasMore on: the dish tail below picks up where the
+        // shops stop, so the scroll only truly ends when both are exhausted.
+        _hasMore = true;
+    }
+
+    /// <summary>
+    /// Shops first, then dishes. Once the shop pages run dry the same infinite scroll keeps
+    /// going into individual items, so a customer who scrolls past the last shop lands on
+    /// something to order rather than on the end of the page.
+    /// </summary>
+    private async Task LoadMore()
+    {
+        if (_loadingMore || !_hasMore || _restaurants is null) return;
+        _loadingMore = true;
+        try
+        {
+            if (!_storesDone)
+            {
+                var page = await Api.BrowsePageAsync(_storeType, CuisineCsv, _sort, _favoritesOnly,
+                                                     _restaurants.Count, PageSize, null, _lat, _lng) ?? [];
+                var known = _restaurants.Select(r => r.Id).ToHashSet();
+                _restaurants.AddRange(page.Where(r => !known.Contains(r.Id)));
+                if (page.Count == PageSize) return;       // more shops to come
+                _storesDone = true;
+            }
+
+            // Favourites and a cuisine filter are questions about SHOPS; carrying on into
+            // every dish on the platform would quietly ignore what was asked for.
+            if (_favoritesOnly || _selectedCuisineIds.Count > 0)
+            {
+                _hasMore = false;
+                return;
+            }
+
+            _items ??= [];
+            var dishes = await Api.GetAllItemsAsync(_items.Count, ItemPageSize) ?? [];
+            var seen = _items.Select(d => d.MenuItemId).ToHashSet();
+            _items.AddRange(dishes.Where(d => !seen.Contains(d.MenuItemId)));
+            if (dishes.Count < ItemPageSize)
+            {
+                _hasMore = false;
+            }
+        }
+        finally
+        {
+            _loadingMore = false;
+        }
+    }
+
+    private Task OpenSearch() =>
+        Dialogs.ShowAsync<SearchDialog>("", new DialogOptions
+        {
+            FullScreen = true,
+            NoHeader = true
+        });
+
+    private async Task LoadOrderAgain()
+    {
+        // The restaurants of your recent delivered orders, in one tap-friendly row.
+        var orders = await Api.GetMyOrdersAsync() ?? [];
+        var recentIds = orders.Where(o => o.Status == OrderStatus.Delivered)
+            .Select(o => o.RestaurantId).Distinct().Take(8).ToList();
+        _orderAgain = recentIds.Count == 0
+            ? []
+            : (await Api.GetRestaurantsByIdsAsync(recentIds) ?? []).Where(r => r.IsOpen).Take(8).ToList();
+    }
+
+    private void SelectAddress(AddressDto address)
+    {
+        _selectedAddress = address;
+        Cart.PreferredAddressId = address.Id;
+    }
+
+    private async Task ToggleCuisine(int id)
+    {
+        if (!_selectedCuisineIds.Add(id))
+            _selectedCuisineIds.Remove(id);
+        _favoritesOnly = false;
+        await Reload();
+    }
+
+    private async Task ClearFilters()
+    {
+        _selectedCuisineIds.Clear();
+        _favoritesOnly = false;
+        await Reload();
+    }
+
+    /// <summary>
+    /// The Restaurants pill (or the logo) was pressed while this page was already open.
+    /// Everything goes back to how the page looks on a first visit: no cuisine, no
+    /// vertical, no favourites filter, the whole list again.
+    /// </summary>
+    private void OnHomeReset(bool restaurantsOnly) => _ = InvokeAsync(async () =>
+    {
+        _selectedCuisineIds.Clear();
+        _favoritesOnly = false;
+        _storeType = restaurantsOnly ? StoreType.Restaurant : null;
+        _items = null;
+        _storesDone = false;
+        await Reload();
+        StateHasChanged();
+    });
+
+    private async Task ToggleFavoritesFilter()
+    {
+        // Favourites are tied to an account, so a guest is asked to sign in first.
+        if (!_favoritesOnly && !await RequireAccount(L["auth.reasonFavorites"])) return;
+        _favoritesOnly = !_favoritesOnly;
+        if (_favoritesOnly) _selectedCuisineIds.Clear();
+        await Reload();
+    }
+
+    /// <summary>Prompts a guest to sign in; true once they have an account.</summary>
+    private async Task<bool> RequireAccount(string reason)
+    {
+        if (State.IsAuthenticated) return true;
+        var parameters = new DialogParameters<SignInDialog> { { d => d.Reason, reason } };
+        var dialog = await Dialogs.ShowAsync<SignInDialog>("", parameters, new DialogOptions { FullScreen = true, NoHeader = true });
+        await dialog.Result;
+        if (!State.IsAuthenticated) return false;
+        _favoriteIds = (await Api.GetFavoriteRestaurantIdsAsync() ?? []).ToHashSet();
+        return true;
+    }
+
+    private async Task OnSortChanged(string? sort)
+    {
+        _sort = sort ?? "recommended";
+        await Reload();
+    }
+
+    private async Task ToggleFavorite(RestaurantCardDto restaurant)
+    {
+        if (!await RequireAccount(L["auth.reasonFavorites"])) return;
+        var (ok, error) = await Api.ToggleFavoriteAsync(restaurant.Id);
+        if (!ok)
+        {
+            Snackbar.Add(error ?? L["common.favFail"], Severity.Error);
+            return;
+        }
+        if (!_favoriteIds.Add(restaurant.Id))
+        {
+            _favoriteIds.Remove(restaurant.Id);
+            Snackbar.Add($"Removed {restaurant.Name} from favorites.", Severity.Normal);
+        }
+        else
+        {
+            Snackbar.Add($"❤️ Added {restaurant.Name} to favorites!", Severity.Success);
+        }
+    }
+
+    private void Open(RestaurantCardDto restaurant)
+    {
+        // Closed is a state, not a wall: the menu is always browsable —
+        // only ORDERING waits for the shop to open (the server enforces it).
+        Nav.NavigateTo(StorePath.For(restaurant.Id));
+    }
+
+    /// <summary>
+    /// Copies a promo code to the clipboard and marks that card as copied. The tick
+    /// reverts on its own so a second tap still reads as a fresh action.
+    /// </summary>
+    private async Task CopyCode(string code)
+    {
+        var ok = false;
+        try { ok = await JS.InvokeAsync<bool>("mfChat.copy", code); } catch { /* no clipboard here */ }
+        if (!ok)
+        {
+            Snackbar.Add(string.Format(L["promo.copyFail"], code), Severity.Info);
+            return;
+        }
+        _copiedCode = code;
+        Snackbar.Add(string.Format(L["promo.copied"], code), Severity.Success);
+        StateHasChanged();
+
+        // The tick reverts on its own. If the customer has navigated away by then the
+        // component is gone, so the re-render is best-effort.
+        await Task.Delay(2000);
+        if (_copiedCode != code) return;
+        _copiedCode = null;
+        try { await InvokeAsync(StateHasChanged); } catch (ObjectDisposedException) { /* left the page */ }
+    }
+
+    /// <summary>Tapping an offer opens its store scrolled to that dish.</summary>
+    private void OpenDeal(DealDto deal)
+    {
+        Nav.NavigateTo($"{StorePath.For(deal.RestaurantId)}?dish={deal.MenuItemId}");
+    }
+
+    public void Dispose() => State.HomeReset -= OnHomeReset;
+}

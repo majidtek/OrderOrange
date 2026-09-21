@@ -1,0 +1,88 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* Add or edit someone in the store's book. The phone number is the identity — it is how
+the counter recognises a caller, and it is what the order is filed under. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">
+            @(Existing is null ? L["cust.add"] : L["cust.edit"])
+        </MudText>
+    </TitleContent>
+
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="@L["cust.name"]" Variant="Variant.Outlined"
+            Margin="Margin.Dense" Class="mb-3" Immediate="true" MaxLength="120" />
+        <MudTextField @bind-Value="_phone" Label="@L["common.phone"]" Variant="Variant.Outlined"
+            Margin="Margin.Dense" Class="mb-3" Placeholder="+968 ..." MaxLength="40"
+            Immediate="true" />
+        <MudTextField @bind-Value="_address" Label="@L["cust.address"]" Variant="Variant.Outlined"
+            Margin="Margin.Dense" Class="mb-3" Lines="2" MaxLength="300" />
+        <MudTextField @bind-Value="_notes" Label="@L["cust.notes"]" Variant="Variant.Outlined"
+            Margin="Margin.Dense" Lines="2" MaxLength="300"
+            Placeholder="@L["cust.notesPh"]" />
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_busy" OnClick="Save">
+            @L["common.save"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public StoreCustomerDto? Existing { get; set; }
+
+    private string _name = "";
+    private string _phone = "";
+    private string _address = "";
+    private string _notes = "";
+    private bool _busy;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null) return;
+        _name = Existing.Name;
+        _phone = Existing.Phone;
+        _address = Existing.Address;
+        _notes = Existing.Notes ?? "";
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var req = new SaveStoreCustomerRequest(
+            _name, _phone, _address,
+            string.IsNullOrWhiteSpace(_notes) ? null : _notes,
+            Existing?.Lat, Existing?.Lng);
+
+            if (Existing is null)
+            {
+                var (created, error) = await Api.CreateStoreCustomerAsync(req);
+                if (created is null) { _error = error ?? L["common.saveFail"]; return; }
+            }
+            else
+            {
+                var (ok, error) = await Api.UpdateStoreCustomerAsync(Existing.Id, req);
+                if (!ok) { _error = error ?? L["common.saveFail"]; return; }
+            }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

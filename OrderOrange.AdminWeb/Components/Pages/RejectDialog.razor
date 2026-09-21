@@ -1,0 +1,23 @@
+@inject LanguageService L
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            @L["admin.rejectHint"] — <b>@DriverName</b>
+        </MudText>
+        <MudTextField Margin="Margin.Dense" @bind-Value="_reason" Label="@L["drv.reason"]" Variant="Variant.Outlined" Lines="3" Immediate="true"
+                      Placeholder="@L["admin.rejectPlaceholder"]" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@string.IsNullOrWhiteSpace(_reason)"
+                   OnClick="@(() => Dialog.Close(DialogResult.Ok(_reason)))">@L["admin.rejectBtn"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string DriverName { get; set; } = "";
+
+    private string _reason = "";
+}

@@ -1,0 +1,202 @@
+﻿@inject ApiClient Api
+@inject OrderOrange.RestaurantWeb.Services.ReceiptPrinter Printer
+@inject LanguageService L
+@inject IJSRuntime JS
+
+@* Taking an order at the counter or on the phone: pick items, pick how they are paying,
+   done. Everything else an app checkout asks for is either already known (the address,
+   from the customer's record) or is nobody's business here. *@
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <MudIcon Icon="@Icons.Material.Filled.PointOfSale" Color="Color.Primary" />
+            <div>
+                <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["cust.newOrder"]</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @Customer.Name · <span class="mf-ltr">@Customer.Phone</span>@(Table is null ? "" : $" · 🍽️ {Table.Name}")
+                </MudText>
+            </div>
+        </div>
+    </TitleContent>
+
+    <DialogContent>
+        @if (_menu is null)
+        {
+            <MudProgressCircular Indeterminate="true" Class="my-6 mx-auto d-block" />
+        }
+        else if (_menu.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true">@L["cust.noProducts"]</MudAlert>
+        }
+        else
+        {
+            <MudTextField @bind-Value="_search" Placeholder="@L["cust.searchProduct"]" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Immediate="true" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Class="mb-2" />
+
+            @* Product groups slide along the top; the arrows glide the rail. *@
+            <div class="co-cats-row">
+                <button type="button" class="co-arrow" @onclick="@(() => JS.InvokeVoidAsync("mfPos.slideCats", ".co-cats", -1))">‹</button>
+                <div class="co-cats">
+                    <button type="button" class="@(_catId == 0 ? "on" : "")" @onclick="@(() => _catId = 0)">@L["admin.all"]</button>
+                    @foreach (var c in _menu)
+                    {
+                        var cat = c;
+                        <button type="button" class="@(_catId == cat.Id ? "on" : "")" @onclick="@(() => _catId = cat.Id)">
+                            @cat.NameFor(L.Locale)
+                        </button>
+                    }
+                </div>
+                <button type="button" class="co-arrow" @onclick="@(() => JS.InvokeVoidAsync("mfPos.slideCats", ".co-cats", 1))">›</button>
+            </div>
+
+            <div class="co-items" @key="_catId">
+                @foreach (var category in Visible)
+                {
+                    <MudText Typo="Typo.overline" Color="Color.Secondary" Class="mt-2">@category.NameFor(L.Locale)</MudText>
+                    @foreach (var item in category.Items)
+                    {
+                        var qty = QuantityOf(item.Id);
+                        <div class="co-row @(qty > 0 ? "on" : "")">
+                            <div class="co-name">
+                                <div class="n">@item.NameFor(L.Locale)</div>
+                                <div class="p mf-ltr">@Fmt.Rial(item.FinalPrice)</div>
+                            </div>
+                            <div class="co-step">
+                                <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline" Size="Size.Small"
+                                               Disabled="@(qty == 0)" OnClick="@(() => Bump(item, -1))" />
+                                <span class="q">@qty</span>
+                                <MudIconButton Icon="@Icons.Material.Filled.AddCircle" Color="Color.Primary" Size="Size.Small"
+                                               OnClick="@(() => Bump(item, 1))" />
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <MudDivider Class="my-3" />
+
+            <MudSelect T="PaymentMethod" @bind-Value="_payment" Label="@L["cust.payment"]"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+                <MudSelectItem T="PaymentMethod" Value="PaymentMethod.CashOnDelivery">💵 @L["pay.CashOnDelivery"]</MudSelectItem>
+                <MudSelectItem T="PaymentMethod" Value="PaymentMethod.CardOnDelivery">💳 @L["pay.CardOnDelivery"]</MudSelectItem>
+            </MudSelect>
+
+            <MudCheckBox @bind-Value="_markPaid" Color="Color.Primary" Dense="true" Class="mb-2"
+                         Label="@L["cust.alreadyPaid"]" />
+
+            <MudTextField @bind-Value="_address" Label="@L["cust.address"]" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Lines="2" Class="mb-3" />
+            <MudTextField @bind-Value="_notes" Label="@L["cust.orderNotes"]" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Lines="2" />
+
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+            }
+
+            <div class="co-total mt-3">
+                <span>@L["cust.itemsTotal"] (@Count)</span>
+                <b class="mf-ltr">@Fmt.Rial(Subtotal)</b>
+            </div>
+        }
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.Send" Disabled="@(_busy || Count == 0)" OnClick="Place">
+            @L["cust.placeOrder"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public StoreCustomerDto Customer { get; set; } = default!;
+
+    /// <summary>Set when the order is taken AT a table — it tags the order for the kitchen.</summary>
+    [Parameter] public StoreTableDto? Table { get; set; }
+
+    private List<MenuCategoryDto>? _menu;
+    private readonly Dictionary<int, int> _quantities = [];
+    private string _search = "";
+    private string _address = "";
+    private string _notes = "";
+    private PaymentMethod _payment = PaymentMethod.CashOnDelivery;
+    private bool _markPaid;
+    private bool _busy;
+    private string? _error;
+
+    /// <summary>0 = all groups; otherwise only the picked category shows.</summary>
+    private int _catId;
+
+    private IEnumerable<MenuCategoryDto> Visible
+    {
+        get
+        {
+            var cats = _catId == 0 ? _menu! : _menu!.Where(c => c.Id == _catId);
+            return string.IsNullOrWhiteSpace(_search)
+                ? cats
+                : cats.Select(c => c with { Items = c.Items.Where(Matches).ToList() })
+                      .Where(c => c.Items.Count > 0);
+        }
+    }
+
+    private bool Matches(MenuItemDto item) =>
+        item.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private int Count => _quantities.Values.Sum();
+
+    private decimal Subtotal =>
+        _menu is null ? 0m
+        : _menu.SelectMany(c => c.Items)
+               .Where(i => _quantities.ContainsKey(i.Id))
+               .Sum(i => i.FinalPrice * _quantities[i.Id]);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _address = Customer.Address;
+        _menu = await Api.GetMyMenuBasicAsync() ?? [];
+    }
+
+    private int QuantityOf(int itemId) => _quantities.GetValueOrDefault(itemId);
+
+    private void Bump(MenuItemDto item, int delta)
+    {
+        var next = QuantityOf(item.Id) + delta;
+        if (next <= 0) _quantities.Remove(item.Id);
+        else _quantities[item.Id] = next;
+    }
+
+    private async Task Place()
+    {
+        _error = null;
+        if (Count == 0) return;
+
+        _busy = true;
+        try
+        {
+            var items = _quantities.Select(q => new PlaceOrderItem(q.Key, q.Value, null)).ToList();
+            var (order, error) = await Api.PlaceCounterOrderAsync(new PlaceCounterOrderRequest(
+                Customer.Id, _payment, items,
+                string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(),
+                string.IsNullOrWhiteSpace(_address) || _address.Trim() == Customer.Address ? null : _address.Trim(),
+                _markPaid,
+                Table?.Id));
+
+            if (order is null)
+            {
+                _error = error ?? L["common.saveFail"];
+                return;
+            }
+            await Printer.PrintAsync(order);
+            Dialog.Close(DialogResult.Ok(order));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,114 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* The store list's professional filter sheet: text, type, cuisine, status, open
+   state and ordering in one place. Returns a Criteria record; the page renders
+   the active ones as removable chips. *@
+
+<MudDialog Class="mf-lang-dialog">
+    <TitleContent>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <div class="mf-lang-badge"><MudIcon Icon="@Icons.Material.Filled.FilterAlt" /></div>
+            <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["admin.filters"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_c.Search" Label="@L["admin.searchStores"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Clearable="true" Class="mb-3" Immediate="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      OnKeyDown="@(e => e.Key == "Enter" ? Apply() : Task.CompletedTask)" />
+
+        <MudSelect T="StoreType?" @bind-Value="_c.StoreType" Label="@L["partner.storeType"]"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Clearable="true">
+            <MudSelectItem T="StoreType?" Value="@(StoreType.Restaurant)">🍔 @L["st.restaurant"]</MudSelectItem>
+            <MudSelectItem T="StoreType?" Value="@(StoreType.Grocery)">🛒 @L["st.grocery"]</MudSelectItem>
+            <MudSelectItem T="StoreType?" Value="@(StoreType.Pharmacy)">💊 @L["st.pharmacy"]</MudSelectItem>
+            <MudSelectItem T="StoreType?" Value="@(StoreType.Flowers)">💐 @L["st.flowers"]</MudSelectItem>
+            <MudSelectItem T="StoreType?" Value="@(StoreType.Shop)">🛍️ @L["st.shop"]</MudSelectItem>
+        </MudSelect>
+
+        <MudSelect T="int?" @bind-Value="_c.CuisineId" Label="@L["admin.cuisine"]"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Clearable="true">
+            @foreach (var cuisine in _cuisines)
+            {
+                <MudSelectItem T="int?" Value="@cuisine.Id">@cuisine.Emoji @L.Data("cuisine", cuisine.Name)</MudSelectItem>
+            }
+        </MudSelect>
+
+        @* Status + open state as segmented rows — one glance, one tap. *@
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@L["common.status"]</MudText>
+        <MudChipSet T="string" SelectionMode="SelectionMode.SingleSelection" CheckMark="true" Class="mb-2"
+                    SelectedValue="@StatusKey" SelectedValueChanged="@(v => _c.Approved = v switch { "approved" => true, "pending" => false, _ => null })">
+            <MudChip T="string" Value="@("all")" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["admin.all"]</MudChip>
+            <MudChip T="string" Value="@("approved")" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">@L["admin.approvedFilter"]</MudChip>
+            <MudChip T="string" Value="@("pending")" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@L["admin.pendingFilter"]</MudChip>
+        </MudChipSet>
+
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@L["partner.open"] / @L["partner.closed"]</MudText>
+        <MudChipSet T="string" SelectionMode="SelectionMode.SingleSelection" CheckMark="true" Class="mb-2"
+                    SelectedValue="@OpenKey" SelectedValueChanged="@(v => _c.Open = v switch { "open" => true, "closed" => false, _ => null })">
+            <MudChip T="string" Value="@("all")" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["admin.all"]</MudChip>
+            <MudChip T="string" Value="@("open")" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">@L["partner.open"]</MudChip>
+            <MudChip T="string" Value="@("closed")" Size="Size.Small" Color="Color.Default" Variant="Variant.Text">@L["partner.closed"]</MudChip>
+        </MudChipSet>
+
+        <MudSelect T="string" @bind-Value="_c.Sort" Label="@L["admin.sortBy"]"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-1">
+            <MudSelectItem T="string" Value="@("newest")">@L["admin.newestFirst"]</MudSelectItem>
+            <MudSelectItem T="string" Value="@("oldest")">@L["admin.oldestFirst"]</MudSelectItem>
+            <MudSelectItem T="string" Value="@("name")">@L["admin.byName"]</MudSelectItem>
+            <MudSelectItem T="string" Value="@("commission")">@L["admin.byCommission"]</MudSelectItem>
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Clear" StartIcon="@Icons.Material.Filled.FilterAltOff">@L["common.clearAll"]</MudButton>
+        <MudSpacer />
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Apply"
+                   StartIcon="@Icons.Material.Filled.Check">@L["common.apply"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    /// <summary>Everything the store list can be narrowed and ordered by.</summary>
+    public sealed class Criteria
+    {
+        public string? Search { get; set; }
+        public bool? Approved { get; set; }
+        public StoreType? StoreType { get; set; }
+        public int? CuisineId { get; set; }
+        public bool? Open { get; set; }
+        public string Sort { get; set; } = "newest";
+
+        public Criteria Clone() => (Criteria)MemberwiseClone();
+        public int ActiveCount =>
+            (string.IsNullOrWhiteSpace(Search) ? 0 : 1) + (Approved is null ? 0 : 1) +
+            (StoreType is null ? 0 : 1) + (CuisineId is null ? 0 : 1) + (Open is null ? 0 : 1) +
+            (Sort == "newest" ? 0 : 1);
+    }
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    /// <summary>The page's current criteria — edited on a copy until Apply.</summary>
+    [Parameter] public Criteria Value { get; set; } = new();
+
+    private Criteria _c = new();
+    private List<CuisineDto> _cuisines = [];
+
+    private string StatusKey => _c.Approved switch { true => "approved", false => "pending", _ => "all" };
+    private string OpenKey => _c.Open switch { true => "open", false => "closed", _ => "all" };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _c = Value.Clone();
+        _cuisines = await Api.GetCuisinesAsync() ?? [];
+    }
+
+    private void Clear() => _c = new Criteria();
+
+    private Task Apply()
+    {
+        Dialog.Close(DialogResult.Ok(_c));
+        return Task.CompletedTask;
+    }
+}

@@ -1,0 +1,171 @@
+﻿@page "/bot-chats"
+@inject ApiClient Api
+@inject LanguageService L
+
+@* What people actually ask the assistant, grouped by the address they asked from. The
+   visitor board next door says where people went; this says what they were trying to say.
+   Almost every line here is from somebody with no account, which is the point. *@
+
+<PageTitle>Admin — Assistant questions</PageTitle>
+
+<PageHeader Title="@L["bots.title"]" Subtitle="@L["bots.sub"]" />
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-xl mb-3">
+    <MudTextField T="string" @bind-Value="_search" Placeholder="@L["bots.searchPh"]"
+                  Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="max-width: 420px;"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="true" DebounceInterval="450" OnDebounceIntervalElapsed="Reload" />
+</MudPaper>
+
+@if (_data is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_data.Items.Count == 0)
+{
+    <MudAlert Severity="Severity.Normal" Class="mt-2">@L["bots.none"]</MudAlert>
+}
+else
+{
+    <MudPaper Elevation="0" Outlined="true" Class="rounded-xl bc-wrap">
+        <MudTable T="BotChatIpDto" Items="_data.Items" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm"
+                  OnRowClick="OnRow" RowClass="bc-row">
+            <HeaderContent>
+                <MudTh>@L["bots.ip"]</MudTh>
+                <MudTh>@L["bots.lastSaid"]</MudTh>
+                <MudTh Style="text-align:center">@L["bots.turns"]</MudTh>
+                <MudTh Style="text-align:center">@L["bots.sessions"]</MudTh>
+                <MudTh>@L["bots.last"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="@L["bots.ip"]">
+                    <span class="bc-ip mf-ltr">@(string.IsNullOrWhiteSpace(context.Ip) ? L["bots.unknownIp"] : context.Ip)</span>
+                    @if (!string.IsNullOrWhiteSpace(context.Country))
+                    {
+                        <span class="bc-cc">@context.Country</span>
+                    }
+                </MudTd>
+                <MudTd DataLabel="@L["bots.lastSaid"]"><span class="bc-said">@context.LastText</span></MudTd>
+                <MudTd DataLabel="@L["bots.turns"]" Style="text-align:center">@context.Turns</MudTd>
+                <MudTd DataLabel="@L["bots.sessions"]" Style="text-align:center">@context.Sessions</MudTd>
+                <MudTd DataLabel="@L["bots.last"]"><span class="bc-when">@context.Last.ToLocalTime().ToString("g")</span></MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+
+    <div class="d-flex justify-center mt-4">
+        <MudPagination Count="@Pages" Selected="@(_page + 1)" SelectedChanged="OnPage" Color="Color.Primary" />
+    </div>
+}
+
+@* ---------- one address's whole conversation ---------- *@
+<MudDialog @bind-Visible="_open" Options="DlgOptions">
+    <TitleContent>
+        <div class="bc-dlg-head">
+            <MudIcon Icon="@Icons.Material.Filled.Forum" Class="me-2" />
+            <span class="mf-ltr">@(string.IsNullOrWhiteSpace(_openIp) ? L["bots.unknownIp"] : _openIp)</span>
+            @if (_turns is { Count: > 0 })
+            {
+                <span class="bc-dlg-count">@_turns.Count</span>
+            }
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (_turns is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-4" />
+        }
+        else if (_turns.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@L["bots.none"]</MudText>
+        }
+        else
+        {
+            <div class="bc-thread">
+                @foreach (var group in _turns.GroupBy(t => t.Session))
+                {
+                    <div class="bc-session">
+                        <div class="bc-session-h">
+                            <span>@group.Last().At.ToLocalTime().ToString("g")</span>
+                            <span class="bc-bot">@BotName(group.First().Bot)</span>
+                            @if (group.First().Lang is { Length: > 0 } lc)
+                            {
+                                <span class="bc-lang">@lc</span>
+                            }
+                        </div>
+                        @foreach (var turn in group.OrderBy(t => t.Id))
+                        {
+                            <div class="bc-turn">
+                                <div class="bc-said-row"><span class="who">@L["bots.said"]</span><span>@turn.Text</span></div>
+                                @if (!string.IsNullOrWhiteSpace(turn.Reply))
+                                {
+                                    <div class="bc-reply-row"><span class="who">@L["bots.answered"]</span><span>@turn.Reply</span></div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(turn.Page))
+                                {
+                                    <div class="bc-page mf-ltr">@turn.Page</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _open = false)">@L["common.close"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private const int PageSize = 50;
+
+    private BotChatIpsDto? _data;
+    private List<BotChatTurnDto>? _turns;
+    private string _search = "";
+    private string _openIp = "";
+    private int _page;
+    private bool _open;
+
+    private static readonly DialogOptions DlgOptions = new()
+    {
+        MaxWidth = MaxWidth.Medium,
+        FullWidth = true,
+        CloseButton = true,
+    };
+
+    private int Pages => _data is null ? 1 : Math.Max(1, (int)Math.Ceiling(_data.Total / (double)PageSize));
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        _data = null;
+        StateHasChanged();
+        _data = await Api.AdminBotChatsAsync(_page * PageSize, PageSize, _search)
+                ?? new BotChatIpsDto([], 0);
+    }
+
+    private async Task OnPage(int page)
+    {
+        _page = Math.Max(0, page - 1);
+        await Reload();
+    }
+
+    private async Task OnRow(TableRowClickEventArgs<BotChatIpDto> row)
+    {
+        if (row.Item is not { } item) return;
+        _openIp = item.Ip;
+        _turns = null;
+        _open = true;
+        StateHasChanged();
+        _turns = (await Api.AdminBotChatTurnsAsync(item.Ip))?.Items ?? [];
+    }
+
+    private string BotName(string bot) => bot switch
+    {
+        "pos" => L["bots.botPos"],
+        "partner" => L["bots.botPartner"],
+        _ => L["bots.botCustomer"],
+    };
+}

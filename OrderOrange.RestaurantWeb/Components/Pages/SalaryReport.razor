@@ -1,0 +1,260 @@
+﻿@page "/staff/salary-report"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Partner — Salary report</PageTitle>
+
+<PageHeader Title="@L["salrep.title"]" Subtitle="@L["salrep.sub"]" />
+
+<div class="rp">
+    <div class="d-flex align-center flex-wrap mb-4" style="gap: 10px;">
+        <MfDateRangePicker DateFormat="yyyy-MM-dd" DateRange="_range" DateRangeChanged="OnRangeChanged"
+                            Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                            Class="rp-range" PlaceholderStart="@L["w.date"]" PlaceholderEnd="@L["w.date"]" />
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">@RangeLabel</MudChip>
+        <span style="flex: 1;"></span>
+        <ReportExport Title="@ExportTitle" Subtitle="@L["salrep.sub"]" RangeLabel="@RangeLabel"
+                      Columns="@ExportColumns" Fetch="ExportRows" FetchTotals="ExportTotals" />
+    </div>
+
+    <MudGrid Spacing="3" Class="mb-1">
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["salrep.totalPaid"]" Value="@(_report is null ? "…" : Fmt.RialShort(_report.Total).Value)" Icon="@Icons.Material.Filled.Payments" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.payments"]" Value="@(_report?.Payments.ToString("N0") ?? "…")" Icon="@Icons.Material.Filled.ReceiptLong" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["salrep.bonuses"]" Value="@(_report is null ? "…" : Fmt.RialShort(_report.Bonuses).Value)" Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Success" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["salrep.deductions"]" Value="@(_report is null ? "…" : Fmt.RialShort(_report.Deductions).Value)" Icon="@Icons.Material.Filled.RemoveCircle" Color="Color.Error" />
+        </MudItem>
+    </MudGrid>
+
+    <div class="pv-seg my-4" style="max-width: 460px;">
+        <button type="button" class="@(_tab == 0 ? "on" : "")" @onclick="@(() => _tab = 0)">
+            <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" /> @L["w.month"]
+        </button>
+        <button type="button" class="@(_tab == 1 ? "on" : "")" @onclick="@(() => _tab = 1)">
+            <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" /> @L["salrep.byPerson"]
+        </button>
+        <button type="button" class="@(_tab == 2 ? "on" : "")" @onclick="@(() => _tab = 2)">
+            <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" /> @L["w.payments"]
+        </button>
+    </div>
+
+    <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+        @if (_report is null)
+        {
+            <Loader />
+        }
+        else if (_report.Payments == 0)
+        {
+            <div class="pv-empty">
+                <span class="em">💸</span>
+                <MudText Typo="Typo.body1" Style="font-weight: 700;">@L["salrep.empty"]</MudText>
+            </div>
+        }
+        else if (_tab == 0)
+        {
+            <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mb-3">@L["salrep.payrollByMonth"]</MudText>
+            <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                <thead>
+                    <tr><th>@L["w.month"]</th><th class="num">@L["w.payments"]</th><th class="num">@L["common.total"]</th><th class="num">@L["w.share"]</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _report.Months)
+                    {
+                        <tr>
+                            <td class="strong">@row.Label</td>
+                            <td class="num">@row.Payments</td>
+                            <td class="num strong">@Fmt.RialShort(row.Total)</td>
+                            <td class="num">@Share(row.Total)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="total">
+                        <td>@L["common.total"]</td>
+                        <td class="num">@_report.Payments</td>
+                        <td class="num strong">@Fmt.RialShort(_report.Total)</td>
+                        <td class="num">100%</td>
+                    </tr>
+                </tfoot>
+            </MudSimpleTable>
+        }
+        else if (_tab == 1)
+        {
+            <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mb-3">@L["salrep.paidPerPerson"]</MudText>
+            <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                <thead>
+                    <tr><th style="width: 44px;">#</th><th>@L["w.member"]</th><th class="num">@L["w.payments"]</th><th class="num">@L["common.total"]</th><th class="num">@L["w.share"]</th></tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < _report.Staff.Count; i++)
+                    {
+                        var row = _report.Staff[i];
+                        <tr>
+                            <td><span class="rk r@(Math.Min(i + 1, 4))">@(i + 1)</span></td>
+                            <td>
+                                <div class="strong">@row.StaffName</div>
+                                <div class="bl-sub">@StaffRoles.Emoji(row.Role) @L["srole." + row.Role]</div>
+                            </td>
+                            <td class="num">@row.Payments</td>
+                            <td class="num strong">@Fmt.RialShort(row.Total)</td>
+                            <td class="num">@Share(row.Total)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="total">
+                        <td></td>
+                        <td>@L["common.total"]</td>
+                        <td class="num">@_report.Payments</td>
+                        <td class="num strong">@Fmt.RialShort(_report.Total)</td>
+                        <td class="num">100%</td>
+                    </tr>
+                </tfoot>
+            </MudSimpleTable>
+        }
+        else
+        {
+            <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mb-3">@L["salrep.recentPayments"]</MudText>
+            <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                <thead>
+                    <tr>
+                        <th>@L["w.member"]</th><th>@L["w.period"]</th><th class="num">@L["w.base"]</th>
+                        <th class="num">@L["w.bonus"]</th><th class="num">@L["w.deduction"]</th><th class="num">@L["w.net"]</th><th>@L["w.method"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in _report.Recent)
+                    {
+                        <tr>
+                            <td>
+                                <div class="strong">@p.StaffName</div>
+                                <div class="bl-sub">@p.PaidAt.ToString("d MMM yyyy · HH:mm")</div>
+                            </td>
+                            <td>@(new DateTime(p.Year, p.Month, 1).ToString("MMM yyyy"))</td>
+                            <td class="num">@Fmt.RialShort(p.BaseSalary)</td>
+                            <td class="num">@(p.Bonus > 0 ? (MarkupString)("+" + Fmt.RialShort(p.Bonus).Value) : (MarkupString)"—")</td>
+                            <td class="num">@(p.Deduction > 0 ? (MarkupString)("−" + Fmt.RialShort(p.Deduction).Value) : (MarkupString)"—")</td>
+                            <td class="num strong">@Fmt.RialShort(p.NetPaid)</td>
+                            <td><span class="pr-method">@p.Method</span></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    </MudPaper>
+</div>
+
+@code {
+    // ---------- Export ----------
+    // Payroll leaves this page as often as any report — the accountant wants the
+    // payments tab, the owner wants the per-person one. Whichever is on screen is
+    // what gets written, with the same columns and the same order.
+
+    private string ExportTitle => _tab switch
+    {
+        1 => $"{L["salrep.title"]} · {L["salrep.byPerson"]}",
+        2 => $"{L["salrep.title"]} · {L["w.payments"]}",
+        _ => $"{L["salrep.title"]} · {L["w.month"]}",
+    };
+
+    private List<ExportColumnDto> ExportColumns => _tab switch
+    {
+        1 =>
+        [
+            new(L["w.member"], Width: 26),
+            new(L["tm.role"], Width: 16),
+            new(L["w.payments"], Numeric: true),
+            new($"{L["common.total"]} ({Fmt.Symbol})", Numeric: true),
+        ],
+        2 =>
+        [
+            new(L["w.member"], Width: 24),
+            new(L["w.period"], Width: 14),
+            new(L["w.date"], Width: 18),
+            new($"{L["w.base"]} ({Fmt.Symbol})", Numeric: true),
+            new($"{L["w.bonus"]} ({Fmt.Symbol})", Numeric: true),
+            new($"{L["w.deduction"]} ({Fmt.Symbol})", Numeric: true),
+            new($"{L["w.net"]} ({Fmt.Symbol})", Numeric: true),
+            new(L["w.method"], Width: 14),
+        ],
+        _ =>
+        [
+            new(L["w.month"], Width: 18),
+            new(L["w.payments"], Numeric: true),
+            new($"{L["common.total"]} ({Fmt.Symbol})", Numeric: true),
+        ],
+    };
+
+    private Task<List<List<string>>> ExportRows()
+    {
+        if (_report is null) return Task.FromResult(new List<List<string>>());
+        return Task.FromResult(_tab switch
+        {
+            1 => _report.Staff.Select(s => new List<string>
+                 { s.StaffName, L["srole." + s.Role], s.Payments.ToString(), s.Total.ToString("0.000") }).ToList(),
+            2 => _report.Recent.Select(p => new List<string>
+                 {
+                     p.StaffName,
+                     new DateTime(p.Year, p.Month, 1).ToString("MMM yyyy"),
+                     p.PaidAt.ToString("dd MMM yyyy HH:mm"),
+                     p.BaseSalary.ToString("0.000"),
+                     p.Bonus.ToString("0.000"),
+                     p.Deduction.ToString("0.000"),
+                     p.NetPaid.ToString("0.000"),
+                     p.Method,
+                 }).ToList(),
+            _ => _report.Months.Select(m => new List<string>
+                 { m.Label, m.Payments.ToString(), m.Total.ToString("0.000") }).ToList(),
+        });
+    }
+
+    private Task<List<string>?> ExportTotals()
+    {
+        if (_report is null) return Task.FromResult<List<string>?>(null);
+        return Task.FromResult<List<string>?>(_tab switch
+        {
+            1 => [L["common.total"], "", _report.Payments.ToString(), _report.Total.ToString("0.000")],
+            2 =>
+            [
+                L["common.total"], "", "",
+                _report.Recent.Sum(p => p.BaseSalary).ToString("0.000"),
+                _report.Bonuses.ToString("0.000"),
+                _report.Deductions.ToString("0.000"),
+                _report.Recent.Sum(p => p.NetPaid).ToString("0.000"),
+                "",
+            ],
+            _ => [L["common.total"], _report.Payments.ToString(), _report.Total.ToString("0.000")],
+        });
+    }
+
+    private SalaryReportDto? _report;
+    private DateRange? _range;
+    private int _tab;
+
+    private string RangeLabel => _range is { Start: not null, End: not null }
+        ? $"{_range.Start:d MMM yyyy} – {_range.End:d MMM yyyy}"
+        : L["billrep.last12"];
+
+    private string Share(decimal amount) =>
+        _report is null || _report.Total == 0 ? "—" : $"{amount * 100 / _report.Total:0.#}%";
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task OnRangeChanged(DateRange? range)
+    {
+        _range = range?.Start is null || range.End is null ? null : range;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        _report = null;
+        _report = await Api.GetSalaryReportAsync(_range?.Start, _range?.End);
+    }
+}

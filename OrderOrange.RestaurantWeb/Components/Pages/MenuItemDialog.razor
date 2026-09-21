@@ -1,0 +1,391 @@
+﻿@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+@inject IDialogService Dialogs
+
+<MudDialog>
+    <DialogContent>
+        @* ---------- Product photos: big preview = the MAIN photo customers see first ---------- *@
+        <input type="file" id="dish-photo-input" accept="image/png,image/jpeg,image/webp" hidden />
+        @if (_photoPct >= 0)
+        {
+            <div class="qc-upload mb-2">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.CloudUpload" Style="width:17px;height:17px;" /></span>
+                <span class="meta">
+                    <small>@L["qc.uploading"]</small>
+                    <span class="bar"><span class="fill" style="width:@(_photoPct)%"></span></span>
+                </span>
+                <b class="pct">@_photoPct%</b>
+            </div>
+        }
+        <div class="pmn-pe mb-2">
+            @if (Main is not null)
+            {
+                <img src="@Main" alt="@_name" />
+                <span class="pmn-pe-tag main">@L["partner.mainPhoto"]</span>
+            }
+            else if (FoodPhoto.ForDish(_name) is string stockPhoto)
+            {
+                <img src="@stockPhoto" alt="@_name" />
+                <span class="pmn-pe-tag">@L["partner.autoPhoto"]</span>
+            }
+            else
+            {
+                <span class="em">@_emoji</span>
+            }
+        </div>
+        <div class="d-flex mb-2" style="gap: 8px;">
+            @if (_photos.Count < 4)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.AddAPhoto" OnClick="PickPhoto" Disabled="_uploadingPhoto">
+                    @(_uploadingPhoto ? "…" : string.Format(L["partner.addPhotoN"], _photos.Count))
+                </MudButton>
+            }
+            @if (_photos.Count > 0)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Delete" OnClick="RemoveMain">
+                    @L["partner.removePhoto"]
+                </MudButton>
+            }
+        </div>
+        @if (_photos.Count > 1)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">@L["partner.mainHint"]</MudText>
+        }
+        @if (_photos.Count > 0)
+        {
+            <div class="pmn-pe-thumbs mb-3">
+                @for (var i = 0; i < _photos.Count; i++)
+                {
+                    var index = i;
+                    <div class="pmn-pe-th @(index == _mainIndex ? "on" : "")">
+                        <img src="@_photos[index]" alt="@L["common.photo"]" />
+                        <label class="pmn-main-ck">
+                            <input type="checkbox" checked="@(index == _mainIndex)" @onchange="@(() => SetMain(index))" />
+                            <span>@L["partner.mainCheck"]</span>
+                        </label>
+                    </div>
+                }
+            </div>
+        }
+
+        <MudSelect T="int" @bind-Value="_categoryId" Label="@L["partner.category"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+            @foreach (var category in Categories)
+            {
+                <MudSelectItem T="int" Value="@category.Id">@category.NameFor(L.Locale)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">@L["partner.productName"]</MudText>
+        <StoreNameFields @bind-Value="_dishNames" />
+        <MudTextField @bind-Value="_description" Label="@L["partner.description"]" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Class="mb-3" />
+
+        @* ---------- How it is sold, and what it is made of ---------- *@
+        <MudSelect T="string" @bind-Value="_unit" Label="@L["mi.unit"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Clearable="true">
+            @foreach (var u in Units)
+            {
+                <MudSelectItem T="string" Value="@u">@L[$"unit.{u}"]</MudSelectItem>
+            }
+        </MudSelect>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">🧾 @L["mi.ingredients"]</MudText>
+        <div class="mi-ing mb-1">
+            @foreach (var ing in _ingredients)
+            {
+                var item = ing;
+                <span class="tag">@item<button type="button" @onclick="@(() => _ingredients.Remove(item))">✕</button></span>
+            }
+        </div>
+        <div class="d-flex align-center mb-3" style="gap: 8px;">
+            <MudTextField @bind-Value="_newIngredient" Placeholder="@L["mi.ingPh"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          @onkeydown="@(e => { if (e.Key == "Enter") AddIngredient(); })" />
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled"
+                           Size="Size.Small" OnClick="AddIngredient" />
+        </div>
+        <div class="d-flex" style="gap: 12px;">
+            <MudNumericField @bind-Value="_price" Label="@L["partner.price"]" Variant="Variant.Outlined" Margin="Margin.Dense" Format="0.000"
+                             Min="0.05m" Step="0.100m" Class="mb-3" />
+            @* Picked from a plate of emojis, never typed. *@
+            <div @onclick="PickEmoji" style="cursor: pointer;">
+                <MudTextField Value="_emoji" Label="@L["partner.emojiLabel"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3"
+                              ReadOnly="true" HelperText="@L["partner.emojiHint"]"
+                              Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.EmojiEmotions" />
+            </div>
+        </div>
+        <MudNumericField @bind-Value="_discount" Label="@L["partner.discount"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0m" Max="90m" Step="5m"
+                         Class="mb-3" Adornment="Adornment.End" AdornmentText="%"
+                         HelperText="@(_discount > 0 ? string.Format(L["partner.discountHint"], Fmt.Money(Math.Round(_price * (1 - _discount / 100m), 3)), Fmt.Money(_price)) : L["partner.noDiscount"])" />
+        @* Same index idea as the group dialog: lowest number stands first in its group. *@
+        <MudNumericField @bind-Value="_sortOrder" Label="@L["partner.sortOrder"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         Class="mb-3" HelperText="@L["partner.sortHint"]" />
+        @* One option per line, each with a one-line explanation — a row of three wrapped badly. *@
+        <div class="mi-flags mb-2">
+            <label class="mi-flag">
+                <MudCheckBox T="bool" @bind-Value="_isAvailable" Color="Color.Success" Dense="true" />
+                <span><b>@L["partner.available"]</b><small>@L["partner.availableHint"]</small></span>
+            </label>
+            <label class="mi-flag">
+                <MudCheckBox T="bool" @bind-Value="_isPopular" Color="Color.Warning" Dense="true" />
+                <span><b>@L["rest.popular"]</b><small>@L["partner.popularHint"]</small></span>
+            </label>
+            <label class="mi-flag">
+                <MudCheckBox T="bool" @bind-Value="_inStoreOnly" Color="Color.Warning" Dense="true" />
+                <span><b>@L["partner.inStoreOnly"]</b><small>@L["partner.inStoreOnlyHint"]</small></span>
+            </label>
+        </div>
+
+        @* ---------- Which DAYS is this on the menu? Its own question, no longer buried
+           under the hours switch: all week, or exactly the days the owner ticks. ---------- *@
+        <MudDivider Class="my-3" />
+        <MudCheckBox T="bool" Value="_allWeek" ValueChanged="OnAllWeek" Label="@L["partner.allWeek"]" Color="Color.Primary" Dense="true" />
+        @if (!_allWeek)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">@L["partner.availDays"]</MudText>
+            <div class="oo-daychips mb-2">
+                @for (var d = 0; d < 7; d++)
+                {
+                    var day = d;
+                    <button type="button" class="@(_days.Contains(day) ? "on" : "")" @onclick="@(() => ToggleDay(day))">
+                        @L[$"day.short.{day}"]
+                    </button>
+                }
+            </div>
+        }
+
+        @* ---------- Limited HOURS within those days ---------- *@
+        <MudCheckBox T="bool" @bind-Value="_limited" Label="@L["partner.limitedHours"]" Color="Color.Primary" Dense="true" />
+        @if (_limited)
+        {
+            <div class="d-flex mt-2" style="gap: 12px;">
+                <MfTimePicker @bind-Time="_availFrom" Label="@L["partner.availFrom"]" Variant="Variant.Outlined"
+                               Margin="Margin.Dense" TimeFormat="HH:mm" Class="mb-2" />
+                <MfTimePicker @bind-Time="_availTo" Label="@L["partner.availTo"]" Variant="Variant.Outlined"
+                               Margin="Margin.Dense" TimeFormat="HH:mm" Class="mb-2" />
+            </div>
+        }
+
+        <MudNumericField @bind-Value="_leadDays" Label="@L["partner.leadDays"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         Min="0" Max="30" Class="mb-1 mt-1" HelperText="@(_leadDays > 0 ? string.Format(L["partner.leadDaysHint"], _leadDays) : L["partner.leadDaysOff"])" />
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy">@L["partner.saveProduct"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public MenuItemDto? Existing { get; set; }
+    [Parameter, EditorRequired] public List<MenuCategoryDto> Categories { get; set; } = [];
+
+    private static readonly string[] Units = ["piece", "portion", "kg", "gram", "liter", "box", "dozen", "pack"];
+
+    private int _categoryId;
+    private string _name = "";
+    private Dictionary<string, string> _dishNames = [];
+    private string _description = "";
+    private string _unit = "";
+    private readonly List<string> _ingredients = [];
+    private string _newIngredient = "";
+
+    private void AddIngredient()
+    {
+        var clean = (_newIngredient ?? "").Trim().Trim(';');
+        if (clean.Length is > 0 and <= 40 && _ingredients.Count < 20 &&
+            !_ingredients.Contains(clean, StringComparer.OrdinalIgnoreCase))
+        {
+            _ingredients.Add(clean);
+        }
+        _newIngredient = "";
+    }
+    private decimal _price = 1.000m;
+    private decimal _discount;
+    private int _sortOrder;
+    private string _emoji = "🍽️";
+
+    /// <summary>The emoji comes from a picker dialog — tapped, never typed.</summary>
+    private async Task PickEmoji()
+    {
+        var parameters = new DialogParameters<EmojiPickerDialog> { { d => d.Current, _emoji } };
+        var dialog = await Dialogs.ShowAsync<EmojiPickerDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result?.Canceled == false && result.Data is string picked) _emoji = picked;
+    }
+    private bool _isPopular;
+    private bool _isAvailable = true;
+    private bool _inStoreOnly;
+    private readonly List<string> _photos = [];
+    private int _mainIndex;
+    private bool _uploadingPhoto;
+    private string? _error;
+    private bool _busy;
+
+    // ---------- When may this be ordered? ----------
+    private bool _limited;
+    private bool _allWeek = true;
+    private TimeSpan? _availFrom = new TimeSpan(6, 0, 0);
+    private TimeSpan? _availTo = new TimeSpan(11, 0, 0);
+    private readonly HashSet<int> _days = [];
+    private int _leadDays;
+
+    private void ToggleDay(int day)
+    {
+        if (!_days.Remove(day)) _days.Add(day);
+    }
+
+    private void OnAllWeek(bool value)
+    {
+        _allWeek = value;
+        // Flipping to "chosen days" with nothing ticked would silently mean "no day at
+        // all" — start from every day ticked and let the owner untick.
+        if (!_allWeek && _days.Count == 0)
+            for (var d = 0; d < 7; d++) _days.Add(d);
+    }
+
+    private string? Main => _photos.Count == 0 ? null : _photos[Math.Clamp(_mainIndex, 0, _photos.Count - 1)];
+
+    private sealed class PhotoPick
+    {
+        public string? DataUrl { get; set; }
+        public string? Error { get; set; }
+        public bool Image { get; set; }
+    }
+
+    private int _photoPct = -1;
+
+    /// <summary>Slices cross the bridge 50KB at a time; the bar narrates the trip.</summary>
+    private async Task<string?> PullChunks(string id, int size)
+    {
+        var sb = new System.Text.StringBuilder(size);
+        for (var offset = 0; offset < size; offset += 50000)
+        {
+            sb.Append(await JS.InvokeAsync<string>("mfBlob.chunk", id, offset, 50000));
+            _photoPct = (int)Math.Min(99, (offset + 50000) * 100L / size);
+            StateHasChanged();
+        }
+        await JS.InvokeVoidAsync("mfBlob.end", id);
+        return sb.Length == size ? sb.ToString() : null;
+    }
+
+    private async Task PickPhoto()
+    {
+        if (_photos.Count >= 4) return;
+        _uploadingPhoto = true;
+        try
+        {
+            // Compressed on-device: longest edge 1024 px, at most half a megabyte, then pulled in slices.
+            var meta = await JS.InvokeAsync<string?>("mfImage.pick", false, 680000, 1024);
+            if (string.IsNullOrEmpty(meta)) return;
+            if (meta == "huge") { _error = L["common.photoOver5"]; return; }
+            if (meta == "too-big") { _error = L["common.photoTooLarge"]; return; }
+            _photoPct = 0;
+            var parked = System.Text.Json.JsonDocument.Parse(meta);
+            var data = await PullChunks(parked.RootElement.GetProperty("id").GetString()!,
+                                        parked.RootElement.GetProperty("size").GetInt32());
+            if (string.IsNullOrEmpty(data)) return;
+            _photos.Add(data);
+            _mainIndex = _photos.Count == 1 ? 0 : _mainIndex;
+        }
+        finally
+        {
+            _uploadingPhoto = false;
+            _photoPct = -1;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Exactly one main photo — picking one moves it to the FRONT of the list.</summary>
+    private void SetMain(int index)
+    {
+        if (index <= 0 || index >= _photos.Count) { _mainIndex = 0; return; }
+        var photo = _photos[index];
+        _photos.RemoveAt(index);
+        _photos.Insert(0, photo);
+        _mainIndex = 0;
+    }
+
+    private void RemoveMain()
+    {
+        if (_photos.Count == 0) return;
+        _photos.RemoveAt(Math.Clamp(_mainIndex, 0, _photos.Count - 1));
+        _mainIndex = 0;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Existing is null)
+        {
+            _categoryId = Categories.FirstOrDefault()?.Id ?? 0;
+            return;
+        }
+        _categoryId = Existing.CategoryId;
+        _name = Existing.Name;
+        _dishNames = Existing.Names ?? [];
+        // A product born before languages keeps its old name as the Arabic entry.
+        if (_dishNames.Count == 0 && Existing.Name.Length > 0) _dishNames["ar"] = Existing.Name;
+        _description = Existing.Description;
+        _price = Existing.Price;
+        _discount = Existing.DiscountPercent;
+        _sortOrder = Existing.SortOrder;
+        _emoji = Existing.ImageEmoji;
+        _isPopular = Existing.IsPopular;
+        _isAvailable = Existing.IsAvailable;
+        _inStoreOnly = Existing.InStoreOnly;
+        _unit = Existing.Unit;
+        _ingredients.Clear();
+        _ingredients.AddRange(Existing.IngredientList);
+
+        _leadDays = Existing.LeadTimeDays;
+        _limited = Existing.HasWindow;
+        if (Existing.AvailableFromMinutes is { } from) _availFrom = TimeSpan.FromMinutes(from);
+        if (Existing.AvailableToMinutes is { } to) _availTo = TimeSpan.FromMinutes(to);
+        foreach (var day in Existing.AvailableDays.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (int.TryParse(day, out var d)) _days.Add(d);
+        // Empty (or every day ticked) reads as "all week"; anything narrower shows the chips.
+        _allWeek = _days.Count is 0 or 7;
+
+        var photos = await Api.GetMyDishPhotosAsync(Existing.Id) ?? [];
+        // Items saved before the gallery existed carry only the single cached photo.
+        if (photos.Count == 0 && Existing.Photo is not null) photos = [new DishPhotoDto(0, Existing.Photo, true)];
+        _photos.AddRange(photos.Select(p => p.Data));
+        _mainIndex = Math.Max(0, photos.FindIndex(p => p.IsMain));
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            if (!_dishNames.ContainsKey("ar")) { _error = L["nm.needAr"]; _busy = false; return; }
+            _name = _dishNames.GetValueOrDefault("en") ?? _dishNames.GetValueOrDefault("ar") ?? _name;
+            var request = new SaveMenuItemRequest(_categoryId, _name, _description, _price, _emoji, _isPopular, _isAvailable,
+                Photos: _photos.ToList(), MainPhoto: _mainIndex, DiscountPercent: _discount,
+                AvailableFromMinutes: _limited && _availFrom is { } f ? (int)f.TotalMinutes : null,
+                AvailableToMinutes: _limited && _availTo is { } t ? (int)t.TotalMinutes : null,
+                AvailableDays: _allWeek || _days.Count is 0 or 7 ? "" : string.Join(",", _days.OrderBy(d => d)),
+                LeadTimeDays: _leadDays,
+                InStoreOnly: _inStoreOnly,
+                Ingredients: string.Join("; ", _ingredients),
+                Unit: _unit ?? "",
+                Names: _dishNames,
+                SortOrder: _sortOrder);
+            var (ok, error) = Existing is null
+                ? await Api.CreateMenuItemAsync(request)
+                : await Api.UpdateMenuItemAsync(Existing.Id, request);
+            if (!ok) { _error = error; return; }
+            // A brand-new product goes to the admin queue; an edit is live immediately.
+            Dialog.Close(DialogResult.Ok(Existing is null ? "pending" : "saved"));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

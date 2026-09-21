@@ -1,0 +1,86 @@
+@inject LanguageService L
+@* One column of the live order board — modern card layout. *@
+
+<div class="ob-col">
+    <div class="ob-col-head ob-@(Accent)">
+        <span class="ob-col-dot"></span>
+        <span class="ob-col-title">@Title</span>
+        <span class="ob-col-count">@Orders.Count</span>
+    </div>
+
+    @if (Orders.Count == 0)
+    {
+        <div class="ob-col-empty">
+            <span>🗒️</span>
+            <span>@L["partner.colEmpty"]</span>
+        </div>
+    }
+
+    @foreach (var order in Orders)
+    {
+        var o = order;
+        <div class="ob-card ob-@(Accent)">
+            <div class="ob-card-top">
+                <span class="ob-card-num">@o.Number</span>
+                @if (o.TableName is not null)
+                {
+                    <span class="ob-tag dine">🍽️ @o.TableName</span>
+                }
+                else if (o.OrderType == OrderType.Pickup)
+                {
+                    <span class="ob-tag pick">🏪 @L["order.pickup"]</span>
+                }
+                @if (o.ScheduledFor is { } scheduled)
+                {
+                    <span class="ob-tag sched">🗓️ @scheduled.ToString("dd MMM")</span>
+                }
+                <span class="ob-card-time">@Fmt.TimeAgo(o.PlacedAt, L)</span>
+            </div>
+
+            <div class="ob-card-cust">
+                <span class="ob-card-name">@o.CustomerName</span>
+                <span class="ob-card-pay">@Fmt.PaymentLabel(o.PaymentMethod, L)</span>
+            </div>
+
+            <div class="ob-card-items">
+                @foreach (var item in o.Items)
+                {
+                    <div class="ob-line">
+                        <span class="ob-qty">@item.Quantity</span>
+                        <span class="ob-item-name">@item.Name</span>
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(item.Notes))
+                    {
+                        <div class="ob-note">“@item.Notes”</div>
+                    }
+                }
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(o.Notes))
+            {
+                <div class="ob-order-note">💬 @o.Notes</div>
+            }
+
+            <div class="ob-card-foot">
+                <span class="ob-total">@Fmt.Rial(o.Total)</span>
+                <span class="ob-actions">@ActionsTemplate(o)</span>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public Color Color { get; set; } = Color.Default;
+    [Parameter, EditorRequired] public List<OrderDto> Orders { get; set; } = [];
+    [Parameter, EditorRequired] public RenderFragment<OrderDto> ActionsTemplate { get; set; } = default!;
+
+    /// <summary>CSS accent keyed off the Mud colour the parent passes per column.</summary>
+    private string Accent => Color switch
+    {
+        Color.Warning => "new",
+        Color.Info => "cook",
+        Color.Primary => "out",
+        _ => "new",
+    };
+}

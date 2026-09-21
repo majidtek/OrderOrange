@@ -1,0 +1,91 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snack
+
+@* The saved shopping lists, in full: what each one orders and from whom. Picking
+   one hands it back to the ticket; nothing is bought from here. *@
+
+<MudDialog>
+    <DialogContent>
+        @if (Templates.Count == 0)
+        {
+            <div class="sb-empty">📋 @L["tpl.none"]</div>
+        }
+        else
+        {
+            <div class="rd-search">
+                <MudIcon Icon="@Icons.Material.Filled.Search" />
+                <input placeholder="@L["mat.search"]" @bind="_filter" @bind:event="oninput" />
+            </div>
+            <div class="tp-list">
+                @foreach (var template in Filtered)
+                {
+                    <div class="tp-row">
+                        <button type="button" class="pick" @onclick="@(() => Dialog.Close(DialogResult.Ok(template)))">
+                            <div class="top">
+                                <b>📋 @template.Name</b>
+                                <span class="sup">🚚 @template.Supplier</span>
+                            </div>
+                            <small>@Preview(template)</small>
+                        </button>
+                        <button type="button" class="x" title="@L["common.delete"]"
+                                @onclick="@(() => DeleteAsync(template))">✕</button>
+                    </div>
+                }
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public List<PurchaseTemplateDto> Templates { get; set; } = [];
+    [Parameter] public StoreMaterialsDto? Materials { get; set; }
+    [Parameter] public List<MenuCategoryDto> Menu { get; set; } = [];
+
+    private string _filter = "";
+
+    /// <summary>Name or supplier — either finds the list.</summary>
+    private IEnumerable<PurchaseTemplateDto> Filtered
+    {
+        get
+        {
+            if (_filter.Trim().Length == 0) return Templates;
+            var folded = OrderOrange.RestaurantWeb.Services.PosBotNlu.Fold(_filter);
+            return Templates.Where(t =>
+                OrderOrange.RestaurantWeb.Services.PosBotNlu.Fold(t.Name).Contains(folded)
+                || OrderOrange.RestaurantWeb.Services.PosBotNlu.Fold(t.Supplier).Contains(folded));
+        }
+    }
+
+    /// <summary>"گوشت گوسفند ×20 · چرخ‌کرده ×10 · +1" — the list at a glance.</summary>
+    private string Preview(PurchaseTemplateDto template)
+    {
+        var parts = template.Lines.Take(3).Select(line =>
+        {
+            var name = line.IsProduct
+                ? Menu.SelectMany(c => c.Items).FirstOrDefault(i => i.Id == line.ItemId)?.NameFor(L.Locale)
+                : Materials?.Items.FirstOrDefault(m => m.Id == line.ItemId)?.Name;
+            return name is null ? null : $"{name} ×{line.Quantity:0.##}";
+        }).Where(p => p is not null).ToList();
+
+        var extra = template.Lines.Count - parts.Count;
+        return string.Join(" · ", parts) + (extra > 0 ? $" · +{extra}" : "");
+    }
+
+    private async Task DeleteAsync(PurchaseTemplateDto template)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(
+            L["common.areYouSure"], string.Format(L["tpl.deleteAsk"], template.Name),
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.DeletePurchaseTemplateAsync(template.Id);
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Templates.Remove(template);
+    }
+}

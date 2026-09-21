@@ -1,0 +1,19 @@
+@* Placeholder rows shown while a card's own data is still on the way, so the page
+   keeps its shape instead of jumping when the answer arrives. *@
+
+@for (var i = 0; i < Count; i++)
+{
+    <div class="sk-row" style="animation-delay:@(i * 70)ms">
+        <span class="sk-ava"></span>
+        <div class="sk-mid">
+            <span class="sk-line w1"></span>
+            <span class="sk-line w2"></span>
+        </div>
+        <span class="sk-chip"></span>
+    </div>
+}
+
+@code {
+    /// <summary>How many placeholder rows to draw — match what the real list shows.</summary>
+    [Parameter] public int Count { get; set; } = 5;
+}

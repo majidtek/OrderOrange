@@ -1,0 +1,257 @@
+﻿@page "/bills/report"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Partner — Bill report</PageTitle>
+
+<PageHeader Title="@L["billrep.title"]" Subtitle="@L["billrep.sub"]" />
+
+<div class="rp">
+    <div class="d-flex align-center flex-wrap mb-4" style="gap: 10px;">
+        <MfDateRangePicker DateFormat="yyyy-MM-dd" DateRange="_range" DateRangeChanged="OnRangeChanged"
+                            Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                            Class="rp-range" PlaceholderStart="@L["w.date"]" PlaceholderEnd="@L["w.date"]" />
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">@RangeLabel</MudChip>
+        <span style="flex: 1;"></span>
+        <ReportExport Title="@ExportTitle" Subtitle="@L["billrep.sub"]" RangeLabel="@RangeLabel"
+                      Columns="@ExportColumns" Fetch="ExportRows" FetchTotals="ExportTotals" />
+    </div>
+
+    <MudGrid Spacing="3" Class="mb-1">
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["billrep.totalBilled"]" Value="@(_report is null ? "…" : Fmt.RialShort(_report.Total).Value)" Icon="@Icons.Material.Filled.Summarize" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.paid"]" Value="@(_report is null ? "…" : Fmt.RialShort(_report.Paid).Value)" Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.unpaid"]" Value="@(_report is null ? "…" : Fmt.RialShort(_report.Unpaid).Value)" Icon="@Icons.Material.Filled.HourglassBottom" Color="Color.Warning" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.overdue"]" Value="@(_report is null ? "…" : Fmt.RialShort(_report.Overdue).Value)" Icon="@Icons.Material.Filled.WarningAmber" Color="Color.Error" />
+        </MudItem>
+    </MudGrid>
+
+    <div class="pv-seg my-4" style="max-width: 460px;">
+        <button type="button" class="@(_tab == 0 ? "on" : "")" @onclick="@(() => _tab = 0)">
+            <MudIcon Icon="@Icons.Material.Filled.Category" Size="Size.Small" /> @L["w.category"]
+        </button>
+        <button type="button" class="@(_tab == 1 ? "on" : "")" @onclick="@(() => _tab = 1)">
+            <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" /> @L["w.month"]
+        </button>
+        <button type="button" class="@(_tab == 2 ? "on" : "")" @onclick="@(() => _tab = 2)">
+            <MudIcon Icon="@Icons.Material.Filled.Storefront" Size="Size.Small" /> @L["w.company"]
+        </button>
+    </div>
+
+    <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+        @if (_report is null)
+        {
+            <Loader />
+        }
+        else if (_report.Count == 0)
+        {
+            <div class="pv-empty">
+                <span class="em">📊</span>
+                <MudText Typo="Typo.body1" Style="font-weight: 700;">@L["billrep.empty"]</MudText>
+            </div>
+        }
+        else if (_tab == 0)
+        {
+            <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mb-3">@L["billrep.spendCategory"]</MudText>
+            <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                <thead>
+                    <tr>
+                        <th>@L["w.category"]</th>
+                        <th class="num">@L["w.bills"]</th>
+                        <th class="num">@L["common.total"]</th>
+                        <th class="num">@L["w.paid"]</th>
+                        <th class="num">@L["w.unpaid"]</th>
+                        <th class="num">@L["w.share"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _report.Categories)
+                    {
+                        <tr>
+                            <td class="strong">@BillCategories.Emoji(row.Category) @L["bcat." + row.Category]</td>
+                            <td class="num">@row.Count</td>
+                            <td class="num strong">@Fmt.RialShort(row.Total)</td>
+                            <td class="num">@Fmt.RialShort(row.Paid)</td>
+                            <td class="num">@Fmt.RialShort(row.Unpaid)</td>
+                            <td class="num">@Share(row.Total)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="total">
+                        <td>@L["common.total"]</td>
+                        <td class="num">@_report.Count</td>
+                        <td class="num strong">@Fmt.RialShort(_report.Total)</td>
+                        <td class="num">@Fmt.RialShort(_report.Paid)</td>
+                        <td class="num">@Fmt.RialShort(_report.Unpaid)</td>
+                        <td class="num">100%</td>
+                    </tr>
+                </tfoot>
+            </MudSimpleTable>
+        }
+        else if (_tab == 1)
+        {
+            <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mb-3">@L["billrep.spendMonth"]</MudText>
+            <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                <thead>
+                    <tr>
+                        <th>@L["w.month"]</th>
+                        <th class="num">@L["w.bills"]</th>
+                        <th class="num">@L["common.total"]</th>
+                        <th class="num">@L["w.paid"]</th>
+                        <th class="num">@L["w.unpaid"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{
+                        var peak = _report.Months.Count == 0 ? 0 : _report.Months.Max(m => m.Total);
+                    }
+                    @foreach (var row in _report.Months)
+                    {
+                        <tr class="@(row.Total == peak ? "best" : "")">
+                            <td class="strong">@row.Label @(row.Total == peak ? "🔺" : "")</td>
+                            <td class="num">@row.Count</td>
+                            <td class="num strong">@Fmt.RialShort(row.Total)</td>
+                            <td class="num">@Fmt.RialShort(row.Paid)</td>
+                            <td class="num">@Fmt.RialShort(row.Unpaid)</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="total">
+                        <td>@L["common.total"]</td>
+                        <td class="num">@_report.Count</td>
+                        <td class="num strong">@Fmt.RialShort(_report.Total)</td>
+                        <td class="num">@Fmt.RialShort(_report.Paid)</td>
+                        <td class="num">@Fmt.RialShort(_report.Unpaid)</td>
+                    </tr>
+                </tfoot>
+            </MudSimpleTable>
+        }
+        else
+        {
+            <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mb-3">@L["billrep.topCompanies"]</MudText>
+            @if (_report.Vendors.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@L["billrep.noCompanies"]</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 44px;">#</th>
+                            <th>@L["w.company"]</th>
+                            <th class="num">@L["w.bills"]</th>
+                            <th class="num">@L["common.total"]</th>
+                            <th class="num">@L["w.share"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < _report.Vendors.Count; i++)
+                        {
+                            var row = _report.Vendors[i];
+                            <tr>
+                                <td><span class="rk r@(Math.Min(i + 1, 4))">@(i + 1)</span></td>
+                                <td class="strong">@row.Vendor</td>
+                                <td class="num">@row.Count</td>
+                                <td class="num strong">@Fmt.RialShort(row.Total)</td>
+                                <td class="num">@Share(row.Total)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        }
+    </MudPaper>
+</div>
+
+@code {
+    private BillReportDto? _report;
+    private DateRange? _range;
+    private int _tab;
+
+    private string RangeLabel => _range is { Start: not null, End: not null }
+        ? $"{_range.Start:d MMM yyyy} – {_range.End:d MMM yyyy}"
+        : L["billrep.last12"];
+
+    // ---------- Export ----------
+    // Whatever breakdown is on screen is what leaves in the file. Exporting all three
+    // at once would hand the partner a sheet they did not ask for and cannot read.
+
+    private string ExportTitle => _tab switch
+    {
+        1 => $"{L["billrep.title"]} · {L["w.month"]}",
+        2 => $"{L["billrep.title"]} · {L["w.company"]}",
+        _ => $"{L["billrep.title"]} · {L["w.category"]}",
+    };
+
+    private List<ExportColumnDto> ExportColumns => _tab switch
+    {
+        2 =>
+        [
+            new(L["w.company"], Width: 30),
+            new(L["w.bills"], Numeric: true),
+            new($"{L["common.total"]} ({Fmt.Symbol})", Numeric: true),
+        ],
+        _ =>
+        [
+            new(_tab == 1 ? L["w.month"] : L["w.category"], Width: 26),
+            new(L["w.bills"], Numeric: true),
+            new($"{L["common.total"]} ({Fmt.Symbol})", Numeric: true),
+            new($"{L["w.paid"]} ({Fmt.Symbol})", Numeric: true),
+            new($"{L["w.unpaid"]} ({Fmt.Symbol})", Numeric: true),
+        ],
+    };
+
+    private Task<List<List<string>>> ExportRows()
+    {
+        if (_report is null) return Task.FromResult(new List<List<string>>());
+        return Task.FromResult(_tab switch
+        {
+            1 => _report.Months.Select(m => new List<string>
+                 { m.Label, m.Count.ToString(), m.Total.ToString("0.000"), m.Paid.ToString("0.000"), m.Unpaid.ToString("0.000") }).ToList(),
+            2 => _report.Vendors.Select(v => new List<string>
+                 { v.Vendor, v.Count.ToString(), v.Total.ToString("0.000") }).ToList(),
+            // The category key is an English enum name on the wire; the sheet gets the
+            // same translated label the table shows.
+            _ => _report.Categories.Select(c => new List<string>
+                 { L["bcat." + c.Category], c.Count.ToString(), c.Total.ToString("0.000"), c.Paid.ToString("0.000"), c.Unpaid.ToString("0.000") }).ToList(),
+        });
+    }
+
+    private Task<List<string>?> ExportTotals()
+    {
+        if (_report is null) return Task.FromResult<List<string>?>(null);
+        return Task.FromResult<List<string>?>(_tab == 2
+            ? [L["common.total"], _report.Vendors.Sum(v => v.Count).ToString(), _report.Vendors.Sum(v => v.Total).ToString("0.000")]
+            : [L["common.total"],
+               (_tab == 1 ? _report.Months.Sum(m => m.Count) : _report.Categories.Sum(c => c.Count)).ToString(),
+               _report.Total.ToString("0.000"),
+               _report.Paid.ToString("0.000"),
+               _report.Unpaid.ToString("0.000")]);
+    }
+
+    private string Share(decimal amount) =>
+        _report is null || _report.Total == 0 ? "—" : $"{amount * 100 / _report.Total:0.#}%";
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task OnRangeChanged(DateRange? range)
+    {
+        _range = range?.Start is null || range.End is null ? null : range;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        _report = null;
+        _report = await Api.GetBillReportAsync(_range?.Start, _range?.End);
+    }
+}

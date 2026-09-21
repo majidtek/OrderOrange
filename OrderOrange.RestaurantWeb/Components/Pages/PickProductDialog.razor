@@ -1,0 +1,74 @@
+﻿@using OrderOrange.Shared
+@inject LanguageService L
+
+@* Every product with a picture, searchable, so a post can use any dish — not only the
+   handful that fit in the strip. Returns the chosen item. *@
+
+<MudDialog Class="pp-dlg">
+    <TitleContent>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <MudIcon Icon="@Icons.Material.Filled.Inventory2" Color="Color.Primary" />
+            <b>@L["igp.pickProduct"]</b>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_search" Placeholder="@L["common.search"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Immediate="true" Class="mb-3" />
+
+        @if (Matches.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="py-4 d-block" Align="Align.Center">@L["igp.noProducts"]</MudText>
+        }
+        else
+        {
+            <div class="pp-grid">
+                @foreach (var entry in Matches)
+                {
+                    var item = entry.Item;
+                    <button type="button" class="pp-card" @onclick="@(() => Pick(item))">
+                        <span class="pic"><img src="@item.Photo" alt="@item.Name" loading="lazy" /></span>
+                        <span class="txt">
+                            <b>@item.NameFor(L.Locale)</b>
+                            <small>@entry.Category · @item.Price.ToString("0.000") @Fmt.Symbol</small>
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    /// <summary>The whole menu; only products that carry a picture can be posted.</summary>
+    [Parameter, EditorRequired] public List<MenuCategoryDto> Categories { get; set; } = [];
+
+    private string _search = "";
+
+    private sealed record Entry(MenuItemDto Item, string Category);
+
+    private List<Entry> All => Categories
+        .SelectMany(c => c.Items
+            .Where(i => i.Photo is { Length: > 0 })
+            .Select(i => new Entry(i, c.NameFor(L.Locale))))
+        .ToList();
+
+    private List<Entry> Matches
+    {
+        get
+        {
+            var q = _search.Trim();
+            if (q.Length == 0) return All;
+            return All.Where(e =>
+                e.Item.NameFor(L.Locale).Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                e.Item.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                e.Category.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+    }
+
+    private void Pick(MenuItemDto item) => Dialog.Close(DialogResult.Ok(item));
+}

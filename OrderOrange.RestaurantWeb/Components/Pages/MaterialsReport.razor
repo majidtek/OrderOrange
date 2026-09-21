@@ -1,0 +1,175 @@
+﻿@page "/materials/report"
+@inject ApiClient Api
+@inject LanguageService L
+
+@* What the period's sales burned off the shelf: every delivered order, multiplied
+   through its recipe. Where the money in the kitchen actually goes. *@
+
+<PageTitle>Partner — Consumption</PageTitle>
+
+<PageHeader Title="@L["cons.title"]" Subtitle="@L["cons.sub"]" />
+
+<div class="cn-chips" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <button type="button" class="@(_period == "week" ? "on" : "")" @onclick="@(() => LoadAsync("week"))">@L["vis.days7"]</button>
+    <button type="button" class="@(_period == "month" ? "on" : "")" @onclick="@(() => LoadAsync("month"))">@L["vis.days30"]</button>
+    <button type="button" class="@(_period == "quarter" ? "on" : "")" @onclick="@(() => LoadAsync("quarter"))">@L["cons.days90"]</button>
+    <span style="flex: 1;"></span>
+    <ReportExport Title="@L["cons.title"]" Subtitle="@L["cons.sub"]" RangeLabel="@RangeLabel"
+                  Columns="@ExportColumns" Fetch="ExportRows" FetchTotals="ExportTotals" />
+</div>
+
+@if (_report is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_report.Rows.Count == 0)
+{
+    <EmptyState Emoji="🧮" Title="@L["cons.none"]" Subtitle="@L["cons.noneSub"]" />
+}
+else
+{
+    <div class="cn-top">
+        <div class="cn-sum">
+            <span class="ic">💸</span>
+            <div><b class="mf-ltr">@Fmt.Rial(_report.TotalCost)</b><small>@L["cons.totalCost"]</small></div>
+        </div>
+        <div class="cn-sum">
+            <span class="ic">🧾</span>
+            <div><b>@_report.OrdersCounted.ToString("N0")</b><small>@L["cons.orders"]</small></div>
+        </div>
+        <div class="cn-sum">
+            <span class="ic">🥘</span>
+            <div><b>@_report.Rows.Count</b><small>@L["cons.materialsUsed"]</small></div>
+        </div>
+    </div>
+
+    @* ---------- Which dishes eat the money ---------- *@
+    @if (_report.TopProducts.Count > 0)
+    {
+        <div class="cn-card">
+            <div class="hd">🏆 @L["cons.topProducts"]</div>
+            @{ var topCost = Math.Max(0.001m, _report.TopProducts[0].Cost); }
+            @foreach (var product in _report.TopProducts)
+            {
+                <div class="cn-prod">
+                    <span class="nm">@product.ProductName</span>
+                    <span class="sold">×@product.Sold</span>
+                    <div class="meter"><span style="width:@((product.Cost * 100 / topCost).ToString("0.#"))%"></span></div>
+                    <span class="ct mf-ltr">@Fmt.Rial(product.Cost)</span>
+                </div>
+            }
+        </div>
+    }
+
+    @* ---------- Material by material: used, cost, and how long the shelf lasts ---------- *@
+    <div class="cn-card">
+        <div class="hd">📦 @L["cons.byMaterial"]</div>
+        @foreach (var row in _report.Rows)
+        {
+            var open = _openId == row.MaterialId;
+            var daysLeft = row.DaysLeft(_report.PeriodDays);
+            <div class="cn-row @(daysLeft is < 4 ? "urgent" : "")">
+                <button type="button" class="line" @onclick="@(() => _openId = open ? 0 : row.MaterialId)">
+                    <span class="ic">@CategoryIcon(row.Category)</span>
+                    <div class="mid">
+                        <b>@row.MaterialName</b>
+                        <small class="mf-ltr">@row.Used.ToString("0.##") @L[$"mat.unit.{row.Unit}"] · @Fmt.Rial(row.Cost)</small>
+                    </div>
+                    @if (daysLeft is { } days)
+                    {
+                        <span class="days @(days < 4 ? "bad" : days < 10 ? "mid" : "")">
+                            @(days > 90 ? "90+" : days.ToString("0")) @L["cons.daysLeft"]
+                        </span>
+                    }
+                    <MudIcon Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" />
+                </button>
+                @if (open)
+                {
+                    <div class="det">
+                        <div class="st">
+                            <span>@L["mat.inStock"]: <b class="mf-ltr">@row.InStock.ToString("0.##") @L[$"mat.unit.{row.Unit}"]</b></span>
+                            <span>@L["cons.usedIn"]:</span>
+                        </div>
+                        @foreach (var product in row.Products)
+                        {
+                            <div class="ln">
+                                <span class="nm">@product.ProductName</span>
+                                <span class="sold">×@product.Sold</span>
+                                <span class="qt mf-ltr">@product.Amount.ToString("0.##") @L[$"mat.unit.{row.Unit}"]</span>
+                                <span class="ct mf-ltr">@Fmt.Rial(product.Cost)</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private ConsumptionReportDto? _report;
+    private string _period = "week";
+    private int _openId;
+
+    // ---------- Export ----------
+    // Material by material, which is the sheet a kitchen actually reorders from.
+
+    private string RangeLabel => _period switch
+    {
+        "month" => L["vis.days30"],
+        "quarter" => L["cons.days90"],
+        _ => L["vis.days7"],
+    };
+
+    private List<ExportColumnDto> ExportColumns =>
+    [
+        new(L["cons.material"], Width: 28),
+        new(L["w.category"], Width: 16),
+        new(L["cons.used"], Numeric: true),
+        new(L["w.unit"], Width: 10),
+        new($"{L["w.cost"]} ({Fmt.Symbol})", Numeric: true),
+        new(L["cons.inStock"], Numeric: true),
+        new(L["cons.daysLeft"], Numeric: true),
+    ];
+
+    private Task<List<List<string>>> ExportRows()
+    {
+        if (_report is null) return Task.FromResult(new List<List<string>>());
+        return Task.FromResult(_report.Rows.Select(r =>
+        {
+            var days = r.DaysLeft(_report.PeriodDays);
+            return new List<string>
+            {
+                r.MaterialName,
+                r.Category,
+                r.Used.ToString("0.###"),
+                r.Unit,
+                r.Cost.ToString("0.000"),
+                r.InStock.ToString("0.###"),
+                // Nothing used means the shelf never empties — a dash, not a zero,
+                // which would read as "out tomorrow".
+                days is null ? "—" : Math.Round(days.Value).ToString("0"),
+            };
+        }).ToList());
+    }
+
+    private Task<List<string>?> ExportTotals() =>
+        Task.FromResult<List<string>?>(_report is null ? null :
+            [L["common.total"], "", "", "", _report.TotalCost.ToString("0.000"), "", ""]);
+
+    protected override Task OnInitializedAsync() => LoadAsync(_period);
+
+    private async Task LoadAsync(string period)
+    {
+        _period = period;
+        _report = null;
+        _report = await Api.GetConsumptionAsync(period);
+    }
+
+    private static string CategoryIcon(string category) => category switch
+    {
+        "grain" => "🌾", "oil" => "🫒", "meat" => "🥩", "dairy" => "🧀",
+        "vegetable" => "🥬", "spice" => "🧂", "drink" => "🥤", "packaging" => "📦",
+        _ => "🧺",
+    };
+}

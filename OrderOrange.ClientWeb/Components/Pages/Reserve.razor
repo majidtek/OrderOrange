@@ -1,0 +1,817 @@
+﻿@page "/reserve/{Code}"
+@layout OrderOrange.ClientWeb.Components.Layout.PublicLayout
+@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject TableBrandState TableBrand
+@implements IDisposable
+
+@* Where a table's QR lands: the till, handed to the guest. Same idea as the staff
+   POS — category chips, tap tiles, running total — but public, no account, sized
+   for the phone in their hand. What they send lands on this table's open invoice. *@
+
+<PageTitle>@L["qo.title"] · OrderOrange</PageTitle>
+
+@if (_loading)
+{
+    @* NOTHING of the page until it is ready: one full-screen loader, brand-free —
+       the first mark this guest sees will be the restaurant's own. *@
+    <Loader FullPage="true" HideBrand="true" />
+}
+else
+{
+@* The guest scanned a card on a TABLE: the page wears the restaurant's face, not the
+   platform's. *@
+@* A proper masthead: the store's mark on a white tile, its name at a modest size with
+   its other-language name beneath — the brand leads, the words follow (Majed 2026-09-07:
+   "add more size to logo, make the header professional"). *@
+<div class="pub-top qm-head">
+    <div class="pub-brand">
+        @if (_info is not null)
+        {
+            <span class="qm-logo">
+                @if (!string.IsNullOrEmpty(_info.LogoData))
+                {
+                    <img src="@_info.LogoData" alt="@_info.StoreName" class="store" />
+                }
+                else
+                {
+                    <span class="pub-brand-emoji">@_info.LogoEmoji</span>
+                }
+            </span>
+            <span class="qm-names">
+                <b>@_info.NameFor(L.Locale)</b>
+                @if (AltName(_info) is { } alt)
+                {
+                    <small>@alt</small>
+                }
+            </span>
+        }
+    </div>
+    <LanguageMenu Compact="true" />
+</div>
+}
+
+@if (_loading)
+{
+    @* Body is the loader above — nothing else renders while loading. *@
+}
+else if (_info is null)
+{
+    <div class="pub-wrap">
+        <div class="bill-card bill-bad">
+            <div class="bill-seal bad">✕</div>
+            <h1>@L["rsv.notFound"]</h1>
+            <p>@L["rsv.notFoundHint"]</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="qmenu @(_ready ? "" : "booting")">
+        @* The hero: the shop's face, the guest's table — a welcome, not a form. *@
+        @* No hero at all — the top bar already says whose house this is. One slim
+           utility row is the whole header: the table badge, the area (a quiet map
+           link), and two ghost icon buttons for call and share. Then the menu. *@
+        <div class="qm-topbar">
+            <span class="tbl">@string.Format(L["rsv.tableChip"], _info.TableName)</span>
+            @if (!string.IsNullOrWhiteSpace(_info.Area))
+            {
+                <a class="loc" href="@HeroMapUrl(_info)" target="_blank" rel="noopener" title="@L["pub.location"]">
+                    <MudIcon Icon="@Icons.Material.Filled.Place" /> @_info.Area
+                </a>
+            }
+            <span class="sp"></span>
+            @if (HeroPhones(_info.Phone).FirstOrDefault() is { } heroTel)
+            {
+                <a class="ib" href="tel:@heroTel" title="@L["pub.call"]" aria-label="@L["pub.call"]">
+                    <MudIcon Icon="@Icons.Material.Filled.Call" />
+                </a>
+            }
+            <button type="button" class="ib" title="@L["pub.share"]" aria-label="@L["pub.share"]"
+                    onclick="if (navigator.share) { navigator.share({ title: document.title, url: location.href }); } else { navigator.clipboard && navigator.clipboard.writeText(location.href); }">
+                <MudIcon Icon="@Icons.Material.Filled.IosShare" />
+            </button>
+        </div>
+
+        @if (_sent is not null)
+        {
+            <div class="qm-sent">
+                <div class="seal">✓</div>
+                <b>@L["qo.sentTitle"]</b>
+                <p>@string.Format(L["qo.sentBody"], _sent.TableName)</p>
+                <div class="sum">
+                    <span>@string.Format(L["qo.items"], _sent.LineCount)</span>
+                    <b class="mf-ltr">@Fmt.Rial(_sent.Total)</b>
+                </div>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+                           OnClick="@(() => _sent = null)">
+                    @L["qo.addMore"]
+                </MudButton>
+                @if (!string.IsNullOrEmpty(_sent.InvoicePdfUrl))
+                {
+                    @* Their copy of the bill, one tap. Fetched here — not opened in a blank
+                       tab — so the button can say it is working and the file lands as a
+                       download; the server draws the PDF in well under a second. *@
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Class="mt-2"
+                               StartIcon="@(_pdfBusy ? null : Icons.Material.Filled.PictureAsPdf)"
+                               Disabled="_pdfBusy" OnClick="DownloadInvoicePdf">
+                        @if (_pdfBusy)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                            @L["qo.pdfWait"]@(_pdfPct >= 0 ? $" {_pdfPct}%" : "")
+                        }
+                        else
+                        {
+                            @L["qo.invoicePdf"]
+                        }
+                    </MudButton>
+                    @if (_pdfBusy)
+                    {
+                        @* A bar under the button: sliding while the server draws the file, filling as it arrives. *@
+                        <MudProgressLinear Color="Color.Primary" Size="Size.Small" Rounded="true" Class="mt-2"
+                                           Indeterminate="@(_pdfPct < 0)" Value="@Math.Max(_pdfPct, 0)" />
+                    }
+                    @if (_pdfMsg is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="@(_pdfOk ? Color.Success : Color.Error)" Class="d-block mt-1 text-center">@_pdfMsg</MudText>
+                    }
+                }
+                @if (_hasSurvey)
+                {
+                    @* The store is asking its guests something; the table code rides along as the source. *@
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" FullWidth="true" Class="mt-1"
+                               StartIcon="@Icons.Material.Filled.Poll"
+                               Href="@($"/survey/{_info!.StoreId}?t={Code}")">
+                        @L["sv.take"]
+                    </MudButton>
+                }
+            </div>
+        }
+        else if (_info.Menu is not { Count: > 0 })
+        {
+            <MudAlert Severity="Severity.Info" Dense="true">@L["rsv.noMenu"]</MudAlert>
+        }
+        else
+        {
+            @* Search + groups ride under the masthead and stay put while the menu scrolls
+               ("make the header and groups fixed, also add smart search" — Majed 2026-09-07). *@
+            <div class="qm-sticky">
+                <div class="qm-search @(_query.Length > 0 ? "has" : "")">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" />
+                    @* Uncontrolled on purpose: the keystrokes stay in the browser and mfQm.bindSearch
+                       sends the text ONCE per pause (220 ms) — one round trip and one re-render per
+                       word, not per letter ("there is delay on typing in search" — Majed 2026-09-08). *@
+                    <input id="qm-search-input" type="search" placeholder="@L["qo.searchPh"]"
+                           enterkeyhint="search" autocomplete="off" autocorrect="off" spellcheck="false" aria-label="@L["common.search"]" />
+                    @if (_query.Length > 0)
+                    {
+                        <button type="button" class="clr" @onclick="ClearSearch" aria-label="@L["common.clear"]">✕</button>
+                    }
+                </div>
+                @* The groups: a scrolling row of pills with an item count, and two PHYSICAL
+                   arrows (left nudges left, right nudges right, whatever the language) drawn
+                   as CSS chevrons — typed ‹ › mirror in RTL. They only show when the row
+                   overflows, and each dims at its own end (mfQm.watchCats). *@
+                <div class="qm-cats-row">
+                    <button type="button" class="qm-cat-arrow l" onclick="mfQm.scrollCats(-1)" aria-label="@L["pg.prev"]"><i></i></button>
+                    <div class="pos-cats qm-cats">
+                        <button type="button" class="@(_categoryId == 0 && _query.Length == 0 ? "on" : "")" @onclick="@(() => PickGroup(0))">
+                            @L["qo.all"] <em>@_info.Menu.Sum(c => c.Items.Count(i => i.IsAvailable))</em>
+                        </button>
+                        @foreach (var c in _info.Menu.Where(c => c.Items.Count > 0))
+                        {
+                            var cat = c;
+                            <button type="button" class="@(_categoryId == cat.Id && _query.Length == 0 ? "on" : "")" @onclick="@(() => PickGroup(cat.Id))">
+                                @(cat.Names is { Count: > 0 } ? cat.NameFor(L.Locale) : L.Data("category", cat.Name)) <em>@cat.Items.Count(i => i.IsAvailable)</em>
+                            </button>
+                        }
+                    </div>
+                    <button type="button" class="qm-cat-arrow r" onclick="mfQm.scrollCats(1)" aria-label="@L["pg.next"]"><i></i></button>
+                </div>
+            </div>
+
+            @if (_query.Trim().Length > 0 && VisibleItems.Count() is var hits && hits > 0)
+            {
+                <div class="qm-results">@string.Format(L["qo.results"], hits, _query.Trim())</div>
+            }
+            @if (_query.Length > 0 && !VisibleItems.Any())
+            {
+                <div class="qm-empty">
+                    <span>🔍</span>
+                    <b>@string.Format(L["qo.noMatch"], _query)</b>
+                    <small>@L["qo.noMatchHint"]</small>
+                </div>
+            }
+
+            <div class="qm-grid">
+                @{ var popIndex = 0; }
+                @foreach (var item in VisibleItems)
+                {
+                    var dish = item;
+                    var qty = _pending.GetValueOrDefault(dish.Id);
+                    var delay = Math.Min(popIndex++ * 30, 300);
+                    @* The card opens the story; the + does the shopping. *@
+                    <div @key="dish.Id" class="qm-card @(qty > 0 ? "on" : "")" style="animation-delay: @(delay)ms;"
+                         @onclick="@(() => _detail = dish)">
+                        <div class="img">
+                            @if (!string.IsNullOrWhiteSpace(dish.Photo))
+                            {
+                                <img src="@dish.Photo" alt="" loading="lazy" />
+                            }
+                            else if (FoodPhoto.ForDish(dish.Name, _info!.DishStockPhotos) is string stockPhoto)
+                            {
+                                <img src="@stockPhoto" alt="" loading="lazy" />
+                            }
+                            else
+                            {
+                                <span class="em">@(string.IsNullOrWhiteSpace(dish.ImageEmoji) ? "🍽️" : dish.ImageEmoji)</span>
+                            }
+                        </div>
+                        <b class="nm">@dish.NameFor(L.Locale)</b>
+                        <div class="foot">
+                            <span class="pr mf-ltr">@Fmt.Rial(dish.FinalPrice)</span>
+                            @if (qty == 0)
+                            {
+                                <button type="button" class="add @(_ready ? "" : "wait")" disabled="@(!_ready)"
+                                        @onclick="@(() => Bump(dish, 1))" @onclick:stopPropagation="true"
+                                        aria-label="@(_ready ? "+" : L["common.loading"])">
+                                    @if (_ready) { <text>+</text> } else { <i class="spin"></i> }
+                                </button>
+                            }
+                            else
+                            {
+                                @* The stepper: a drawn bin when the next tap removes the dish (the emoji
+                                   looked cheap and varied by phone — "remove item is not good"), a minus otherwise. *@
+                                <span class="stp @(qty == 1 ? "rm" : "")" @onclick:stopPropagation="true" @onclick="@(() => { })">
+                                    <button type="button" class="@(qty == 1 ? "del" : "")" @onclick="@(() => Bump(dish, -1))"
+                                            @onclick:stopPropagation="true" aria-label="@(qty == 1 ? L["common.remove"] : "−")">
+                                        @if (qty == 1)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Outlined.DeleteOutline" />
+                                        }
+                                        else
+                                        {
+                                            <i class="minus"></i>
+                                        }
+                                    </button>
+                                    <b>@qty</b>
+                                    <button type="button" @onclick="@(() => Bump(dish, 1))"
+                                            @onclick:stopPropagation="true">+</button>
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_error</MudAlert>
+            }
+
+            @* Chat with the store — its own page, a real messenger screen. *@
+            <button type="button" class="qc-fab"
+                    @onclick="@(() => Nav.NavigateTo($"/reserve/{Uri.EscapeDataString(Code)}/chat"))">
+                💬
+                @if (_chatUnread > 0)
+                {
+                    <span class="n">@_chatUnread</span>
+                }
+            </button>
+
+            @if (_detail is { } detail)
+            {
+                @* What is this dish made from? The sheet answers, and can add it too. *@
+                <div class="qm-veil" @onclick="@(() => _detail = null)"></div>
+                <div class="qm-sheet">
+                    @if (!string.IsNullOrWhiteSpace(detail.Photo))
+                    {
+                        <img src="@detail.Photo" alt="" />
+                    }
+                    else if (FoodPhoto.ForDish(detail.Name, _info!.DishStockPhotos) is string detailStock)
+                    {
+                        <img src="@detailStock" alt="" />
+                    }
+                    else
+                    {
+                        <span class="em">@(string.IsNullOrWhiteSpace(detail.ImageEmoji) ? "🍽️" : detail.ImageEmoji)</span>
+                    }
+                    <b class="nm">@detail.NameFor(L.Locale)</b>
+                    @if (!string.IsNullOrWhiteSpace(detail.Description))
+                    {
+                        <p class="ds">@detail.Description</p>
+                    }
+                    @if (detail.IngredientList.Length > 0)
+                    {
+                        <div class="qm-ing">
+                            <small>🧾 @L["dish.ingredients"]</small>
+                            <div class="wrap">
+                                @foreach (var material in detail.IngredientList)
+                                {
+                                    <span>@material</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                    <div class="row">
+                        <b class="pr mf-ltr">@Fmt.Rial(detail.FinalPrice)@(detail.Unit.Length > 0 ? $" / {L[$"unit.{detail.Unit}"]}" : "")</b>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                                   StartIcon="@Icons.Material.Filled.AddCircle"
+                                   OnClick="@(() => { Bump(detail, 1); _detail = null; })">
+                            @L["qo.add"]
+                        </MudButton>
+                    </div>
+                </div>
+            }
+
+            @if (Count > 0)
+            {
+                @* The cart rides the bottom of the screen, thumb distance from everything. *@
+                <div class="qm-bar">
+                    <div class="tx">
+                        <b class="mf-ltr">@Fmt.Rial(PendingSum)</b>
+                        <small>@string.Format(L["qo.items"], Count)</small>
+                    </div>
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large"
+                               Class="qm-send" StartIcon="@Icons.Material.Filled.RoomService"
+                               Disabled="_busy" OnClick="Send">
+                        @L["qo.send"]
+                    </MudButton>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    /// <summary>The header's numbers, ;-joined by the owner; only the first is shown.</summary>
+    private static IEnumerable<string> HeroPhones(string? raw) =>
+        (raw ?? "").Split(';', ',').Select(p => p.Trim()).Where(p => p.Length > 3);
+
+    /// <summary>The shop's pin when set, a name+area search when not.</summary>
+    private static string HeroMapUrl(TableReserveInfoDto i) =>
+        i.MapLat is { } la && i.MapLng is { } ln
+            ? $"https://www.google.com/maps/search/?api=1&query={la.ToString(System.Globalization.CultureInfo.InvariantCulture)},{ln.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString($"{i.StoreName} {i.Area} Muscat")}";
+
+    [Parameter] public string Code { get; set; } = "";
+
+    private TableReserveInfoDto? _info;
+    private PublicOrderResultDto? _sent;
+    private MenuItemDto? _detail;
+    private bool _hasSurvey;
+
+    // ---------- Chat badge state (the chat itself lives on its own page) ----------
+    private int _chatUnread;
+    private int _lastChatId;
+    private System.Threading.Timer? _chatPoll;
+    private readonly Dictionary<int, int> _pending = [];
+    private int _categoryId;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private string _query = "";
+    private bool _searchBound;
+
+    /// <summary>Called from mfQm.bindSearch after the guest pauses typing (or presses Enter).</summary>
+    [JSInvokable]
+    public void SetQuery(string? text)
+    {
+        var next = (text ?? "").TrimStart();
+        if (next == _query) return;
+        _query = next;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ClearSearch()
+    {
+        _query = "";
+        try { await JS.InvokeVoidAsync("mfQm.clearSearch", "qm-search-input"); } catch (JSException) { }
+    }
+
+    private async Task PickGroup(int id)
+    {
+        _categoryId = id;
+        if (_query.Length > 0) await ClearSearch();
+    }
+
+    private IEnumerable<MenuItemDto> VisibleItems
+    {
+        get
+        {
+            var now = DateTime.Now;
+            // A search looks through the WHOLE menu, whatever group is selected; the best
+            // matches (name starts with the words) come first, then the rest, then today's
+            // unavailable dishes.
+            if (_query.Trim().Length > 0)
+            {
+                // Single letters match everything ("zzzz" folds to "z"); they are not a search yet.
+                var terms = Fold(_query).Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(t => t.Length >= 2).ToArray();
+                if (terms.Length == 0) return [];
+                var index = SearchIndex;
+                return index
+                    .Select(e => (e.Item, match: Score(e, terms)))
+                    .Where(x => x.match > 0)                                   // matched at all?
+                    .OrderByDescending(x => x.match + Bonus(x.Item, now))      // best (and orderable now) first …
+                    .ThenBy(x => x.Item.SortOrder)                             // … the owner's order breaks ties
+                    .Select(x => x.Item);
+            }
+            var categories = _categoryId == 0
+                ? _info!.Menu!
+                : _info!.Menu!.Where(c => c.Id == _categoryId);
+            // Orderable-now first, today's unavailable dishes last (stable, keeps the owner's order).
+            return categories.SelectMany(c => c.Items).Where(i => i.IsAvailable)
+                .OrderBy(i => i.OrderableAt(now) ? 0 : 1);
+        }
+    }
+
+    // ---------- Smart search ----------
+
+    /// <summary>One dish, pre-folded once: its name words in every language, the whole name
+    /// text, its group's names, and the long text (descriptions + ingredients).</summary>
+    private sealed record SearchEntry(MenuItemDto Item, string[] NameWords, string NameText, string GroupText, string ExtraText)
+    {
+        /// <summary>Consonant skeletons of the name words: Persian/Arabic is typed without its
+        /// long vowels half the time — "قر" and "قرمه" must find «قورمه» (Majed 2026-09-08).</summary>
+        public string[] Skeletons { get; } = NameWords.Select(Skeleton).Where(s => s.Length >= 2).Distinct().ToArray();
+    }
+
+    /// <summary>
+    /// A word with its Arabic-script long vowels (ا و ی) and a trailing ه removed, first letter
+    /// kept. Latin words pass through untouched (their vowel spellings are folded elsewhere).
+    /// </summary>
+    private static string Skeleton(string w)
+    {
+        if (w.Length < 2 || !w.Any(ch => ch >= '؀' && ch <= 'ۿ')) return w;
+        var sb = new System.Text.StringBuilder(w.Length);
+        for (var i = 0; i < w.Length; i++)
+        {
+            var ch = w[i];
+            if (i > 0 && (ch == 'ا' || ch == 'و' || ch == 'ی')) continue;
+            if (i == w.Length - 1 && i > 0 && ch == 'ه') continue;
+            if (sb.Length > 0 && sb[^1] == ch) continue;
+            sb.Append(ch);
+        }
+        return sb.ToString();
+    }
+
+    private List<SearchEntry>? _index;
+
+    private List<SearchEntry> SearchIndex => _index ??= (_info?.Menu ?? [])
+        .SelectMany(c => c.Items.Where(i => i.IsAvailable).Select(i =>
+        {
+            var names = new List<string> { i.Name };
+            if (i.Names is not null) names.AddRange(i.Names.Values);
+            var nameText = string.Join(" ", names.Select(Fold));
+            var groups = new List<string> { c.Name };
+            if (c.Names is not null) groups.AddRange(c.Names.Values);
+            var extra = new List<string> { i.Description, i.Ingredients };
+            if (i.Descriptions is not null) extra.AddRange(i.Descriptions.Values);
+            return new SearchEntry(i,
+                nameText.Split(' ', StringSplitOptions.RemoveEmptyEntries).Distinct().ToArray(),
+                " " + nameText + " ",
+                " " + string.Join(" ", groups.Select(Fold)) + " ",
+                " " + string.Join(" ", extra.Where(s => !string.IsNullOrEmpty(s)).Select(Fold)) + " ");
+        }))
+        .ToList();
+
+    /// <summary>
+    /// The score of one dish for the typed words. Every word must land somewhere — on a
+    /// name word (exact 100 / prefix 80 / inside 50), on a close misspelling of a name word
+    /// (35: "chiken", "kobide"), on its group ("fast food", "drinks": 30) or in its long
+    /// text (20). A word may also land through a synonym in any language: "kebab" finds
+    /// کباب, "rice" finds چلو and پلو, "دجاج" finds جوجه and مرغ. 0 = not this dish.
+    /// </summary>
+    private static int Score(SearchEntry e, string[] terms)
+    {
+        var total = 0;
+        foreach (var raw in terms)
+        {
+            var best = 0;
+            foreach (var t in Expand(raw))
+            {
+                var s = 0;
+                foreach (var w in e.NameWords)
+                {
+                    if (w == t) { s = Math.Max(s, 100); break; }
+                    if (w.StartsWith(t)) s = Math.Max(s, 80 + Math.Min(15, t.Length * 15 / w.Length));
+                }
+                if (s == 0 && e.NameText.Contains(t)) s = 50;
+                if (s == 0)
+                {
+                    // vowel-less Persian/Arabic typing: compare skeletons ("قر" ⊂ "قرم" from «قورمه»)
+                    var ts = Skeleton(t);
+                    if (ts.Length >= 2 && ts != t || ts.Length >= 2 && e.Skeletons.Length > 0)
+                        foreach (var sk in e.Skeletons)
+                        {
+                            if (sk == ts) { s = Math.Max(s, 60); break; }
+                            if (sk.StartsWith(ts)) s = Math.Max(s, 45);
+                            else if (sk.Contains(ts)) s = Math.Max(s, 40);
+                        }
+                }
+                if (s == 0 && t.Length >= 4)
+                {
+                    var allow = t.Length >= 7 ? 2 : 1;
+                    foreach (var w in e.NameWords)
+                        if (w.Length >= 4 && Math.Abs(w.Length - t.Length) <= allow && Distance(t, w, allow) <= allow) { s = 35; break; }
+                }
+                if (s == 0 && e.GroupText.Contains(t)) s = 30;
+                if (s == 0 && e.ExtraText.Contains(t)) s = 20;
+                best = Math.Max(best, s);
+            }
+            if (best == 0) return 0;
+            total += best;
+        }
+        return total;
+    }
+
+    /// <summary>What lifts a dish among equals: orderable right now, popular, on offer.</summary>
+    private static int Bonus(MenuItemDto i, DateTime now) =>
+        (i.OrderableAt(now) ? 0 : -60) + (i.IsPopular ? 8 : 0) + (i.HasDiscount ? 4 : 0);
+
+    /// <summary>The typed word plus every synonym that shares a meaning with it.</summary>
+    private static IEnumerable<string> Expand(string t)
+    {
+        yield return t;
+        foreach (var group in Aliases)
+            if (group.Contains(t))
+                foreach (var a in group) if (a != t) yield return a;
+    }
+
+    /// <summary>
+    /// Kitchen vocabulary across the menu's languages, stored folded. A group is one meaning;
+    /// typing any member finds dishes named with any other.
+    /// </summary>
+    private static readonly string[][] Aliases = new[]
+    {
+        new[] { "kabab", "kebab", "kabob", "kebap", "کباب", "كباب" },
+        new[] { "koobideh", "kubideh", "kobide", "کوبیده", "كوبيدة" },
+        new[] { "chicken", "morgh", "murgh", "jooje", "joojeh", "juje", "مرغ", "جوجه", "دجاج", "فراخ" },
+        new[] { "beef", "meat", "gusht", "goosht", "gosht", "گوشت", "لحم", "لحمة" },
+        new[] { "lamb", "mutton", "بره", "ضأن", "غنم" },
+        new[] { "fish", "mahi", "ماهی", "سمک", "سمك" },
+        new[] { "shrimp", "prawn", "prawns", "meygoo", "meygu", "میگو", "روبیان", "جمبری" },
+        new[] { "rice", "polo", "polow", "pulao", "chelo", "chelow", "berenj", "برنج", "چلو", "پلو", "رز", "ارز" },
+        new[] { "stew", "khoresh", "khoresht", "خورشت", "خورش" },
+        new[] { "ghormeh", "ghorme", "qormeh", "قورمه", "قرمه" },
+        new[] { "salad", "سالاد", "سلطه", "سلطة" },
+        new[] { "soup", "سوپ", "شوربه", "شوربة", "حساء" },
+        new[] { "drink", "drinks", "beverage", "soda", "نوشیدنی", "نوشابه", "مشروب", "مشروبات", "عصیر", "عصير" },
+        new[] { "water", "ab", "آب", "ماء", "مياه" },
+        new[] { "tea", "chai", "chay", "چای", "شای", "شاي" },
+        new[] { "coffee", "kahve", "qahwa", "قهوه", "قهوة" },
+        new[] { "bread", "nan", "naan", "نان", "خبز" },
+        new[] { "yogurt", "yoghurt", "mast", "ماست", "لبن", "زبادی", "زبادي" },
+        new[] { "doogh", "dugh", "ayran", "دوغ", "لبن" },
+        new[] { "burger", "hamburger", "برگر", "همبرگر", "برجر" },
+        new[] { "fries", "chips", "potato", "sibzamini", "سیب زمینی", "سیب‌زمینی", "بطاطس", "بطاطا" },
+        new[] { "sandwich", "wrap", "ساندویچ", "ساندویتش", "ساندويتش", "شاورما", "shawarma" },
+        new[] { "egg", "eggs", "omelet", "omelette", "tokhm", "تخم مرغ", "بیض", "بيض", "املت" },
+        new[] { "vegetable", "vegetables", "veg", "sabzi", "سبزی", "سبزیجات", "خضار", "خضروات" },
+        new[] { "dessert", "sweet", "sweets", "shirini", "دسر", "شیرینی", "حلو", "حلویات", "حلويات" },
+        new[] { "spicy", "hot", "tond", "تند", "حار", "حراق" },
+        new[] { "special", "chef", "makhsoos", "مخصوص", "ویژه", "خاص" },
+        new[] { "family", "platter", "tray", "sini", "سینی", "خانوادگی", "عائلی", "عائلي", "صینیه", "صينية" },
+    }.Select(g => g.Select(Fold).Distinct().ToArray()).ToArray();
+
+    /// <summary>Optimal-string-alignment distance (insert / delete / replace / adjacent swap),
+    /// cut off once it passes <paramref name="max"/> so long words cost nothing.</summary>
+    private static int Distance(string a, string b, int max)
+    {
+        if (Math.Abs(a.Length - b.Length) > max) return max + 1;
+        var d = new int[a.Length + 1, b.Length + 1];
+        for (var i = 0; i <= a.Length; i++) d[i, 0] = i;
+        for (var j = 0; j <= b.Length; j++) d[0, j] = j;
+        for (var i = 1; i <= a.Length; i++)
+        {
+            var rowMin = int.MaxValue;
+            for (var j = 1; j <= b.Length; j++)
+            {
+                var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                var v = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + cost);
+                if (i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1]) v = Math.Min(v, d[i - 2, j - 2] + 1);
+                d[i, j] = v;
+                rowMin = Math.Min(rowMin, v);
+            }
+            if (rowMin > max) return max + 1;
+        }
+        return d[a.Length, b.Length];
+    }
+
+    /// <summary>
+    /// The search alphabet: lower-case, no accents, Arabic/Persian letter variants unified
+    /// (ي/ی, ك/ک, ة/ه, أإآ/ا, ZWNJ dropped), and the usual Latin spellings of Persian
+    /// sounds folded together (q/k, kh/k, gh/g, oo/ou/u, ee/i, doubled letters).
+    /// </summary>
+    private static string Fold(string? s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        var d = s.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(d.Length);
+        foreach (var ch in d)
+        {
+            var cat = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch);
+            if (cat == System.Globalization.UnicodeCategory.NonSpacingMark) continue;       // accents + Arabic harakat
+            sb.Append(ch switch
+            {
+                'ي' or 'ی' or 'ئ' => 'ی', 'ك' or 'ک' => 'ک', 'ة' or 'ۀ' => 'ه',
+                'أ' or 'إ' or 'آ' or 'ٱ' => 'ا', 'ؤ' => 'و', 'ى' => 'ی',
+                '‌' or '‍' or 'ـ' => ' ',
+                '-' or '_' or '.' or ',' or '،' or '/' or '(' or ')' or '&' or '+' => ' ',
+                _ => char.ToLowerInvariant(ch),
+            });
+        }
+        var f = sb.ToString();
+        // Latin spellings of Persian/Arabic sounds
+        f = f.Replace("kh", "k").Replace("gh", "g").Replace("q", "k").Replace("c", "k")
+             .Replace("oo", "u").Replace("ou", "u").Replace("ee", "i").Replace("ph", "f").Replace("w", "v");
+        // doubled letters: "kabbab" ≈ "kabab"
+        var o = new System.Text.StringBuilder(f.Length);
+        foreach (var ch in f) if (o.Length == 0 || o[^1] != ch || ch == ' ') o.Append(ch);
+        return System.Text.RegularExpressions.Regex.Replace(o.ToString(), @"\s+", " ").Trim();
+    }
+
+    private MenuItemDto? ItemById(int id) => _info?.Menu?.SelectMany(c => c.Items).FirstOrDefault(i => i.Id == id);
+    private int Count => _pending.Values.Sum();
+    private decimal PendingSum => _pending.Sum(p => (ItemById(p.Key)?.FinalPrice ?? 0m) * p.Value);
+
+    private bool _catsWatched;
+
+    /// <summary>
+    /// True only once this component renders on a LIVE circuit. The page is prerendered
+    /// on the server first, so the guest sees the menu — and the + buttons — seconds
+    /// before a tap can reach anyone. Until then the buttons spin instead of pretending
+    /// (Majed 2026-09-07: "user can not add item after some time, add loader for plus").
+    /// OnAfterRender never runs during prerendering, which is exactly what makes this work.
+    /// </summary>
+    private bool _ready;
+
+    /// <summary>Once the group row exists, let the browser watch its overflow for the arrows.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_ready)
+        {
+            _ready = true;
+            StateHasChanged();
+        }
+        if (_catsWatched || _loading || _info?.Menu is not { Count: > 0 }) return;
+        _catsWatched = true;
+        try { await JS.InvokeVoidAsync("mfQm.watchCats"); } catch (JSException) { }
+        if (!_searchBound)
+        {
+            _searchBound = true;
+            _self ??= DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("mfQm.bindSearch", "qm-search-input", _self); } catch (JSException) { }
+        }
+    }
+
+    /// <summary>The language button lives in the layout; without this the page kept its old
+    /// names until the next tap re-rendered it ("on change language product name not change
+    /// until I add item to basket" — Majed 2026-09-08).</summary>
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.Changed += OnLangChanged;
+        _info = await Api.GetReserveInfoAsync(Code);
+        _loading = false;
+        if (_info is null) return;
+
+        // Is the store asking its guests anything? Decides the survey button after an order.
+        if (_info.StoreId > 0)
+            _ = Task.Run(async () =>
+            {
+                try { _hasSurvey = await Api.GetPublicSurveyAsync(_info.StoreId) is not null; }
+                catch { }
+                await InvokeAsync(StateHasChanged);
+            });
+
+        // The app bar wears THIS store's face while the guest is at the table.
+        TableBrand.Set(_info.NameFor(L.Locale), _info.LogoData, _info.LogoEmoji);
+
+        // Paint the menu the moment it is here. Blazor renders when this method's whole
+        // task completes, so awaiting the chat history first left the guest staring at
+        // the loader until an unrelated call returned — and only a tap woke it up.
+        StateHasChanged();
+
+        // The chat catches up on its own time; it holds nothing back.
+        _ = PrimeChatAsync();
+    }
+
+    /// <summary>History first so old replies never count as "new", then the poll.</summary>
+    private async Task PrimeChatAsync()
+    {
+        try
+        {
+            var history = await Api.GetTableChatAsync(Code) ?? [];
+            _lastChatId = history.Count > 0 ? history[^1].Id : 0;
+            _chatPoll = new System.Threading.Timer(async _ => await PollChat(), null, 4000, 4000);
+        }
+        catch { /* the menu is what the guest came for; chat can wait for the next poll */ }
+    }
+
+    private async Task PollChat()
+    {
+        try
+        {
+            var fresh = await Api.GetTableChatAsync(Code, _lastChatId);
+            if (fresh is not { Count: > 0 }) return;
+            var newFromStore = 0;
+            foreach (var m in fresh)
+            {
+                _lastChatId = Math.Max(_lastChatId, m.Id);
+                if (m.From == "store") newFromStore++;
+            }
+            if (newFromStore > 0)
+            {
+                await InvokeAsync(() => { _chatUnread += newFromStore; StateHasChanged(); });
+                try { await JS.InvokeVoidAsync("mfDing"); } catch { }
+            }
+        }
+        catch { /* a missed poll is the next poll's problem */ }
+    }
+
+    public void Dispose()
+    {
+        L.Changed -= OnLangChanged;
+        _chatPoll?.Dispose();
+        _self?.Dispose();
+        TableBrand.Clear();
+    }
+
+    private void Bump(MenuItemDto item, int delta)
+    {
+        var next = _pending.GetValueOrDefault(item.Id) + delta;
+        if (next <= 0) _pending.Remove(item.Id);
+        else _pending[item.Id] = Math.Min(next, 20);
+    }
+
+    /// <summary>The store's name in its OTHER tongue for the masthead's second line —
+    /// Arabic under an English name, English under an Arabic one; nothing if they match.</summary>
+    private string? AltName(TableReserveInfoDto info)
+    {
+        var main = info.NameFor(L.Locale);
+        foreach (var code in new[] { L.Locale == "ar" ? "en" : "ar", "fa", "en" })
+        {
+            if (info.StoreNames is not null && info.StoreNames.TryGetValue(code, out var n)
+                && n.Length > 0 && !string.Equals(n, main, StringComparison.OrdinalIgnoreCase))
+                return n;
+        }
+        return null;
+    }
+
+    // ---------- The guest's invoice PDF ----------
+    private bool _pdfBusy;
+    private bool _pdfOk;
+    private int _pdfPct = -1;   // -1: the server is still drawing; 0–100: bytes arriving
+    private string? _pdfMsg;
+    private DotNetObjectReference<Reserve>? _self;
+
+    /// <summary>Called from mf-export.js as the file streams in.</summary>
+    [JSInvokable]
+    public void PdfProgress(int percent)
+    {
+        _pdfPct = percent;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task DownloadInvoicePdf()
+    {
+        if (_sent?.InvoicePdfUrl is not { Length: > 0 } url || _pdfBusy) return;
+        _pdfBusy = true;
+        _pdfPct = -1;
+        _pdfMsg = null;
+        _self ??= DotNetObjectReference.Create(this);
+        try
+        {
+            var ok = await JS.InvokeAsync<bool>("mfExport.fetchAndSave", url, $"invoice-{_sent.TabId}.pdf", "application/pdf", _self);
+            _pdfOk = ok;
+            _pdfMsg = ok ? L["qo.pdfReady"] : L["qo.pdfFail"];
+        }
+        catch (JSException)
+        {
+            _pdfOk = false;
+            _pdfMsg = L["qo.pdfFail"];
+        }
+        finally { _pdfBusy = false; }
+    }
+
+    private async Task Send()
+    {
+        if (Count == 0) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var items = _pending.Select(p => new PlaceOrderItem(p.Key, p.Value, null)).ToList();
+            var (result, error) = await Api.SubmitTableOrderAsync(Code, new PublicTableOrderRequest(items));
+            if (result is null) { _error = error ?? L["common.saveFail"]; return; }
+            _sent = result;
+            _pending.Clear();
+        }
+        finally { _busy = false; }
+    }
+}

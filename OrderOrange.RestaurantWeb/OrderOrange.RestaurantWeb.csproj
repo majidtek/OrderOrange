@@ -1,0 +1,40 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- No ICU: every label, month name and digit form comes from the app's own language
+         files (the server build ran on an invariant en-US culture too), so the 1.3 MB
+         culture database would only slow the first load. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- No TimeZoneInfo anywhere in the apps: drop the tz database from the download. -->
+    <BlazorEnableTimeZoneSupport>false</BlazorEnableTimeZoneSupport>
+    <!-- AOT was measured on staging (2026-09-11): the 5.6 MB native module made the first
+         load 3x slower and in-app pages no faster, so the app stays on the interpreter.
+         Flip RunAOTCompilation to true (wasm-tools workload is installed) to try again. -->
+    <RunAOTCompilation>false</RunAOTCompilation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OrderOrange.ClientCore\OrderOrange.ClientCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0" PrivateAssets="all" />
+    <PackageReference Include="Heron.MudCalendar" Version="3.4.0" />
+    <PackageReference Include="MudBlazor" Version="8.15.0" />
+    <PackageReference Include="QRCoder" Version="1.8.0" />
+  </ItemGroup>
+
+  <!-- The language files are fetched over HTTP in the browser; mirror them into this
+       app's wwwroot/i18n before static assets are collected, so they ship and are served. -->
+  <Target Name="CopyI18n" BeforeTargets="ResolveProjectStaticWebAssets;BeforeBuild">
+    <ItemGroup>
+      <I18nFile Include="..\OrderOrange.ClientCore\Localization\*.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(I18nFile)" DestinationFolder="wwwroot\i18n" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

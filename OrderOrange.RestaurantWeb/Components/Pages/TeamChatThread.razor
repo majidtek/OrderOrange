@@ -1,0 +1,17 @@
+@page "/chat/{OtherId:int}"
+@layout Layout.ChatLayout
+@inject LanguageService L
+
+@* The phone-sized route: one private thread filling the screen. Desktop users get
+   the split view on /chat instead. *@
+
+<PageTitle>Partner — Team chat</PageTitle>
+
+<div class="wa-screen team">
+    <TeamChatPane OtherId="OtherId" OtherName="@(Name ?? "")" ShowBack="true" @key="OtherId" />
+</div>
+
+@code {
+    [Parameter] public int OtherId { get; set; }
+    [SupplyParameterFromQuery(Name = "name")] public string? Name { get; set; }
+}

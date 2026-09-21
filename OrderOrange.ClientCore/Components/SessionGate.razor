@@ -1,0 +1,106 @@
+﻿@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+@inject AppState State
+@inject ISessionPersistence Persistence
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* Decides what the app shows: a restore, the login, or the app itself. *@
+@if (_restoring && !PrerenderForCrawler)
+{
+    @* A QR guest belongs to a store: the restore splash carries no platform mark. *@
+    <Loader FullPage="true" Label="@Lang["common.restoring"]" HideBrand="@QrEntry" />
+}
+else if (!State.IsAuthenticated && !AllowAnonymous)
+{
+    @SignedOut
+}
+else
+{
+    @SignedIn
+}
+
+@code {
+    /// <summary>
+    /// A visit that belongs to a STORE rather than to the platform: a table QR, a shop
+    /// link, or the booking page someone opened for one particular restaurant. The
+    /// restore splash carries no OrderOrange mark on any of them — the visitor came for
+    /// the shop, and the very first thing they see should not be somebody else's name.
+    /// </summary>
+    private bool QrEntry
+    {
+        get
+        {
+            var uri = new Uri(Nav.Uri);
+            var path = Nav.ToBaseRelativePath(Nav.Uri);
+            return path.StartsWith("reserve/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("reserve-table/", StringComparison.OrdinalIgnoreCase)
+                || uri.Query.Contains("id=", StringComparison.OrdinalIgnoreCase)
+                || uri.Query.Contains("qr=1", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Parameter] public RenderFragment? SignedOut { get; set; }
+    [Parameter] public RenderFragment? SignedIn { get; set; }
+
+    /// <summary>
+    /// Let visitors in without signing in. The session is still restored, so a returning
+    /// customer is recognised — the app simply isn't withheld from someone who isn't.
+    /// Used by the customer app, where you can browse and build a basket as a guest and
+    /// only sign in when you actually place the order.
+    /// </summary>
+    [Parameter] public bool AllowAnonymous { get; set; }
+
+    /// <summary>
+    /// Search engines and link previewers render no JavaScript: for them the prerender
+    /// IS the page. A crawler that may browse anonymously gets the app's content in that
+    /// first pass, in the language its URL asked for, instead of a restore splash.
+    /// </summary>
+    [CascadingParameter(Name = "Crawler")] public bool Crawler { get; set; }
+    [CascadingParameter(Name = "SeoLang")] public string? SeoLang { get; set; }
+    private bool PrerenderForCrawler => AllowAnonymous && Crawler && !RendererInfo.IsInteractive;
+
+    private bool _restoring = true;
+
+    protected override void OnInitialized()
+    {
+        State.Changed += OnStateChanged;
+        if (PrerenderForCrawler && !string.IsNullOrEmpty(SeoLang)) Lang.UseLocaleForThisRender(SeoLang);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            // JS interop only works after the first render, which is why this isn't in
+            // OnInitializedAsync — calling it there throws on a Blazor Server prerender.
+            var saved = await Persistence.LoadAsync();
+            if (saved is not null) State.SignIn(saved);
+        }
+        catch
+        {
+            // A corrupt or unreadable stored session must not brick the app — fall through
+            // to the login screen.
+        }
+        finally
+        {
+            _restoring = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Mirror every sign-in/out into storage so a reload survives it.</summary>
+    private void OnStateChanged() => _ = InvokeAsync(async () =>
+    {
+        try
+        {
+            if (State.IsAuthenticated && State.Session is { } s) await Persistence.SaveAsync(s);
+            else await Persistence.ClearAsync();
+        }
+        catch { /* storage is a convenience, never a hard failure */ }
+        StateHasChanged();
+    });
+
+    public void Dispose() => State.Changed -= OnStateChanged;
+}

@@ -1,0 +1,38 @@
+@inject LanguageService L
+
+@* A plate of emojis: tap one, done. Beats guessing what to type into a text box. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["partner.emojiLabel"]</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="oo-emoji-grid">
+            @foreach (var emoji in Choices)
+            {
+                var e = emoji;
+                <button type="button" class="@(e == Current ? "on" : "")"
+                        @onclick="@(() => Dialog.Close(DialogResult.Ok(e)))">@e</button>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string Current { get; set; } = "";
+
+    private static readonly string[] Choices =
+    [
+        "🍽️", "🍔", "🍕", "🌮", "🌯", "🥙", "🫓", "🥪", "🌭", "🍟", "🍗", "🍖", "🥩", "🍢", "🥓",
+        "🍛", "🍚", "🍝", "🍜", "🍲", "🥘", "🫕", "🍥", "🥟", "🍱", "🍘", "🍙", "🍣", "🍤", "🦐",
+        "🦑", "🐟", "🦞", "🦀", "🍳", "🥞", "🧇", "🥐", "🍞", "🥖", "🥨", "🧀", "🥚", "🧈", "🥣",
+        "🥗", "🥬", "🥒", "🍅", "🥕", "🌽", "🥦", "🍆", "🥔", "🧅", "🧄", "🌶️", "🥑", "🫒", "🍄",
+        "🍰", "🎂", "🧁", "🍮", "🍩", "🍪", "🍫", "🍬", "🍭", "🍨", "🍦", "🍧", "🍡", "🥮", "🍯",
+        "🥤", "🧋", "☕", "🍵", "🧃", "🫖", "🥛", "🧉", "🥥", "🍊", "🍋", "🍎", "🍉", "🍇", "🍓",
+        "🫐", "🥭", "🍍", "🍌", "🍒", "🍑", "🍐", "🍈", "🥝", "🍿", "🥜", "🌰", "🍽", "🥄", "🍴",
+    ];
+}

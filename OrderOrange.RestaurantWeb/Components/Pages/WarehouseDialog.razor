@@ -1,0 +1,78 @@
+﻿@using OrderOrange.Shared
+@using OrderOrange.RestaurantWeb.Services
+@inject LanguageService L
+
+@* Naming a place on the map. A name, the picture it wears, what kind of place it is,
+   and whether new stock should land here by default. *@
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="@L["wh.name"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" MaxLength="60" Immediate="true" AutoFocus="true" />
+
+        <div class="wh-hint">@L["wh.icon"]</div>
+        <div class="wh-icons">
+            @foreach (var (key, glyph) in WarehouseIconSet.All)
+            {
+                var k = key;
+                <button type="button" class="@(_icon == k ? "on" : "")" title="@L[$"wh.icon.{k}"]"
+                        @onclick="@(() => _icon = k)">
+                    <MudIcon Icon="@glyph" />
+                    <span>@L[$"wh.icon.{k}"]</span>
+                </button>
+            }
+        </div>
+
+        <div class="wh-hint">@L["wh.kindLabel"]</div>
+        <div class="wh-kinds">
+            @foreach (var kind in WarehouseKinds.All)
+            {
+                var k = kind;
+                <button type="button" class="@(_kind == k ? "on" : "")" @onclick="@(() => _kind = k)">
+                    @L[$"wh.kind.{k}"]
+                </button>
+            }
+        </div>
+
+        <MudTextField @bind-Value="_notes" Label="@L["wh.notes"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Class="mt-3" MaxLength="200" />
+
+        <MudSwitch T="bool" @bind-Value="_default" Color="Color.Primary" Class="mt-2" Label="@L["wh.makeDefault"]" />
+        <MudSwitch T="bool" @bind-Value="_central" Color="Color.Dark" Class="mt-1" Label="@L["wh.makeCentral"]" />
+        <p class="wh-dialog-hint">@L["wh.centralHint"]</p>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_name.Trim().Length < 2)"
+                   OnClick="Save">@L["common.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    /// <summary>Set when an existing place is being changed rather than a new one created.</summary>
+    [Parameter] public WarehouseDto? Existing { get; set; }
+
+    private string _name = "";
+    private string _kind = WarehouseKinds.Main;
+    private string _icon = "warehouse";
+    private string _notes = "";
+    private bool _default;
+    private bool _central;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not { } w) return;
+        _name = w.Name;
+        _kind = w.Kind;
+        _icon = WarehouseIcons.IsKnown(w.Icon) ? w.Icon : "warehouse";
+        _notes = w.Notes ?? "";
+        _default = w.IsDefault;
+        _central = w.IsCentral;
+    }
+
+    private void Save() =>
+        Dialog.Close(DialogResult.Ok(new SaveWarehouseRequest(_name.Trim(), _kind,
+            string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim(), _default, _icon, _central)));
+}

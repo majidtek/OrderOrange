@@ -1,0 +1,362 @@
+@page "/team-activity"
+@inject ApiClient Api
+@inject LanguageService L
+@implements IDisposable
+
+@* Who is at work right now, and where they have been. Presence comes from a
+   heartbeat; the history comes from the portal's own navigation log. *@
+
+<PageTitle>Partner — Team activity</PageTitle>
+
+@if (_rows is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    var online = _rows.Count(x => x.IsOnline);
+    var offline = _rows.Count - online;
+    var pct = _rows.Count == 0 ? 0 : (int)Math.Round(online * 100.0 / _rows.Count);
+    var shown = Shown.ToList();
+
+    <div class="ua">
+        <PageHeader Title="@L["ua.title"]" Subtitle="@L["ua.sub"]" />
+
+        @* ---------- The ratio, and the three numbers behind it ---------- *@
+        <div class="ua-hero">
+            <div class="ua-ringcard">
+                <div class="ua-ring" style="--p:@pct">
+                    <div class="hole">
+                        <b>@pct<span>%</span></b>
+                        <small>@L["ua.onlineRate"]</small>
+                    </div>
+                </div>
+                <div class="side">
+                    <div><span class="d on"></span> @L["ua.online"] <b>@online</b></div>
+                    <div><span class="d off"></span> @L["ua.offline"] <b>@offline</b></div>
+                </div>
+            </div>
+
+            <div class="ua-kpis">
+                <div class="ua-kpi green">
+                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Wifi" /></span>
+                    <div><b>@online</b><small>@L["ua.onlineNow"]</small></div>
+                </div>
+                <div class="ua-kpi grey">
+                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.HistoryToggleOff" /></span>
+                    <div><b>@offline</b><small>@L["ua.offline"]</small></div>
+                </div>
+                <div class="ua-kpi blue">
+                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Groups" /></span>
+                    <div><b>@_rows.Count</b><small>@L["ua.totalUsers"]</small></div>
+                </div>
+            </div>
+        </div>
+
+        @* ---------- The people ---------- *@
+        <div class="ua-card">
+            <div class="hd">
+                <div class="t"><MudIcon Icon="@Icons.Material.Filled.TableRows" /> @L["ua.listTitle"]</div>
+                <div class="tools">
+                    <div class="find">
+                        <MudIcon Icon="@Icons.Material.Filled.Search" Style="width:16px;height:16px;" />
+                        <input @bind="_search" @bind:event="oninput" placeholder="@L["ua.search"]" />
+                    </div>
+                    <div class="seg">
+                        <button type="button" class="@(_onlineOnly ? "" : "on")" @onclick="@(() => _onlineOnly = false)">@L["common.all"]</button>
+                        <button type="button" class="@(_onlineOnly ? "on" : "")" @onclick="@(() => _onlineOnly = true)">@L["ua.online"]</button>
+                    </div>
+                    <span class="upd">@_lastRefresh.ToString("HH:mm:ss")</span>
+                    <button type="button" class="rf" @onclick="Refresh" title="@L["ua.refresh"]">
+                        <MudIcon Icon="@Icons.Material.Filled.Refresh" />
+                    </button>
+                </div>
+            </div>
+
+            @* The countdown to the next read: the filled part is time elapsed, the
+               buffer runs just ahead of it. The bar IS the timer, not decoration. *@
+            <MudProgressLinear Color="Color.Error" Buffer="true" Value="@Value" BufferValue="@BufferValue" Class="ua-prog" />
+
+            <div class="ua-scroll">
+                <table class="ua-table">
+                    <thead>
+                        <tr>
+                            <th style="width:44px">#</th>
+                            <th>@L["ua.user"]</th>
+                            <th style="width:110px">@L["common.status"]</th>
+                            <th style="width:150px">@L["ua.lastLogin"]</th>
+                            <th style="width:130px">@L["ua.lastSeen"]</th>
+                            <th>@L["ua.currentPage"]</th>
+                            <th style="width:90px">@L["ua.today"]</th>
+                            <th style="width:110px">@L["ua.history"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{ var i = 1; }
+                        @foreach (var u in shown)
+                        {
+                            var row = u;
+                            <tr>
+                                <td class="idx">@(i++)</td>
+                                <td>
+                                    <div class="who">
+                                        <span class="av @(row.IsOnline ? "on" : "")" style="background:@AvColor(row.FullName)">
+                                            @if (row.Photo is { Length: > 0 })
+                                            {
+                                                <img src="@row.Photo" alt="" />
+                                            }
+                                            else if (row.Icon is { Length: > 0 })
+                                            {
+                                                @row.Icon
+                                            }
+                                            else
+                                            {
+                                                @Initials(row.FullName)
+                                            }
+                                            @if (row.IsOnline) { <i class="dot"></i> }
+                                        </span>
+                                        <div>
+                                            <div class="nm">@row.FullName @if (row.IsOwner) { <span class="crown">👑</span> }</div>
+                                            <div class="sub">@RoleLabel(row.Role)</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (row.IsOnline)
+                                    {
+                                        <span class="pill on"><span class="d"></span> @L["ua.online"]</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pill off">@L["ua.offline"]</span>
+                                    }
+                                </td>
+                                <td><span class="tm mf-ltr">@Fmt(row.LastLoginAt)</span></td>
+                                <td><span class="rel @(row.IsOnline ? "live" : "")">@Rel(row.LastSeenAt)</span></td>
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(row.CurrentPage))
+                                    {
+                                        <span class="muted">—</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="pg mf-ltr" title="@row.CurrentPage">@row.CurrentPage</span>
+                                    }
+                                </td>
+                                <td><span class="cnt">@row.PagesToday</span></td>
+                                <td>
+                                    <button type="button" class="hist" @onclick="@(() => OpenVisits(row))">
+                                        <MudIcon Icon="@Icons.Material.Filled.History" /> @L["ua.pages"]
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                        @if (shown.Count == 0)
+                        {
+                            <tr><td colspan="8" class="empty">🗂️<div>@L["ua.noMatch"]</div></td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="ft">@string.Format(L["ua.footer"], shown.Count, _rows.Count)</div>
+        </div>
+    </div>
+
+    @* ---------- One person's trail ---------- *@
+    @if (_picked is { } who)
+    {
+        <div class="oo-modal" @onclick="CloseVisits"></div>
+        <aside class="ua-drawer" @onclick:stopPropagation="true">
+            <div class="hd">
+                <div class="who">
+                    <span class="av" style="background:@AvColor(who.FullName)">
+                        @if (who.Photo is { Length: > 0 })
+                        {
+                            <img src="@who.Photo" alt="" />
+                        }
+                        else
+                        {
+                            @Initials(who.FullName)
+                        }
+                    </span>
+                    <div>
+                        <div class="nm">@who.FullName</div>
+                        <div class="sub">@L["ua.pageHistory"]</div>
+                    </div>
+                </div>
+                <button type="button" class="x" @onclick="CloseVisits">✕</button>
+            </div>
+
+            <div class="filter">
+                @foreach (var (days, label) in Ranges)
+                {
+                    var d = days;
+                    <button type="button" class="@(_days == d ? "on" : "")" @onclick="@(() => SetDays(d))">@L[label]</button>
+                }
+            </div>
+
+            <div class="body">
+                @if (_visitsLoading)
+                {
+                    <div class="note">@L["common.loading"]</div>
+                }
+                else if (_visits.Count == 0)
+                {
+                    <div class="note">🗂️<div>@L["ua.noVisits"]</div></div>
+                }
+                else
+                {
+                    <div class="n">@string.Format(L["ua.nVisits"], _visits.Count)</div>
+                    <div class="line">
+                        @foreach (var v in _visits)
+                        {
+                            <div class="vrow">
+                                <span class="vdot"></span>
+                                <div class="vmain">
+                                    <div class="vpg mf-ltr">@v.Page</div>
+                                    <div class="vtm mf-ltr">@v.At.ToString("yyyy-MM-dd  HH:mm:ss")</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </aside>
+    }
+}
+
+@code {
+    private List<TeamActivityDto>? _rows;
+    private string _search = "";
+    private bool _onlineOnly;
+    private DateTime _lastRefresh = DateTime.Now;
+    private System.Threading.Timer? _timer;
+
+    /// <summary>How often the board re-reads itself. The bar counts down the same span.</summary>
+    private const int RefreshSeconds = 15;
+
+    /// <summary>Ticks the progress bar between reads, four times a second.</summary>
+    private System.Threading.Timer? _progressTimer;
+
+    /// <summary>How far through the current wait we are, 0–100.</summary>
+    private double Value =>
+        Math.Clamp((DateTime.Now - _lastRefresh).TotalSeconds / RefreshSeconds * 100, 0, 100);
+
+    /// <summary>The buffer runs a little ahead — the shape MudBlazor's buffered bar wants.</summary>
+    private double BufferValue => Math.Clamp(Value + 8, 0, 100);
+
+    private TeamActivityDto? _picked;
+    private List<TeamVisitDto> _visits = [];
+    private bool _visitsLoading;
+    private int _days = 7;
+
+    private static readonly (int Days, string Key)[] Ranges =
+        [(1, "ua.today"), (7, "ua.week"), (30, "ua.month")];
+
+    private IEnumerable<TeamActivityDto> Shown =>
+        (_rows ?? []).Where(x =>
+            (!_onlineOnly || x.IsOnline) &&
+            (string.IsNullOrWhiteSpace(_search) ||
+             x.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+             x.Role.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        // The board is only true while it keeps asking.
+        _timer = new System.Threading.Timer(async _ =>
+        {
+            try { await Load(); await InvokeAsync(StateHasChanged); } catch { }
+        }, null, RefreshSeconds * 1000, RefreshSeconds * 1000);
+
+        // A smooth bar needs its own, faster pulse than the data refresh.
+        _progressTimer = new System.Threading.Timer(async _ =>
+        {
+            try { await InvokeAsync(StateHasChanged); } catch { }
+        }, null, 250, 250);
+    }
+
+    private async Task Load()
+    {
+        _rows = await Api.GetTeamActivityAsync() ?? [];
+        _lastRefresh = DateTime.Now;
+    }
+
+    /// <summary>A manual read also restarts the clock — the bar must not lie.</summary>
+    private async Task Refresh()
+    {
+        await Load();
+        _timer?.Change(RefreshSeconds * 1000, RefreshSeconds * 1000);
+    }
+
+    private async Task OpenVisits(TeamActivityDto u)
+    {
+        _picked = u;
+        _visits = [];
+        await LoadVisits();
+    }
+
+    private void CloseVisits()
+    {
+        _picked = null;
+        _visits = [];
+    }
+
+    private async Task SetDays(int d)
+    {
+        _days = d;
+        await LoadVisits();
+    }
+
+    private async Task LoadVisits()
+    {
+        if (_picked is null) return;
+        _visitsLoading = true;
+        StateHasChanged();
+        try
+        {
+            _visits = await Api.GetTeamVisitsAsync(_picked.UserId,
+                DateTime.Today.AddDays(-(_days - 1)), DateTime.Today) ?? [];
+        }
+        catch { _visits = []; }
+        finally { _visitsLoading = false; StateHasChanged(); }
+    }
+
+    private string RoleLabel(string role) =>
+        L[$"trole.{role}"] is { } t && !t.StartsWith("trole.") ? t : role;
+
+    private static string Fmt(DateTime? d) => d?.ToString("yyyy-MM-dd HH:mm") ?? "—";
+
+    private string Rel(DateTime? d)
+    {
+        if (d is null) return "—";
+        var diff = DateTime.Now - d.Value;
+        if (diff.TotalSeconds < 60) return L["time.justNow"];
+        if (diff.TotalMinutes < 60) return string.Format(L["time.minAgo"], (int)diff.TotalMinutes);
+        if (diff.TotalHours < 24) return string.Format(L["time.hAgo"], (int)diff.TotalHours);
+        return d.Value.ToString("dd MMM");
+    }
+
+    private static string Initials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1 ? parts[0][..1] : $"{parts[0][..1]}{parts[1][..1]}";
+    }
+
+    /// <summary>The same name always draws the same colour — a face before the face loads.</summary>
+    private static string AvColor(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "#8a8175";
+        var h = 0;
+        foreach (var c in name) h = (h * 31 + c) % 360;
+        return $"hsl({h}, 52%, 45%)";
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _progressTimer?.Dispose();
+    }
+}

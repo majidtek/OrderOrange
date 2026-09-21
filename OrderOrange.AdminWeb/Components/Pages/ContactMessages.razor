@@ -1,0 +1,90 @@
+@page "/contact-messages"
+@using OrderOrange.ClientCore.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snack
+
+@* Messages from the public "Contact us" form (the partner guide). Newest first; open a
+   row to read it, mark it read, or delete it. The counters show today's use of the
+   daily ceiling the API enforces. *@
+
+<PageTitle>Admin — Contact messages</PageTitle>
+
+<PageHeader Title="@L["contact.a.title"]" Subtitle="@L["contact.a.sub"]" />
+
+@if (_page is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="cm-stats">
+        <div class="cm-stat"><b>@_page.Unread</b><span>@L["contact.a.unread"]</span></div>
+        <div class="cm-stat"><b>@_page.Today <small>/ @_page.DailyLimit</small></b><span>@L["contact.a.today"]</span></div>
+        <div class="cm-stat"><b>@_page.Total</b><span>@L["contact.a.total"]</span></div>
+    </div>
+
+    @if (_page.Rows.Count == 0)
+    {
+        <EmptyState Emoji="📮" Title="@L["contact.a.empty"]" />
+    }
+    else
+    {
+        <div class="cm-list">
+            @foreach (var m in _page.Rows)
+            {
+                <div class="cm-row @(m.ReadAt is null ? "unread" : "") @(_open == m.Id ? "open" : "")" @onclick="@(() => Toggle(m))">
+                    <div class="cm-head">
+                        <span class="cm-dot"></span>
+                        <div class="cm-who">
+                            <b>@m.Title</b>
+                            <small>@m.Email · @m.Phone</small>
+                        </div>
+                        <span class="cm-when">@m.CreatedAt.ToString("dd MMM, HH:mm")</span>
+                    </div>
+                    @if (_open == m.Id)
+                    {
+                        <div class="cm-body" @onclick:stopPropagation="true">
+                            <p>@m.Text</p>
+                            <div class="cm-meta">
+                                <span>@L["contact.a.from"] @m.Ip</span>
+                                @if (!string.IsNullOrEmpty(m.Source)) { <span>· @m.Source</span> }
+                            </div>
+                            <div class="cm-actions">
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"mailto:{m.Email}?subject=Re: {Uri.EscapeDataString(m.Title)}")" StartIcon="@Icons.Material.Filled.Reply">@L["contact.a.reply"]</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"tel:{m.Phone}")" StartIcon="@Icons.Material.Filled.Call">@L["contact.a.call"]</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => MarkRead(m, m.ReadAt is null))">@(m.ReadAt is null ? L["contact.a.markRead"] : L["contact.a.markUnread"])</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="@(() => Delete(m))">@L["common.delete"]</MudButton>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private ContactPageDto? _page;
+    private string? _open;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load() => _page = await Api.AdminContactAsync(0, 100);
+
+    private async Task Toggle(ContactMessageDto m)
+    {
+        _open = _open == m.Id ? null : m.Id;
+        if (_open == m.Id && m.ReadAt is null) await MarkRead(m, true);
+    }
+
+    private async Task MarkRead(ContactMessageDto m, bool read)
+    {
+        if (await Api.AdminContactReadAsync(m.Id, read)) await Load();
+    }
+
+    private async Task Delete(ContactMessageDto m)
+    {
+        if (await Api.AdminContactDeleteAsync(m.Id)) { Snack.Add(L["contact.a.deleted"], Severity.Success); _open = null; await Load(); }
+    }
+}

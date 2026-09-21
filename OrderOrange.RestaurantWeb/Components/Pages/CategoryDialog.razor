@@ -1,0 +1,62 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* A category speaks every tongue the store does: Arabic anchors the set,
+   any other language is added by choice — same as product names. *@
+
+<MudDialog>
+    <DialogContent>
+        <StoreNameFields @bind-Value="_names" />
+        <MudNumericField @bind-Value="_sortOrder" Label="@L["partner.sortOrder"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         Class="mt-3" HelperText="@L["partner.sortHint"]" />
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy">@L["common.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public MenuCategoryDto? Existing { get; set; }
+
+    private Dictionary<string, string> _names = [];
+    private int _sortOrder = 1;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null) return;
+        // A category from before the multilingual days claims its Arabic row.
+        _names = Existing.Names is { Count: > 0 }
+            ? new Dictionary<string, string>(Existing.Names)
+            : new Dictionary<string, string> { ["ar"] = Existing.Name };
+        _sortOrder = Existing.SortOrder;
+    }
+
+    private async Task Save()
+    {
+        if (!_names.ContainsKey("ar")) { _error = L["nm.needAr"]; return; }
+        _error = null;
+        _busy = true;
+        try
+        {
+            var canonical = _names.GetValueOrDefault("en") ?? _names["ar"];
+            var request = new SaveCategoryRequest(canonical, _sortOrder, _names);
+            var (ok, error) = Existing is null
+                ? await Api.CreateCategoryAsync(request)
+                : await Api.UpdateCategoryAsync(Existing.Id, request);
+            if (!ok) { _error = error; return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="260" viewBox="0 0 260 260">
+  <!-- Food & drink doodles, line-art, whisper-quiet — the chat wallpaper. -->
+  <g fill="none" stroke="#d3c2b0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.22">
+    <!-- donut -->
+    <g transform="translate(28,30) rotate(-12)">
+      <circle cx="0" cy="0" r="13"/><circle cx="0" cy="0" r="4.5"/>
+      <path d="M-8,-6 l2,2 M5,-9 l2,2 M7,5 l2,2"/>
+    </g>
+    <!-- pizza slice -->
+    <g transform="translate(96,22) rotate(15)">
+      <path d="M-12,-10 A16,16 0 0 1 12,-10 L0,14 Z"/>
+      <circle cx="-3" cy="-4" r="1.6"/><circle cx="4" cy="-1" r="1.6"/><circle cx="0" cy="5" r="1.6"/>
+    </g>
+    <!-- coffee cup with steam -->
+    <g transform="translate(170,36) rotate(-6)">
+      <path d="M-10,-4 h20 v12 a6,6 0 0 1 -6,6 h-8 a6,6 0 0 1 -6,-6 Z"/>
+      <path d="M10,-1 h4 a4,4 0 0 1 0,8 h-4"/>
+      <path d="M-4,-9 q1,-3 0,-5 M3,-9 q1,-3 0,-5"/>
+    </g>
+    <!-- cherry -->
+    <g transform="translate(232,26) rotate(10)">
+      <circle cx="-5" cy="6" r="5"/><circle cx="6" cy="8" r="5"/>
+      <path d="M-4,1 Q0,-10 8,-12 M6,3 Q6,-6 8,-12"/>
+    </g>
+    <!-- drumstick -->
+    <g transform="translate(52,96) rotate(28)">
+      <ellipse cx="0" cy="-4" rx="8" ry="10"/>
+      <path d="M-3,5 l-3,9 M3,5 l3,9"/>
+      <circle cx="-7" cy="16" r="2.6"/><circle cx="7" cy="16" r="2.6"/>
+    </g>
+    <!-- cupcake -->
+    <g transform="translate(126,88) rotate(-8)">
+      <path d="M-10,2 q0,-12 10,-12 q10,0 10,12"/>
+      <path d="M-11,2 h22 l-3,12 h-16 Z"/>
+      <path d="M-7,2 l2,12 M0,2 v12 M7,2 l-2,12"/>
+    </g>
+    <!-- soft-drink bottle -->
+    <g transform="translate(198,96) rotate(8)">
+      <path d="M-4,-16 h8 v5 q5,3 5,9 v14 a4,4 0 0 1 -4,4 h-10 a4,4 0 0 1 -4,-4 v-14 q5,-6 5,-9 Z"/>
+      <path d="M-6,2 h12"/>
+    </g>
+    <!-- burger -->
+    <g transform="translate(30,168) rotate(-10)">
+      <path d="M-13,-4 q0,-9 13,-9 q13,0 13,9 Z"/>
+      <path d="M-13,0 h26 M-11,5 q3,3 5,0 q3,3 6,0 q3,3 6,0"/>
+      <path d="M-12,9 h24 a3,3 0 0 1 -3,5 h-18 a3,3 0 0 1 -3,-5 Z"/>
+    </g>
+    <!-- ice cream cone -->
+    <g transform="translate(104,162) rotate(12)">
+      <path d="M-8,-2 L0,16 L8,-2"/>
+      <path d="M-8,-2 a8,8 0 0 1 16,0"/>
+      <path d="M-5,2 l10,3 M-4,7 l7,2"/>
+    </g>
+    <!-- teapot -->
+    <g transform="translate(178,168) rotate(-5)">
+      <path d="M-8,-2 h16 a3,3 0 0 1 3,4 l-2,8 a5,5 0 0 1 -5,4 h-8 a5,5 0 0 1 -5,-4 l-2,-8 a3,3 0 0 1 3,-4 Z"/>
+      <path d="M11,0 q6,1 5,7 M-8,-2 q-6,-1 -7,4"/>
+      <path d="M-2,-2 v-4 h4 v4"/>
+    </g>
+    <!-- candy -->
+    <g transform="translate(240,160) rotate(24)">
+      <circle cx="0" cy="0" r="6"/>
+      <path d="M-6,0 l-7,-5 v10 Z M6,0 l7,-5 v10 Z"/>
+    </g>
+    <!-- croissant -->
+    <g transform="translate(64,232) rotate(-16)">
+      <path d="M-14,4 q4,-14 14,-14 q10,0 14,14 q-5,4 -9,0 q-2,-8 -5,-8 q-3,0 -5,8 q-4,4 -9,0 Z"/>
+    </g>
+    <!-- juice glass with straw -->
+    <g transform="translate(134,236) rotate(6)">
+      <path d="M-8,-10 h16 l-2,20 h-12 Z"/>
+      <path d="M-2,-10 l7,-8"/>
+      <path d="M-7,-2 h14"/>
+    </g>
+    <!-- watermelon slice -->
+    <g transform="translate(206,232) rotate(-20)">
+      <path d="M-13,0 a13,13 0 0 0 26,0 Z"/>
+      <path d="M-9,0 a9,9 0 0 0 18,0"/>
+      <circle cx="-4" cy="4" r="1.2"/><circle cx="2" cy="5" r="1.2"/>
+    </g>
+  </g>
+</svg>

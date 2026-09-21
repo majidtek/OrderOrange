@@ -1,0 +1,314 @@
+﻿@page "/kds"
+@page "/kds/{Station}"
+@layout Layout.KdsLayout
+@using OrderOrange.Shared
+@inject ApiClient Api
+@inject AppState State
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The kitchen display. Two lanes — what has not been started, and what is on — with the
+   oldest ticket first in each, because the oldest ticket is always the next job. Every
+   card counts up from the moment the food was ordered and changes colour as it runs late
+   against the shop's own prep promise. Nothing here needs reading twice from two metres. *@
+
+<PageTitle>OrderOrange — @L["kds.title"]</PageTitle>
+
+<header class="kds-bar">
+    <div class="kds-brand">
+        <span class="dot @(_stale ? "off" : "")"></span>
+        <b>@L["kds.title"]</b>
+        <span class="store">@_storeName</span>
+    </div>
+
+    @if (_board is { Stations.Count: > 0 })
+    {
+        <nav class="kds-stations" aria-label="@L["kds.station"]">
+            <button type="button" class="@(_station is null ? "on" : "")" @onclick="@(() => SetStation(null))">@L["kds.allStations"]</button>
+            @foreach (var s in _board.Stations)
+            {
+                var station = s;
+                <button type="button" class="@(_station == station ? "on" : "")" @onclick="@(() => SetStation(station))">@StationName(station)</button>
+            }
+            <button type="button" class="@(_station == "none" ? "on" : "")" @onclick="@(() => SetStation("none"))">@L["kds.noStation"]</button>
+        </nav>
+    }
+
+    <div class="kds-stats">
+        <span><b>@Waiting.Count</b> @L["kds.waiting"]</span>
+        <span><b>@Cooking.Count</b> @L["kds.cooking"]</span>
+        @if (LateCount > 0)
+        {
+            <span class="late"><b>@LateCount</b> @L["kds.late"]</span>
+        }
+    </div>
+
+    <div class="kds-tools">
+        <button type="button" title="@L["kds.sound"]" class="@(_sound ? "on" : "")" @onclick="ToggleSound">@(_sound ? "🔔" : "🔕")</button>
+        <button type="button" title="@L["kds.fullscreen"]" @onclick="ToggleFullscreen">⛶</button>
+        <a href="/orders" title="@L["kds.exit"]">✕</a>
+        <span class="clock">@Now.ToString("HH:mm")</span>
+    </div>
+</header>
+
+@if (_board is null)
+{
+    <div class="kds-empty"><span class="sp"></span>@L["common.loading"]</div>
+}
+else if (Waiting.Count == 0 && Cooking.Count == 0)
+{
+    <div class="kds-empty"><span class="big">🍳</span>@L["kds.allClear"]<small>@L["kds.allClearSub"]</small></div>
+}
+else
+{
+    <main class="kds-lanes">
+        <section class="kds-lane">
+            <h2>@L["kds.newTickets"] <span>@Waiting.Count</span></h2>
+            <div class="kds-tickets">
+                @foreach (var ticket in Waiting)
+                {
+                    @Card(ticket, started: false)
+                }
+                @if (Waiting.Count == 0)
+                {
+                    <p class="kds-lane-empty">@L["kds.laneEmptyNew"]</p>
+                }
+            </div>
+        </section>
+
+        <section class="kds-lane on">
+            <h2>@L["kds.cooking"] <span>@Cooking.Count</span></h2>
+            <div class="kds-tickets">
+                @foreach (var ticket in Cooking)
+                {
+                    @Card(ticket, started: true)
+                }
+                @if (Cooking.Count == 0)
+                {
+                    <p class="kds-lane-empty">@L["kds.laneEmptyOn"]</p>
+                }
+            </div>
+        </section>
+    </main>
+}
+
+@if (Done.Count > 0)
+{
+    <footer class="kds-done">
+        <span class="lbl">@L["kds.justDone"]</span>
+        @foreach (var ticket in Done.Take(8))
+        {
+            var t = ticket;
+            <button type="button" @onclick="@(() => Recall(t))" title="@L["kds.recall"]">
+                <b>@t.Number</b> ↺
+            </button>
+        }
+    </footer>
+}
+
+@code {
+    [Parameter] public string? Station { get; set; }
+
+    private KdsBoardDto? _board;
+    private string? _station;
+    private string _storeName = "";
+    private bool _sound = true, _stale, _busy;
+    private System.Threading.Timer? _tick;
+    private System.Threading.Timer? _poll;
+    private readonly HashSet<string> _known = [];
+    private bool _primed;
+
+    /// <summary>
+    /// The shop's wall clock, as the server last reported it, plus however long ago that was.
+    /// The tablet's own clock is never consulted: this app ships without the timezone
+    /// database, so its DateTime.Now is UTC and every age would come out four hours wrong.
+    /// </summary>
+    private DateTime _serverNow = DateTime.UtcNow;
+    private DateTime _serverSeen = DateTime.UtcNow;
+    private DateTime Now => _serverNow + (DateTime.UtcNow - _serverSeen);
+
+    private List<KdsTicketDto> Visible => _board is null ? [] : _board.Tickets.Where(Keep).ToList();
+    private List<KdsTicketDto> Waiting => Visible.Where(t => t.State == "new").OrderBy(t => t.At).ToList();
+    private List<KdsTicketDto> Cooking => Visible.Where(t => t.State == "cooking").OrderBy(t => t.At).ToList();
+    private List<KdsTicketDto> Done => Visible.Where(t => t.State == "done").OrderByDescending(t => t.DoneAt ?? t.At).ToList();
+    private int LateCount => Waiting.Concat(Cooking).Count(t => Age(t) >= Target);
+    private int Target => _board?.TargetMinutes ?? 15;
+
+    /// <summary>A station filter hides the lines that belong elsewhere, and any ticket left empty.</summary>
+    private bool Keep(KdsTicketDto ticket) => _station is null || Lines(ticket).Count > 0;
+
+    private List<KdsLineDto> Lines(KdsTicketDto ticket) => _station switch
+    {
+        null => ticket.Lines,
+        "none" => ticket.Lines.Where(l => string.IsNullOrEmpty(l.Station)).ToList(),
+        var s => ticket.Lines.Where(l => l.Station == s).ToList(),
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _station = string.IsNullOrWhiteSpace(Station) ? null : Station;
+        L.Changed += OnLang;
+        _storeName = State.RestaurantName ?? "";
+        await Reload();
+
+        // Two clocks: one that repaints the ages every second, one that asks the server
+        // what is new. Separating them keeps the counters smooth without hammering the API.
+        _tick = new System.Threading.Timer(_ => InvokeAsync(StateHasChanged), null, 1000, 1000);
+        _poll = new System.Threading.Timer(async _ => await InvokeAsync(Reload), null, 5000, 5000);
+    }
+
+    protected override void OnParametersSet() =>
+        _station = string.IsNullOrWhiteSpace(Station) ? null : Station;
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (!first) return;
+        try { await JS.InvokeVoidAsync("mfKds.keepAwake"); } catch { }
+    }
+
+    private async Task Reload()
+    {
+        try
+        {
+            var board = await Api.KdsBoardAsync();
+            if (board is null) { _stale = true; StateHasChanged(); return; }
+
+            _stale = false;
+            _serverNow = board.ServerNow;
+            _serverSeen = DateTime.UtcNow;
+            _board = board;
+
+            // A ticket the screen has never seen is the only thing worth a noise. The very
+            // first load is not news — otherwise every reload shouts the whole board.
+            var fresh = board.Tickets.Where(t => t.State != "done" && _known.Add(t.Key)).ToList();
+            foreach (var gone in _known.Where(k => board.Tickets.All(t => t.Key != k)).ToList()) _known.Remove(gone);
+
+            if (_primed && fresh.Count > 0 && _sound)
+                try { await JS.InvokeVoidAsync("mfKds.ding", Math.Min(fresh.Count, 2)); } catch { }
+            _primed = true;
+            StateHasChanged();
+        }
+        catch { _stale = true; StateHasChanged(); }
+    }
+
+    /// <summary>Minutes since the food was ordered, on the server's clock.</summary>
+    private double Age(KdsTicketDto ticket) => (Now - ticket.At).TotalMinutes;
+
+    private string Heat(KdsTicketDto ticket)
+    {
+        var age = Age(ticket);
+        if (age >= Target) return "late";
+        if (age >= Target * 0.6) return "warn";
+        return "fresh";
+    }
+
+    private static string Clock(double minutes)
+    {
+        if (minutes < 0) minutes = 0;
+        var total = (int)(minutes * 60);
+        return $"{total / 60:00}:{total % 60:00}";
+    }
+
+    private RenderFragment Card(KdsTicketDto ticket, bool started) => @<article class="kds-ticket @Heat(ticket) @(started ? "on" : "")">
+        <header>
+            <span class="no">@ticket.Number</span>
+            <span class="kind @ticket.Kind">@KindLabel(ticket)</span>
+            <span class="age">@Clock(Age(ticket))</span>
+        </header>
+
+        <ul class="kds-lines">
+            @foreach (var line in Lines(ticket))
+            {
+                var l = line;
+                <li class="@(l.Done ? "off" : "")" @onclick="@(() => ToggleLine(ticket, l))">
+                    <span class="q">@l.Quantity</span>
+                    <span class="nm">@l.Name</span>
+                    @if (!string.IsNullOrWhiteSpace(l.Notes))
+                    {
+                        <span class="note">@l.Notes</span>
+                    }
+                </li>
+            }
+        </ul>
+
+        @if (!string.IsNullOrWhiteSpace(ticket.Note))
+        {
+            <p class="kds-order-note">@ticket.Note</p>
+        }
+        @if (ticket.ScheduledFor is { } when)
+        {
+            <p class="kds-when">@L["kds.scheduled"] @when.ToString("dd MMM HH:mm")</p>
+        }
+
+        <button type="button" class="kds-bump" disabled="@_busy" @onclick="@(() => Bump(ticket, started))">
+            @(started ? L["kds.markReady"] : L["kds.startCooking"])
+        </button>
+    </article>;
+
+    private string KindLabel(KdsTicketDto ticket) => ticket.Kind switch
+    {
+        "dinein" => ticket.Table is { Length: > 0 } t ? t : L["kds.dineIn"],
+        "pickup" => L["kds.pickup"],
+        _ => L["kds.delivery"],
+    };
+
+    private string StationName(string station) =>
+        L[$"kds.st.{station}"] is { } text && !text.StartsWith("kds.st.") ? text : station;
+
+    private async Task Bump(KdsTicketDto ticket, bool started)
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            var (ok, _) = started ? await Api.KdsDoneAsync(ticket.Key) : await Api.KdsStartAsync(ticket.Key);
+            if (ok) await Reload();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Recall(KdsTicketDto ticket)
+    {
+        var (ok, _) = await Api.KdsRecallAsync(ticket.Key);
+        if (ok) await Reload();
+    }
+
+    private async Task ToggleLine(KdsTicketDto ticket, KdsLineDto line)
+    {
+        // Paint it at once — a cook tapping a plated line should not wait for a round trip.
+        var lines = ticket.Lines.Select(l => l.Id == line.Id ? l with { Done = !l.Done } : l).ToList();
+        _board = _board! with { Tickets = _board.Tickets.Select(t => t.Key == ticket.Key ? t with { Lines = lines } : t).ToList() };
+        StateHasChanged();
+        await Api.KdsLineAsync(ticket.Key, line.Id);
+    }
+
+    private void SetStation(string? station)
+    {
+        _station = station;
+        Nav.NavigateTo(station is null ? "/kds" : $"/kds/{station}", replace: true);
+        StateHasChanged();
+    }
+
+    private async Task ToggleSound()
+    {
+        _sound = !_sound;
+        if (_sound) try { await JS.InvokeVoidAsync("mfKds.ding", 1); } catch { }
+    }
+
+    private async Task ToggleFullscreen()
+    {
+        try { await JS.InvokeVoidAsync("mfKds.toggleFullscreen"); } catch { }
+    }
+
+    private void OnLang() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        L.Changed -= OnLang;
+        _tick?.Dispose();
+        _poll?.Dispose();
+        try { _ = JS.InvokeVoidAsync("mfKds.release"); } catch { }
+    }
+}

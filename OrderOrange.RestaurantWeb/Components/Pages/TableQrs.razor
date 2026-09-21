@@ -1,0 +1,161 @@
+@page "/table-qr"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+
+@* One QR per table, ready to print and glue on. A scan opens the public reservation
+   page for exactly that table — no app, no account, signed so nobody can forge it.
+   Every card carries a checkbox: only the ticked ones leave through the printer. *@
+
+<PageTitle>Partner — Table QR</PageTitle>
+
+<div class="d-flex align-center mb-4 no-print" style="gap: 12px;">
+    <div style="flex: 1;">
+        <MudText Typo="Typo.h5" Style="font-weight: 800;">@L["tableqr.title"]</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@L["tableqr.sub"]</MudText>
+    </div>
+    @if (_qrs is { Count: > 0 })
+    {
+        @* The printed card's QR size, in pixels — regenerated as the owner types. *@
+        <MudNumericField T="int" Value="_size" ValueChanged="OnSizeChanged" Min="120" Max="1200" Step="40"
+                         Label="@L["qr.width"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         Style="width: 130px;" Class="no-print" />
+        <label class="tqr-all">
+            <input type="checkbox" checked="@AllSelected" @onchange="ToggleAll" />
+            @L["admin.all"]
+        </label>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print"
+                   Disabled="@(_selected.Count == 0)"
+                   OnClick="@(() => JS.InvokeVoidAsync("window.print"))">
+            @L["tableqr.print"] (@_selected.Count)
+        </MudButton>
+    }
+</div>
+
+<div class="no-print mb-4" style="max-width: 560px;">
+    @* The card's help line, in the owner's own words. Blank = the app's default. *@
+    <MudTextField @bind-Value="_cardText" Label="@L["tableqr.textLabel"]" Variant="Variant.Outlined"
+                  Margin="Margin.Dense" Lines="2" MaxLength="300" HelperText="@L["tableqr.textHint"]" />
+    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="mt-1"
+               Disabled="_savingText" OnClick="SaveCardText">@L["common.save"]</MudButton>
+    @if (_textSaved) { <MudText Typo="Typo.caption" Color="Color.Success" Class="d-inline-block ms-2">✓ @L["slug.saved"]</MudText> }
+</div>
+
+@if (_qrs is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+}
+else if (_qrs.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">@L["tables.emptyTitle"]</MudAlert>
+}
+else
+{
+    <div class="tqr-grid">
+        @foreach (var qr in _qrs)
+        {
+            var picked = _selected.Contains(qr.TableId);
+            <div class="tqr-card @(picked ? "" : "skip")" @onclick="@(() => Toggle(qr.TableId))">
+                <span class="tqr-pick no-print"><input type="checkbox" checked="@picked" readonly /></span>
+                <div class="tqr-table">🍽️ @qr.Name</div>
+                @if (!string.IsNullOrEmpty(qr.Floor))
+                {
+                    <div class="tqr-floor">@qr.Floor</div>
+                }
+                <img src="@_images.GetValueOrDefault(qr.TableId)" alt="QR" />
+                <div class="tqr-hint">@L["tableqr.scanHint"]</div>
+                @* Help for the guest, not a platform mark — the card belongs to the store. *@
+                <div class="tqr-help">@(string.IsNullOrWhiteSpace(_cardText) ? L["tableqr.help"] : _cardText)</div>
+                @* A plain button: MudIconButton cannot carry stopPropagation next to
+                   OnClick, and the card's own click must not toggle the tick here. *@
+                <button type="button" class="tqr-dl no-print" title="PNG"
+                        @onclick="@(() => Download(qr))" @onclick:stopPropagation="true">
+                    <MudIcon Icon="@Icons.Material.Filled.Download" Size="Size.Small" />
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<TableQrDto>? _qrs;
+    private readonly Dictionary<int, string> _images = [];
+    private readonly HashSet<int> _selected = [];
+
+    private bool AllSelected => _qrs is not null && _selected.Count == _qrs.Count;
+
+    /// <summary>The QR's edge in pixels, the owner's call — 240 prints crisp at card size.</summary>
+    private int _size = 240;
+
+    private string _cardText = "";
+    private bool _savingText;
+    private bool _textSaved;
+
+    private async Task SaveCardText()
+    {
+        _savingText = true;
+        try
+        {
+            var (ok, _) = await Api.SetQrCardTextAsync(_cardText);
+            _textSaved = ok;
+        }
+        finally { _savingText = false; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _qrs = await Api.GetTableQrsAsync() ?? [];
+        _cardText = (await Api.GetMyRestaurantAsync())?.QrCardText ?? "";
+        foreach (var qr in _qrs)
+            _selected.Add(qr.TableId); // everything ticked until the owner says otherwise
+        Regenerate();
+    }
+
+    /// <summary>
+    /// One PNG per table at the chosen size. QR modules are whole pixels, so the edge
+    /// is matched by picking the nearest pixels-per-module — never by blurry scaling.
+    /// </summary>
+    private void Regenerate()
+    {
+        foreach (var qr in _qrs ?? [])
+        {
+            using var generator = new QRCoder.QRCodeGenerator();
+            using var data = generator.CreateQrCode(qr.Url, QRCoder.QRCodeGenerator.ECCLevel.M);
+            var modules = data.ModuleMatrix.Count;
+            var perModule = Math.Clamp(_size / modules, 2, 40);
+            var png = new QRCoder.PngByteQRCode(data).GetGraphic(perModule);
+            _images[qr.TableId] = "data:image/png;base64," + Convert.ToBase64String(png);
+        }
+    }
+
+    private void OnSizeChanged(int size)
+    {
+        _size = Math.Clamp(size, 120, 1200);
+        Regenerate();
+    }
+
+    /// <summary>The card's QR as a file — named for the table, saved by the browser.</summary>
+    private async Task Download(TableQrDto qr)
+    {
+        var uri = _images.GetValueOrDefault(qr.TableId);
+        if (uri is null) return;
+        var name = $"table-qr-{qr.Name.Replace(' ', '-')}.png";
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                $"(() => {{ const a = document.createElement('a'); a.href = '{uri}'; a.download = '{name}'; document.body.appendChild(a); a.click(); a.remove(); }})()");
+        }
+        catch (JSException) { }
+    }
+
+    private void Toggle(int id)
+    {
+        if (!_selected.Remove(id)) _selected.Add(id);
+    }
+
+    private void ToggleAll()
+    {
+        if (AllSelected) _selected.Clear();
+        else foreach (var qr in _qrs!) _selected.Add(qr.TableId);
+    }
+}

@@ -1,0 +1,147 @@
+﻿@page "/add-business"
+@inject ApiClient Api
+@inject AppState State
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject IJSRuntime DraftJs
+@inject ISessionPersistence Persistence
+
+@* Opening another business under the same account — a full page, not a dialog, so it
+   works comfortably on a phone. Everything typed survives an unwanted reload. *@
+
+<PageTitle>Partner — Add a business</PageTitle>
+
+<PageHeader Title="@L["partner.addBusiness"]" Subtitle="@L["partner.addBusinessHint"]" />
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl" Style="max-width: 560px;">
+    @* The TYPE leads — everything below is named after what it is. *@
+    <MudSelect Margin="Margin.Dense" T="StoreType" Value="_storeType" ValueChanged="@(v => SaveField(() => _storeType = v))"
+               Label="@L["partner.storeType"]" Variant="Variant.Outlined" Class="mb-3">
+        <MudSelectItem T="StoreType" Value="StoreType.Restaurant">🍔 @L["st.restaurant"]</MudSelectItem>
+        <MudSelectItem T="StoreType" Value="StoreType.Grocery">🛒 @L["st.grocery"]</MudSelectItem>
+        <MudSelectItem T="StoreType" Value="StoreType.Pharmacy">💊 @L["st.pharmacy"]</MudSelectItem>
+        <MudSelectItem T="StoreType" Value="StoreType.Flowers">💐 @L["st.flowers"]</MudSelectItem>
+        <MudSelectItem T="StoreType" Value="StoreType.Shop">🛍️ @L["st.shop"]</MudSelectItem>
+    </MudSelect>
+
+    <MudTextField Margin="Margin.Dense" T="string" Value="_name" ValueChanged="@(v => SaveField(() => _name = v))" Immediate="true"
+                  Label="@string.Format(L["login.typedName"], L[$"st.{_storeType.ToString().ToLowerInvariant()}"])"
+                  Variant="Variant.Outlined" Class="mb-3" MaxLength="120" />
+
+    @* Multi: a kitchen can be Iranian AND an Arabic grill. First pick wears the star
+       (the main type); further taps add the rest. *@
+    <CuisinePicker Value="_cuisineId" ValueChanged="@(v => SaveField(() => _cuisineId = v))"
+                   Multi="true" ExtraValues="_extraCuisineIds"
+                   ExtraValuesChanged="@(v => _extraCuisineIds = v.ToList())"
+                   Label="@L["admin.cuisine"]" Class="mb-3" />
+
+    @* No area text field: the PIN is the address. *@
+    <LocationPicker @bind-Lat="_lat" @bind-Lng="_lng" />
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">@_error</MudAlert>
+    }
+
+    <div class="d-flex justify-end" style="gap: 10px;">
+        <MudButton OnClick="@(() => Nav.NavigateTo("/"))">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Create" Disabled="_busy">
+            @L["partner.addBusiness"]
+        </MudButton>
+    </div>
+</MudPaper>
+
+@code {
+    private string _name = "";
+    private StoreType _storeType = StoreType.Restaurant;
+    private int _cuisineId;
+    private List<int> _extraCuisineIds = [];
+    private double? _lat;
+    private double? _lng;
+    private List<CuisineDto>? _cuisines;
+    private string? _error;
+    private bool _busy;
+
+    /// <summary>What survives an unwanted reload while the phone was away.</summary>
+    private sealed record DraftData(string Name, string Area, StoreType StoreType, int CuisineId);
+
+    private const string DraftKey = "partner.addBusinessDraft";
+    private bool _draftLoaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cuisines = await Api.GetCuisinesAsync();
+        if (_cuisineId == 0) _cuisineId = _cuisines?.FirstOrDefault()?.Id ?? 0;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _draftLoaded) return;
+        _draftLoaded = true;
+        try
+        {
+            var raw = await DraftJs.InvokeAsync<string?>("sessionStorage.getItem", DraftKey);
+            var stored = (Success: !string.IsNullOrEmpty(raw), Value: string.IsNullOrEmpty(raw) ? null
+                : System.Text.Json.JsonSerializer.Deserialize<DraftData>(raw!, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+            if (stored.Success && stored.Value is { } d && d.Name.Length > 0)
+            {
+                _name = d.Name;
+                _storeType = d.StoreType;
+                if (d.CuisineId > 0) _cuisineId = d.CuisineId;
+                StateHasChanged();
+            }
+        }
+        catch { /* a lost draft must never break the page */ }
+    }
+
+    private async Task SaveField(Action apply)
+    {
+        apply();
+        try { await DraftJs.InvokeVoidAsync("sessionStorage.setItem", DraftKey, System.Text.Json.JsonSerializer.Serialize(new DraftData(_name, "", _storeType, _cuisineId), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))); }
+        catch { /* best-effort */ }
+    }
+
+    private async Task Create()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var (store, error) = await Api.CreateMyStoreAsync(new CreateMyStoreRequest(_name, _cuisineId, _storeType, "", _lat, _lng,
+                null, [_cuisineId, .. _extraCuisineIds.Where(id => id != _cuisineId)]));
+            if (store is null) { _error = error ?? L["common.saveFail"]; return; }
+
+            try { await DraftJs.InvokeVoidAsync("sessionStorage.removeItem", DraftKey); } catch { }
+            Snackbar.Add(string.Format(L["partner.businessCreated"], store.Name), Severity.Success);
+
+            // Land straight in the new business so it can be set up right away. The
+            // stored flag keeps the "which business?" screen from re-asking on reload.
+            try { await JS.InvokeVoidAsync("sessionStorage.setItem", "oo.storeChosen", "1"); } catch { }
+            var (session, switchError) = await Api.SwitchStoreAsync(store.Id);
+            if (session is not null)
+            {
+                State.SignIn(session);
+                // Persist the NEW session before leaving this page — the mirror-to-storage
+                // listener is fire-and-forget, and racing it meant a reload could restore
+                // the OLD business.
+                try { await Persistence.SaveAsync(session); } catch { }
+
+                // A soft navigation, not a full reload: the token is already live on this
+                // circuit, so the dashboard simply loads as the new store. The full reload
+                // was what parked people on "Restoring your session" for ages.
+                Nav.NavigateTo("/");
+            }
+            else
+            {
+                Snackbar.Add(switchError ?? L["common.updateFail"], Severity.Error);
+                Nav.NavigateTo("/");
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

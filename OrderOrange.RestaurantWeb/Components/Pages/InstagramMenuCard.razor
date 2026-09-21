@@ -1,0 +1,248 @@
+﻿@page "/instagram/menu"
+@using OrderOrange.Shared
+@using OrderOrange.ClientCore.Components
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The menu as a poster: pick the dishes, pick a look, and the browser draws a 1080×1350
+   picture that can go out now or at an hour you choose. *@
+
+<PageTitle>OrderOrange — @L["igm.title"]</PageTitle>
+
+<div class="igm">
+    <div class="igm-head">
+        <div>
+            <MudText Typo="Typo.h5" Class="mb-1 ig-h5"><MudIcon Icon="@OrderOrange.ClientCore.Services.BrandIcons.Instagram" Class="ig-h5-ic" />@L["igm.title"]</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@L["igm.sub"]</MudText>
+        </div>
+        <MudButton Variant="Variant.Text" Href="/instagram/schedule" StartIcon="@Icons.Material.Filled.Schedule">@L["igp.title"]</MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-4" />
+    }
+    else
+    {
+        @if (_ig is not { Connected: true })
+        {
+            <div class="igm-connect">
+                <MudIcon Icon="@OrderOrange.ClientCore.Services.BrandIcons.Instagram" />
+                <span>@L["igm.connectToPost"]</span>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Href="/instagram">@L["ig.connect"]</MudButton>
+            </div>
+        }
+        <div class="igm-grid">
+            @* ---------------- what goes on the poster ---------------- *@
+            <MudPaper Elevation="0" Class="igm-card">
+                <MudText Typo="Typo.subtitle1" Class="mb-3"><b>@L["igm.pick"]</b></MudText>
+
+                <div class="igm-row">
+                    <MudSelect T="int" Value="_categoryId" ValueChanged="OnCategory" Label="@L["igm.category"]"
+                               Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="flex-grow-1">
+                        <MudSelectItem T="int" Value="0">@L["igm.allCategories"]</MudSelectItem>
+                        @foreach (var c in _menu)
+                        {
+                            <MudSelectItem T="int" Value="@c.Id">@c.NameFor(L.Locale)</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSelect T="string" @bind-Value="_theme" Label="@L["igm.look"]" Variant="Variant.Outlined"
+                               Margin="Margin.Dense" Dense="true" Class="igm-theme">
+                        <MudSelectItem T="string" Value="@("orange")">@L["igm.themeOrange"]</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("dark")">@L["igm.themeDark"]</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("light")">@L["igm.themeLight"]</MudSelectItem>
+                    </MudSelect>
+                </div>
+
+                <div class="igm-hint">@string.Format(L["igm.upTo"], Max, _chosen.Count)</div>
+
+                <div class="igm-items">
+                    @foreach (var item in Candidates)
+                    {
+                        var i = item;
+                        var on = _chosen.Contains(i.Id);
+                        <button type="button" class="igm-item @(on ? "on" : "")" @onclick="@(() => Toggle(i))"
+                                disabled="@(!on && _chosen.Count >= Max)">
+                            <span class="tick">@(on ? "✓" : "")</span>
+                            <span class="nm">@i.NameFor(L.Locale)</span>
+                            <span class="pr">@i.Price.ToString("0.000")</span>
+                        </button>
+                    }
+                </div>
+
+                <MudTextField @bind-Value="_caption" Label="@L["ig.caption"]" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Lines="4" Class="mt-3" Counter="2200" MaxLength="2200" />
+
+                <div class="igm-when mt-3">
+                    <MudSwitch T="bool" @bind-Value="_later" Color="Color.Primary" Label="@L["igm.later"]" />
+                    @if (_later)
+                    {
+                        <div class="igp-when mt-2">
+                            <MfDatePicker @bind-Date="_date" Label="@L["igp.date"]" MinDate="DateTime.Today" Class="flex-grow-1" />
+                            <MfTimePicker @bind-Time="_time" Label="@L["igp.time"]" Class="flex-grow-1" />
+                        </div>
+                    }
+                </div>
+
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_error</MudAlert>
+                }
+
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true" Class="mt-3"
+                           StartIcon="@(_later ? Icons.Material.Filled.Schedule : Icons.Material.Filled.Send)"
+                           Disabled="@(_busy || _chosen.Count == 0 || _preview is null || _ig is not { Connected: true })" OnClick="Send">
+                    @(_busy ? L["ig.posting"] : _later ? L["igp.schedule"] : L["ig.post"])
+                </MudButton>
+            </MudPaper>
+
+            @* ---------------- the poster ---------------- *@
+            <MudPaper Elevation="0" Class="igm-card">
+                <MudText Typo="Typo.subtitle1" Class="mb-3"><b>@L["igm.preview"]</b></MudText>
+                <div class="igm-preview">
+                    @if (_preview is { Length: > 0 })
+                    {
+                        <img src="@_preview" alt="@L["igm.preview"]" />
+                    }
+                    else
+                    {
+                        <span class="ph">@L["igm.previewHint"]</span>
+                    }
+                </div>
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Refresh" Class="mt-2"
+                           Disabled="@(_chosen.Count == 0)" OnClick="Draw">@L["igm.redraw"]</MudButton>
+                <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" Class="mt-2"
+                           Disabled="@(_preview is null)" OnClick="Download">@L["igm.download"]</MudButton>
+            </MudPaper>
+        </div>
+    }
+</div>
+
+@code {
+    private const int Max = 12;
+
+    private InstagramStatusDto? _ig;
+    private MyRestaurantDto? _store;
+    private List<MenuCategoryDto> _menu = [];
+    private readonly HashSet<int> _chosen = [];
+    private int _categoryId;
+    private string _theme = "orange";
+    private string _caption = "";
+    private string? _preview, _error;
+    private bool _loading = true, _busy, _later, _drawn;
+    private DateTime? _date = DateTime.Today;
+    private TimeSpan? _time = new TimeSpan(DateTime.Now.Hour + 1, 0, 0);
+
+    private List<MenuItemDto> Candidates => _menu
+        .Where(c => _categoryId == 0 || c.Id == _categoryId)
+        .SelectMany(c => c.Items)
+        .Where(i => i.IsAvailable && !i.InStoreOnly && i.Price > 0)
+        .OrderBy(i => i.SortOrder).Take(60).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.Changed += OnLang;
+        _ig = await Api.GetInstagramAsync();
+        // The poster is drawn from the menu whether or not an account is connected —
+        // the picture is useful on its own (a print, a WhatsApp status, a story).
+        _store = await Api.GetMyRestaurantAsync();
+        _menu = await Api.GetMyMenuAsync() ?? [];
+        // A sensible first poster: the first six dishes, so the preview is never empty.
+        foreach (var item in Candidates.Take(6)) _chosen.Add(item.Id);
+        _caption = $"{L["igm.captionSeed"]}\n\n#OrderOrange #Oman #Muscat";
+        _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        // The first render happens while the menu is still loading, so "first" is too
+        // early: draw once, on the first render after the dishes are in.
+        if (_loading || _drawn || _chosen.Count == 0) return;
+        _drawn = true;
+        await Draw();
+    }
+
+    private async Task OnCategory(int id)
+    {
+        _categoryId = id;
+        _chosen.Clear();
+        foreach (var item in Candidates.Take(6)) _chosen.Add(item.Id);
+        await Draw();
+    }
+
+    private async Task Toggle(MenuItemDto item)
+    {
+        if (!_chosen.Remove(item.Id))
+        {
+            if (_chosen.Count >= Max) return;
+            _chosen.Add(item.Id);
+        }
+        await Draw();
+    }
+
+    /// <summary>Hands the chosen dishes to the browser, which paints the poster.</summary>
+    private async Task Draw()
+    {
+        if (_chosen.Count == 0) { _preview = null; return; }
+        var chosen = _menu.SelectMany(c => c.Items).Where(i => _chosen.Contains(i.Id)).ToList();
+        var payload = new
+        {
+            title = StoreText.Name(_store?.Name, _store?.Names, L.Locale),
+            subtitle = string.Join(" · ", new[] { StoreText.Area(_store?.Area, L.Locale), _store?.Phone }
+                .Where(x => !string.IsNullOrWhiteSpace(x))),
+            footer = _store is { Slug.Length: > 0 } s ? $"orderorange.com/{s.Slug}" : "orderorange.com",
+            logo = _store?.LogoData,
+            theme = _theme,
+            rtl = L.IsRtl,
+            items = chosen.Select(i => new
+            {
+                name = i.NameFor(L.Locale),
+                price = $"{i.Price:0.000} {Fmt.Symbol}",
+                note = i.DescriptionFor(L.Locale) is { Length: > 0 } d && d.Length < 60 ? d : null,
+            }).ToList(),
+        };
+        try { _preview = await JS.InvokeAsync<string>("mfMenuCard.render", payload); }
+        catch (Exception ex) { _error = ex.Message; }
+        StateHasChanged();
+    }
+
+    private async Task Send()
+    {
+        _error = null;
+        if (_preview is not { Length: > 0 }) { await Draw(); if (_preview is null) return; }
+        _busy = true;
+        try
+        {
+            if (_later)
+            {
+                if (_date is not { } d || _time is not { } t) { _error = L["igp.past"]; return; }
+                var when = d.Date + t;
+                if (when <= DateTime.Now) { _error = L["igp.past"]; return; }
+                var (post, error) = await Api.SchedulePostAsync(new SchedulePostRequest(_caption.Trim(), when, null, null, _preview));
+                if (post is null) { _error = error ?? L["common.saveFail"]; return; }
+                Snackbar.Add(L["igp.scheduled"], Severity.Success);
+            }
+            else
+            {
+                var (result, error) = await Api.PostToInstagramAsync(new InstagramPostRequest(_caption.Trim(), null, null, _preview));
+                if (result is null) { _error = error ?? L["common.saveFail"]; return; }
+                Snackbar.Add(L["ig.posted"], Severity.Success);
+            }
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>The finished picture as a file — the same 1080×1350 JPEG that would be posted.</summary>
+    private async Task Download()
+    {
+        if (_preview is null) return;
+        var name = string.Concat((_store?.Name ?? "menu").Where(ch => char.IsLetterOrDigit(ch) || ch == ' ')).Trim().Replace(' ', '-');
+        await JS.InvokeVoidAsync("mfMenuCard.download", _preview, $"{name}-menu.jpg");
+    }
+
+    private void OnLang() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => L.Changed -= OnLang;
+}

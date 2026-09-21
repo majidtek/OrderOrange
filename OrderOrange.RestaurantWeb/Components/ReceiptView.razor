@@ -1,0 +1,281 @@
+@inject LanguageService L
+@inject IConfiguration Config
+
+@* The printable market receipt — used by the real invoice page AND the designer's live preview. *@
+
+@* mf-ascii: the printed slip keeps Western digits whatever language the screen is in —
+   totals, dates and numbers on paper must read the same for every courier and customer. *@
+<div class="rcpt mf-ascii f-@Design.Font s-@Design.FontSize sp-@Design.Spacing hs-@Design.HeaderStyle fr-@Design.Frame ink-@Design.Ink ls-@Design.LogoSize @(Design.PaperWidth == 58 ? "p58" : "")">
+    @if (Design.Stamp == "auto")
+    {
+        <div class="stamp @(Order.IsPaid ? "paid" : "cash")">@(Order.IsPaid ? "PAID ✔" : PayEn)</div>
+    }
+    @* No logo by default — photos smear on thermal heads and eat paper. Only a logo
+       the owner explicitly uploaded in the invoice DESIGNER prints. *@
+    @if (Design.Logo is { Length: > 0 } receiptLogo)
+    {
+        <div class="c"><img class="rlogo" src="@receiptLogo" alt="@Store.Name" /></div>
+    }
+    <div class="c nm">@Store.Name</div>
+    @if (!string.IsNullOrWhiteSpace(Design.HeaderMessage))
+    {
+        <div class="c sm tag">@Design.HeaderMessage</div>
+    }
+    @if (Design.ShowAddress)
+    {
+        <div class="c sm">@Store.Area · @Store.Street</div>
+        <div class="c sm">Tel: <span class="mf-ltr">@Store.Phone</span> · Muscat, Oman</div>
+    }
+    @* Only REAL registrations print — from the store's own Settings. An invented
+       number on a tax invoice is worse than none. *@
+    @if (Design.ShowVat && (Store.CrNumber.Length > 0 || Store.VatNumber.Length > 0))
+    {
+        <div class="c xs">
+            @(Store.CrNumber.Length > 0 ? $"CR No: {Store.CrNumber}" : "")@(Store.CrNumber.Length > 0 && Store.VatNumber.Length > 0 ? " · " : "")@(Store.VatNumber.Length > 0 ? $"VAT No: {Store.VatNumber}" : "")
+        </div>
+    }
+    @Sep
+
+    <div class="c ttl">@(Design.LabelStyle == "bilingual" ? "TAX INVOICE — فاتورة" : "TAX INVOICE")</div>
+    <div class="row"><span>@Lb("Order", "الطلب")</span><b>@Order.Number</b></div>
+    <div class="row"><span>@Lb("Receipt #", "رقم الإيصال")</span><span>@Order.Id.ToString("D6")</span></div>
+    <div class="row"><span>@Lb("Date", "التاريخ")</span><span>@Order.PlacedAt.ToString("dd/MM/yyyy HH:mm")</span></div>
+    @* The type is read off the ORDER, not assumed: a counter sale is not a delivery. *@
+    <div class="row"><span>@Lb("Type", "النوع")</span><span>@Lb(TypeEn, TypeAr) @TypeIcon</span></div>
+    @if (Order.TableName is { Length: > 0 })
+    {
+        <div class="row"><span>@Lb("Table", "الطاولة")</span><b>@Order.TableName</b></div>
+    }
+    @Sep
+
+    <div class="row"><span>@Lb("Customer", "العميل")</span><b>@Order.CustomerName</b></div>
+    @* A walk-in has no number — "0000" placeholders are not a phone. *@
+    @if (Order.CustomerPhone is { Length: > 0 } ph && ph.Trim('0', ' ', '-').Length > 0)
+    {
+        <div class="row"><span>@Lb("Phone", "الهاتف")</span><span class="mf-ltr">@Order.CustomerPhone</span></div>
+    }
+    @* The address only matters when something actually travels to it. *@
+    @if (IsDelivery && !string.IsNullOrWhiteSpace(Order.DeliveryAddress))
+    {
+        <div class="wrap sm">@Order.DeliveryAddress</div>
+    }
+    @if (Design.ShowCourier && Order.DriverName is not null)
+    {
+        <div class="row"><span>@Lb("Courier", "المندوب")</span><b>@Order.DriverName</b></div>
+        @if (Order.DriverPlate is not null)
+        {
+            <div class="row"><span>@Lb("Plate", "اللوحة")</span><b>@Order.DriverPlate</b></div>
+        }
+    }
+    @Sep
+
+    @if (Design.ItemStyle == "table")
+    {
+        <table class="ritems">
+            <thead>
+                <tr><th>@Lb("ITEM", "الصنف")</th><th class="tq">@Lb("QTY", "كمية")</th><th class="tp">@Lb("PRICE", "السعر")</th><th class="tp">@Lb("AMT", "المبلغ")</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Order.Items)
+                {
+                    <tr>
+                        <td>
+                            @line.Name
+                            @if (!string.IsNullOrWhiteSpace(line.Notes))
+                            {
+                                <div class="inote">* @line.Notes</div>
+                            }
+                        </td>
+                        <td class="tq">@line.Quantity</td>
+                        <td class="tp">@line.UnitPrice.ToString("0.000")</td>
+                        <td class="tp">@((line.UnitPrice * line.Quantity).ToString("0.000"))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+    else
+    {
+        @foreach (var line in Order.Items)
+        {
+            <div class="item">
+                <span class="q">@(line.Quantity)x</span>
+                <span class="n">@line.Name</span>
+                <span class="p">@Fmt.Rial(line.UnitPrice * line.Quantity)</span>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(line.Notes))
+            {
+                <div class="inote">* @line.Notes</div>
+            }
+        }
+    }
+    @Sep
+
+    <div class="row"><span>@Lb("Items", "العناصر")</span><span>@Order.Items.Sum(i => i.Quantity)</span></div>
+    <div class="row"><span>@Lb("Subtotal", "المجموع")</span><span>@Fmt.Rial(Order.Subtotal)</span></div>
+    @* Fee lines only when they charged something — "Delivery 0.000" on a counter
+       receipt is noise a customer squints at. *@
+    @if (Order.DeliveryFee > 0)
+    {
+        <div class="row"><span>@Lb("Delivery", "التوصيل")</span><span>@Fmt.Rial(Order.DeliveryFee)</span></div>
+    }
+    @if (Order.ServiceFee > 0)
+    {
+        <div class="row"><span>@Lb("Service", "الخدمة")</span><span>@Fmt.Rial(Order.ServiceFee)</span></div>
+    }
+    @if (Order.TaxAmount > 0)
+    {
+        <div class="row"><span>@Lb($"VAT {Order.TaxPercent:0.#}%", $"الضريبة {Order.TaxPercent:0.#}٪")</span><span>@Fmt.Rial(Order.TaxAmount)</span></div>
+    }
+    @if (Order.Discount > 0)
+    {
+        <div class="row"><span>@Lb("Discount", "الخصم")</span><span>-@Fmt.Rial(Order.Discount)</span></div>
+    }
+    @Sep
+    <div class="row total @(Design.TotalStyle == "invert" ? "inv-total" : "")">
+        <span>@Lb("TOTAL", "الإجمالي")</span><span>@Fmt.Rial(Order.Total)</span>
+    </div>
+    @* The payment line reads the ORDER's method and state — the same truth the POS
+       recorded, not a guess from the paid flag. *@
+    <div class="row"><span>@Lb("Payment", "الدفع")</span><span>@Lb(PayEn, PayAr)</span></div>
+    <div class="c pay">
+        @(Order.IsPaid
+            ? $"*** PAID — {PayEn} ***"
+            : $"*** {PayEn} — COLLECT {Fmt.Money(Order.Total)} ***")
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Order.Notes))
+    {
+        @Sep
+        <div class="wrap sm">@Lb("Note", "ملاحظة"): @Order.Notes</div>
+    }
+
+    @if (Design.ShowBarcode)
+    {
+        @Sep
+        <div class="bar"></div>
+        <div class="c xs mono">*@Order.Number*</div>
+    }
+    @if (Design.ShowQr && _qrDataUrl is not null)
+    {
+        <div class="c"><img class="qrimg qr-@Design.QrSize" src="@_qrDataUrl" alt="QR" /></div>
+        <div class="c xs">@QrCaption</div>
+        @if (Design.QrMode == "verify")
+        {
+            <div class="c xs mono">@BillCode.For(Order.Id)</div>
+        }
+    }
+    @Sep
+    @* Paper speaks English regardless of the screen language — one script, one font,
+       readable by every courier and every customer. *@
+    <div class="c sm">@(string.IsNullOrWhiteSpace(Design.FooterMessage) ? "Thank you — see you soon!" : Design.FooterMessage)</div>
+    @if (!string.IsNullOrWhiteSpace(Design.Promo))
+    {
+        <div class="c sm promo">@Design.Promo</div>
+    }
+    <div class="c sm">Keep this receipt for your order.</div>
+    <div class="c nm2">OrderOrange</div>
+    <div class="c xs">Ordered online · @ClientHost</div>
+    <div class="c xs">Printed @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public OrderDto Order { get; set; } = default!;
+    [Parameter, EditorRequired] public MyRestaurantDto Store { get; set; } = default!;
+    [Parameter] public ReceiptDesignDto Design { get; set; } = ReceiptDesignDto.Default;
+
+
+    // ---------- What KIND of order this paper records ----------
+    private bool IsDineIn => Order.TableName is { Length: > 0 }
+        || Order.DeliveryAddress?.StartsWith("Dine-in", StringComparison.OrdinalIgnoreCase) == true;
+    private bool IsCounter => !IsDineIn && Order.DeliveryAddress?.Equals("Counter", StringComparison.OrdinalIgnoreCase) == true;
+    private bool IsDelivery => !IsDineIn && !IsCounter && Order.OrderType == OrderType.Delivery;
+
+    private string TypeEn => IsDineIn ? "DINE-IN" : IsCounter ? "COUNTER" : IsDelivery ? "DELIVERY" : "PICKUP";
+    private string TypeAr => IsDineIn ? "محلي" : IsCounter ? "كاونتر" : IsDelivery ? "توصيل" : "استلام";
+    private string TypeIcon => IsDineIn ? "🍽️" : IsCounter ? "🧾" : IsDelivery ? "🛵" : "🏪";
+
+    // ---------- How the money moved (or will) ----------
+    private string PayEn => Order.PaymentMethod switch
+    {
+        PaymentMethod.CardOnline => "ONLINE",
+        PaymentMethod.CardOnDelivery => "CARD",
+        _ => "CASH",
+    };
+    private string PayAr => Order.PaymentMethod switch
+    {
+        PaymentMethod.CardOnline => "أونلاين",
+        PaymentMethod.CardOnDelivery => "بطاقة",
+        _ => "نقداً",
+    };
+
+    /// <summary>
+    /// A receipt line label. Printed receipts stay in English (or English + Arabic when the
+    /// owner picks bilingual mode) so any courier or customer can read them.
+    /// </summary>
+    private string Lb(string en, string ar) => Design.LabelStyle == "bilingual" ? $"{en} / {ar}" : en;
+
+    /// <summary>Section separator in the chosen style.</summary>
+    private RenderFragment Sep => builder =>
+    {
+        if (Design.Separator == "stars")
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "sepstars");
+            builder.AddContent(2, "✱ ✱ ✱ ✱ ✱ ✱ ✱ ✱");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", $"dash sep-{Design.Separator}");
+            builder.CloseElement();
+        }
+    };
+
+    private string? _qrDataUrl;
+    private string? _qrFor;
+
+    /// <summary>
+    /// The customer app a scanned receipt QR opens. Set ClientUrl in configuration;
+    /// the fallback stays on the pre-rename host until orderorange.com has DNS and a
+    /// certificate, because a receipt printed today has to keep working tomorrow.
+    /// </summary>
+    private string ClientUrl => Config["ClientUrl"] ?? "https://majidtekwajibatclient.majidtek.com";
+
+    private string ClientHost => Uri.TryCreate(ClientUrl, UriKind.Absolute, out var u) ? u.Host : ClientUrl;
+
+    /// <summary>Where this receipt's QR points.</summary>
+    private string QrTarget => Design.QrMode switch
+    {
+        "link" when !string.IsNullOrWhiteSpace(Design.QrLink) => Design.QrLink!,
+        "store" => $"{ClientUrl}/restaurant/{Store.Id}",
+        _ => BillCode.LinkFor(Order.Id, ClientUrl)
+    };
+
+    private string QrCaption => !string.IsNullOrWhiteSpace(Design.QrCaption)
+        ? Design.QrCaption!
+        : Design.QrMode == "verify" ? "Scan to verify this bill" : "Scan me";
+
+    /// <summary>A REAL scannable QR — bigger modules print more reliably on thermal paper.</summary>
+    protected override void OnParametersSet()
+    {
+        if (!Design.ShowQr) { _qrDataUrl = null; _qrFor = null; return; }
+        var link = QrTarget;
+        var stamp = $"{link}|{Design.QrSize}";
+        if (stamp == _qrFor) return; // already generated for this link and size
+        try
+        {
+            var dots = Design.QrSize switch { "small" => 3, "large" => 6, _ => 4 };
+            using var generator = new QRCoder.QRCodeGenerator();
+            using var data = generator.CreateQrCode(link, QRCoder.QRCodeGenerator.ECCLevel.M);
+            var png = new QRCoder.PngByteQRCode(data).GetGraphic(dots);
+            _qrDataUrl = "data:image/png;base64," + Convert.ToBase64String(png);
+            _qrFor = stamp;
+        }
+        catch
+        {
+            _qrDataUrl = null;
+        }
+    }
+}

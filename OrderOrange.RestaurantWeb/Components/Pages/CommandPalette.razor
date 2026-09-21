@@ -1,0 +1,561 @@
+﻿@inject ApiClient Api
+@inject LanguageService L
+@inject AppState State
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The everything-door: Ctrl+K (or the appbar lens) opens one box that reaches every
+   page, product, customer, table and live order this session's role may touch.
+
+   Three things make it feel like it understands you rather than just filtering:
+   fuzzy ranked matching with the matched letters lit up, intent lines that turn a
+   phrase like "orders today" into an action, and results that arrive from the server
+   while you keep typing. None of it is a language model — it is ranking and pattern
+   matching — so it must never be slower than the keystroke that triggered it. *@
+
+@if (_open)
+{
+    <div class="cpx-veil" @onclick="Close">
+        <div class="cpx @(_thinking ? "busy" : "")" @onclick:stopPropagation="true" role="dialog" aria-modal="true">
+            @* The rim glows while a lookup is in flight — the one honest signal that
+               something is happening off-screen. *@
+            <div class="cpx-rim" aria-hidden="true"></div>
+
+            <div class="cpx-bar">
+                <span class="cpx-lens">
+                    <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" />
+                </span>
+                <div class="cpx-field">
+                    <input id="cp-in" value="@_q" @oninput="OnQuery" @onkeydown="OnKey"
+                           autocomplete="off" spellcheck="false" aria-label="@L["cp.placeholder"]" />
+                    @if (_q.Length == 0)
+                    {
+                        @* A cycling hint teaches what the box can do without a help panel. *@
+                        <span class="cpx-ghost" aria-hidden="true">
+                            <span class="cpx-type" @key="_hintIndex">@Hints[_hintIndex]</span>
+                        </span>
+                    }
+                </div>
+                @if (_q.Length > 0)
+                {
+                    <button type="button" class="cpx-clear" @onclick="ClearQuery" aria-label="@L["common.clear"]">
+                        <MudIcon Icon="@Icons.Material.Filled.Close" />
+                    </button>
+                }
+                <kbd class="cpx-esc">ESC</kbd>
+            </div>
+
+            <div class="cpx-body">
+                @{
+                    var hits = _hits;
+                    string? section = null;
+                }
+
+                @if (hits.Count == 0)
+                {
+                    <div class="cpx-empty">
+                        <span class="em">@(_thinking ? "⏳" : "🔍")</span>
+                        <b>@(_thinking ? L["cp.searching"] : L["cp.noResults"])</b>
+                        @if (!_thinking)
+                        {
+                            <small>@L["cp.noResultsSub"]</small>
+                            <div class="cpx-chips">
+                                @foreach (var chip in Chips)
+                                {
+                                    var text = chip;
+                                    <button type="button" @onclick="@(() => Seed(text))">@text</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    @for (var i = 0; i < hits.Count; i++)
+                    {
+                        var index = i;
+                        var hit = hits[i];
+
+                        if (hit.Section != section)
+                        {
+                            section = hit.Section;
+                            var count = hits.Count(x => x.Section == section);
+                            <div class="cpx-sec">
+                                <span>@section</span>
+                                <i>@count</i>
+                            </div>
+                        }
+
+                        <button type="button" class="cpx-row k-@hit.Kind @(index == _sel ? "on" : "")"
+                                @onclick="@(() => Go(hit))" @onmouseenter="@(() => _sel = index)">
+                            <span class="ic"><MudIcon Icon="@hit.Icon" /></span>
+                            <span class="tx">
+                                <b>
+                                    @foreach (var (text, isHit) in Fuzzy.Highlight(hit.Label, hit.Positions))
+                                    {
+                                        if (isHit)
+                                        {
+                                            <mark>@text</mark>
+                                        }
+                                        else
+                                        {
+                                            @text
+                                        }
+                                    }
+                                </b>
+                                @if (hit.Sub is not null)
+                                {
+                                    <small>@hit.Sub</small>
+                                }
+                            </span>
+                            @if (hit.Badge is not null)
+                            {
+                                <span class="bdg">@hit.Badge</span>
+                            }
+                            <span class="go">
+                                @if (index == _sel)
+                                {
+                                    <kbd>↵</kbd>
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" />
+                                }
+                            </span>
+                        </button>
+                    }
+                }
+            </div>
+
+            <div class="cpx-foot">
+                <span><kbd>↑</kbd><kbd>↓</kbd> @L["cp.navigate"]</span>
+                <span><kbd>↵</kbd> @L["cp.open"]</span>
+                <span class="far">
+                    @if (_hits.Count > 0)
+                    {
+                        <i>@string.Format(L["cp.results"], _hits.Count)</i>
+                    }
+                    <kbd>Ctrl</kbd><kbd>K</kbd>
+                </span>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _open;
+    private bool _focusPending;
+    private string _q = "";
+    private int _sel;
+    private bool _thinking;
+    private DotNetObjectReference<CommandPalette>? _self;
+
+    /// <summary>The rendered result list. Held in a field rather than recomputed from a
+    /// property on every render: keyboard navigation and click both index into it, and a
+    /// list that reshuffled between the keypress and the click would open the wrong thing.</summary>
+    private List<Hit> _hits = [];
+
+    /// <summary>Rises with every keystroke; a late server response whose stamp is stale is
+    /// discarded rather than allowed to overwrite fresher results.</summary>
+    private int _stamp;
+
+    private List<StoreTableDto>? _tables;
+    private List<MenuCategoryDto>? _menu;
+    private List<StoreCustomerDto> _customers = [];
+    private List<OrderDto> _orders = [];
+
+    /// <summary>What was opened before, newest first — the palette's memory of this session.</summary>
+    private readonly List<Hit> _recent = [];
+
+    private int _hintIndex;
+    private System.Threading.Timer? _hintTimer;
+
+    private sealed record Hit(
+        string Section,
+        string Kind,
+        string Label,
+        string? Sub,
+        string Icon,
+        string Href,
+        int Score = 0,
+        int[]? PositionsRaw = null,
+        string? Badge = null)
+    {
+        public int[] Positions => PositionsRaw ?? [];
+    }
+
+    private string[] Hints =>
+    [
+        L["cp.hint1"], L["cp.hint2"], L["cp.hint3"], L["cp.hint4"],
+    ];
+
+    private string[] Chips =>
+    [
+        L["cp.chipOrders"], L["cp.chipToday"], L["cp.chipMenu"], L["cp.chipReport"],
+    ];
+
+    /// <summary>Every door in the portal, tagged with who holds a key to it.</summary>
+    private static readonly (string LabelKey, string Href, string Icon, string[] Roles)[] Doors =
+    [
+        ("nav.dashboard", "/", Icons.Material.Filled.Dashboard, ["*"]),
+        ("nav.pos", "/pos", Icons.Material.Filled.PointOfSale, ["owner", "manager", "cashier"]),
+        ("nav.posTablet", "/pos-tablet", Icons.Material.Filled.TabletMac, ["owner", "manager", "cashier"]),
+        ("nav.liveorders", "/orders", Icons.Material.Filled.ReceiptLong, ["*"]),
+        ("nav.reservations", "/reservations", Icons.Material.Filled.EventAvailable, ["owner", "manager", "cashier", "waiter"]),
+        ("nav.tableChats", "/table-chats", Icons.Material.Filled.ChatBubbleOutline, ["*"]),
+        ("tchat.title", "/chat", Icons.Material.Filled.Forum, ["*"]),
+        ("nav.products", "/menu", Icons.Material.Filled.Inventory2, ["owner", "manager"]),
+        ("nav.customers", "/customers", Icons.Material.Filled.ContactPhone, ["owner", "manager"]),
+        ("nav.tables", "/tables", Icons.Material.Filled.TableRestaurant, ["owner", "manager"]),
+        ("nav.tableQr", "/table-qr", Icons.Material.Filled.QrCode, ["owner", "manager"]),
+        ("nav.storeQr", "/qr", Icons.Material.Filled.QrCode2, ["owner", "manager"]),
+        ("nav.settings", "/settings", Icons.Material.Filled.Settings, ["owner", "manager"]),
+        ("nav.teamUsers", "/team-users", Icons.Material.Filled.AdminPanelSettings, ["owner", "manager"]),
+        ("roles.title", "/team-roles", Icons.Material.Filled.Key, ["owner", "manager"]),
+        ("ua.title", "/team-activity", Icons.Material.Filled.Wifi, ["owner", "manager"]),
+        ("nav.staff", "/staff", Icons.Material.Filled.Badge, ["owner", "manager"]),
+        ("nav.paySalaries", "/staff/payroll", Icons.Material.Filled.Payments, ["owner", "manager"]),
+        ("nav.salaryReport", "/staff/salary-report", Icons.Material.Filled.Assessment, ["owner", "manager"]),
+        ("nav.activeDeliveries", "/delivery", Icons.Material.Filled.TwoWheeler, ["owner", "manager"]),
+        ("nav.delivered", "/delivery/done", Icons.Material.Filled.TaskAlt, ["owner", "manager"]),
+        ("nav.invoiceDesigner", "/invoice-design", Icons.Material.Filled.Brush, ["owner", "manager"]),
+        ("nav.allBills", "/bills", Icons.Material.Filled.ListAlt, ["owner", "manager", "cashier"]),
+        ("nav.billReport", "/bills/report", Icons.Material.Filled.PieChart, ["owner", "manager", "cashier"]),
+        ("nav.sales", "/reports", Icons.Material.Filled.TrendingUp, ["owner", "manager"]),
+        ("prep.title", "/reports/products", Icons.Material.Filled.BarChart, ["owner", "manager"]),
+        ("crep.title", "/reports/customers", Icons.Material.Filled.Group, ["owner", "manager"]),
+        ("mat.title", "/materials", Icons.Material.Filled.Kitchen, ["owner", "manager"]),
+        ("pur.title", "/materials/purchases", Icons.Material.Filled.ShoppingCart, ["owner", "manager"]),
+        ("cons.title", "/materials/report", Icons.Material.Filled.DonutSmall, ["owner", "manager"]),
+        ("cap.title", "/materials/capacity", Icons.Material.Filled.Insights, ["owner", "manager"]),
+        ("nav.chatHistory", "/chat-history", Icons.Material.Filled.History, ["owner", "manager"]),
+        ("nav.visits", "/visits", Icons.Material.Filled.Insights, ["owner", "manager"]),
+        ("nav.reviews", "/reviews", Icons.Material.Filled.Star, ["owner", "manager"]),
+        ("partner.addBusiness", "/add-business", Icons.Material.Filled.AddBusiness, ["owner"]),
+    ];
+
+    /// <summary>Phrases that mean "do this", not "find that". Each entry lists the words
+    /// that should trigger it in the current language plus their English equivalents, so
+    /// a partner typing Arabic and a partner typing English land on the same action.</summary>
+    private (string Label, string Sub, string Icon, string Href, string[] Words)[] Intents =>
+    [
+        (L["cp.actNewOrder"], L["nav.pos"], Icons.Material.Filled.AddShoppingCart, "/pos",
+            ["new order", "sell", "sale", "pos", "till", L["cp.wNewOrder"], L["nav.pos"]]),
+        (L["cp.actTodayOrders"], L["nav.liveorders"], Icons.Material.Filled.Today, "/orders",
+            ["today", "order", "orders", "live", L["vis.today"], L["nav.liveorders"]]),
+        (L["cp.actAddDish"], L["nav.products"], Icons.Material.Filled.PostAdd, "/menu",
+            ["add dish", "new dish", "new product", "add product", "menu", L["cp.wAddDish"], L["nav.products"]]),
+        (L["cp.actTodayMoney"], L["nav.sales"], Icons.Material.Filled.Savings, "/reports",
+            ["revenue", "money", "sales", "income", "earned", L["w.revenue"], L["nav.sales"]]),
+        (L["cp.actPaySalary"], L["nav.paySalaries"], Icons.Material.Filled.Payments, "/staff/payroll",
+            ["salary", "pay", "payroll", "wage", L["nav.paySalaries"]]),
+        (L["cp.actExport"], L["exp.excel"], Icons.Material.Filled.GridOn, "/reports/products",
+            ["excel", "export", "xlsx", "download", "print", L["exp.excel"], L["exp.print"]]),
+    ];
+
+    /// <summary>The waiting-message count for the two chat rooms, or null for every other
+    /// page. Read from AppState, which the layout keeps current — the palette must not
+    /// start a poll of its own just to draw a badge.</summary>
+    private string? UnreadBadge(string href) => href switch
+    {
+        "/table-chats" when State.TableChatUnread > 0 => Cap(State.TableChatUnread),
+        "/chat" when State.TeamChatUnread > 0 => Cap(State.TeamChatUnread),
+        _ => null,
+    };
+
+    private static string Cap(int n) => n > 99 ? "99+" : n.ToString();
+
+    private bool RoleAllows(string[] roles)
+    {
+        if (roles.Contains("*")) return true;
+        var mine = string.IsNullOrEmpty(State.StoreRole) ? "owner" : State.StoreRole;
+        return roles.Contains(mine);
+    }
+
+    // ---------- ranking ----------
+
+    /// <summary>Builds the list once per input change. Sections keep a fixed order so the
+    /// eye learns where to look, but WITHIN a section everything is score-sorted.</summary>
+    private void Rank()
+    {
+        var q = _q.Trim();
+        var hits = new List<Hit>();
+
+        // Nothing typed: offer where they have been, then the doors they use most.
+        if (q.Length == 0)
+        {
+            foreach (var r in _recent.Take(4))
+                hits.Add(r with { Section = L["cp.recent"] });
+
+            foreach (var d in Doors.Where(d => RoleAllows(d.Roles)).Take(_recent.Count > 0 ? 6 : 9))
+                hits.Add(new Hit(L["cp.pages"], "page", L[d.LabelKey], null, d.Icon, d.Href,
+                    Badge: UnreadBadge(d.Href)));
+
+            _hits = hits;
+            _sel = 0;
+            return;
+        }
+
+        // ---- Actions, first, because a verb beats a noun ----
+        var actions = new List<Hit>();
+        foreach (var intent in Intents)
+        {
+            var best = Fuzzy.Best(q, intent.Words);
+            // Intent words are matched loosely, so demand a real hit rather than a
+            // stray subsequence — otherwise every action shows for every query.
+            if (!best.Ok || best.Score < 300) continue;
+            actions.Add(new Hit(L["cp.actions"], "action", intent.Label, intent.Sub,
+                intent.Icon, intent.Href, best.Score));
+        }
+        hits.AddRange(actions.OrderByDescending(a => a.Score).Take(3));
+
+        // ---- An order number, typed straight in ----
+        var digits = new string(q.Where(char.IsDigit).ToArray());
+        if (digits.Length >= 2)
+        {
+            foreach (var order in _orders
+                .Where(o => o.Number.Contains(digits, StringComparison.OrdinalIgnoreCase)
+                         || o.Id.ToString() == digits)
+                .Take(4))
+            {
+                hits.Add(new Hit(L["nav.liveorders"], "order", order.Number,
+                    $"{order.CustomerName} · {Fmt.Amount(order.Total)}",
+                    Icons.Material.Filled.Receipt, "/orders", 900,
+                    Badge: L["status." + order.Status]));
+            }
+        }
+
+        // ---- Pages ----
+        var pages = new List<Hit>();
+        foreach (var d in Doors.Where(d => RoleAllows(d.Roles)))
+        {
+            var label = L[d.LabelKey];
+            // The route itself is searchable too: typing "/pos" or "team" finds the page
+            // even when the label is in a language the user is not typing in.
+            var m = Fuzzy.Best(q, label, d.Href.Trim('/').Replace('-', ' '));
+            if (!m.Ok) continue;
+            var onLabel = Fuzzy.Score(q, label);
+            pages.Add(new Hit(L["cp.pages"], "page", label, null, d.Icon, d.Href,
+                m.Score, onLabel.Ok ? onLabel.Positions : [], UnreadBadge(d.Href)));
+        }
+        hits.AddRange(pages.OrderByDescending(p => p.Score).Take(7));
+
+        // ---- Live data ----
+        if (RoleAllows(["owner", "manager"]))
+        {
+            var products = new List<Hit>();
+            foreach (var (category, item) in (_menu ?? []).SelectMany(c => c.Items.Select(i => (c.Name, i))))
+            {
+                var m = Fuzzy.Score(q, item.Name);
+                if (!m.Ok) continue;
+                products.Add(new Hit(L["nav.products"], "product", item.Name,
+                    L.Data("cat", category), Icons.Material.Filled.Fastfood, "/menu",
+                    m.Score, m.Positions, Fmt.Amount(item.Price)));
+            }
+            hits.AddRange(products.OrderByDescending(p => p.Score).Take(6));
+
+            var people = new List<Hit>();
+            foreach (var customer in _customers)
+            {
+                var m = Fuzzy.Best(q, customer.Name, customer.Phone);
+                if (!m.Ok) continue;
+                var onName = Fuzzy.Score(q, customer.Name);
+                people.Add(new Hit(L["nav.customers"], "customer", customer.Name, customer.Phone,
+                    Icons.Material.Filled.Person, "/customers",
+                    m.Score, onName.Ok ? onName.Positions : []));
+            }
+            hits.AddRange(people.OrderByDescending(p => p.Score).Take(5));
+        }
+
+        var tables = new List<Hit>();
+        foreach (var table in _tables ?? [])
+        {
+            var m = Fuzzy.Score(q, table.Name);
+            if (!m.Ok) continue;
+            tables.Add(new Hit(L["nav.tables"], "table", table.Name, null,
+                Icons.Material.Filled.TableRestaurant, "/tables", m.Score, m.Positions));
+        }
+        hits.AddRange(tables.OrderByDescending(t => t.Score).Take(5));
+
+        _hits = hits;
+        _sel = 0;
+    }
+
+    // ---------- lifecycle ----------
+
+    public void Open()
+    {
+        _open = true;
+        _q = "";
+        _sel = 0;
+        _customers = [];
+        _focusPending = true;
+        Rank();
+        StateHasChanged();
+        StartHints();
+        _ = WarmAsync();
+    }
+
+    /// <summary>The catalog, the floor plan and the live board load once behind the box,
+    /// so the first keystroke already has something to search.</summary>
+    private async Task WarmAsync()
+    {
+        try
+        {
+            _tables ??= await Api.GetTablesAsync() ?? [];
+            _menu ??= await Api.GetMyMenuBasicAsync() ?? [];
+            if (_orders.Count == 0) _orders = await Api.GetRestaurantBoardAsync() ?? [];
+            Rank();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch { /* the palette still works on pages alone */ }
+    }
+
+    /// <summary>Rotates the ghost hint while the box is empty. Stops the moment it closes —
+    /// a timer redrawing a hidden component is pure waste on a Blazor Server circuit.</summary>
+    private void StartHints()
+    {
+        _hintTimer?.Dispose();
+        _hintTimer = new System.Threading.Timer(async _ =>
+        {
+            if (!_open || _q.Length > 0) return;
+            _hintIndex = (_hintIndex + 1) % Hints.Length;
+            try { await InvokeAsync(StateHasChanged); } catch { }
+        }, null, 2600, 2600);
+    }
+
+    private void Close()
+    {
+        _open = false;
+        _hintTimer?.Dispose();
+        _hintTimer = null;
+    }
+
+    private async Task ClearQuery()
+    {
+        _q = "";
+        Rank();
+        try { await JS.InvokeVoidAsync("mfPalette.focus"); } catch { }
+    }
+
+    private async Task Seed(string text)
+    {
+        _q = text;
+        await Lookup();
+    }
+
+    private async Task OnQuery(ChangeEventArgs e)
+    {
+        _q = e.Value?.ToString() ?? "";
+        await Lookup();
+    }
+
+    /// <summary>Rank what is already in hand immediately, then top it up from the server.
+    /// The list must never wait on the network — a palette that stalls for 200 ms per
+    /// keystroke feels broken however good its results are.</summary>
+    private async Task Lookup()
+    {
+        Rank();
+        StateHasChanged();
+
+        var q = _q.Trim();
+        var mine = ++_stamp;
+
+        if (q.Length < 2 || !RoleAllows(["owner", "manager"]))
+        {
+            _customers = [];
+            return;
+        }
+
+        _thinking = true;
+        try
+        {
+            var found = await Api.GetStoreCustomersAsync(q) ?? [];
+            if (mine != _stamp) return;   // a newer keystroke already won
+            _customers = found;
+        }
+        catch
+        {
+            if (mine == _stamp) _customers = [];
+        }
+        finally
+        {
+            if (mine == _stamp)
+            {
+                _thinking = false;
+                Rank();
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "Escape":
+                Close();
+                break;
+            case "ArrowDown":
+                _sel = _hits.Count == 0 ? 0 : (_sel + 1) % _hits.Count;
+                break;
+            case "ArrowUp":
+                _sel = _hits.Count == 0 ? 0 : (_sel - 1 + _hits.Count) % _hits.Count;
+                break;
+            case "Home":
+                _sel = 0;
+                break;
+            case "End":
+                _sel = Math.Max(0, _hits.Count - 1);
+                break;
+            case "Enter":
+                if (_hits.Count > 0) Go(_hits[Math.Clamp(_sel, 0, _hits.Count - 1)]);
+                break;
+        }
+    }
+
+    private void Go(Hit hit)
+    {
+        // Remember it under its real section, not "Recent", so reopening does not stack
+        // the same entry twice under two different headings.
+        _recent.RemoveAll(r => r.Href == hit.Href && r.Label == hit.Label);
+        _recent.Insert(0, hit with { Score = 0, PositionsRaw = [] });
+        if (_recent.Count > 6) _recent.RemoveRange(6, _recent.Count - 6);
+
+        Close();
+        Nav.NavigateTo(hit.Href);
+    }
+
+    [JSInvokable]
+    public Task OpenFromHotkey()
+    {
+        Open();
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _self = DotNetObjectReference.Create(this);
+            try { await JS.InvokeVoidAsync("mfHotkey.bind", _self); } catch { }
+        }
+        if (_focusPending && _open)
+        {
+            _focusPending = false;
+            try { await JS.InvokeVoidAsync("mfPalette.focus"); } catch { }
+        }
+        if (_open)
+        {
+            // Arrow keys move the selection past the fold; the list has to follow.
+            try { await JS.InvokeVoidAsync("mfPalette.scrollToSelected"); } catch { }
+        }
+    }
+
+    public void Dispose()
+    {
+        _hintTimer?.Dispose();
+        _self?.Dispose();
+    }
+}

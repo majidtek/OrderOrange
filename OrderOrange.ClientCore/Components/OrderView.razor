@@ -1,0 +1,164 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+
+@* The one true order rendering — items, totals, contacts and the status timeline.
+   Every app shows orders through this so a "delivery" always looks the same. *@
+
+<div class="d-flex align-center flex-wrap mb-3" style="gap: 8px;">
+    <MudText Typo="Typo.h6">@Order.Number</MudText>
+    <StatusChip Status="@Order.Status" />
+    @if (Order.IsPaid)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled"
+                 Icon="@Icons.Material.Filled.Verified">@Lang["pay.paid"]</MudChip>
+    }
+    <MudSpacer />
+    <MudText Typo="Typo.caption" Color="Color.Secondary">@Order.PlacedAt.ToString("dd MMM yyyy, HH:mm")</MudText>
+</div>
+
+@* A turned-away order always says so. The shop may give no reason — that is allowed —
+   and then the line is written in the reader's language rather than left blank. *@
+@if (Order.Status is OrderStatus.Cancelled or OrderStatus.Rejected)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">
+        @* "Cancelled by customer" is what the API used to store when the customer gave
+           no reason — old orders still carry it, so it reads as "no reason" too. *@
+        @{ var why = Order.CancelReason is null or "" or "Cancelled by customer" ? null : Order.CancelReason; }
+        @(why ?? Lang[Order.Status == OrderStatus.Cancelled ? "order.cancelledByCustomer" : "order.noReason"])
+    </MudAlert>
+}
+
+<MudGrid Spacing="2" Class="mb-1">
+    @if (ShowRestaurant)
+    {
+        <MudItem xs="12" sm="6">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" Style="height: 100%;">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">@Lang["track.restaurant"]</MudText>
+                <MudText Typo="Typo.body1">@Order.RestaurantLogoEmoji @Order.RestaurantName</MudText>
+                @* The area is translated text, so only the number is pinned left-to-right. *@
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@Order.RestaurantArea · <span class="mf-ltr">@Order.RestaurantPhone</span></MudText>
+            </MudPaper>
+        </MudItem>
+    }
+    @if (ShowCustomer)
+    {
+        <MudItem xs="12" sm="6">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" Style="height: 100%;">
+                <MudText Typo="Typo.overline" Color="Color.Secondary">@Lang["track.customer"]</MudText>
+                <MudText Typo="Typo.body1">@Order.CustomerName</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mf-ltr">@Order.CustomerPhone</MudText>
+            </MudPaper>
+        </MudItem>
+    }
+    @if (Order.ScheduledFor is { } scheduled)
+    {
+        <MudItem xs="12">
+            <MudAlert Severity="Severity.Info" Dense="true">
+                🗓️ @string.Format(Lang["track.scheduledFor"], scheduled.ToString("dddd, dd MMM"))
+            </MudAlert>
+        </MudItem>
+    }
+    <MudItem xs="12" sm="6">
+        <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" Style="height: 100%;">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">@Lang["track.deliverTo"]</MudText>
+            <MudText Typo="Typo.body2">@Order.DeliveryAddress</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Class="mt-1 px-2"
+                       StartIcon="@Icons.Material.Filled.Map" Target="_blank" Href="@MapsUrl">@Lang["track.openMaps"]</MudButton>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg" Style="height: 100%;">
+            <MudText Typo="Typo.overline" Color="Color.Secondary">@Lang["track.paymentDriver"]</MudText>
+            <MudText Typo="Typo.body2">
+                @Lang[$"pay.{Order.PaymentMethod}"]
+                @if (Order.IsPaid) { <span style="color: #12A150;"> ✓</span> }
+            </MudText>
+            @if (Order.PaymentRef is not null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Ref: @Order.PaymentRef</MudText>
+            }
+            @if (ShowDriver)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @if (Order.DriverName is null)
+                    {
+                        @Lang["track.noDriver"]
+                    }
+                    else
+                    {
+                        <text>🛵 @Order.DriverName · <span class="mf-ltr">@Order.DriverPhone</span></text>
+                    }
+                </MudText>
+            }
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@if (!string.IsNullOrWhiteSpace(Order.Notes))
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="my-2" Icon="@Icons.Material.Filled.StickyNote2">
+        “@Order.Notes”
+    </MudAlert>
+}
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-lg my-3">
+    @foreach (var item in Order.Items)
+    {
+        <div class="d-flex align-center py-1" style="gap: 10px;">
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default">@($"{item.Quantity}×")</MudChip>
+            <div class="flex-grow-1" style="min-width: 0;">
+                <MudText Typo="Typo.body2">@item.Name</MudText>
+                @if (!string.IsNullOrWhiteSpace(item.Notes))
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">“@item.Notes”</MudText>
+                }
+            </div>
+            <MudText Typo="Typo.body2">@Fmt.Rial(item.LineTotal)</MudText>
+        </div>
+    }
+    <MudDivider Class="my-2" />
+    <div class="d-flex justify-space-between"><MudText Typo="Typo.body2" Color="Color.Secondary">@Lang["common.subtotal"]</MudText><MudText Typo="Typo.body2">@Fmt.Rial(Order.Subtotal)</MudText></div>
+    <div class="d-flex justify-space-between"><MudText Typo="Typo.body2" Color="Color.Secondary">@Lang["common.deliveryFee"]</MudText><MudText Typo="Typo.body2">@Fmt.Rial(Order.DeliveryFee)</MudText></div>
+    @if (Order.ServiceFee > 0)
+    {
+        <div class="d-flex justify-space-between"><MudText Typo="Typo.body2" Color="Color.Secondary">@Lang["common.serviceFee"]</MudText><MudText Typo="Typo.body2">@Fmt.Rial(Order.ServiceFee)</MudText></div>
+    }
+    @if (Order.Discount > 0)
+    {
+        <div class="d-flex justify-space-between">
+            <MudText Typo="Typo.body2" Color="Color.Success">@Lang["common.discount"]</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Success">−@Fmt.Rial(Order.Discount)</MudText>
+        </div>
+    }
+    <div class="d-flex justify-space-between mt-1">
+        <MudText Typo="Typo.subtitle1">@Lang["common.total"]</MudText>
+        <MudText Typo="Typo.subtitle1" Color="Color.Primary">@Fmt.Rial(Order.Total)</MudText>
+    </div>
+</MudPaper>
+
+@if (ShowTimeline && Order.History.Count > 0)
+{
+    <MudText Typo="Typo.overline" Color="Color.Secondary">@Lang["track.timeline"]</MudText>
+    <MudTimeline TimelinePosition="TimelinePosition.Start" Class="mt-1">
+        @foreach (var step in Order.History)
+        {
+            <MudTimelineItem Color="@Fmt.StatusColor(step.Status)" Size="Size.Small" Variant="Variant.Filled">
+                <MudText Typo="Typo.body2">@Lang[$"status.{step.Status}"]</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@step.At.ToString("HH:mm") · @step.By</MudText>
+            </MudTimelineItem>
+        }
+    </MudTimeline>
+}
+
+@code {
+    [Parameter, EditorRequired] public OrderDto Order { get; set; } = default!;
+    [Parameter] public bool ShowCustomer { get; set; } = true;
+
+    /// <summary>Exact pin when the address was picked on the map, otherwise a text search.</summary>
+    private string MapsUrl => Order.DeliveryLat is not null
+        ? $"https://www.google.com/maps/dir/?api=1&destination={Order.DeliveryLat:0.######},{Order.DeliveryLng:0.######}"
+        : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString(Order.DeliveryAddress)}";
+    [Parameter] public bool ShowRestaurant { get; set; } = true;
+    [Parameter] public bool ShowDriver { get; set; } = true;
+    [Parameter] public bool ShowTimeline { get; set; } = true;
+}

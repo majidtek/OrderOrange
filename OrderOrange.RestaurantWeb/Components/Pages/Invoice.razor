@@ -1,0 +1,62 @@
+@page "/invoice/{Id:int}"
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>Invoice</PageTitle>
+
+@if (_order is null || _store is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    @* ?print=1 is the direct-print visit: a hidden frame that exists only to put this
+       receipt on paper. It prints itself; buttons would just be ink on the page. *@
+    @if (AutoPrint != 1)
+    {
+        <div class="inv-actions no-print">
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack"
+                       OnClick="@(() => Nav.NavigateTo("/delivery"))">@L["dlv2.back"]</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Brush"
+                       OnClick="@(() => Nav.NavigateTo("/invoice-design"))">@L["dlv2.design"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print"
+                       OnClick="@(() => JS.InvokeVoidAsync("print"))">@L["dlv2.print"]</MudButton>
+        </div>
+    }
+
+    <ReceiptView Order="_order" Store="_store" Design="_design" />
+    @if (_design.Copies == 2)
+    {
+        <div class="cutline">✂ - - - - - - - - - - - - - - - - - - - - - - -</div>
+        <ReceiptView Order="_order" Store="_store" Design="_design" />
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    /// <summary>1 = the page was opened only to print itself (Settings' "print direct").</summary>
+    [SupplyParameterFromQuery(Name = "print")]
+    public int? AutoPrint { get; set; }
+
+    private OrderDto? _order;
+    private MyRestaurantDto? _store;
+    private ReceiptDesignDto _design = ReceiptDesignDto.Default;
+    private bool _autoPrinted;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _order = await Api.GetOrderAsync(Id);
+        _store = await Api.GetMyRestaurantAsync();
+        _design = await Api.GetMyReceiptDesignAsync() ?? ReceiptDesignDto.Default;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (AutoPrint != 1 || _autoPrinted || _order is null || _store is null) return;
+        _autoPrinted = true;   // once per visit — a re-render must not print twice
+        await JS.InvokeVoidAsync("mfPrint.auto");
+    }
+}

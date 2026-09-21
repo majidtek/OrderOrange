@@ -1,0 +1,369 @@
+@page "/restaurants"
+@inject ApiClient Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject LanguageService L
+@inject IJSRuntime JS
+@inject IConfiguration Config
+
+<PageTitle>Admin — Restaurants</PageTitle>
+
+<PageHeader Title="@L["admin.partners"]" Subtitle="@L["admin.storesSub"]" />
+
+@if (_pendingCount > 0)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-4">
+        @_pendingCount — @L["admin.pendingApproval"]
+        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => SetApprovedFilter(false))">@L["admin.pendingFilter"]</MudButton>
+    </MudAlert>
+}
+
+@* The customer home's "Suggested" strip, in running order. The star on each table row
+   puts a shop in (at the end) or takes it out; the arrows here decide who leads. *@
+<MudPaper Elevation="0" Outlined="true" Class="rounded-xl pa-4 mb-4">
+    <div class="d-flex align-center mb-2" style="gap: 8px;">
+        <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" />
+        <MudText Typo="Typo.subtitle1"><b>@L["admin.suggestedStrip"]</b></MudText>
+    </div>
+    @if (_suggested.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@L["admin.suggestedEmpty"]</MudText>
+    }
+    else
+    {
+        @for (var i = 0; i < _suggested.Count; i++)
+        {
+            var pos = i;
+            var s = _suggested[pos];
+            <div class="d-flex align-center py-1" style="gap: 8px;">
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Style="width: 24px; text-align: center;">@(pos + 1)</MudText>
+                <div style="font-size: 20px;">@s.LogoEmoji</div>
+                <MudText Typo="Typo.body2" Style="flex: 1;">
+                    <b>@s.Name</b>
+                    @if (!s.IsApproved)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Class="ms-1">@L["admin.pendingApproval"]</MudChip>
+                    }
+                </MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp" Size="Size.Small"
+                               Disabled="@(pos == 0)" OnClick="@(() => MoveSuggested(pos, -1))" />
+                <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small"
+                               Disabled="@(pos == _suggested.Count - 1)" OnClick="@(() => MoveSuggested(pos, +1))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => ToggleSuggested(s.Id, s.Name))" />
+            </div>
+        }
+    }
+</MudPaper>
+
+<div class="d-flex align-center mb-2" style="gap: 10px; flex-wrap: wrap;">
+    <MudTextField T="string" @bind-Value="_search" Placeholder="@L["admin.searchStores"]"
+                  Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="min-width: 280px;"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Immediate="true" DebounceInterval="450" OnDebounceIntervalElapsed="OnQuickSearch" />
+    <MudBadge Content="@_criteria.ActiveCount" Color="Color.Primary" Overlap="true"
+              Visible="@(_criteria.ActiveCount > 0)">
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FilterAlt"
+                   OnClick="OpenFilters">@L["admin.filters"]</MudButton>
+    </MudBadge>
+</div>
+
+@* Every active filter is a chip an admin can flick away without reopening the sheet. *@
+@if (_criteria.ActiveCount > 0)
+{
+    <div class="d-flex align-center mb-3" style="gap: 6px; flex-wrap: wrap;">
+        @if (!string.IsNullOrWhiteSpace(_criteria.Search))
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                     OnClose="@(() => Strip(c => { c.Search = null; _search = ""; }))">🔎 @_criteria.Search</MudChip>
+        }
+        @if (_criteria.Approved is not null)
+        {
+            <MudChip T="string" Size="Size.Small" Color="@(_criteria.Approved == true ? Color.Success : Color.Warning)" Variant="Variant.Outlined"
+                     OnClose="@(() => Strip(c => c.Approved = null))">@(_criteria.Approved == true ? L["admin.approvedFilter"] : L["admin.pendingFilter"])</MudChip>
+        }
+        @if (_criteria.StoreType is not null)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                     OnClose="@(() => Strip(c => c.StoreType = null))">@L[$"st.{_criteria.StoreType.ToString()!.ToLowerInvariant()}"]</MudChip>
+        }
+        @if (_criteria.CuisineId is not null)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                     OnClose="@(() => Strip(c => c.CuisineId = null))">@L.Data("cuisine", _cuisineName)</MudChip>
+        }
+        @if (_criteria.Open is not null)
+        {
+            <MudChip T="string" Size="Size.Small" Color="@(_criteria.Open == true ? Color.Success : Color.Default)" Variant="Variant.Outlined"
+                     OnClose="@(() => Strip(c => c.Open = null))">@(_criteria.Open == true ? L["partner.open"] : L["partner.closed"])</MudChip>
+        }
+        @if (_criteria.Sort != "newest")
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined"
+                     OnClose="@(() => Strip(c => c.Sort = "newest"))">@L[SortKey]</MudChip>
+        }
+        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Strip(c => { c.Search = null; c.Approved = null; c.StoreType = null; c.CuisineId = null; c.Open = null; c.Sort = "newest"; _search = ""; }))">
+            @L["common.clearAll"]
+        </MudButton>
+    </div>
+}
+
+    <MudTable T="AdminRestaurantDto" @ref="_table" ServerData="LoadRestaurants" Hover="true" Dense="true"
+              Elevation="0" Outlined="true" Class="rounded-xl" RowsPerPage="25">
+        <HeaderContent>
+            <MudTh>@L["nav.restaurants"]</MudTh>
+            <MudTh>@L["role.RestaurantOwner"]</MudTh>
+            <MudTh>@L["addr.area"]</MudTh>
+            <MudTh>@L["admin.rating"]</MudTh>
+            <MudTh>@L["admin.ordersCount"]</MudTh>
+            <MudTh>@L["admin.revenue"]</MudTh>
+            <MudTh>@L["admin.commission"]</MudTh>
+            <MudTh>@L["common.status"]</MudTh>
+            <MudTh />
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <div class="d-flex align-center" style="gap: 8px;">
+                    <div style="font-size: 22px;">@context.LogoEmoji</div>
+                    <div>
+                        <MudText Typo="Typo.body2"><b>@context.Name</b></MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@L.Data("cuisine", context.Cuisine)</MudText>
+                    </div>
+                </div>
+            </MudTd>
+            <MudTd>
+                <MudText Typo="Typo.body2">@context.OwnerName</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mf-ltr">@context.OwnerEmail</MudText>
+            </MudTd>
+            <MudTd>@context.Area</MudTd>
+            <MudTd>@(context.RatingCount > 0 ? $"{context.Rating:0.0} ★ ({context.RatingCount})" : "—")</MudTd>
+            <MudTd>@context.TotalOrders</MudTd>
+            <MudTd>@Fmt.Rial(context.TotalRevenue)</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => EditCommission(context))"
+                         Icon="@Icons.Material.Filled.Edit">@context.CommissionPercent.ToString("0.#")%</MudChip>
+            </MudTd>
+            <MudTd>
+                @if (context.IsApproved)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="@(context.IsOpen ? Color.Success : Color.Default)" Variant="Variant.Text">
+                        @(context.IsOpen ? $"{L["admin.approvedFilter"]} · {L["partner.open"]}" : $"{L["admin.approvedFilter"]} · {L["partner.closed"]}")
+                    </MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">@L["admin.pendingApproval"]</MudChip>
+                }
+            </MudTd>
+            <MudTd Style="white-space: nowrap;">
+                @* In or out of the customer home's "Suggested" strip. *@
+                <MudIconButton Icon="@(context.SuggestedOrder is null ? Icons.Material.Filled.StarBorder : Icons.Material.Filled.Star)"
+                               Size="Size.Small" Color="@(context.SuggestedOrder is null ? Color.Default : Color.Warning)"
+                               title="@L["admin.suggestToggle"]"
+                               OnClick="@(() => ToggleSuggested(context.Id, context.Name))" />
+                @* Straight into this store's partner portal as its owner — no password. *@
+                <MudIconButton Icon="@Icons.Material.Filled.Login" Size="Size.Small" Color="Color.Primary"
+                               title="@L["admin.openAsPartner"]"
+                               OnClick="@(() => OpenAsPartner(context))" />
+                <MudIconButton Icon="@(context.IsOpen ? Icons.Material.Filled.DoorFront : Icons.Material.Filled.MeetingRoom)"
+                               Size="Size.Small" Color="@(context.IsOpen ? Color.Success : Color.Default)"
+                               title="@(context.IsOpen ? L["partner.open"] : L["partner.closed"])"
+                               OnClick="@(() => ToggleOpen(context))" />
+                <MudButton Size="Size.Small" Variant="@(context.IsApproved ? Variant.Outlined : Variant.Filled)"
+                           Color="@(context.IsApproved ? Color.Error : Color.Success)"
+                           OnClick="@(() => ToggleApproval(context))">
+                    @(context.IsApproved ? L["admin.suspend"] : L["admin.approve"])
+                </MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteForever" Size="Size.Small" Color="Color.Error"
+                               title="@L["admin.deleteStore"]"
+                               OnClick="@(() => DeleteStore(context))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <EmptyState Emoji="🏪" Title="@L["admin.noStores"]" />
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4">@L["admin.loading"]</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager RowsPerPageOptions="new[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+@code {
+    private MudTable<AdminRestaurantDto>? _table;
+    private string _search = "";
+    private int _pendingCount;
+    private StoreFilterDialog.Criteria _criteria = new();
+    private string _cuisineName = "";
+
+    private string SortKey => _criteria.Sort switch
+    {
+        "oldest" => "admin.oldestFirst",
+        "name" => "admin.byName",
+        "commission" => "admin.byCommission",
+        _ => "admin.newestFirst"
+    };
+
+    private List<AdminSuggestedDto> _suggested = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _pendingCount = await Api.GetAdminRestaurantsCountAsync(null, approved: false) ?? 0;
+        await ReloadSuggested();
+    }
+
+    private async Task ReloadSuggested() => _suggested = await Api.GetAdminSuggestedAsync() ?? [];
+
+    private async Task ToggleSuggested(int id, string name)
+    {
+        var (ok, error) = await Api.ToggleSuggestedAsync(id);
+        if (ok) Snackbar.Add($"⭐ {name}", Severity.Success);
+        else Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+        await ReloadSuggested();
+        await Refresh();
+    }
+
+    private async Task MoveSuggested(int index, int delta)
+    {
+        var target = index + delta;
+        if (target < 0 || target >= _suggested.Count) return;
+        (_suggested[index], _suggested[target]) = (_suggested[target], _suggested[index]);
+        var (ok, error) = await Api.SetSuggestedOrderAsync(_suggested.Select(s => s.Id).ToList());
+        if (!ok)
+        {
+            Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+            await ReloadSuggested();
+        }
+    }
+
+    /// <summary>Server-side page load — the 5-million-store catalog stays in the database.</summary>
+    private async Task<TableData<AdminRestaurantDto>> LoadRestaurants(TableState state, CancellationToken _)
+    {
+        var c = _criteria;
+        var total = await Api.GetAdminRestaurantsCountAsync(c.Search, c.Approved, c.StoreType, c.CuisineId, c.Open) ?? 0;
+        var items = await Api.GetAdminRestaurantsAsync(c.Search, c.Approved,
+            state.Page * state.PageSize, state.PageSize, c.StoreType, c.CuisineId, c.Open, c.Sort) ?? [];
+        return new TableData<AdminRestaurantDto> { TotalItems = total, Items = items };
+    }
+
+    private Task Refresh() => _table?.ReloadServerData() ?? Task.CompletedTask;
+
+    private Task Reload() => Refresh();
+
+    /// <summary>The toolbar's quick box writes into the same criteria the sheet edits.</summary>
+    private Task OnQuickSearch()
+    {
+        _criteria.Search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
+        return Refresh();
+    }
+
+    private async Task OpenFilters()
+    {
+        var parameters = new DialogParameters<StoreFilterDialog> { { d => d.Value, _criteria } };
+        var dialog = await Dialogs.ShowAsync<StoreFilterDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result?.Canceled != false || result.Data is not StoreFilterDialog.Criteria applied) return;
+        _criteria = applied;
+        _search = applied.Search ?? "";
+        await ResolveCuisineName();
+        await Refresh();
+    }
+
+    /// <summary>Removes one filter from the chip row and re-queries.</summary>
+    private async Task Strip(Action<StoreFilterDialog.Criteria> change)
+    {
+        change(_criteria);
+        await Refresh();
+    }
+
+    private async Task ResolveCuisineName()
+    {
+        if (_criteria.CuisineId is not { } id) { _cuisineName = ""; return; }
+        var cuisines = await Api.GetCuisinesAsync() ?? [];
+        _cuisineName = cuisines.FirstOrDefault(c => c.Id == id)?.Name ?? "";
+    }
+
+    private async Task SetApprovedFilter(bool approved)
+    {
+        _criteria.Approved = approved;
+        await Refresh();
+    }
+
+    private async Task ToggleApproval(AdminRestaurantDto restaurant)
+    {
+        if (restaurant.IsApproved)
+        {
+            var confirmed = await Dialogs.ShowMessageBox(L["admin.suspendStore"],
+                $"Suspend “{restaurant.Name}”? It disappears from the customer app immediately.",
+                yesText: "Suspend", cancelText: "Keep");
+            if (confirmed != true) return;
+        }
+        var (ok, error) = await Api.ToggleRestaurantApprovedAsync(restaurant.Id);
+        if (ok) Snackbar.Add(restaurant.IsApproved ? $"{restaurant.Name} suspended." : $"{restaurant.Name} approved — they're live! 🎉",
+            restaurant.IsApproved ? Severity.Warning : Severity.Success);
+        else Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+        await Reload();
+    }
+
+    /// <summary>Support tool: force a store open or closed regardless of the owner's switch.</summary>
+    /// <summary>
+    /// Mints a single-use code and opens the partner portal in a new tab, signed in as
+    /// this store's owner. The admin panel keeps its own session — the two apps are
+    /// different origins, so becoming the partner over there changes nothing here.
+    /// </summary>
+    private async Task OpenAsPartner(AdminRestaurantDto restaurant)
+    {
+        var (code, error) = await Api.StartImpersonationAsync(restaurant.OwnerUserId);
+        if (code is null)
+        {
+            Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+            return;
+        }
+
+        var partnerUrl = (Config["PartnerUrl"] ?? "https://partner.orderorange.com").TrimEnd('/');
+        await JS.InvokeVoidAsync("open", $"{partnerUrl}/?impersonate={code.Code}", "_blank");
+    }
+
+    private async Task ToggleOpen(AdminRestaurantDto restaurant)
+    {
+        var (ok, error) = await Api.AdminToggleRestaurantOpenAsync(restaurant.Id);
+        if (ok) Snackbar.Add($"{restaurant.Name}: {(restaurant.IsOpen ? L["partner.closed"] : L["partner.open"])}", Severity.Info);
+        else Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+        await Refresh();
+    }
+
+    /// <summary>
+    /// HARD delete — the store and everything it owns is erased permanently. The
+    /// dialog lists the full bill (orders, menu, tables, staff…) before the red
+    /// button; suspend stays the reversible option next door.
+    /// </summary>
+    private async Task DeleteStore(AdminRestaurantDto restaurant)
+    {
+        var parameters = new DialogParameters<DeleteStoreDialog> { { d => d.Store, restaurant } };
+        var dialog = await Dialogs.ShowAsync<DeleteStoreDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result?.Canceled != false) return;
+        if (result.Data is true) Snackbar.Add($"🗑️ {restaurant.Name}", Severity.Warning);
+        else Snackbar.Add(result.Data as string ?? L["common.deleteFail"], Severity.Error);
+        await Reload();
+    }
+
+    private async Task EditCommission(AdminRestaurantDto restaurant)
+    {
+        var parameters = new DialogParameters<CommissionDialog>
+        {
+            { d => d.RestaurantName, restaurant.Name },
+            { d => d.Percent, restaurant.CommissionPercent }
+        };
+        var dialog = await Dialogs.ShowAsync<CommissionDialog>("Commission", parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled != false || result.Data is not decimal percent) return;
+        var (ok, error) = await Api.SetCommissionAsync(restaurant.Id, percent);
+        if (ok) Snackbar.Add($"Commission for {restaurant.Name} set to {percent:0.#}%.", Severity.Success);
+        else Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+        await Reload();
+    }
+}

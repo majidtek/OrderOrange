@@ -1,0 +1,257 @@
+@page "/profile"
+@inject ApiClient Api
+@inject AppState State
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject LanguageService L
+@inject NavigationManager Nav
+
+<PageTitle>OrderOrange — Profile</PageTitle>
+
+<div class="pg-compact">
+    <PageHeader Title="@L["profile.title"]" />
+
+    @* ---------- Avatar hero ---------- *@
+    <div class="mf-avatar-hero mb-4">
+        <div class="mf-avatar-big" @onclick="@(() => _pickerOpen = true)" title="@L["profile.changePhoto"]">
+            @if (Avatars.Url(State.Avatar) is string url)
+            {
+                <img src="@url" alt="@L["common.profilePhoto"]" class="photo" />
+            }
+            else
+            {
+                <span class="em">@(State.Avatar ?? Initial)</span>
+            }
+            <span class="pen"><MudIcon Icon="@Icons.Material.Filled.Edit" Style="font-size: 13px;" /></span>
+        </div>
+        <div style="min-width: 0;">
+            <MudText Typo="Typo.h6" Style="font-weight: 800;">@State.FullName</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mf-ltr">@State.Email</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary"
+                StartIcon="@Icons.Material.Filled.Face" OnClick="@(() => _pickerOpen = true)">
+                @L["profile.changePhoto"]
+            </MudButton>
+        </div>
+    </div>
+
+    <MudDialog @bind-Visible="_pickerOpen" Options="_pickerOptions" Class="mf-lang-dialog">
+        <TitleContent>
+            <div class="d-flex align-center" style="gap: 10px;">
+                <div class="mf-lang-badge"><MudIcon Icon="@Icons.Material.Filled.Face" /></div>
+                <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["profile.choosePhoto"]</MudText>
+            </div>
+        </TitleContent>
+        <DialogContent>
+            <div class="mf-avatar-grid">
+                @foreach (var choice in Avatars.Choices)
+                {
+                    var a = choice;
+                    <div class="mf-avatar-tile @(State.Avatar == a ? "on" : "")" @onclick="@(() => PickAvatar(a))">
+                        <img src="@Avatars.Url(a)" alt="@L["common.avatarOption"]" loading="lazy" />
+                    </div>
+                }
+            </div>
+            <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-3"
+                OnClick="@(() => PickAvatar(null))">
+                @L["profile.useInitial"] (@Initial)
+            </MudButton>
+        </DialogContent>
+    </MudDialog>
+
+    <MudGrid Spacing="4">
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl">
+                <MudText Typo="Typo.h6" Class="mb-4">@L["profile.account"]</MudText>
+                <MudTextField Value="@State.Email" Label="@L["common.email"]" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="true" Class="mb-3 mf-ltr" InputType="InputType.Email" />
+                <MudTextField @bind-Value="_name" Label="@L["login.fullname"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                <MudTextField @bind-Value="_phone" Label="@L["common.phone"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveProfile" Disabled="_savingProfile">
+                    @L["profile.savechanges"]
+                </MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl">
+                <MudText Typo="Typo.h6" Class="mb-4">@L["profile.changepw"]</MudText>
+                <MudTextField @bind-Value="_currentPassword" Label="@L["profile.current"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                    InputType="InputType.Password" Class="mb-3" />
+                <MudTextField @bind-Value="_newPassword" Label="@L["profile.new"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                    InputType="InputType.Password" Class="mb-3" />
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ChangePassword" Disabled="_savingPassword">
+                    @L["profile.update"]
+                </MudButton>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12">
+            @* The customer's saved addresses live ON the profile: see, add, remove. *@
+            <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl">
+                <div class="d-flex align-center mb-3" style="gap: 10px;">
+                    <MudText Typo="Typo.h6" Class="flex-grow-1">@L["addr.title"]</MudText>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                        StartIcon="@Icons.Material.Filled.AddLocationAlt" OnClick="@(() => EditAddress(null))">
+                        @L["addr.add"]
+                    </MudButton>
+                </div>
+                @if (_addresses is null)
+                {
+                    <Loader />
+                }
+                else if (_addresses.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@L["addr.none"]</MudText>
+                }
+                else
+                {
+                    @foreach (var address in _addresses)
+                    {
+                        var addr = address;
+                        var tail = string.Join("، ", new[] { addr.Building, addr.Street, addr.Area }
+                        .Where(p => !string.IsNullOrWhiteSpace(p)));
+                        <div class="d-flex align-center py-2" style="gap: 8px; border-bottom: 1px solid #f4ede3;">
+                            <MudIcon Icon="@Icons.Material.Filled.Place" Color="Color.Primary" Style="width:18px;height:18px;" />
+                            <div class="flex-grow-1" style="min-width: 0;">
+                                <MudText Typo="Typo.subtitle2">@addr.Label</MudText>
+                                @if (tail.Length > 0)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@tail</MudText>
+                                }
+                            </div>
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                OnClick="@(() => EditAddress(addr))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
+                                OnClick="@(() => DeleteAddress(addr))" />
+                        </div>
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* Air under the last card: the assistant bubble hovers here, never ON the icons. *@
+    <div style="height: 170px;"></div>
+</div>
+
+@code {
+    private static readonly DialogOptions _pickerOptions = new()
+    {
+        MaxWidth = MaxWidth.ExtraSmall,
+        FullWidth = true,
+        CloseButton = true,
+        BackdropClick = true,
+        Position = DialogPosition.Center
+    };
+
+    private bool _pickerOpen;
+    private string _name = "";
+    private string _phone = "";
+    private string _currentPassword = "";
+    private string _newPassword = "";
+    private bool _savingProfile;
+    private bool _savingPassword;
+
+    private string Initial => string.IsNullOrEmpty(State.FullName) ? "?" : State.FullName[..1].ToUpper();
+
+    private async Task PickAvatar(string? avatar)
+    {
+        _pickerOpen = false;
+        var (ok, error) = await Api.UpdateAvatarAsync(avatar);
+        if (ok)
+        {
+            State.UpdateAvatar(avatar);
+            Snackbar.Add(L["profile.photoUpdated"], Severity.Success);
+        }
+        else Snackbar.Add(error ?? L["common.iconFail"], Severity.Error);
+    }
+
+    private List<AddressDto>? _addresses;
+
+        private async Task LoadAddresses() => _addresses = await Api.GetAddressesAsync() ?? [];
+
+        private async Task EditAddress(AddressDto? address)
+        {
+            var parameters = new DialogParameters<AddressDialog> { { d => d.Existing, address } };
+                var dialog = await Dialogs.ShowAsync<AddressDialog>(address is null ? L["addr.new"] : L["addr.edit"], parameters);
+                    if ((await dialog.Result)?.Canceled == false) await LoadAddresses();
+                }
+
+                private async Task DeleteAddress(AddressDto address)
+                {
+                    var confirmed = await Dialogs.ShowMessageBox(L["addr.deleteTitle"],
+                    string.Format(L["addr.deleteAsk"], address.Label),
+                    yesText: L["common.delete"], cancelText: L["common.keep"]);
+                    if (confirmed != true) return;
+                    var (ok, error) = await Api.DeleteAddressAsync(address.Id);
+                    if (!ok) { Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error); return; }
+                    await LoadAddresses();
+                }
+
+                private bool _askSignIn;
+
+                protected override async Task OnInitializedAsync()
+                {
+                    _name = State.FullName;
+                    _phone = State.Phone;
+                    // A guest who lands here by URL is asked to sign in at once; the page waits
+                    // and fills itself the moment they are in.
+                    if (State.IsAuthenticated) await LoadAddresses();
+                    else _askSignIn = true;
+                }
+
+                protected override async Task OnAfterRenderAsync(bool firstRender)
+                {
+                    if (!firstRender || !_askSignIn) return;
+                    _askSignIn = false;
+                    var parameters = new DialogParameters<SignInDialog> { { d => d.Reason, L["auth.reasonProfile"] } };
+                        var dialog = await Dialogs.ShowAsync<SignInDialog>("", parameters,
+                            new DialogOptions { FullScreen = true, NoHeader = true });
+                            await dialog.Result;
+                            if (!State.IsAuthenticated)
+                            {
+                                // Declined — a profile without a person has nothing to show.
+                                Nav.NavigateTo("/");
+                                return;
+                            }
+                            _name = State.FullName;
+                            _phone = State.Phone;
+                            await LoadAddresses();
+                            StateHasChanged();
+                        }
+
+                        private async Task SaveProfile()
+                        {
+                            _savingProfile = true;
+                            try
+                            {
+                                var (ok, error) = await Api.UpdateProfileAsync(new UpdateProfileRequest(_name, _phone));
+                                if (ok)
+                                {
+                                    State.UpdateProfile(_name, _phone);
+                                    Snackbar.Add(L["profile.updated"], Severity.Success);
+                                }
+                                else Snackbar.Add(error ?? L["common.saveFail"], Severity.Error);
+                            }
+                            finally
+                            {
+                                _savingProfile = false;
+                            }
+                        }
+
+                        private async Task ChangePassword()
+                        {
+                            _savingPassword = true;
+                            try
+                            {
+                                var (ok, error) = await Api.ChangePasswordAsync(new ChangePasswordRequest(_currentPassword, _newPassword));
+                                if (ok)
+                                {
+                                    _currentPassword = _newPassword = "";
+                                    Snackbar.Add(L["profile.pwChanged"], Severity.Success);
+                                }
+                                else Snackbar.Add(error ?? L["common.pwFail"], Severity.Error);
+                            }
+                            finally
+                            {
+                                _savingPassword = false;
+                            }
+                        }
+                    }

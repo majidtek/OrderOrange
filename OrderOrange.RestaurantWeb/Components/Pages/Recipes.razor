@@ -1,0 +1,138 @@
+﻿@page "/materials/recipes"
+@using OrderOrange.RestaurantWeb.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snack
+@inject IDialogService Dialogs
+
+@* Which raw materials each dish consumes. A dish with a recipe shows its true
+   portion cost next to its selling price — the margin, visible at last. *@
+
+<PageTitle>Partner — Recipes</PageTitle>
+
+<PageHeader Title="@L["rcp.title"]" Subtitle="@L["rcp.sub"]" />
+
+@if (_menu is null || _recipes is null || _materials is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="rc-top">
+        <div class="rc-sum">
+            <span class="ic">🧾</span>
+            <div><b>@_recipes.ByMenuItem.Count</b><small>@L["rcp.withRecipe"]</small></div>
+        </div>
+        <div class="rc-sum warn">
+            <span class="ic">✏️</span>
+            <div><b>@(AllItems.Count - _recipes.ByMenuItem.Count)</b><small>@L["rcp.without"]</small></div>
+        </div>
+        <div class="rc-search">
+            <MudIcon Icon="@Icons.Material.Filled.Search" />
+            <input placeholder="@L["rcp.search"]" @bind="_search" @bind:event="oninput" />
+        </div>
+        <label class="rc-onlymiss">
+            <input type="checkbox" @bind="_onlyMissing" /> @L["rcp.onlyMissing"]
+        </label>
+    </div>
+
+    <div class="rc-grid">
+        @foreach (var item in Filtered.Skip(ClampedPage * ListPageSize).Take(ListPageSize))
+        {
+            var recipe = _recipes.ByMenuItem.GetValueOrDefault(item.Id);
+            var cost = recipe?.PortionCost ?? 0;
+            var margin = recipe is null || item.FinalPrice <= 0 ? (decimal?)null
+                : (item.FinalPrice - cost) * 100 / item.FinalPrice;
+            <button type="button" class="rc-card @(recipe is null ? "none" : "")" @onclick="@(() => OpenAsync(item))">
+                @if (FoodPhoto.ForDish(item.Name) is string photo)
+                {
+                    <img class="ph" src="@photo" alt="@item.Name" loading="lazy" />
+                }
+                else
+                {
+                    <span class="ph em">🍽️</span>
+                }
+                <div class="tx">
+                    <b>@item.NameFor(L.Locale)</b>
+                    @if (recipe is null)
+                    {
+                        <small class="miss">@L["rcp.noRecipe"]</small>
+                    }
+                    else
+                    {
+                        <small>@string.Format(L["rcp.lineCount"], recipe.Lines.Count) · <span class="mf-ltr">@Fmt.Rial(cost)</span></small>
+                    }
+                </div>
+                @if (margin is { } marginPct)
+                {
+                    <span class="mg @(marginPct < 40 ? "bad" : marginPct < 60 ? "mid" : "good") mf-ltr">
+                        @marginPct.ToString("0")%
+                    </span>
+                }
+                else
+                {
+                    <span class="mg add">+</span>
+                }
+            </button>
+        }
+    </div>
+    @if (Filtered.Count > ListPageSize)
+    {
+        <Pager Page="ClampedPage" Pages="@(((Filtered.Count - 1) / ListPageSize) + 1)" PageChanged="@(p => _listPage = p)" />
+    }
+}
+
+@code {
+    private List<MenuCategoryDto>? _menu;
+    private AllRecipesDto? _recipes;
+    private StoreMaterialsDto? _materials;
+
+    private string _search = "";
+
+    private const int ListPageSize = 24;
+    private int _listPage;
+    private int ClampedPage => Math.Clamp(_listPage, 0, Math.Max(0, (Filtered.Count - 1) / ListPageSize));
+    private bool _onlyMissing;
+
+    private List<MenuItemDto> AllItems => (_menu ?? []).SelectMany(c => c.Items).ToList();
+
+    private List<MenuItemDto> Filtered
+    {
+        get
+        {
+            var query = AllItems.AsEnumerable();
+            if (_onlyMissing) query = query.Where(i => !_recipes!.ByMenuItem.ContainsKey(i.Id));
+            if (_search.Trim().Length > 0)
+            {
+                var folded = PosBotNlu.Fold(_search);
+                query = query.Where(i => PosBotNlu.Fold(i.NameFor(L.Locale)).Contains(folded)
+                                      || PosBotNlu.Fold(i.Name).Contains(folded));
+            }
+            return query.ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _menu = await Api.GetMyMenuBasicAsync() ?? [];
+        _recipes = await Api.GetRecipesAsync() ?? new AllRecipesDto([]);
+        _materials = await Api.GetMaterialsAsync();
+    }
+
+    private async Task OpenAsync(MenuItemDto item)
+    {
+        var existing = _recipes!.ByMenuItem.TryGetValue(item.Id, out var recipe)
+            ? recipe.Lines.Select(l => new SaveRecipeLineRequest(l.MaterialId, l.Amount)).ToList()
+            : [];
+        var parameters = new DialogParameters
+        {
+            ["Item"] = item,
+            ["Materials"] = _materials!,
+            ["Existing"] = existing,
+        };
+        var dialog = await Dialogs.ShowAsync<RecipeDialog>(item.NameFor(L.Locale), parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is { Canceled: false })
+            _recipes = await Api.GetRecipesAsync() ?? new AllRecipesDto([]);
+    }
+}

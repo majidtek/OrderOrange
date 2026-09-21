@@ -1,0 +1,207 @@
+@page "/visitors"
+@inject ApiClient Api
+@inject LanguageService L
+
+@* Who has been on the site, grouped by address. The activity feed next door is a
+   stream of individual page opens by signed-in people; this is the other question —
+   how many distinct visitors, where they came from, and what each of them looked at.
+   Guests are the point: almost nobody browsing the shop list has an account yet. *@
+
+<PageTitle>Admin — Visitors</PageTitle>
+
+<PageHeader Title="@L["nav.visitors"]" Subtitle="@L["vis.sub"]" />
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-xl mb-3">
+    <div class="d-flex align-center flex-wrap" style="gap: 12px;">
+        <MudSelect T="int" Value="_days" ValueChanged="OnDaysChanged" Label="@L["vis.window"]"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 170px;">
+            <MudSelectItem T="int" Value="1">@L["vis.today"]</MudSelectItem>
+            <MudSelectItem T="int" Value="7">@string.Format(L["vis.lastDays"], 7)</MudSelectItem>
+            <MudSelectItem T="int" Value="30">@string.Format(L["vis.lastDays"], 30)</MudSelectItem>
+            <MudSelectItem T="int" Value="90">@string.Format(L["vis.lastDays"], 90)</MudSelectItem>
+        </MudSelect>
+
+        <MudChipSet T="string" SelectionMode="SelectionMode.SingleSelection" CheckMark="false"
+                    SelectedValue="_app" SelectedValueChanged="OnAppChanged">
+            @foreach (var app in Apps)
+            {
+                <MudChip T="string" Value="@app" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">
+                    @AppEmoji(app) @(app == "All" ? L["admin.all"] : app)
+                </MudChip>
+            }
+        </MudChipSet>
+
+        <MudTextField T="string" @bind-Value="_search" Placeholder="@L["vis.searchPh"]"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="min-width: 240px;"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Immediate="true" DebounceInterval="450" OnDebounceIntervalElapsed="Reload" />
+    </div>
+</MudPaper>
+
+@if (_data is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="vis-stats mb-4">
+        <div class="vis-stat">
+            <span class="ic" style="background: rgba(255,90,0,.14); color:#FF5A00;">
+                <MudIcon Icon="@Icons.Material.Filled.Dns" />
+            </span>
+            <div>
+                <div class="num">@_data.TotalVisitors</div>
+                <div class="lbl">@L["vis.addresses"]</div>
+            </div>
+        </div>
+        <div class="vis-stat">
+            <span class="ic" style="background: rgba(66,165,245,.14); color:#1E88E5;">
+                <MudIcon Icon="@Icons.Material.Filled.TouchApp" />
+            </span>
+            <div>
+                <div class="num">@_data.TotalVisits</div>
+                <div class="lbl">@L["vis.pageViews"]</div>
+            </div>
+        </div>
+        <div class="vis-stat">
+            <span class="ic" style="background: rgba(120,144,156,.16); color:#546E7A;">
+                <MudIcon Icon="@Icons.Material.Filled.PersonOutline" />
+            </span>
+            <div>
+                <div class="num">@_data.Guests</div>
+                <div class="lbl">@L["vis.guests"]</div>
+            </div>
+        </div>
+    </div>
+
+    @if (_data.Rows.Count == 0)
+    {
+        <EmptyState Emoji="🛰️" Title="@L["vis.none"]" Subtitle="@L["vis.noneSub"]" />
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow: hidden;">
+            @foreach (var row in _data.Rows)
+            {
+                var v = row;
+                var open = _open == v.Ip;
+                <div class="vis-row @(open ? "open" : "")" @onclick="@(() => Toggle(v.Ip))">
+                    <span class="vis-chevron">@(open ? "▾" : "▸")</span>
+                    <span class="vis-ip mf-ltr mf-ascii">@v.Ip</span>
+                    <span class="vis-who">
+                        @if (v.Who.Length > 0)
+                        {
+                            <b>@v.Who</b>
+                        }
+                        else
+                        {
+                            <i>@L["vis.guest"]</i>
+                        }
+                    </span>
+                    <span class="vis-last"><span class="mf-ascii mf-ltr">@AppEmoji(v.LastApp) @v.LastPage</span></span>
+                    <span class="vis-count" title="@L["vis.pageViews"]">@v.Visits</span>
+                    <span class="vis-pages" title="@L["vis.distinctPages"]">@v.Pages</span>
+                    <span class="vis-when">@Fmt.TimeAgo(v.LastAt, L)</span>
+                </div>
+
+                @if (open)
+                {
+                    <div class="vis-detail">
+                        @if (_pages is null)
+                        {
+                            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-2" />
+                        }
+                        else if (_pages.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">@L["vis.noPages"]</MudText>
+                        }
+                        else
+                        {
+                            <div class="vis-firstseen">
+                                @string.Format(L["vis.firstSeen"], v.FirstAt.ToString("dd MMM yyyy, HH:mm"))
+                            </div>
+                            @foreach (var p in _pages)
+                            {
+                                <div class="vis-page">
+                                    <span class="pg mf-ltr mf-ascii">@AppEmoji(p.App) @p.Page</span>
+                                    <span class="n">@p.Views ×</span>
+                                    <span class="t">@p.LastAt.ToString("dd MMM HH:mm")</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            }
+        </MudPaper>
+
+        @if (_page > 0 || _hasMore)
+        {
+            <Pager Page="_page" HasMore="_hasMore" Busy="_loadingMore" PageChanged="GoPage" />
+        }
+    }
+}
+
+@code {
+    private const int PageSize = 50;
+    private static readonly string[] Apps = ["Customer", "Partner", "Delivery", "Admin", "All"];
+
+    private VisitorsDto? _data;
+    private List<VisitorPageDto>? _pages;
+    private string? _open;
+
+    private int _days = 7;
+    private string _app = "Customer";
+    private string _search = "";
+    private bool _hasMore;
+    private bool _loadingMore;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private Task OnDaysChanged(int days) { _days = days; return Reload(); }
+    private Task OnAppChanged(string? app) { _app = app ?? "Customer"; return Reload(); }
+
+    private int _page;
+
+    private Task Reload()
+    {
+        _page = 0;   // a new filter or search starts from its first page
+        return GoPage(0);
+    }
+
+    /// <summary>One page in memory at a time — the old Load More let the list grow without bound.</summary>
+    private async Task GoPage(int page)
+    {
+        if (_loadingMore) return;
+        _loadingMore = true;
+        try
+        {
+            _open = null;
+            _pages = null;
+            var data = await Api.GetVisitorsAsync(_days, _app, Trimmed, page * PageSize, PageSize);
+            if (data is null) return;
+            _data = data;
+            _page = page;
+            _hasMore = data.Rows.Count >= PageSize;
+        }
+        finally { _loadingMore = false; }
+    }
+
+    private string? Trimmed => string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
+
+    /// <summary>Opening a row fetches its pages; clicking it again closes it.</summary>
+    private async Task Toggle(string ip)
+    {
+        if (_open == ip) { _open = null; _pages = null; return; }
+        _open = ip;
+        _pages = null;
+        _pages = await Api.GetVisitorPagesAsync(ip, _days, _app) ?? [];
+    }
+
+    private static string AppEmoji(string app) => app.ToLowerInvariant() switch
+    {
+        var a when a.Contains("driver") || a.Contains("rider") || a.Contains("delivery") => "🛵",
+        var a when a.Contains("partner") || a.Contains("restaurant") => "🍳",
+        var a when a.Contains("admin") => "🛠️",
+        _ => "🍔"
+    };
+}

@@ -1,0 +1,199 @@
+﻿@page "/pos"
+@layout Layout.PosLayout
+@using OrderOrange.ClientWeb.Seo
+@inject LanguageService L
+@inject IJSRuntime JS
+
+@* The other half of what OrderOrange is. The rest of this site talks to the person ordering
+   dinner; this page talks to the business that cooks it, because "restaurant POS" is what an
+   owner types into Google — and "free POS" is what they type next. Plain HTML with real
+   headings and links, so the crawler prerender and a visitor read the same thing. *@
+
+<PageTitle>@L["seo.posTitle"]</PageTitle>
+
+<header class="mf-posnav">
+    <div class="mf-posnav-in">
+        <a class="brand" href="/pos"><img src="/logo.svg?v=4" alt="OrderOrange" class="logo"><span>Order<b>Orange</b> <i>POS</i></span></a>
+        <nav class="links" aria-label="Sections">
+            <a href="#screens">@L["pos.nav.screens"]</a>
+            <a href="#features">@L["pos.nav.features"]</a>
+            <a href="#free">@L["pos.nav.free"]</a>
+            <a href="#compare">@L["pos.nav.compare"]</a>
+            <a href="#faq">@L["pos.nav.faq"]</a>
+            <a href="https://orderorange.com/guide">@L["pos.nav.guide"]</a>
+        </nav>
+        <div class="acts">
+            <a class="signin" href="https://partner.orderorange.com/">@L["pos.signIn"]</a>
+            <a class="go" href="https://partner.orderorange.com/register">@L["pos.getStarted"]</a>
+        </div>
+    </div>
+</header>
+
+<div class="mf-pos">
+    <nav class="mf-crumbs" aria-label="Breadcrumb"><a href="/">OrderOrange</a> › <span>@L["pos.h1"]</span></nav>
+
+    <header class="mf-pos-hero split">
+        <div class="mf-hero-text">
+            <h1>@L["pos.h1"]</h1>
+            <p class="lede">@L["pos.lede"]</p>
+            <p class="free">@L["pos.free"]</p>
+            <p class="cta">
+                <a class="go" href="https://partner.orderorange.com/register">@L["pos.start"]</a>
+                <a class="ghost" href="https://partner.orderorange.com/">@L["pos.signIn"]</a>
+                <a class="ghost" href="https://orderorange.com/guide">@L["pos.guide"]</a>
+            </p>
+        </div>
+        <div class="mf-hero-show" id="screens">
+            <div class="mf-glow"></div>
+            <div class="mf-slider fade" id="pos-slider" tabindex="0" aria-roledescription="carousel">
+                <div class="mf-device"><div class="mf-device-bar"><i></i><i></i><i></i><b>partner.orderorange.com</b></div><div class="mf-slider-view">
+                    <div class="mf-slider-track">
+                        @{ var slideNo = 0; }
+                        @foreach (var (file, key) in Shots)
+                        {
+                            slideNo++;
+                            <figure class="mf-slide">
+                                <a href="/guide/@(file).jpg" target="_blank" rel="noopener"><img src="/guide/@(file).jpg" alt="@L[$"pos.{key}"]" loading="eager" decoding="async" fetchpriority="@(slideNo == 1 ? "high" : "auto")" width="1280" height="800"></a>
+                                <figcaption><span class="n">@slideNo / @Shots.Length</span>@L[$"pos.{key}"]</figcaption>
+                            </figure>
+                        }
+                    </div>
+                    <button type="button" class="mf-slider-btn prev" aria-label="Previous">‹</button>
+                    <button type="button" class="mf-slider-btn next" aria-label="Next">›</button>
+                    <div class="mf-slider-bar"><i></i></div>
+                </div></div>
+                <div class="mf-slider-dots"></div>
+                <div class="mf-slider-thumbs">
+                    @foreach (var (file, key) in Shots)
+                    {
+                        <button type="button" class="mf-thumb" title="@L[$"pos.{key}"]"><img src="/guide/@(file).jpg" alt="" loading="lazy" width="160" height="100"></button>
+                    }
+                </div>
+            </div>
+            <p class="mf-show-hint">@L["pos.shotsLede"]</p>
+        </div>
+    </header>
+
+    <h2 class="mf-pos-h2" id="features">@L["pos.whatTitle"]</h2>
+    <div class="mf-pos-grid">
+        @foreach (var block in Blocks)
+        {
+            <section class="mf-pos-card">
+                <h3>@L[$"pos.{block}T"]</h3>
+                <p>@L[$"pos.{block}B"]</p>
+            </section>
+        }
+    </div>
+
+    <section class="mf-pos-free" id="free">
+        <h2>@L["pos.freeTitle"]</h2>
+        <p class="lede">@L["pos.freeLede"]</p>
+        <div class="mf-pos-grid">
+            @for (var i = 1; i <= FreeCount; i++)
+            {
+                <section class="mf-pos-card free">
+                    <h3>@L[$"pos.free{i}T"]</h3>
+                    <p>@L[$"pos.free{i}B"]</p>
+                </section>
+            }
+        </div>
+    </section>
+
+    <section class="mf-pos-cmp" id="compare">
+        <h2>@L["pos.cmpTitle"]</h2>
+        <div class="mf-pos-table">
+            <table>
+                <thead>
+                    <tr><th>@L["pos.cmpFeature"]</th><th>@L["pos.cmpPaid"]</th><th class="us">@L["pos.cmpUs"]</th></tr>
+                </thead>
+                <tbody>
+                    @for (var i = 1; i <= CmpCount; i++)
+                    {
+                        <tr><th>@L[$"pos.cmp{i}"]</th><td>@L[$"pos.cmp{i}a"]</td><td class="us">@L[$"pos.cmp{i}b"]</td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="mf-pos-price" id="pricing">
+        <h2>@L["pos.priceTitle"]</h2>
+        <p>@L["pos.priceBody"]</p>
+        <p class="cta"><a class="go" href="https://partner.orderorange.com/register">@L["pos.start"]</a></p>
+    </section>
+
+    <section class="mf-pos-who">
+        <div><h2>@L["pos.whoTitle"]</h2><p>@L["pos.whoBody"]</p></div>
+        <div><h2>@L["pos.whereTitle"]</h2><p>@L["pos.whereBody"]</p></div>
+    </section>
+
+    <section class="mf-pos-faq" id="faq">
+        <h2>@L["pos.faqTitle"]</h2>
+        @for (var i = 1; i <= FaqCount; i++)
+        {
+            <details @open="@(i == 1)"><summary>@L[$"pos.q{i}"]</summary><p>@L[$"pos.a{i}"]</p></details>
+        }
+    </section>
+
+    <section class="mf-pos-also">
+        <h2>@L["pos.alsoTitle"]</h2>
+        <p>@L["pos.alsoBody"]</p>
+        <p class="cta"><a class="ghost" href="@SeoSlugs.Hub">@L["browse.hubH1"]</a></p>
+    </section>
+</div>
+
+<footer class="mf-pos-footer">
+    <div class="mf-pos-footer-in">
+        <div class="col brand">
+            <div class="name"><img src="/logo.svg?v=4" alt="" class="logo">Order<b>Orange</b> POS</div>
+            <p>@L["pos.footerTag"]</p>
+        </div>
+        <div class="col">
+            <h4>@L["pos.footerProduct"]</h4>
+            <a href="#screens">@L["pos.nav.screens"]</a>
+            <a href="#features">@L["pos.nav.features"]</a>
+            <a href="#pricing">@L["pos.priceTitle"]</a>
+            <a href="#faq">@L["pos.nav.faq"]</a>
+        </div>
+        <div class="col">
+            <h4>@L["pos.footerStart"]</h4>
+            <a href="https://partner.orderorange.com/register">@L["pos.start"]</a>
+            <a href="https://partner.orderorange.com/">@L["pos.signIn"]</a>
+            <a href="https://orderorange.com/guide">@L["pos.nav.guide"]</a>
+            <a href="https://partner.orderorange.com/api.html">@L["pos.apiT"]</a>
+        </div>
+        <div class="col">
+            <h4>@L["pos.footerMore"]</h4>
+            <a href="/">@L["browse.hubH1"]</a>
+            <a href="https://www.instagram.com/orderorange.blog" rel="noopener">Instagram</a>
+            <a href="mailto:info@orderorange.com">info@orderorange.com</a>
+        </div>
+    </div>
+    <div class="mf-pos-footer-end">© @DateTime.Now.Year OrderOrange · @L["pos.free"]</div>
+</footer>
+
+@code {
+    /// <summary>The feature blocks, in order. Here rather than in the markup so the copy keys,
+    /// the page and the FAQ in the head cannot drift apart.</summary>
+    internal static readonly string[] Blocks =
+    [
+        "till", "tables", "kds", "menu", "webmenu", "printing", "stock", "purchasing",
+        "staff", "customers", "reports", "invoices", "online", "branches", "api", "global",
+    ];
+
+    /// <summary>What "free" covers (pos.free1T…), the free-vs-paid rows (pos.cmp1…) and the FAQ (pos.q1…).</summary>
+    /// <summary>Screens from the partner guide (content-hashed frames served under /guide/), with their caption keys.</summary>
+    internal static readonly (string File, string Key)[] Shots =
+    [
+        ("7942cb562979", "shot1"), ("57da40f1f6a3", "shot2"), ("5cce47990e93", "shot3"), ("503baef465d3", "shot4"), ("96125bebe3d1", "shot5"), ("6efb78a53b61", "shot6"), ("d3f9ac165755", "shot7"), ("29673e715596", "shot8")
+    ];
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) { try { await JS.InvokeVoidAsync("mfSlider.init", "pos-slider"); } catch { /* prerender: no JS yet */ } }
+    }
+
+    internal const int FreeCount = 8;
+    internal const int CmpCount = 8;
+    internal const int FaqCount = 12;
+}

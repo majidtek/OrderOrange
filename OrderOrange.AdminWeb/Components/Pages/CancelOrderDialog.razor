@@ -1,0 +1,23 @@
+@inject LanguageService L
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            Cancelling @OrderNumber notifies everyone through the order timeline. Give a reason
+            the customer and restaurant will understand.
+        </MudText>
+        <MudTextField Margin="Margin.Dense" @bind-Value="_reason" Label="@L["admin.reason"]" Variant="Variant.Outlined" Lines="2" Immediate="true"
+                      Placeholder="@L["admin.cancelPh"]" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@string.IsNullOrWhiteSpace(_reason)"
+                   OnClick="@(() => Dialog.Close(DialogResult.Ok(_reason)))">@L["admin.cancelOrder"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string OrderNumber { get; set; } = "";
+
+    private string _reason = "";
+}

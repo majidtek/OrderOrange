@@ -1,0 +1,55 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+
+@* Rewriting who a user IS: name, the email they sign in with, phone. The password
+   has its own dialog (the key icon) — identity and secrets change separately. *@
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="@L["login.fullname"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" MaxLength="80" Class="mb-3" />
+        <MudTextField @bind-Value="_email" Label="@L["common.email"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" MaxLength="150" Class="mb-3 mf-ltr"
+                      HelperText="@L["admin.emailIsLogin"]" />
+        <MudTextField @bind-Value="_phone" Label="@L["common.phone"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" MaxLength="20" Class="mf-ltr" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="Save">
+            @if (_busy) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" /> }
+            @L["common.save"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public UserDto User { get; set; } = null!;
+
+    private string _name = "";
+    private string _email = "";
+    private string _phone = "";
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        _name = User.FullName;
+        _email = User.Email;
+        _phone = User.Phone;
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.AdminUpdateUserAsync(User.Id,
+                new AdminUpdateUserRequest(_name.Trim(), _email.Trim(), _phone.Trim()));
+            if (!ok) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally { _busy = false; }
+    }
+}

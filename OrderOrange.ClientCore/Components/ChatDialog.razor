@@ -1,0 +1,26 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+
+@* Fullscreen chat: its own modern gradient header with a back button — no dialog chrome. *@
+
+<MudDialog ContentClass="pa-0">
+    <DialogContent>
+        <div class="mf-chat-topbar">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Style="color: #fff;"
+                           OnClick="@(() => Dialog.Cancel())" />
+            <div class="flex-grow-1" style="min-width: 0;">
+                <MudText Typo="Typo.subtitle1" Style="color: #fff; font-weight: 700; line-height: 1.1;">💬 @(string.IsNullOrEmpty(Title) ? Lang["chat.orderChat"] : Title)</MudText>
+                <MudText Typo="Typo.caption" Style="color: rgba(255,255,255,.85);">OrderOrange</MudText>
+            </div>
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Style="color: #fff;"
+                           OnClick="@(() => Dialog.Cancel())" />
+        </div>
+        <ChatPanel OrderId="OrderId" FullScreen="true" />
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public int OrderId { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+}

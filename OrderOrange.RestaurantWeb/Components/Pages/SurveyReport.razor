@@ -1,0 +1,134 @@
+@page "/surveys/report"
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+
+@* The reading side of surveys, in the Reports family: pick a survey, see every
+   question as a bar per answer, plus the free-text comments underneath. The export
+   button hands the same rows to Excel and to paper like every other report. *@
+
+<PageTitle>Partner — @L["svr.title"]</PageTitle>
+
+<PageHeader Title="@L["svr.title"]" Subtitle="@L["svr.sub"]">
+    <Actions>
+        @if (_current is not null)
+        {
+            <ReportExport Title="@($"{L["svr.title"]} — {_current.Title}")" Subtitle="@L["svr.sub"]"
+                          RangeLabel="@string.Format(L["sv.responses"], _current.Responses)"
+                          Columns="@ExportColumns" Fetch="ExportRows" />
+        }
+    </Actions>
+</PageHeader>
+
+@if (_surveys is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_surveys.Count == 0)
+{
+    <EmptyState Emoji="📝" Title="@L["svr.none"]" Subtitle="@L["svr.noneSub"]" />
+}
+else
+{
+    <div class="svr-pick">
+        <MudSelect T="string" Value="_selectedId" ValueChanged="SelectAsync" Label="@L["svr.pick"]"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
+            @foreach (var s in _surveys)
+            {
+                <MudSelectItem T="string" Value="@s.Id">@s.Title · @string.Format(L["sv.responses"], s.ResponseCount)</MudSelectItem>
+            }
+        </MudSelect>
+    </div>
+
+    @if (_current is null)
+    {
+        <Loader />
+    }
+    else if (_current.Responses == 0)
+    {
+        <EmptyState Emoji="⏳" Title="@L["svr.noAnswers"]" />
+    }
+    else
+    {
+        <div class="svr-grid">
+            @foreach (var q in _current.Questions)
+            {
+                var total = Math.Max(1, q.Counts.Sum());
+                <div class="svr-card">
+                    <b>@q.Text</b>
+                    <small>@string.Format(L["sv.responses"], q.Counts.Sum())@(q.Multi ? $" · {L["sv.multi"]}" : "")</small>
+                    @for (var i = 0; i < q.Options.Count; i++)
+                    {
+                        var n = i < q.Counts.Count ? q.Counts[i] : 0;
+                        var pct = (int)Math.Round(n * 100.0 / total);
+                        <div class="bar">
+                            <span class="lb">@q.Options[i]</span>
+                            <span class="track"><span class="fill" style="width:@(pct)%"></span></span>
+                            <span class="num">@n · @(pct)%</span>
+                        </div>
+                    }
+                </div>
+            }
+            @if (_current.Comments.Count > 0)
+            {
+                <div class="svr-card wide">
+                    <b>@L["svr.comments"]</b>
+                    @foreach (var c in _current.Comments)
+                    {
+                        <div class="cmt"><small>@c.At.ToString("dd MMM HH:mm")@(string.IsNullOrEmpty(c.Source) ? "" : $" · {c.Source}")</small><span>@c.Text</span></div>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "id")] public string? Id { get; set; }
+
+    private List<SurveyDto>? _surveys;
+    private string _selectedId = "";
+    private SurveyResultsDto? _current;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _surveys = await Api.GetSurveysAsync() ?? [];
+        if (_surveys.Count == 0) return;
+        var first = _surveys.FirstOrDefault(s => s.Id == Id) ?? _surveys[0];
+        await SelectAsync(first.Id);
+    }
+
+    private async Task SelectAsync(string id)
+    {
+        _selectedId = id;
+        _current = null;
+        _current = await Api.GetSurveyResultsAsync(id);
+    }
+
+    // ---------- export: one row per answer option ----------
+    private List<ExportColumnDto> ExportColumns =>
+    [
+        new(L["svr.question"], Width: 40),
+        new(L["svr.option"], Width: 28),
+        new(L["svr.count"], Numeric: true, Width: 10),
+        new(L["svr.share"], Numeric: true, Width: 10),
+    ];
+
+    private Task<List<List<string>>> ExportRows()
+    {
+        var rows = new List<List<string>>();
+        if (_current is null) return Task.FromResult(rows);
+        foreach (var q in _current.Questions)
+        {
+            var total = Math.Max(1, q.Counts.Sum());
+            for (var i = 0; i < q.Options.Count; i++)
+            {
+                var n = i < q.Counts.Count ? q.Counts[i] : 0;
+                rows.Add([q.Text, q.Options[i], n.ToString(), $"{Math.Round(n * 100.0 / total)}%"]);
+            }
+        }
+        foreach (var c in _current.Comments)
+            rows.Add([L["svr.comments"], c.Text, "", c.At.ToString("yyyy-MM-dd HH:mm")]);
+        return Task.FromResult(rows);
+    }
+}

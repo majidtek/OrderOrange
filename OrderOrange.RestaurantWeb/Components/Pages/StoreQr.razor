@@ -1,0 +1,154 @@
+@page "/qr"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IConfiguration Config
+@inject IJSRuntime JS
+
+@* The store's own QR code: stick it on the counter, the window or a table and a customer
+   scans straight through to this shop's page in the app. Printed from the browser rather
+   than downloaded as a file, because the shop wants paper, not a PNG in a folder. *@
+
+<div class="no-print">
+    <MudText Typo="Typo.h5" Style="font-weight: 800;" Class="mb-1">@L["qr.title"]</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@L["qr.subtitle"]</MudText>
+</div>
+
+@if (_store is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+}
+else
+{
+    <div class="qr-layout">
+        @* ---------- Controls ---------- *@
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl no-print qr-controls">
+            <MudText Typo="Typo.subtitle2" Style="font-weight: 800;" Class="mb-3">@L["qr.style"]</MudText>
+
+            <MudRadioGroup T="string" @bind-Value="_layout" Class="mb-4">
+                <MudRadio T="string" Value="@("poster")" Color="Color.Primary" Dense="true">@L["qr.poster"]</MudRadio>
+                <MudRadio T="string" Value="@("tent")" Color="Color.Primary" Dense="true">@L["qr.tent"]</MudRadio>
+                <MudRadio T="string" Value="@("sticker")" Color="Color.Primary" Dense="true">@L["qr.sticker"]</MudRadio>
+            </MudRadioGroup>
+
+            <MudTextField @bind-Value="_headline" Label="@L["qr.headline"]" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Class="mb-3" Immediate="true" MaxLength="40" />
+            <MudTextField @bind-Value="_subline" Label="@L["qr.subline"]" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Class="mb-4" Immediate="true" MaxLength="60" />
+
+            @* The printed square's size, in the owner's hands. *@
+            <MudStack Row="true" Spacing="2" Class="mb-4">
+                <MudNumericField @bind-Value="_qrWidth" Label="@L["qr.width"]" Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" Min="60" Max="1200" />
+                <MudNumericField @bind-Value="_qrHeight" Label="@L["qr.height"]" Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" Min="60" Max="1200" />
+            </MudStack>
+
+            <MudDivider Class="my-3" />
+
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@L["qr.linkIs"]</MudText>
+            <div class="qr-link mf-ltr mf-ascii mb-3">@StoreUrl</div>
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mb-2"
+                       StartIcon="@Icons.Material.Filled.Print" OnClick="@(() => JS.InvokeVoidAsync("print"))">
+                @L["qr.print"]
+            </MudButton>
+            <MudButton Variant="Variant.Text" FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyLink">
+                @(_copied ? L["qr.copied"] : L["qr.copyLink"])
+            </MudButton>
+        </MudPaper>
+
+        @* ---------- What actually prints ---------- *@
+        <div class="qr-stage">
+            <div class="qr-sheet qr-@_layout">
+                <div class="qr-brand">
+                    <span class="logo">@_store.LogoEmoji</span>
+                    <span class="name">@_store.Name</span>
+                </div>
+
+                <div class="qr-head">@Headline</div>
+
+                @if (_qr is not null)
+                {
+                    <img class="qr-img" src="@_qr" alt="@L["qr.title"]"
+                         style="width: @(_qrWidth)px; height: @(_qrHeight)px;" />
+                }
+                else
+                {
+                    <div class="qr-img qr-fail">@L["qr.failed"]</div>
+                }
+
+                <div class="qr-sub">@Subline</div>
+                <div class="qr-url mf-ltr mf-ascii">@ShortUrl</div>
+                @* The shop's number, printed under the link: a customer whose camera will
+                   not scan can type the id into search, and support can find the shop from
+                   a photo of the poster alone. *@
+                <div class="qr-id mf-ltr mf-ascii">@L["qr.storeId"]: @_store.Id</div>
+                <div class="qr-foot">OrderOrange</div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MyRestaurantDto? _store;
+    private string? _qr;
+    private string _layout = "poster";
+    private int _qrWidth = 220;
+    private int _qrHeight = 220;
+    private string _headline = "";
+    private string _subline = "";
+    private bool _copied;
+
+    private string ClientUrl => (Config["ClientUrl"] ?? "https://orderorange.com").TrimEnd('/');
+
+    /// <summary>
+    /// Exactly what the camera opens — the shop's own page in the customer app. A shop
+    /// that has claimed a handle gets the short form (orderorange.com/mazagh); the id form
+    /// keeps working for everyone else and for every QR already printed.
+    /// </summary>
+    private string StoreUrl => string.IsNullOrWhiteSpace(_store?.Slug)
+        ? $"{ClientUrl}/?id={_store?.Id}"
+        : $"{ClientUrl}/?id={_store.Slug}";
+
+    /// <summary>The link without its scheme: printed for people who would rather type it.</summary>
+    private string ShortUrl => StoreUrl.Replace("https://", "").Replace("http://", "");
+
+    private string Headline => string.IsNullOrWhiteSpace(_headline) ? L["qr.defaultHead"] : _headline;
+    private string Subline => string.IsNullOrWhiteSpace(_subline) ? L["qr.defaultSub"] : _subline;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _store = await Api.GetMyRestaurantAsync();
+        if (_store is not null) Render();
+    }
+
+    /// <summary>
+    /// Generated big: this is going on paper, possibly on a wall, and a QR that is
+    /// upscaled from a small bitmap scans badly. The page shrinks it with CSS instead.
+    /// </summary>
+    private void Render()
+    {
+        try
+        {
+            using var generator = new QRCoder.QRCodeGenerator();
+            // Q correction survives a scuffed or partly covered print; M would not.
+            using var data = generator.CreateQrCode(StoreUrl, QRCoder.QRCodeGenerator.ECCLevel.Q);
+            var png = new QRCoder.PngByteQRCode(data).GetGraphic(12);
+            _qr = "data:image/png;base64," + Convert.ToBase64String(png);
+        }
+        catch
+        {
+            _qr = null;
+        }
+    }
+
+    private async Task CopyLink()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", StoreUrl);
+        _copied = true;
+        StateHasChanged();
+        await Task.Delay(1600);
+        _copied = false;
+    }
+}

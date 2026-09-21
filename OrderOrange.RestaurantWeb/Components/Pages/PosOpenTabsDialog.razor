@@ -1,0 +1,133 @@
+@inject ApiClient Api
+@inject OrderOrange.RestaurantWeb.Services.ReceiptPrinter Printer
+@inject LanguageService L
+@inject ISnackbar Snackbar
+
+@* Every bill still running in the room. Tap one and it unfolds: the lines, the
+   totals, and the bill can be settled right here — or the till can jump onto it. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">🧾 @L["pos.openTabs"]</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_tabs is null)
+        {
+            <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-6" />
+        }
+        else if (_tabs.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="my-6">
+                @L["pos.noOpenTabs"]
+            </MudText>
+        }
+        else
+        {
+            <div class="pos-tabs-list">
+                @foreach (var t in _tabs.OrderBy(t => t.OpenedAt))
+                {
+                    var tab = t;
+                    var open = tab.Id == _expandedId;
+                    <div class="pos-tab-card @(open ? "open" : "")">
+                        <button type="button" class="pos-tab-row" @onclick="@(() => _expandedId = open ? null : tab.Id)">
+                            <span class="no">@tab.Id</span>
+                            <span class="tbl">@(tab.TableId > 0 ? $"🍽️ {tab.TableName}" : "🥡")</span>
+                            <span class="who">👤 @(tab.CustomerName ?? tab.GuestName)</span>
+                            <span class="cnt">@tab.Lines.Sum(l => l.Quantity) ×</span>
+                            <span class="dur">⏱ @Tables.Duration(tab.OpenedAt, L)</span>
+                            <b class="sum mf-ltr">@Fmt.Rial(tab.Total)</b>
+                        </button>
+
+                        @if (open)
+                        {
+                            <div class="pos-tab-detail">
+                                @if (tab.Lines.Count == 0)
+                                {
+                                    <div class="pos-empty">@L["tab.noLines"]</div>
+                                }
+                                @foreach (var line in tab.Lines)
+                                {
+                                    <div class="pos-line">
+                                        <span class="q">@(line.Quantity)×</span>
+                                        <span class="nm">@line.Name</span>
+                                        <span class="pr mf-ltr">@Fmt.Rial(line.UnitPrice * line.Quantity)</span>
+                                    </div>
+                                }
+
+                                <div class="pos-totals mt-2">
+                                    <div><span>@L["cust.itemsTotal"]</span><b class="mf-ltr">@Fmt.Rial(tab.Subtotal)</b></div>
+                                    @if (tab.ServiceFee > 0)
+                                    {
+                                        <div><span>@L["common.serviceFee"]</span><b class="mf-ltr">@Fmt.Rial(tab.ServiceFee)</b></div>
+                                    }
+                                    @if (tab.TaxAmount > 0)
+                                    {
+                                        <div><span>@L["common.tax"] (@tab.TaxPercent.ToString("0.#")%)</span><b class="mf-ltr">@Fmt.Rial(tab.TaxAmount)</b></div>
+                                    }
+                                    <div class="grand"><span>@L["tab.total"]</span><b class="mf-ltr">@Fmt.Rial(tab.Total)</b></div>
+                                </div>
+
+                                @if (tab.Lines.Count > 0)
+                                {
+                                    <div class="pos-pay-mode mt-2">
+                                        <button type="button" class="@(_payment == PaymentMethod.CashOnDelivery ? "on" : "")"
+                                                @onclick="@(() => _payment = PaymentMethod.CashOnDelivery)">💵 @L["pos.cash"]</button>
+                                        <button type="button" class="@(_payment == PaymentMethod.CardOnDelivery ? "on" : "")"
+                                                @onclick="@(() => _payment = PaymentMethod.CardOnDelivery)">💳 @L["pos.card"]</button>
+                                    </div>
+                                }
+
+                                <div class="d-flex mt-2" style="gap: 8px;">
+                                    @if (tab.Lines.Count > 0)
+                                    {
+                                        <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true" Size="Size.Small"
+                                                   StartIcon="@Icons.Material.Filled.Paid" Disabled="_busy"
+                                                   OnClick="@(() => CloseTab(tab))">
+                                            @L["tab.closePay"] · @Fmt.Rial(tab.Total)
+                                        </MudButton>
+                                    }
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.PointOfSale"
+                                               OnClick="@(() => Dialog.Close(DialogResult.Ok(tab)))">
+                                        @L["pos.openInTill"]
+                                    </MudButton>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private List<StoreTabDto>? _tabs;
+    private int? _expandedId;
+    private PaymentMethod _payment = PaymentMethod.CashOnDelivery;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() =>
+        _tabs = await Api.GetTabsAsync() ?? [];
+
+    /// <summary>Settle the bill from the list itself — the table frees, the row leaves.</summary>
+    private async Task CloseTab(StoreTabDto tab)
+    {
+        _busy = true;
+        try
+        {
+            var (order, error) = await Api.CloseTabAsync(tab.Id, new CloseTabRequest(_payment, MarkPaid: true));
+            if (order is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+            Snackbar.Add(string.Format(L["tab.closed"], order.Number), Severity.Success);
+            _tabs!.RemoveAll(t => t.Id == tab.Id);
+            await Printer.PrintAsync(order);
+            _expandedId = null;
+        }
+        finally { _busy = false; }
+    }
+}

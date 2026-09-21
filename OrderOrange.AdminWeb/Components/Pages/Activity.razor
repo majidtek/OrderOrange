@@ -1,0 +1,328 @@
+﻿@page "/activity"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Admin — Activity</PageTitle>
+
+@if (_presence is null || _feed is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <AutoRefresh OnRefresh="Reload" Seconds="15" />
+
+    @* ---------- Mission-control hero ---------- *@
+    <div class="mf-act-hero">
+        <div class="mf-act-hero-glow"></div>
+        <div class="d-flex align-center" style="gap: 12px; position: relative;">
+            <span class="mf-live-badge"><span class="mf-live-dot"></span> @L["vis.live"]</span>
+            <div>
+                <MudText Typo="Typo.h5" Style="color:#fff; font-weight:800;">@L["nav.activity"]</MudText>
+                <MudText Typo="Typo.body2" Style="color:rgba(255,255,255,.75);">@L["admin.activitySub"]</MudText>
+            </div>
+        </div>
+        <div class="mf-act-stats">
+            <div class="mf-act-stat">
+                <div class="mf-act-stat-icon" style="background: rgba(76,175,80,.22); color:#7CFC9B;">
+                    <MudIcon Icon="@Icons.Material.Filled.Sensors" />
+                </div>
+                <div>
+                    <div class="mf-act-stat-num">@OnlineUsers.Count</div>
+                    <div class="mf-act-stat-label">@L["admin.onlineNow"]</div>
+                </div>
+            </div>
+            <div class="mf-act-stat">
+                <div class="mf-act-stat-icon" style="background: rgba(255,167,38,.22); color:#FFC87A;">
+                    <MudIcon Icon="@Icons.Material.Filled.TouchApp" />
+                </div>
+                <div>
+                    <div class="mf-act-stat-num">@TotalVisitsToday</div>
+                    <div class="mf-act-stat-label">@L["admin.visitsToday"]</div>
+                </div>
+            </div>
+            <div class="mf-act-stat">
+                <div class="mf-act-stat-icon" style="background: rgba(66,165,245,.22); color:#8EC9FF;">
+                    <MudIcon Icon="@Icons.Material.Filled.Bolt" />
+                </div>
+                <div>
+                    <div class="mf-act-stat-num">@_feed.Count</div>
+                    <div class="mf-act-stat-label">@L["admin.feed"]</div>
+                </div>
+            </div>
+            <div class="mf-act-stat">
+                <div class="mf-act-stat-icon" style="background: rgba(236,64,122,.22); color:#FF9EC0;">
+                    <MudIcon Icon="@Icons.Material.Filled.Groups" />
+                </div>
+                <div>
+                    <div class="mf-act-stat-num">@_presence.Count</div>
+                    <div class="mf-act-stat-label">@L["admin.lastSeen"]</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ---------- Online now ---------- *@
+    @if (OnlineUsers.Count > 0)
+    {
+        <div class="mf-hscroll mb-4 mt-4">
+            @foreach (var user in OnlineUsers)
+            {
+                <div class="mf-presence-card mf-presence-live">
+                    <div class="mf-presence-ring">
+                        <div class="mf-presence-avatar2" style="@AvatarBg(user.Role)">
+                            @user.FullName[..1]
+                        </div>
+                        <span class="mf-presence-dot"></span>
+                    </div>
+                    <MudText Typo="Typo.subtitle2" Style="line-height: 1.1; font-weight: 700;">@user.FullName</MudText>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@RoleColor(user.Role)">
+                        @L[$"role.{user.Role}"]
+                    </MudChip>
+                    <span class="mf-presence-page">@(user.LastPage ?? "/")</span>
+                </div>
+            }
+        </div>
+    }
+
+    @* ---------- Filter toolbar: date range, role, app, search ---------- *@
+    <MudPaper Elevation="0" Outlined="true" Class="@($"pa-3 rounded-xl mb-3 {(OnlineUsers.Count == 0 ? "mt-4" : "")}")">
+        <div class="d-flex align-center flex-wrap" style="gap: 12px;">
+            <div style="max-width: 260px;">
+                <MfDateRangePicker @bind-DateRange="_range" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                Label="@L["driver.date"]" Clearable="true" @bind-DateRange:after="ApplyFilters" />
+            </div>
+            <MudSelect T="UserRole?" Value="_role" ValueChanged="OnRoleChanged" Label="@L["admin.role"]"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="max-width: 190px;">
+                <MudSelectItem T="UserRole?" Value="@(UserRole.Customer)">@L["role.Customer"]</MudSelectItem>
+                <MudSelectItem T="UserRole?" Value="@(UserRole.RestaurantOwner)">@L["role.RestaurantOwner"]</MudSelectItem>
+                <MudSelectItem T="UserRole?" Value="@(UserRole.Driver)">@L["role.Driver"]</MudSelectItem>
+                <MudSelectItem T="UserRole?" Value="@(UserRole.Administrator)">@L["role.Administrator"]</MudSelectItem>
+            </MudSelect>
+            <MudChipSet T="string" SelectionMode="SelectionMode.SingleSelection" CheckMark="false"
+                        SelectedValue="_app" SelectedValueChanged="OnAppChanged">
+                <MudChip T="string" Value="@("")" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["admin.all"]</MudChip>
+                @foreach (var app in KnownApps)
+                {
+                    <MudChip T="string" Value="@app" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@AppEmoji(app) @app</MudChip>
+                }
+            </MudChipSet>
+            <MudTextField T="string" @bind-Value="_searchText" Placeholder="@($"{L["common.search"]}…")"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="min-width: 200px;"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                          Immediate="true" DebounceInterval="450" OnDebounceIntervalElapsed="ApplyFilters" />
+        </div>
+        @* hourly histogram of the loaded feed *@
+        <div class="mf-hourbar-row mt-3">
+            @for (var h = 0; h < 24; h++)
+            {
+                var count = HourHistogram[h];
+                <div class="mf-hourbar" title="@($"{h:00}:00 — {count}")">
+                    <div class="mf-hourbar-fill" style="height: @(HourBarHeight(count))%;"></div>
+                    <span class="mf-hourbar-label">@(h % 6 == 0 ? h.ToString("00") : "")</span>
+                </div>
+            }
+        </div>
+    </MudPaper>
+
+    <MudGrid Spacing="3">
+        @* ---------- Live feed as a timeline ---------- *@
+        <MudItem xs="12" md="7">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl">
+                <div class="d-flex align-center mb-4" style="gap: 8px;">
+                    <MudIcon Icon="@Icons.Material.Filled.Timeline" Color="Color.Primary" />
+                    <MudText Typo="Typo.h6">@L["admin.feed"]</MudText>
+                    <MudSpacer />
+                    <span class="mf-live-badge-sm"><span class="mf-live-dot"></span> 15s</span>
+                </div>
+                <div class="mf-timeline">
+                    @foreach (var (entry, i) in _feed.Select((e, i) => (e, i)))
+                    {
+                        <div class="mf-timeline-row @(i == 0 ? "newest" : "")">
+                            <div class="mf-timeline-node" style="@AvatarBg(entry.Role)">@AppEmoji(entry.App)</div>
+                            <div class="mf-timeline-card">
+                                <div class="d-flex align-center" style="gap: 8px; min-width: 0;">
+                                    <MudText Typo="Typo.body2" Style="font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        @entry.UserName
+                                    </MudText>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@RoleColor(entry.Role)">@entry.App</MudChip>
+                                    <MudSpacer />
+                                    <span class="mf-timeline-time">@Fmt.TimeAgo(entry.At - _skew, L)</span>
+                                </div>
+                                <span class="mf-presence-page mt-1">@entry.Page</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <InfiniteScroll OnLoadMore="LoadMoreFeed" HasMore="_hasMoreFeed" />
+            </MudPaper>
+        </MudItem>
+
+        @* ---------- Last seen with status + visit meter ---------- *@
+        <MudItem xs="12" md="5">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl">
+                <div class="d-flex align-center mb-4" style="gap: 8px;">
+                    <MudIcon Icon="@Icons.Material.Filled.Visibility" Color="Color.Primary" />
+                    <MudText Typo="Typo.h6">@L["admin.lastSeen"]</MudText>
+                </div>
+                @foreach (var user in _presence.Take(25))
+                {
+                    <div class="mf-seen-row">
+                        <div class="mf-seen-avatar" style="@AvatarBg(user.Role)">
+                            @user.FullName[..1]
+                            <span class="mf-seen-status @StatusClass(user)"></span>
+                        </div>
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                @user.FullName
+                            </MudText>
+                            <div class="mf-seen-meter">
+                                <div class="mf-seen-meter-fill" style="width: @(MeterWidth(user))%;"></div>
+                            </div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @L[$"role.{user.Role}"] · @user.VisitsToday @L["admin.visitsToday"]
+                                @if (!string.IsNullOrEmpty(user.LastIp)) { <span> · @user.LastIp</span> }
+                                @if (!string.IsNullOrEmpty(user.BeatApp)) { <span> · @user.BeatApp</span> }
+                            </MudText>
+                            @if (IsAppOpen(user))
+                            {
+                                <MudText Typo="Typo.caption" Style="color: #1E88E5;">
+                                    @L["admin.appOpen"]@(user.LastVisitAt is null ? "" : " · " + L["admin.lastVisit"] + " " + Fmt.TimeAgo(user.LastVisitAt.Value - _skew, L))
+                                </MudText>
+                            }
+                        </div>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                                 Color="@(IsOnline(user) ? Color.Success : IsAppOpen(user) ? Color.Info : IsRecent(user) ? Color.Warning : Color.Default)">
+                            @(user.LastSeenAt is null ? "—" : IsOnline(user) ? L["admin.activeNow"] : IsAppOpen(user) ? L["admin.appOpenShort"] : Fmt.TimeAgo(user.LastSeenAt.Value - _skew, L))
+                        </MudChip>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private const int FeedPage = 40;
+    private static readonly string[] KnownApps = ["Customer", "Partner", "Delivery", "Admin"];
+
+    private List<UserPresenceDto>? _presence;
+    private List<ActivityDto>? _feed;
+    private bool _hasMoreFeed = true;
+
+    // Filters — the range is capped at one month so queries stay instant.
+    private DateRange? _range = new(DateTime.Today.AddDays(-29), DateTime.Today);
+    private UserRole? _role;
+    private string _app = "";
+    private string _searchText = "";
+
+    private void ClampRangeToOneMonth()
+    {
+        if (_range?.Start is not { } start || _range.End is not { } end) return;
+        if (end > start.AddMonths(1)) _range = new DateRange(start, start.AddMonths(1));
+    }
+
+    private int[] HourHistogram
+    {
+        get
+        {
+            var bars = new int[24];
+            foreach (var entry in _feed ?? []) bars[entry.At.Hour]++;
+            return bars;
+        }
+    }
+
+    private int HourBarHeight(int count)
+    {
+        var max = Math.Max(1, HourHistogram.Max());
+        return count == 0 ? 4 : Math.Clamp((int)Math.Round(100.0 * count / max), 10, 100);
+    }
+
+    private Task OnRoleChanged(UserRole? role) { _role = role; return ApplyFilters(); }
+    private Task OnAppChanged(string? app) { _app = app ?? ""; return ApplyFilters(); }
+
+    private async Task ApplyFilters()
+    {
+        ClampRangeToOneMonth();
+        _feed = null;
+        _feed = await FetchFeed(0, FeedPage);
+        _hasMoreFeed = _feed.Count >= FeedPage;
+    }
+
+    private async Task<List<ActivityDto>> FetchFeed(int skip, int take) =>
+        await Api.GetActivityAsync(skip, take, _range?.Start, _range?.End, _role,
+            string.IsNullOrWhiteSpace(_app) ? null : _app,
+            string.IsNullOrWhiteSpace(_searchText) ? null : _searchText) ?? [];
+
+    private List<UserPresenceDto> OnlineUsers => (_presence ?? []).Where(IsOnline).ToList();
+    private int TotalVisitsToday => (_presence ?? []).Sum(p => p.VisitsToday);
+    private int MaxVisits => Math.Max(1, (_presence ?? []).Take(25).DefaultIfEmpty().Max(p => p?.VisitsToday ?? 0));
+
+    private int MeterWidth(UserPresenceDto user) =>
+        Math.Clamp((int)Math.Round(100.0 * user.VisitsToday / MaxVisits), 4, 100);
+
+    // Server clock minus ours. The API stamps LastSeenAt in its own local time and this app
+    // runs in WebAssembly, whose DateTime.Now is UTC — four hours apart in Oman, which made
+    // everyone look "online" for four hours after they left.
+    private TimeSpan _skew;
+    private DateTime Now => DateTime.Now + _skew;
+
+    // Active = a real page view in the last three minutes. A heartbeat alone (any API call —
+    // a tab left open polls every few seconds) only proves the app is open somewhere.
+    private bool IsOnline(UserPresenceDto user) =>
+        user.LastVisitAt is not null && (Now - user.LastVisitAt.Value).TotalMinutes < 3;
+
+    private bool IsAppOpen(UserPresenceDto user) =>
+        !IsOnline(user) && user.LastSeenAt is not null && (Now - user.LastSeenAt.Value).TotalMinutes < 3;
+
+    private bool IsRecent(UserPresenceDto user) =>
+        user.LastSeenAt is not null && (Now - user.LastSeenAt.Value).TotalMinutes < 60;
+
+    private string StatusClass(UserPresenceDto user) =>
+        IsOnline(user) ? "online" : IsAppOpen(user) ? "open" : IsRecent(user) ? "recent" : "off";
+
+    private static Color RoleColor(UserRole role) => role switch
+    {
+        UserRole.Administrator => Color.Error,
+        UserRole.RestaurantOwner => Color.Warning,
+        UserRole.Driver => Color.Info,
+        _ => Color.Primary
+    };
+
+    private static string AvatarBg(UserRole role) => role switch
+    {
+        UserRole.Administrator => "background: linear-gradient(135deg, #E53935, #FF7043);",
+        UserRole.RestaurantOwner => "background: linear-gradient(135deg, #FB8C00, #FFC107);",
+        UserRole.Driver => "background: linear-gradient(135deg, #1E88E5, #4FC3F7);",
+        _ => "background: linear-gradient(135deg, #FF5A00, #FF9A5C);"
+    };
+
+    private static string AppEmoji(string app) => app.ToLowerInvariant() switch
+    {
+        var a when a.Contains("driver") || a.Contains("rider") || a.Contains("delivery") => "🛵",
+        var a when a.Contains("partner") || a.Contains("restaurant") => "🍳",
+        var a when a.Contains("admin") => "🛠️",
+        _ => "🍔"
+    };
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        _presence = await Api.GetPresenceAsync() ?? [];
+        var serverNow = _presence.Select(p => p.ServerNow).FirstOrDefault(t => t is not null);
+        if (serverNow is not null) _skew = serverNow.Value - DateTime.Now;
+        var take = Math.Min(100, Math.Max(FeedPage, _feed?.Count ?? FeedPage));
+        var feed = await FetchFeed(0, take);
+        _feed = feed;
+        _hasMoreFeed = feed.Count >= take;
+    }
+
+    private async Task LoadMoreFeed()
+    {
+        if (_feed is null) return;
+        var page = await FetchFeed(_feed.Count, FeedPage);
+        _feed.AddRange(page);
+        _hasMoreFeed = page.Count == FeedPage;
+    }
+}

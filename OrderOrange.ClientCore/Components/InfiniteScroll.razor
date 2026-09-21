@@ -1,0 +1,65 @@
+@namespace OrderOrange.ClientCore.Components
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Put this under a list: when it scrolls into view, OnLoadMore fires for the next page. *@
+
+<div @ref="_sentinel" style="min-height: 1px;"></div>
+@if (_loading)
+{
+    <div class="d-flex justify-center pa-4">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Small" />
+    </div>
+}
+else if (!HasMore && ShowEndMessage)
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center" Class="d-block pa-4">
+        — that's everything —
+    </MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public EventCallback OnLoadMore { get; set; }
+
+    /// <summary>False once the last page came back short — stops further loads.</summary>
+    [Parameter] public bool HasMore { get; set; } = true;
+    [Parameter] public bool ShowEndMessage { get; set; } = true;
+
+    private ElementReference _sentinel;
+    private DotNetObjectReference<InfiniteScroll>? _selfRef;
+    private bool _loading;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _selfRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("mfInfinite.observe", _sentinel, _selfRef);
+    }
+
+    [JSInvokable]
+    public async Task OnSentinelVisible()
+    {
+        if (_loading || !HasMore) return;
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            await OnLoadMore.InvokeAsync();
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("mfInfinite.unobserve", _sentinel);
+        }
+        catch { /* circuit already gone */ }
+        _selfRef?.Dispose();
+    }
+}

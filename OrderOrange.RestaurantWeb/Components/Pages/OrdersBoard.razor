@@ -1,0 +1,218 @@
+@page "/orders"
+@using OrderOrange.RestaurantWeb.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Partner — Live orders</PageTitle>
+
+<PageHeader Title="@L["nav.liveorders"]" Subtitle="@L["partner.liveSub"]" />
+
+@if (_board is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <AutoRefresh OnRefresh="Reload" Seconds="5" />
+
+    @* Two live lanes only: history moved to the daily report. *@
+    <div class="ob-toolbar">
+        <div class="ob-search">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+            <input type="text" placeholder="@L["partner.filterByCustomer"]"
+                   value="@_filter.Query" @oninput="OnSearchInput" />
+            @if (!string.IsNullOrWhiteSpace(_filter.Query))
+            {
+                <button type="button" class="ob-search-x" @onclick="@(() => SetQuery(null))">✕</button>
+            }
+        </div>
+    </div>
+
+    <MudTabs Elevation="0" ApplyEffectsToContainer="true" PanelClass="pt-3" Class="ob-tabs"
+             ActivePanelIndex="_tab" ActivePanelIndexChanged="OnTabChanged">
+        <MudTabPanel Text="@($"🔔 {L["partner.waitShort"]}")"
+                     BadgeData="@(Waiting.Count > 0 ? (object)Waiting.Count : null)" BadgeColor="Color.Error">
+            @if (Waiting.Count == 0)
+            {
+                <EmptyState Emoji="😌" Title="@L["partner.noLiveOrders"]" Subtitle="@L["partner.noLiveSub"]" />
+            }
+            else
+            {
+                @BoardTable(PageOf(Waiting))
+                @Pager(Waiting)
+            }
+        </MudTabPanel>
+        <MudTabPanel Text="@($"👨‍🍳 {L["partner.progShort"]}")"
+                     BadgeData="@(Progress.Count > 0 ? (object)Progress.Count : null)" BadgeColor="Color.Info">
+            @if (Progress.Count == 0)
+            {
+                <EmptyState Emoji="🧘" Title="@L["partner.noLiveOrders"]" Subtitle="@L["partner.noLiveSub"]" />
+            }
+            else
+            {
+                @BoardTable(PageOf(Progress))
+                @Pager(Progress)
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private const int BoardPageSize = 10;
+
+    private List<OrderDto>? _board;
+    private int _tab;
+    private int _boardPage;
+    private bool _selfDelivery;
+
+    // ── The two lanes — time alone decides the order inside each, newest first ──
+    private List<OrderDto> Waiting =>
+        _board!.Where(o => o.Status == OrderStatus.Pending && _filter.Matches(o))
+               .OrderByDescending(o => o.PlacedAt).ToList();
+    private List<OrderDto> Progress =>
+        _board!.Where(o => o.Status != OrderStatus.Pending && _filter.Matches(o))
+               .OrderByDescending(o => o.PlacedAt).ToList();
+
+    private int PagesOf(List<OrderDto> list) => Math.Max(1, (int)Math.Ceiling(list.Count / (double)BoardPageSize));
+    private int PageIndex(List<OrderDto> list) => Math.Clamp(_boardPage, 0, PagesOf(list) - 1);
+    private List<OrderDto> PageOf(List<OrderDto> list) =>
+        list.Skip(PageIndex(list) * BoardPageSize).Take(BoardPageSize).ToList();
+
+    private void OnTabChanged(int index) { _tab = index; _boardPage = 0; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Whether this shop drives its own orders decides what the "ready" column offers.
+        _selfDelivery = (await Api.GetMyRestaurantAsync())?.SelfDelivery ?? false;
+        await Reload();
+    }
+
+    private async Task Reload() => _board = await Api.GetRestaurantBoardAsync() ?? [];
+
+    // ── Search ──
+    private OrderFilter _filter = new();
+
+    private void OnSearchInput(ChangeEventArgs e) { _filter.Query = e.Value?.ToString(); _boardPage = 0; }
+    private void SetQuery(string? q) { _filter.Query = q; _boardPage = 0; }
+
+    private async Task Accept(OrderDto order) => await Do(Api.AcceptOrderAsync(order.Id), $"Accepted {order.Number} ✅");
+    private async Task StartPreparing(OrderDto order) => await Do(Api.StartPreparingAsync(order.Id), $"{order.Number} is being prepared ⏳");
+    private async Task MarkReady(OrderDto order) => await Do(Api.MarkReadyAsync(order.Id), $"{order.Number} is ready for pickup 🛍️");
+    private async Task MarkDelivered(OrderDto order) => await Do(Api.MarkSelfDeliveredAsync(order.Id), $"{order.Number} — {L["deliv.delivered"]} 🎉");
+
+    private async Task Reject(OrderDto order)
+    {
+        var parameters = new DialogParameters<RejectDialog> { { d => d.OrderNumber, order.Number } };
+        var dialog = await Dialogs.ShowAsync<RejectDialog>(L["partner.reject"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled != false || result.Data is not string reason) return;
+        await Do(Api.RejectOrderAsync(order.Id, reason), $"Rejected {order.Number}");
+    }
+
+    private async Task Do(Task<(bool ok, string? error)> action, string success)
+    {
+        var (ok, error) = await action;
+        if (ok) Snackbar.Add(success, Severity.Success);
+        else Snackbar.Add(error ?? L["common.wentWrong"], Severity.Error);
+        await Reload();
+    }
+
+    private RenderFragment Pager(List<OrderDto> list) => __builder =>
+    {
+        @if (PagesOf(list) > 1)
+        {
+            <Pager Page="PageIndex(list)" Pages="PagesOf(list)" PageChanged="@(p => _boardPage = p)" />
+        }
+    };
+
+    private RenderFragment<List<OrderDto>> BoardTable => items => __builder =>
+    {
+        <div class="ob-cards">
+            @foreach (var context in items)
+            {
+                <div class="ob-card st-@context.Status">
+                    <div class="obc-top">
+                        <div class="obc-id">
+                            <span class="obc-num">@context.Number</span>
+                            <span class="obc-time">@Fmt.TimeAgo(context.PlacedAt, L)</span>
+                        </div>
+                        <StatusChip Status="@context.Status" />
+                    </div>
+
+                    <div class="obc-tags">
+                        @if (context.TableName is not null) { <span class="ob-tag dine">🍽️ @context.TableName</span> }
+                        else if (context.OrderType == OrderType.Pickup) { <span class="ob-tag pick">🏪 @L["order.pickup"]</span> }
+                        else { <span class="ob-tag del">🛵 @L["order.delivery"]</span> }
+                        @if (context.ScheduledFor is { } scheduled) { <span class="ob-tag sched">🗓️ @scheduled.ToString("dd MMM")</span> }
+                    </div>
+
+                    <div class="obc-cust">
+                        <span class="obc-name">@context.CustomerName</span>
+                        <span class="obc-pay">@Fmt.PaymentLabel(context.PaymentMethod, L)</span>
+                    </div>
+
+                    <div class="obc-items">
+                        @foreach (var item in context.Items)
+                        {
+                            <div class="ob-line">
+                                <span class="ob-qty">@item.Quantity</span>
+                                <span class="ob-item-name">@item.Name</span>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(item.Notes)) { <div class="ob-note">“@item.Notes”</div> }
+                        }
+                        @if (!string.IsNullOrWhiteSpace(context.Notes)) { <div class="ob-order-note">💬 @context.Notes</div> }
+                    </div>
+
+                    <div class="obc-foot">
+                        <span class="obc-total">@Fmt.Rial(context.Total)</span>
+                        <div class="obc-actions">
+                            @switch (context.Status)
+                            {
+                                case OrderStatus.Pending:
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" DisableElevation="true"
+                                               StartIcon="@Icons.Material.Filled.ThumbUp" OnClick="@(() => Accept(context))">@L["partner.accept"]</MudButton>
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                               OnClick="@(() => Reject(context))">@L["partner.reject"]</MudButton>
+                                    break;
+                                case OrderStatus.Accepted:
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Info" DisableElevation="true"
+                                               StartIcon="@Icons.Material.Filled.SoupKitchen"
+                                               OnClick="@(() => StartPreparing(context))">@L["partner.startPreparing"]</MudButton>
+                                    break;
+                                case OrderStatus.Preparing:
+                                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" DisableElevation="true"
+                                               StartIcon="@Icons.Material.Filled.TakeoutDining"
+                                               OnClick="@(() => MarkReady(context))">@L["partner.markReady"]</MudButton>
+                                    break;
+                                default:
+                                    @if (_selfDelivery)
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" DisableElevation="true"
+                                                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                                                   OnClick="@(() => MarkDelivered(context))">@L["deliv.delivered"]</MudButton>
+                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                                   StartIcon="@Icons.Material.Filled.DeliveryDining"
+                                                   OnClick="@(() => Nav.NavigateTo("/deliveries"))">@L["deliv.title"]</MudButton>
+                                        @if (context.CourierName is { Length: > 0 } courier)
+                                        {
+                                            <span class="obt-sub">@L["w.courier"]: @courier</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="obt-sub">
+                                            @(context.DriverName is null ? L["partner.waitingDriver"] : $"{L["w.courier"]}: {context.DriverName}")
+                                        </span>
+                                    }
+                                    break;
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    };
+}

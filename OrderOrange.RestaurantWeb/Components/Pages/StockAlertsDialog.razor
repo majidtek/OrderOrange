@@ -1,0 +1,110 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+
+@* The stock alerts, in full: what fired, what is on the shelf RIGHT NOW versus the
+   minimum, who supplies it, and a restock button that fixes it without leaving. *@
+
+<MudDialog>
+    <DialogContent>
+        @if (_alerts is null || _materials is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else
+        {
+            <div class="sad-top">
+                <div class="sad-pill out">
+                    <span class="ic">🚫</span>
+                    <div><b>@_materials.OutCount</b><small>@L["mat.outOfStock"]</small></div>
+                </div>
+                <div class="sad-pill low">
+                    <span class="ic">⚠️</span>
+                    <div><b>@_materials.LowCount</b><small>@L["mat.runningLow"]</small></div>
+                </div>
+                <div class="sad-pill ok">
+                    <span class="ic">📦</span>
+                    <div><b class="mf-ltr">@Fmt.Rial(_materials.TotalValue)</b><small>@L["mat.stockValue"]</small></div>
+                </div>
+            </div>
+
+            @if (_alerts.Alerts.Count == 0)
+            {
+                <div class="sb-empty">✅ @L["sbell.empty"]</div>
+            }
+            else
+            {
+                <div class="sad-list">
+                    @foreach (var alert in _alerts.Alerts)
+                    {
+                        var material = _materials.Items.FirstOrDefault(m => m.Id == alert.MaterialId);
+                        <div class="sad-row @alert.Type @(alert.Seen ? "" : "fresh")">
+                            <span class="ic">@(alert.Type == "out" ? "🚫" : "⚠️")</span>
+                            <div class="mid">
+                                <div class="top">
+                                    <b>@alert.MaterialName</b>
+                                    <span class="chip @alert.Type">
+                                        @(alert.Type == "out" ? L["mat.outOfStock"] : L["mat.runningLow"])
+                                    </span>
+                                </div>
+                                <small class="when">@Fmt.TimeAgo(alert.CreatedAt, L)</small>
+                                @if (material is not null)
+                                {
+                                    <div class="facts">
+                                        <span>📦 @L["mat.inStock"]: <b class="mf-ltr">@material.Quantity.ToString("0.##") @L[$"mat.unit.{material.Unit}"]</b></span>
+                                        <span>🔻 @L["mat.minLevel"]: <b class="mf-ltr">@material.MinQuantity.ToString("0.##")</b></span>
+                                        @if (material.Supplier is { Length: > 0 } supplier)
+                                        {
+                                            <span>🚚 @supplier</span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            @if (material is not null)
+                            {
+                                <button type="button" class="fix" @onclick="@(() => RestockAsync(material))">
+                                    <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Style="width:15px;height:15px;" />
+                                    @L["mat.restock"]
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Inventory"
+                   OnClick="@(() => { Dialog.Close(); Nav.NavigateTo("/materials"); })">
+            @L["mat.title"]
+        </MudButton>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Dark" OnClick="@(() => Dialog.Close())">
+            @L["common.close"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    private StockAlertsDto? _alerts;
+    private StoreMaterialsDto? _materials;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _alerts = await Api.GetStockAlertsAsync();
+        _materials = await Api.GetMaterialsAsync();
+        // Opening the full view reads everything — the bell badge goes quiet.
+        if (_alerts is { UnseenCount: > 0 }) await Api.MarkStockAlertsSeenAsync();
+    }
+
+    /// <summary>An alert is fixed by BUYING — the button starts a purchase invoice.</summary>
+    private Task RestockAsync(StoreMaterialDto material)
+    {
+        Dialog.Close();
+        Nav.NavigateTo($"/materials/purchases?add={material.Id}");
+        return Task.CompletedTask;
+    }
+}

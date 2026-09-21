@@ -1,0 +1,166 @@
+@page "/table-chats"
+@layout Layout.ChatLayout
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The chats home: the inbox, and nothing else. Opening a conversation ALWAYS
+   leaves for the chat-only screen — same behavior on every device. *@
+
+<PageTitle>Partner — Table chat</PageTitle>
+
+<div class="wa-desk">
+    <div class="wa-home">
+        <div class="wa-hometop">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Style="color:#fff;"
+                           OnClick="@(() => Nav.NavigateTo("/"))" />
+            <b>@L["tc.title"]</b>
+            <span style="flex:1"></span>
+            <MudIconButton Icon="@Icons.Material.Filled.AddComment" Style="color:#fff;"
+                           OnClick="@(async () => await OpenNewChat())" />
+        </div>
+        <div class="wa-search">
+            <input @bind="_search" @bind:event="oninput" placeholder="🔍 @L["cust.search"]" />
+        </div>
+
+        @if (_threads is null)
+        {
+            <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+        }
+        else if (_threads.Count == 0)
+        {
+            <div class="wa-empty">
+                <div style="font-size: 46px;">💬</div>
+                <b>@L["tc.empty"]</b>
+                <span>@L["tc.emptyHint"]</span>
+            </div>
+        }
+        else
+        {
+            <div class="wa-rows">
+                @foreach (var t in _threads.Where(x => string.IsNullOrWhiteSpace(_search) || x.TableName.Contains(_search, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var thread = t;
+                    <button type="button" class="wa-row @(thread.TableId == _selected?.TableId ? "on" : "")"
+                            @onclick="@(() => OpenThread(thread))">
+                        <span class="ava">@Initials(thread.TableName)</span>
+                        <span class="mid">
+                            <span class="top">
+                                <b>@thread.TableName</b>
+                                <small class="@(thread.Unread > 0 ? "hot" : "")">@ChatClock(thread.LastAt)</small>
+                            </span>
+                            <span class="bot">
+                                <span class="preview @(thread.Unread > 0 ? "unread" : "")">@(thread.LastFrom == "store" ? "✓ " : "")@thread.LastText</span>
+                                @if (thread.Unread > 0)
+                                {
+                                    <span class="wa-unread">@(thread.Unread > 99 ? "99+" : thread.Unread.ToString())</span>
+                                }
+                            </span>
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    @* Big monitors: the conversation lives beside the list — the list keeps the
+       start side, which in RTL is exactly the right edge. *@
+    <div class="wa-side">
+        @if (_selected is { } sel)
+        {
+            <TableChatPane TableId="sel.TableId" TableName="@sel.TableName" />
+        }
+        else
+        {
+            <div class="wa-placeholder">
+                <div style="font-size: 56px;">💬</div>
+                <b>@L["tc.pickThread"]</b>
+            </div>
+        }
+    </div>
+</div>
+
+@if (_newChat)
+{
+    <div class="oo-modal" @onclick="@(() => _newChat = false)">
+        <div class="wa-pick" @onclick:stopPropagation="true">
+            <b>@L["tc.pickTable"]</b>
+            <div class="grid">
+                @foreach (var table in _tables ?? [])
+                {
+                    var t = table;
+                    <button type="button" @onclick="@(() => StartChat(t))">
+                        <span class="ava">@Initials(t.Name)</span>@t.Name
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TableChatThreadDto>? _threads;
+    private bool _newChat;
+    private List<StoreTableDto>? _tables;
+    private TableChatThreadDto? _selected;
+    private string _search = "";
+    private System.Threading.Timer? _poll;
+
+    [CascadingParameter] public Layout.MainLayout? Shell { get; set; }
+
+    private static string Initials(string s) =>
+        string.IsNullOrEmpty(s) ? "•" : s.Length <= 2 ? s : s[..2];
+
+    private string ChatClock(DateTime at) =>
+        at.Date == DateTime.Today ? at.ToString("HH:mm")
+        : at.Date == DateTime.Today.AddDays(-1) ? L["qc.yesterday"]
+        : at.ToString("dd/MM/yyyy");
+
+    protected override async Task OnInitializedAsync()
+    {
+        _threads = await Api.GetTableChatThreadsAsync() ?? [];
+        // Opening the inbox reads everything: badge off, counter reset server-side.
+        await Api.MarkTableChatSeenAsync();
+        Shell?.ClearChatBadge();
+        _poll = new System.Threading.Timer(async _ =>
+        {
+            try
+            {
+                var fresh = await Api.GetTableChatThreadsAsync();
+                if (fresh is not null) await InvokeAsync(() => { _threads = fresh; StateHasChanged(); });
+            }
+            catch { }
+        }, null, 5000, 5000);
+    }
+
+    /// <summary>Live width decides: split beside the list, or the chat-only page.</summary>
+    private async Task OpenThread(TableChatThreadDto thread)
+    {
+        var wide = await JS.InvokeAsync<bool>("eval", "window.innerWidth >= 1280");
+        if (wide)
+        {
+            _selected = thread;
+        }
+        else
+        {
+            Nav.NavigateTo($"/table-chats/{thread.TableId}?name={Uri.EscapeDataString(thread.TableName)}");
+        }
+    }
+
+    /// <summary>The store opens the conversation first — any table, spoken or silent.</summary>
+    private async Task OpenNewChat()
+    {
+        _tables ??= await Api.GetTablesAsync() ?? [];
+        _newChat = true;
+    }
+
+    private async Task StartChat(StoreTableDto table)
+    {
+        _newChat = false;
+        await OpenThread(new TableChatThreadDto(table.Id, table.Name, "", "store", DateTime.Now));
+    }
+
+    public void Dispose() => _poll?.Dispose();
+}

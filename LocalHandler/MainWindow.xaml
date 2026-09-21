@@ -1,0 +1,677 @@
+﻿<mah:MetroWindow x:Class="LocalHandler.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mah="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+        xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+        FontSize="10.5"
+        Icon="Assets/app.ico" ShowIconOnTitleBar="True"
+        Title="OrderOrange · Local Handler" Height="600" Width="800"
+        MinHeight="520" MinWidth="720"
+        WindowStartupLocation="CenterScreen"
+        TitleCharacterCasing="Normal"
+        GlowBrush="{DynamicResource MahApps.Brushes.Accent}"
+        BorderThickness="0"
+        WindowTitleBrush="#20180F"
+        NonActiveWindowTitleBrush="#20180F"
+        TitleForeground="#F2E9DF">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <!-- Slim scrollbars everywhere: the wide default ate the small lists. -->
+        <Style TargetType="ScrollBar" BasedOn="{StaticResource MahApps.Styles.ScrollBar}">
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Vertical">
+                    <Setter Property="Width" Value="7" />
+                    <Setter Property="MinWidth" Value="7" />
+                </Trigger>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Height" Value="7" />
+                    <Setter Property="MinHeight" Value="7" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ===== palette ===== -->
+        <Color x:Key="AccentColor">#F4511E</Color>
+        <SolidColorBrush x:Key="Ink" Color="#241C15" />
+        <SolidColorBrush x:Key="Muted" Color="#8B8070" />
+        <SolidColorBrush x:Key="Line" Color="#ECE5DC" />
+        <SolidColorBrush x:Key="Card" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="ContentBg" Color="#F5F1EB" />
+        <SolidColorBrush x:Key="Green" Color="#22A05E" />
+        <SolidColorBrush x:Key="SideMuted" Color="#B4A99D" />
+
+        <LinearGradientBrush x:Key="Sidebar" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#241B14" Offset="0" />
+            <GradientStop Color="#1A130D" Offset="1" />
+        </LinearGradientBrush>
+        <LinearGradientBrush x:Key="AccentGrad" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FF7A3D" Offset="0" />
+            <GradientStop Color="#F4511E" Offset="1" />
+        </LinearGradientBrush>
+
+        <!-- ===== type ===== -->
+        <Style x:Key="PageTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        </Style>
+        <Style x:Key="H2" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="Margin" Value="0,0,0,3" />
+        </Style>
+        <Style x:Key="Sub" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="9.5" />
+            <Setter Property="Foreground" Value="{StaticResource Muted}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,14" />
+        </Style>
+
+        <!-- ===== card ===== -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource Card}" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Padding" Value="22" />
+            <Setter Property="Margin" Value="0,0,0,16" />
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect BlurRadius="26" ShadowDepth="3" Opacity="0.10" Color="#5A4632" Direction="270" />
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ===== buttons ===== -->
+        <Style x:Key="Primary" TargetType="Button">
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="{StaticResource AccentGrad}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" CornerRadius="8" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Opacity" Value="0.92" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Opacity" Value="0.82" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="b" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="Soft" TargetType="Button" BasedOn="{StaticResource Primary}">
+            <Setter Property="Background" Value="#FFF3EC" />
+            <Setter Property="Foreground" Value="#C4471A" />
+        </Style>
+        <Style x:Key="Neutral" TargetType="Button" BasedOn="{StaticResource Primary}">
+            <Setter Property="Background" Value="#F1ECE5" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+        </Style>
+        <Style x:Key="Success" TargetType="Button" BasedOn="{StaticResource Primary}">
+            <Setter Property="Background" Value="{StaticResource Green}" />
+        </Style>
+        <Style x:Key="Danger" TargetType="Button" BasedOn="{StaticResource Primary}">
+            <Setter Property="Background" Value="#FBEBEB" />
+            <Setter Property="Foreground" Value="#C62828" />
+        </Style>
+
+        <!-- ===== inputs ===== -->
+        <Style x:Key="Field" TargetType="TextBox" BasedOn="{StaticResource MahApps.Styles.TextBox}">
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Padding" Value="4,0,4,2" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="mah:ControlsHelper.CornerRadius" Value="10" />
+            <Setter Property="mah:TextBoxHelper.UseFloatingWatermark" Value="True" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="FieldCombo" TargetType="ComboBox" BasedOn="{StaticResource MahApps.Styles.ComboBox}">
+            <Setter Property="Height" Value="40" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="mah:ControlsHelper.CornerRadius" Value="10" />
+            <Setter Property="mah:TextBoxHelper.UseFloatingWatermark" Value="True" />
+        </Style>
+        <Style x:Key="FieldPass" TargetType="PasswordBox" BasedOn="{StaticResource MahApps.Styles.PasswordBox}">
+            <Setter Property="Height" Value="40" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="mah:ControlsHelper.CornerRadius" Value="10" />
+            <Setter Property="mah:TextBoxHelper.UseFloatingWatermark" Value="True" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+
+        <!-- ===== sidebar nav item ===== -->
+        <Style x:Key="NavItem" TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource SideMuted}" />
+            <Setter Property="Margin" Value="8,2" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="bg" CornerRadius="10" Padding="10,6" Background="Transparent">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="#1FFFFFFF" />
+                                <Setter Property="Foreground" Value="#F3ECE4" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="bg" Property="Background" Value="{StaticResource AccentGrad}" />
+                                <Setter Property="Foreground" Value="White" />
+                                <Setter TargetName="bg" Property="Effect">
+                                    <Setter.Value>
+                                        <DropShadowEffect BlurRadius="16" ShadowDepth="0" Opacity="0.5" Color="#F4511E" />
+                                    </Setter.Value>
+                                </Setter>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- data grids sit flat on their card -->
+        <Style x:Key="FlatGrid" TargetType="DataGrid" BasedOn="{StaticResource MahApps.Styles.DataGrid}">
+            <Setter Property="AutoGenerateColumns" Value="False" />
+            <Setter Property="CanUserAddRows" Value="False" />
+            <Setter Property="HeadersVisibility" Value="Column" />
+            <Setter Property="GridLinesVisibility" Value="Horizontal" />
+            <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Line}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="RowBackground" Value="Transparent" />
+            <Setter Property="RowHeight" Value="24" />
+            <Setter Property="ColumnHeaderHeight" Value="26" />
+            <Setter Property="FontSize" Value="10" />
+        </Style>
+    </Window.Resources>
+
+    <!-- SHELL -->
+    <Grid Background="{StaticResource ContentBg}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="190" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- SIDEBAR -->
+        <Border Grid.Column="0" Background="{StaticResource Sidebar}">
+            <DockPanel>
+                <!-- brand -->
+                <StackPanel DockPanel.Dock="Top" Margin="16,14,16,10">
+                    <StackPanel Orientation="Horizontal">
+                        <Border Width="30" Height="30" CornerRadius="9" Background="{StaticResource AccentGrad}">
+                            <TextBlock Text="🍊" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <StackPanel VerticalAlignment="Center" Margin="12,0,0,0">
+                            <TextBlock Text="OrderOrange" Foreground="#F6EFE7" FontSize="13" FontWeight="Bold" />
+                            <TextBlock Text="Local Handler" Foreground="{StaticResource SideMuted}" FontSize="9.5" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- business switcher — only shown when the account has more than one -->
+                <StackPanel x:Name="SwitcherPanel" DockPanel.Dock="Top" Margin="12,0,12,8" Visibility="Collapsed">
+                    <TextBlock Text="BUSINESS" Foreground="{StaticResource SideMuted}" FontSize="8.5" FontWeight="Bold" Margin="6,0,0,6" />
+                    <ComboBox x:Name="StoreSwitcher" SelectionChanged="StoreSwitcher_SelectionChanged"
+                              Style="{StaticResource FieldCombo}" mah:TextBoxHelper.UseFloatingWatermark="False">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding LogoEmoji}" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <!-- status footer -->
+                <Border DockPanel.Dock="Bottom" Margin="12,0,12,12" CornerRadius="8" Padding="8,5" Background="#20FFFFFF">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <Ellipse x:Name="StatusDot" Width="10" Height="10" Fill="#B9AFA1" VerticalAlignment="Center" />
+                            <TextBlock x:Name="StatusText" Text="Offline" Foreground="#F3ECE4" FontWeight="SemiBold"
+                                       FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBlock x:Name="SideStore" Text="Not signed in" Foreground="{StaticResource SideMuted}"
+                                   FontSize="10" Margin="0,6,0,0" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Border>
+
+                <!-- nav -->
+                <ListBox x:Name="NavList" SelectionChanged="Nav_SelectionChanged"
+                         Background="Transparent" BorderThickness="0" Margin="0,6,0,0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource NavItem}" />
+                    </ListBox.ItemContainerStyle>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconMaterial Kind="ReceiptTextOutline" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Text="Orders" FontSize="11" FontWeight="SemiBold" Margin="14,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconMaterial Kind="Printer" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Text="Printers" FontSize="11" FontWeight="SemiBold" Margin="14,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconMaterial Kind="Sitemap" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Text="Products → printers" FontSize="11" FontWeight="SemiBold" Margin="14,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                    <ListBoxItem>
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconMaterial Kind="LanConnect" Width="18" Height="18" VerticalAlignment="Center" />
+                            <TextBlock Text="Connection" FontSize="11" FontWeight="SemiBold" Margin="14,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </ListBoxItem>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <!-- CONTENT -->
+        <Grid Grid.Column="1">
+
+            <!-- ORDERS -->
+            <Grid x:Name="PageOrders" Margin="18,16,18,16" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <DockPanel Grid.Row="0" Margin="0,0,0,20">
+                    <StackPanel DockPanel.Dock="Left">
+                        <TextBlock Text="Live orders" Style="{StaticResource PageTitle}" />
+                        <TextBlock x:Name="OrdersHint" Text="Not connected" Foreground="{StaticResource Muted}" FontSize="10.5" Margin="0,4,0,0" />
+                    </StackPanel>
+                    <Button DockPanel.Dock="Right" Click="RefreshOrders_Click" Style="{StaticResource Primary}" VerticalAlignment="Top" HorizontalAlignment="Right">
+                        <StackPanel Orientation="Horizontal">
+                            <iconPacks:PackIconMaterial Kind="Refresh" Width="16" Height="16" VerticalAlignment="Center" />
+                            <TextBlock Text="Refresh" Margin="8,0,0,0" />
+                        </StackPanel>
+                    </Button>
+                </DockPanel>
+
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="300" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- order cards -->
+                    <Border Style="{StaticResource CardStyle}" Margin="0,0,16,0" Padding="8">
+                        <ListBox x:Name="OrdersList" SelectionChanged="OrdersList_SelectionChanged"
+                                 BorderThickness="0" Background="Transparent"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 HorizontalContentAlignment="Stretch">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Margin" Value="4,4" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <Border x:Name="c" CornerRadius="8" Padding="8,5" Background="#FBF8F4"
+                                                        BorderBrush="#EFE7DC" BorderThickness="1.4">
+                                                    <ContentPresenter />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="c" Property="Background" Value="#FFF6EF" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsSelected" Value="True">
+                                                        <Setter TargetName="c" Property="Background" Value="#FFF1E8" />
+                                                        <Setter TargetName="c" Property="BorderBrush" Value="#F4511E" />
+                                                        <Setter TargetName="c" Property="BorderThickness" Value="1.8" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- avatar -->
+                                        <Border Grid.Column="0" Width="44" Height="30" CornerRadius="22" Background="{StaticResource AccentGrad}" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Initials}" Foreground="White" FontWeight="Bold" FontSize="12"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+
+                                        <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Customer}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource Ink}" />
+                                                <Border Margin="8,0,0,0" CornerRadius="6" Padding="7,1" Background="#E6F5EC"
+                                                        Visibility="{Binding Paid, Converter={StaticResource BoolToVis}}" VerticalAlignment="Center">
+                                                    <TextBlock Text="PAID" FontSize="8.5" FontWeight="Bold" Foreground="{StaticResource Green}" />
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Meta}" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,3,0,0" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding Amount}" FontWeight="Bold" FontSize="12" Foreground="#C4471A" HorizontalAlignment="Right" />
+                                            <TextBlock Text="{Binding Number}" Foreground="{StaticResource Muted}" FontSize="9.5" HorizontalAlignment="Right" Margin="0,3,0,0" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
+                    <!-- ticket / actions -->
+                    <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
+                                <iconPacks:PackIconMaterial Kind="ReceiptTextOutline" Width="18" Height="18" VerticalAlignment="Center" Foreground="{StaticResource Ink}" />
+                                <TextBlock Text="Selected order" Style="{StaticResource H2}" Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </StackPanel>
+
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0,14,0,0">
+                                <Button Click="PrintReceipt_Click" Style="{StaticResource Primary}" Margin="0,0,0,9" HorizontalContentAlignment="Left">
+                                    <StackPanel Orientation="Horizontal">
+                                        <iconPacks:PackIconMaterial Kind="Printer" Width="16" Height="16" VerticalAlignment="Center" />
+                                        <TextBlock Text="Print bill (cashier)" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Click="PrintTickets_Click" Style="{StaticResource Neutral}" Margin="0,0,0,9" HorizontalContentAlignment="Left">
+                                    <StackPanel Orientation="Horizontal">
+                                        <iconPacks:PackIconMaterial Kind="SilverwareForkKnife" Width="16" Height="16" VerticalAlignment="Center" />
+                                        <TextBlock Text="Print kitchen tickets" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="PaidButton" Click="MarkPaid_Click" Style="{StaticResource Success}" Margin="0,0,0,9" HorizontalContentAlignment="Left">
+                                    <StackPanel Orientation="Horizontal">
+                                        <iconPacks:PackIconMaterial Kind="CashMultiple" Width="16" Height="16" VerticalAlignment="Center" />
+                                        <TextBlock Text="Mark PAID" Margin="10,0,0,0" />
+                                    </StackPanel>
+                                </Button>
+                                <UniformGrid Columns="2">
+                                    <Button Content="Accept" Click="Accept_Click" Style="{StaticResource Neutral}" Margin="0,0,5,0" />
+                                    <Button Content="Ready" Click="Ready_Click" Style="{StaticResource Neutral}" Margin="5,0,0,0" />
+                                </UniformGrid>
+                            </StackPanel>
+
+                            <!-- paper preview -->
+                            <Border CornerRadius="12" Background="#FBF9F5" BorderBrush="{StaticResource Line}" BorderThickness="1" Margin="0,4,0,0">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
+                                    <TextBox x:Name="Preview" IsReadOnly="True" FontFamily="Consolas" FontSize="10"
+                                             TextWrapping="NoWrap" BorderThickness="0" Background="Transparent"
+                                             Foreground="#3A2E22" MinHeight="140" />
+                                </ScrollViewer>
+                            </Border>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- PRINTERS -->
+            <ScrollViewer x:Name="PagePrinters" Margin="18,16,18,16" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock Text="Printers" Style="{StaticResource PageTitle}" Margin="0,0,0,20" />
+
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Print stations" Style="{StaticResource H2}" />
+                            <TextBlock Text="Each station is one printer with one job — the cashier prints bills, a kitchen or bar station prints work tickets."
+                                       Style="{StaticResource Sub}" />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.2*" />
+                                    <ColumnDefinition Width="1.6*" />
+                                    <ColumnDefinition Width="104" />
+                                    <ColumnDefinition Width="60" />
+                                    <ColumnDefinition Width="66" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBox x:Name="StationName" Grid.Column="0" Margin="0,0,6,0" Style="{StaticResource Field}" mah:TextBoxHelper.Watermark="Station name" />
+                                <ComboBox x:Name="StationPrinter" Grid.Column="1" Margin="0,0,6,0" Style="{StaticResource FieldCombo}" mah:TextBoxHelper.Watermark="Printer" />
+                                <ComboBox x:Name="StationRole" Grid.Column="2" Margin="0,0,6,0" Style="{StaticResource FieldCombo}" mah:TextBoxHelper.Watermark="Role" />
+                                <TextBox x:Name="StationColumns" Grid.Column="3" Text="42" Margin="0,0,6,0" Style="{StaticResource Field}" mah:TextBoxHelper.Watermark="Cols" />
+                                <TextBox x:Name="StationCopies" Grid.Column="4" Text="1" Margin="0,0,6,0" Style="{StaticResource Field}" mah:TextBoxHelper.Watermark="Copies" />
+                                <Button Grid.Column="5" Content="Add" Click="AddStation_Click" Style="{StaticResource Primary}" VerticalAlignment="Bottom" MinWidth="64" />
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <DataGrid x:Name="StationsGrid" Style="{StaticResource FlatGrid}" MinHeight="180">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="Station" Binding="{Binding Name}" Width="*" />
+                                    <DataGridTextColumn Header="Printer" Binding="{Binding PrinterName}" Width="2*" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Role" Binding="{Binding Role}" Width="110" IsReadOnly="True" />
+                                    <DataGridTextColumn Header="Cols" Binding="{Binding Columns}" Width="60" />
+                                    <DataGridTextColumn Header="Copies" Binding="{Binding Copies}" Width="70" />
+                                    <DataGridCheckBoxColumn Header="On" Binding="{Binding Enabled}" Width="45" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                                <Button Content="Test print" Click="TestPrint_Click" Style="{StaticResource Neutral}" Margin="0,0,10,0" />
+                                <Button Content="Remove selected" Click="RemoveStation_Click" Style="{StaticResource Danger}" Margin="0,0,10,0" />
+                                <Button Content="Save" Click="SaveStations_Click" Style="{StaticResource Primary}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- ROUTING -->
+            <Grid x:Name="PageRouting" Margin="18,16,18,16" Visibility="Collapsed">
+                <Grid.Resources>
+                    <!-- one tick box per printer: used on every product row, every category header, and the "all" bar -->
+                    <Style x:Key="PrinterTick" TargetType="CheckBox" BasedOn="{StaticResource MahApps.Styles.CheckBox}">
+                        <Setter Property="Margin" Value="0,0,18,0" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="FontSize" Value="9.5" />
+                        <Setter Property="Cursor" Value="Hand" />
+                    </Style>
+                </Grid.Resources>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- title + primary actions -->
+                <Grid Grid.Row="0" Margin="0,0,0,18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel>
+                        <TextBlock Text="Products → printers" Style="{StaticResource PageTitle}" />
+                        <TextBlock Text="Tick every printer a product should go to — one, several, or none. Tick in a category header to set all of its products at once. Press Save routing when you are done."
+                                   Style="{StaticResource Sub}" Margin="0,4,0,0" TextWrapping="Wrap" MaxWidth="760" HorizontalAlignment="Left" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top">
+                        <Button Content="↻  Load menu" Click="LoadMenu_Click" Style="{StaticResource Soft}" Margin="0,0,10,0" />
+                        <Button Content="Save routing" Click="SaveRouting_Click" Style="{StaticResource Primary}" MinWidth="100" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- toolbar: search + "all products" ticks -->
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}" Padding="10,8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="RoutingSearch" Style="{StaticResource Field}" Margin="0,0,16,0" MaxWidth="360" HorizontalAlignment="Left"
+                                 mah:TextBoxHelper.Watermark="Search product or category…" mah:TextBoxHelper.ClearTextButton="True"
+                                 TextChanged="RoutingSearch_TextChanged" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="StatLine" Text="" VerticalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,0,18,0" />
+                            <TextBlock Text="All products:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,12,0" />
+                            <ItemsControl ItemsSource="{Binding TicketStations}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Style="{StaticResource PrinterTick}" Content="{Binding Label}" Tag="*"
+                                                  Loaded="MassTick_Loaded" Click="MassTick_Click" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- the list, grouped by category; each header ticks the whole category -->
+                <Border Grid.Row="2" Style="{StaticResource CardStyle}" Padding="6,3,6,6">
+                    <DataGrid x:Name="RoutingGrid" Style="{StaticResource FlatGrid}" SelectionMode="Single" SelectionUnit="FullRow" RowHeight="26"
+                              IsReadOnly="True">
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow" BasedOn="{StaticResource MahApps.Styles.DataGridRow}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsUnassigned}" Value="True">
+                                        <Setter Property="Background" Value="#FFF6F0" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
+                        <DataGrid.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <Border Background="#F7F2EC" CornerRadius="10" Padding="8,5" Margin="0,6,0,2">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock VerticalAlignment="Center">
+                                                    <Run Text="{Binding Name, Mode=OneWay}" FontWeight="SemiBold" FontSize="11" />
+                                                    <Run Text="  ·  " Foreground="#B4A99D" />
+                                                    <Run Text="{Binding ItemCount, Mode=OneWay}" Foreground="#8B8070" />
+                                                    <Run Text=" products" Foreground="#8B8070" />
+                                                </TextBlock>
+                                                <TextBlock Grid.Column="1" Text="Whole category:" VerticalAlignment="Center" Foreground="#8B8070" FontSize="10" Margin="0,0,12,0" />
+                                                <ItemsControl Grid.Column="2" ItemsSource="{Binding DataContext.TicketStations, RelativeSource={RelativeSource AncestorType=mah:MetroWindow}}"
+                                                              Tag="{Binding Name}">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <CheckBox Style="{StaticResource PrinterTick}" Content="{Binding Label}"
+                                                                      Tag="{Binding Tag, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                      Loaded="MassTick_Loaded" Click="MassTick_Click" />
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </DataGrid.GroupStyle>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Product" Binding="{Binding ProductName}" Width="*" />
+                            <DataGridTemplateColumn Header="Prints at" Width="Auto" MinWidth="320">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ItemsControl ItemsSource="{Binding Choices}" Margin="4,0">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <CheckBox Style="{StaticResource PrinterTick}" Content="{Binding Station.Label}"
+                                                              IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Border>
+                <!-- Loader: covers the page while the menu is fetched or the routing is saved. -->
+                <Border x:Name="RoutingBusy" Grid.RowSpan="20" Grid.ColumnSpan="20" Visibility="Collapsed" Background="#C8F5F1EB" CornerRadius="12">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <mah:ProgressRing IsActive="True" Width="34" Height="34" Foreground="#F4511E" />
+                        <TextBlock x:Name="RoutingBusyText" Text="Loading products…" Margin="0,10,0,0" HorizontalAlignment="Center" FontSize="11" Foreground="#6B5A4A" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- CONNECTION -->
+            <ScrollViewer x:Name="PageConnection" Margin="18,16,18,16" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                <StackPanel MaxWidth="580" HorizontalAlignment="Left">
+                    <TextBlock Text="Connection" Style="{StaticResource PageTitle}" Margin="0,0,0,20" />
+
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock x:Name="StoreLine" Text="Shop account" Style="{StaticResource H2}" />
+                            <TextBlock Text="The till signs in with the same partner login used on the web portal."
+                                       Style="{StaticResource Sub}" />
+                            <TextBox x:Name="ApiUrl" Margin="0,0,0,16" Style="{StaticResource Field}" mah:TextBoxHelper.Watermark="Server" />
+                            <TextBox x:Name="Username" Margin="0,0,0,16" Style="{StaticResource Field}" mah:TextBoxHelper.Watermark="Username" />
+                            <PasswordBox x:Name="Password" Margin="0,0,0,16" Style="{StaticResource FieldPass}" mah:TextBoxHelper.Watermark="Password" />
+                            <mah:ToggleSwitch x:Name="RememberPassword" Header="Remember password on this machine" Margin="0,0,0,16" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Connect" Click="Connect_Click" Style="{StaticResource Primary}" Margin="0,0,10,0" MinWidth="130" />
+                                <Button Content="Sign out" Click="SignOut_Click" Style="{StaticResource Neutral}" />
+                            </StackPanel>
+                            <TextBlock x:Name="ConnectMessage" Style="{StaticResource Sub}" Margin="0,16,0,0" />
+
+                            <!-- Several partners on one PC: every window is its own profile. -->
+                            <TextBlock x:Name="ProfileLine" Style="{StaticResource Sub}" Margin="0,20,0,8" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Content="Open another partner window" Click="OpenAnother_Click" Style="{StaticResource Neutral}" />
+                            </StackPanel>
+                            <TextBlock Text="Each window keeps its own login, printers and routing. To start it with Windows, make a shortcut to LocalHandler.exe with  --profile &lt;name&gt;  at the end."
+                                       Style="{StaticResource Sub}" Margin="0,8,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Automatic printing" Style="{StaticResource H2}" />
+                            <TextBlock Text="Let new orders print by themselves the moment they arrive." Style="{StaticResource Sub}" />
+                            <mah:ToggleSwitch x:Name="AutoReceipt" Header="Print the bill when a new order arrives" Margin="0,2,0,12" />
+                            <mah:ToggleSwitch x:Name="AutoKitchen" Header="Print kitchen tickets when a new order arrives" Margin="0,0,0,12" />
+                            <mah:ToggleSwitch x:Name="AutoStart" Header="Start with Windows and keep running (restarts itself, lives in the tray)" Margin="0,0,0,16" />
+                            <TextBlock Text="Kitchen ticket language" FontWeight="SemiBold" Margin="0,0,0,6" />
+                            <TextBlock Text="What language the cook's ticket prints product names in. The customer's bill is unaffected." Style="{StaticResource Sub}" Margin="0,0,0,6" />
+                            <ComboBox x:Name="KitchenLang" Width="260" HorizontalAlignment="Left" Margin="0,0,0,16"
+                                      Style="{StaticResource FieldCombo}" DisplayMemberPath="Display" SelectedValuePath="Code" />
+                            <TextBox x:Name="PollSeconds" Width="150" HorizontalAlignment="Left" Margin="0,0,0,16"
+                                     Style="{StaticResource Field}" mah:TextBoxHelper.Watermark="Check every (sec)" />
+                            <Button Content="Save" Click="SaveConnection_Click" Style="{StaticResource Primary}" HorizontalAlignment="Left" MinWidth="130" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</mah:MetroWindow>

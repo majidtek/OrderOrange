@@ -1,0 +1,160 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* Rating an order should feel like a small moment of joy, not a form: a warm hero,
+   a face that reacts to the stars, one-tap feedback chips, one big obvious action. *@
+
+<MudDialog Class="rv-dialog">
+    <DialogContent>
+        <div class="rv-hero">
+            <button type="button" class="rv-x" @onclick="@(() => Dialog.Cancel())">✕</button>
+            <div class="rv-title">@L["track.rate"]</div>
+            <div class="rv-store">
+                <span class="rv-store-emoji">@Order.RestaurantLogoEmoji</span>
+                <span class="rv-store-name">@Order.RestaurantName</span>
+                <span class="rv-store-num">@Order.Number</span>
+            </div>
+
+            <div class="rv-face-wrap">
+                @if (_restaurantRating == 5)
+                {
+                    @* a tiny celebration around the face — pure CSS particles *@
+                    <span class="rv-burst">
+                        @for (var i = 0; i < 8; i++) { <i style="--i:@i"></i> }
+                    </span>
+                }
+                <div class="rv-face @(_restaurantRating > 0 ? "pop" : "")" @key="_restaurantRating">
+                    @FaceFor(_restaurantRating)
+                </div>
+            </div>
+            <div class="rv-word @(_restaurantRating > 0 ? "show" : "")">
+                @(_restaurantRating > 0 ? L[$"review.r{_restaurantRating}"] : L["review.foodQ"])
+            </div>
+
+            <div class="rv-stars @(_restaurantRating == 0 ? "hint" : "")">
+                @for (var i = 1; i <= 5; i++)
+                {
+                    var star = i;
+                    <button type="button" class="rv-star @(star <= _restaurantRating ? "on" : "")"
+                            style="--d:@(star * 40)ms; --h:@(star * 220)ms" @onclick="@(() => SetRating(star))">
+                        <svg viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="rv-body">
+            @if (_restaurantRating > 0)
+            {
+                @* One-tap feedback — nobody likes typing on a phone. The set follows the mood. *@
+                <div class="rv-tags">
+                    @foreach (var tag in (_restaurantRating >= 4 ? PositiveTags : NegativeTags))
+                    {
+                        var t = tag;
+                        <button type="button" class="rv-tag @(_tags.Contains(t) ? "on" : "")"
+                                @onclick="@(() => ToggleTag(t))">
+                            @L[$"review.{t}"]
+                        </button>
+                    }
+                </div>
+            }
+
+            @if (Order.DriverName is not null)
+            {
+                <div class="rv-driver">
+                    <span class="rv-driver-label">🛵 @L["review.driverQ"] · <b>@Order.DriverName</b></span>
+                    <div class="rv-mini-stars">
+                        @for (var i = 1; i <= 5; i++)
+                        {
+                            var star = i;
+                            <button type="button" class="rv-star mini @(star <= _driverRating ? "on" : "")"
+                                    @onclick="@(() => _driverRating = star)">
+                                <svg viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+
+            <textarea class="rv-comment" rows="2" placeholder="@L["review.ph"]"
+                      @bind="_comment" @bind:event="oninput"></textarea>
+
+            @if (_error is not null)
+            {
+                <div class="rv-error">⚠️ @_error</div>
+            }
+
+            <button type="button" class="rv-submit" disabled="@(_busy || _restaurantRating == 0)" @onclick="Submit">
+                @if (_busy) { <span class="rv-spin"></span> }
+                else { @(_restaurantRating == 0 ? L["review.pickStar"] : L["review.submit"]) }
+            </button>
+            <button type="button" class="rv-skip" @onclick="@(() => Dialog.Cancel())">@L["review.skip"]</button>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public OrderDto Order { get; set; } = default!;
+
+    private static readonly string[] PositiveTags = ["tTasty", "tFresh", "tHot", "tPortion", "tFast", "tPack"];
+    private static readonly string[] NegativeTags = ["tCold", "tLate", "tSmall", "tNotFresh", "tPackBad", "tWrong"];
+
+    private int _restaurantRating;
+    private int _driverRating = 5;
+    private string _comment = "";
+    private readonly HashSet<string> _tags = [];
+    private string? _error;
+    private bool _busy;
+
+    private void SetRating(int stars)
+    {
+        // Crossing the good/bad line swaps the chip set — stale picks must not linger.
+        if (_restaurantRating >= 4 != stars >= 4) _tags.Clear();
+        _restaurantRating = stars;
+    }
+
+    private void ToggleTag(string tag)
+    {
+        if (!_tags.Remove(tag)) _tags.Add(tag);
+    }
+
+    private static string FaceFor(int rating) => rating switch
+    {
+        1 => "😖",
+        2 => "😕",
+        3 => "😐",
+        4 => "😊",
+        5 => "🤩",
+        _ => "🤔",       // full-colour and alive — the washed-out plate read as broken
+    };
+
+    private async Task Submit()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            // The tapped chips become words in the comment, in the customer's language.
+            var tagText = string.Join(" · ", _tags.Select(t => (string)L[$"review.{t}"]));
+            var comment = (tagText, _comment.Trim()) switch
+            {
+                ("", "") => null,
+                (_, "") => tagText,
+                ("", _) => _comment.Trim(),
+                _ => $"{tagText} — {_comment.Trim()}",
+            };
+
+            var (ok, error) = await Api.CreateReviewAsync(new CreateReviewRequest(
+                Order.Id, _restaurantRating,
+                Order.DriverName is null ? null : _driverRating,
+                comment));
+            if (!ok) { _error = error; return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

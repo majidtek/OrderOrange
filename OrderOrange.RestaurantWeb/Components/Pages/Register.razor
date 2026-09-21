@@ -1,0 +1,211 @@
+@page "/register"
+@layout Layout.RegisterLayout
+@inject ApiClient Api
+@inject LanguageService L
+@inject AppState State
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+@inject ISessionPersistence Persistence
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* Opening a business takes one step: a username and a password (or a Google account).
+   The store is born with the account and the owner dresses it later from Settings —
+   name, phones, location, photo — instead of answering six screens before seeing the app.
+   The page is also the pitch: on a wide screen the promise stands beside the form. *@
+
+<PageTitle>OrderOrange — @L["login.applyPartner"]</PageTitle>
+
+<div class="rg-stage">
+    <section class="rg-pitch">
+        <span class="rg-chip">@L["rg.mkEyebrow"]</span>
+        <h1>@L["rg.mkTitle"]</h1>
+        <p>@L["rg.mkSub"]</p>
+        <ul class="rg-points">
+            <li><span class="ic">✓</span>@L["rg.mkA"]</li>
+            <li><span class="ic">✓</span>@L["rg.mkB"]</li>
+            <li><span class="ic">✓</span>@L["rg.mkC"]</li>
+            <li><span class="ic">✓</span>@L["rg.mkD"]</li>
+        </ul>
+        <a class="rg-guide" href="guide.html" target="_blank" rel="noopener">@L["rg.mkFoot"] <span>↗</span></a>
+    </section>
+
+    <div class="rg-wrap">
+        <MudPaper Elevation="0" Class="rg-card">
+            <div class="rg-top">
+                <b>@string.Format(L["typed.open"], L["st.restaurant"])</b>
+            </div>
+
+            <div class="rg-body">
+                <div class="mf-gsi" @ref="_googleHost"></div>
+                @if (_googleVisible)
+                {
+                    <div class="mf-or"><span>@L["login.or"]</span></div>
+                }
+                <MudTextField @bind-Value="_username" Label="@L["login.username"]"
+                              UserAttributes="@NoAutofill"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr" />
+                <MudTextField @bind-Value="_password" Label="@L["common.password"]"
+                              InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                              UserAttributes="@NoAutofillPassword"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-1 mf-ltr"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                              OnKeyDown="@OnPasswordKey" />
+            </div>
+
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">@_error</MudAlert>
+            }
+
+            <div class="rg-acts">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.RocketLaunch"
+                           Size="Size.Large" FullWidth="true" Disabled="_busy" OnClick="Finish">@L["rg.finish"]</MudButton>
+            </div>
+
+            <div class="rg-trust">
+                <span>🔒 @L["rg.mkA"]</span>
+                <span>⚡ @L["rg.mkB"]</span>
+            </div>
+        </MudPaper>
+    </div>
+</div>
+
+@code {
+    // The browser must not resurrect saved logins into a NEW account's cradle.
+    private static readonly Dictionary<string, object?> NoAutofill = new() { ["autocomplete"] = "off", ["name"] = "rg-user" };
+    private static readonly Dictionary<string, object?> NoAutofillPassword = new() { ["autocomplete"] = "new-password", ["name"] = "rg-pass" };
+
+    private string? _error;
+    private bool _busy;
+    private string _username = "";
+    private string _password = "";
+    private bool _showPassword;
+
+    // ---------- Sign in with Google: the email becomes the username ----------
+    private string? _googleClientId;
+    private bool _googleVisible;
+    private bool _googleDrawn;
+    private ElementReference _googleHost;
+    private DotNetObjectReference<Register>? _selfRef;
+
+    [JSInvokable]
+    public async Task OnGoogleCredential(string credential)
+    {
+        await InvokeAsync(async () =>
+        {
+            _error = null;
+            _busy = true;
+            StateHasChanged();
+            try
+            {
+                var (session, error) = await Api.GooglePartnerAsync(credential);
+                if (session is null) { _error = error ?? L["common.signinFail"]; return; }
+                State.SignIn(session);
+                try { await Persistence.SaveAsync(session); } catch { }
+                await EnterAsync();
+            }
+            finally
+            {
+                _busy = false;
+                StateHasChanged();
+            }
+        });
+    }
+
+    // The page has no session gate holding its first paint, so it must listen
+    // for the saved language arriving (and for the picker) itself.
+    protected override async Task OnInitializedAsync()
+    {
+        L.Changed += OnLanguageChanged;
+
+        var methods = await Api.GetAuthMethodsAsync();
+        _googleClientId = methods?.GoogleClientId;
+        _googleVisible = _googleClientId is not null;
+
+        // An owner sent here by sign-in (an account from the days of the long wizard)
+        // has nothing left to answer: close the bookmark and open the app.
+        if (State.IsAuthenticated) await EnterAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_googleDrawn || _googleClientId is null) return;
+        _googleDrawn = true;
+        _selfRef ??= DotNetObjectReference.Create(this);
+        var status = await JS.InvokeAsync<string>("mfGoogle.render", _googleHost, _googleClientId, _selfRef, L.Locale);
+        _googleVisible = status == "ok";
+        StateHasChanged();
+    }
+
+    private void OnLanguageChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        L.Changed -= OnLanguageChanged;
+        _selfRef?.Dispose();
+    }
+
+    private Task OnPasswordKey(KeyboardEventArgs e) => e.Key == "Enter" ? Finish() : Task.CompletedTask;
+
+    /// <summary>The store already exists with the account; mark setup finished and walk in.</summary>
+    private async Task EnterAsync()
+    {
+        try { await Api.SetSetupStepAsync(-1); } catch { }
+        Nav.NavigateTo("/");
+    }
+
+    private async Task Finish()
+    {
+        _error = _username.Trim().Length < 3 ? L["rg.needAcc"]
+               : _password.Length < 6 ? L["login.pwTooShort"]
+               : null;
+        if (_error is not null) return;
+        if (await CreateAccountAsync()) await EnterAsync();
+    }
+
+    private async Task<bool> CreateAccountAsync()
+    {
+        _busy = true;
+        try
+        {
+            var user = _username.Trim();
+            var (ok, error) = await Api.RegisterPartnerAsync(new RegisterPartnerRequest(
+                user, user, "", _password, user, "", StoreType.Restaurant, null, null, null, OrderOrange.Shared.FormToken.Create()));
+            if (!ok)
+            {
+                // Their own account? One tap signs them back into it.
+                if (error?.Contains("already exists", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    var choice = await Dialogs.ShowMessageBox(
+                        L["rg.takenTitle"], L["rg.takenMsg"],
+                        yesText: L["login.signin"], cancelText: L["common.cancel"]);
+                    if (choice == true)
+                    {
+                        var (resumed, resumeError) = await Api.LoginAsync(user, _password);
+                        if (resumed is null) { _error = resumeError ?? L["common.signinFail"]; return false; }
+                        State.SignIn(resumed);
+                        try { await Persistence.SaveAsync(resumed); } catch { }
+                        return true;
+                    }
+                    _error = error;
+                    return false;
+                }
+                _error = error ?? L["common.applyFail"];
+                return false;
+            }
+
+            var (session, loginError) = await Api.LoginAsync(user, _password);
+            if (session is null) { _error = loginError ?? L["common.signinFail"]; return false; }
+            State.SignIn(session);
+            try { await Persistence.SaveAsync(session); } catch { }
+            return true;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

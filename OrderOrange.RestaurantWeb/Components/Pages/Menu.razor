@@ -1,0 +1,290 @@
+﻿@page "/menu"
+@inject ApiClient Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject LanguageService L
+@inject IJSRuntime JS
+
+<PageTitle>Partner — Products</PageTitle>
+
+<PageHeader Title="@L["nav.products"]" Subtitle="@L["partner.menuSub"]">
+    <Actions>
+        @* The toolbar only offers what can actually be done — a store with no
+           categories yet gets ONE clear button, in the middle of the page. *@
+        @if (_menu is { Count: > 0 })
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CreateNewFolder"
+                       OnClick="@(() => EditCategory(null))">@L["partner.newCategory"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => EditItem(null))">@L["partner.newDish"]</MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+@if (_menu is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_menu.Count == 0)
+{
+    <div class="pmn-hero">
+        <div class="ic">🗂️</div>
+        <b>@L["partner.menuEmpty"]</b>
+        <small>@L["partner.menuEmptySub"]</small>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                   StartIcon="@Icons.Material.Filled.CreateNewFolder"
+                   OnClick="@(() => EditCategory(null))">@L["partner.newCategory"]</MudButton>
+    </div>
+}
+else
+{
+    @* ---------- Menu health at a glance ---------- *@
+    <div class="pmn-stats">
+        <div class="pmn-stat">
+            <div class="ic">🍽️</div>
+            <div><div class="v">@AllItems.Count</div><div class="k">@L["nav.products"]</div></div>
+        </div>
+        <div class="pmn-stat good">
+            <div class="ic">✅</div>
+            <div><div class="v">@AllItems.Count(i => i.IsAvailable)</div><div class="k">@L["partner.available"]</div></div>
+        </div>
+        <div class="pmn-stat bad">
+            <div class="ic">⛔</div>
+            <div><div class="v">@AllItems.Count(i => !i.IsAvailable)</div><div class="k">@L["partner.soldout"]</div></div>
+        </div>
+        <div class="pmn-stat star">
+            <div class="ic">⭐</div>
+            <div><div class="v">@AllItems.Count(i => i.IsPopular)</div><div class="k">@L["rest.popular"]</div></div>
+        </div>
+        <div class="pmn-stat">
+            <div class="ic">💰</div>
+            <div><div class="v">@(AllItems.Count == 0 ? (MarkupString)"—" : Fmt.Rial(AllItems.Average(i => i.Price)))</div><div class="k">Ø @L["partner.price"]</div></div>
+        </div>
+    </div>
+
+    @* ---------- Search + filters ---------- *@
+    <div class="pmn-toolbar">
+        <div class="pmn-search">
+            <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+            <input value="@_search" placeholder="@L["common.search"]…"
+                   @oninput="e => _search = e.Value?.ToString() ?? string.Empty" />
+            @if (_search.Length > 0)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => _search = string.Empty)" />
+            }
+        </div>
+        <div class="dlv-filter">
+            <span class="dlv-fchip @(_filter == "all" ? "on" : "")" @onclick="@(() => { _filter = "all"; _itemPage = 0; })">@L["admin.all"]</span>
+            <span class="dlv-fchip @(_filter == "avail" ? "on" : "")" @onclick="@(() => { _filter = "avail"; _itemPage = 0; })">@L["partner.available"]</span>
+            <span class="dlv-fchip @(_filter == "sold" ? "on" : "")" @onclick="@(() => { _filter = "sold"; _itemPage = 0; })">@L["partner.soldout"]</span>
+            <span class="dlv-fchip @(_filter == "star" ? "on" : "")" @onclick="@(() => { _filter = "star"; _itemPage = 0; })">★</span>
+        </div>
+    </div>
+
+    @* ---------- One group at a time: pick the shelf, see the shelf ---------- *@
+    <div class="pmn-cats">
+        @foreach (var category in _menu)
+        {
+            var c = category;
+            <button type="button" class="pmn-cat-chip @(SelCatId == c.Id ? "on" : "")"
+                    @onclick="@(() => { _selCat = c.Id; _itemPage = 0; })">
+                @c.NameFor(L.Locale) <i>@c.Items.Count</i>
+            </button>
+        }
+    </div>
+
+    @foreach (var category in _menu)
+    {
+        var c = category;
+        // A search sweeps the whole menu; otherwise only the chosen group paints.
+        if (_search.Length == 0 && c.Id != SelCatId) { continue; }
+        var visible = Visible(c);
+        if (visible.Count == 0 && (_search.Length > 0 || _filter != "all")) { continue; }
+        <div class="pmn-cat">
+            <div class="pmn-cat-head">
+                <div class="pmn-cat-badge">@(visible.Count)</div>
+                <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="flex-grow-1">@c.NameFor(L.Locale)</MudText>
+                <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" title="@L["partner.newDish"]"
+                               OnClick="@(() => EditItem(null, c))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => EditCategory(c))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => DeleteCategory(c))" />
+            </div>
+
+            @if (c.Items.Count == 0)
+            {
+                @* An empty category shows the way, not just a shrug. *@
+                <button type="button" class="pmn-add-first" @onclick="@(() => EditItem(null, c))">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Style="width:17px;height:17px;" />
+                    @L["partner.newDish"]
+                </button>
+            }
+            @{
+                // Six per page behind ‹ › — a search sweeps everything it matched instead.
+                var pages = Math.Max(1, (visible.Count + PageSize - 1) / PageSize);
+                var page = Math.Clamp(_itemPage, 0, pages - 1);
+                var shown = _search.Length > 0 ? visible
+                    : visible.Skip(page * PageSize).Take(PageSize).ToList();
+            }
+            <div class="pmn-grid">
+                @foreach (var item in shown)
+                {
+                    var dish = item;
+                    <div class="pmn-dish @(dish.IsAvailable ? "" : "off")">
+                        <div class="pmn-dish-ph">
+                            @* No pictures on the list — only the product being edited shows its photos. *@
+                            @if (false)
+                            {
+                                <img src="" alt="" />
+                            }
+                            else
+                            {
+                                <span class="em">@dish.ImageEmoji</span>
+                            }
+                            @if (dish.IsPopular)
+                            {
+                                <span class="pmn-star">★</span>
+                            }
+                            @if (!dish.IsAvailable)
+                            {
+                                <span class="pmn-off">@L["partner.soldout"]</span>
+                            }
+                        </div>
+                        <div class="pmn-dish-body">
+                            <MudText Typo="Typo.subtitle2" Style="font-weight: 700; line-height: 1.2;">@dish.NameFor(L.Locale)</MudText>
+                            @if (dish.IsPending)
+                            {
+                                <span class="pmn-review wait" title="@L["menu.pendingHint"]">⏳ @L["menu.pendingBadge"]</span>
+                            }
+                            else if (dish.IsRejected)
+                            {
+                                <span class="pmn-review no" title="@(dish.RejectionReason ?? L["menu.rejectedHint"])">✕ @L["menu.rejectedBadge"]</span>
+                            }
+                            <MudText Typo="Typo.body2" Color="Color.Primary" Style="font-weight: 800;">
+                                @Fmt.Rial(dish.FinalPrice)
+                                @if (dish.HasDiscount)
+                                {
+                                    <span class="mf-old-price">@Fmt.Rial(dish.Price)</span>
+                                    <span class="mf-off-badge">-@dish.DiscountPercent.ToString("0.#")%</span>
+                                }
+                            </MudText>
+                            <div class="pmn-dish-foot">
+                                <MudSwitch T="bool" Value="@dish.IsAvailable" ValueChanged="@(_ => ToggleAvailable(dish))"
+                                           Color="Color.Success" Size="Size.Small" />
+                                <MudSpacer />
+                                @* Edit and delete fold into one quiet ⋮ — two fewer
+                                   loud icons on every single card. *@
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => EditItem(dish))">@L["common.edit"]</MudMenuItem>
+                                    <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" IconColor="Color.Error" OnClick="@(() => DeleteItem(dish))">@L["common.delete"]</MudMenuItem>
+                                </MudMenu>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+            @if (_search.Length == 0 && visible.Count > PageSize)
+            {
+                <Pager Page="page" Pages="pages" PageChanged="@(p => _itemPage = p)" />
+            }
+        </div>
+    }
+}
+
+@code {
+    private List<MenuCategoryDto>? _menu;
+    private string _search = "";
+
+    /// <summary>The group on show. Falls back to the first shelf when the chosen one is gone.</summary>
+    private int? _selCat;
+    private int? SelCatId =>
+        _selCat is { } s && _menu!.Any(c => c.Id == s) ? s : _menu!.FirstOrDefault()?.Id;
+
+    private const int PageSize = 6;
+    /// <summary>Which page of the chosen group is on show; clamped in markup.</summary>
+    private int _itemPage;
+    private string _filter = "all";
+
+    private List<MenuItemDto> AllItems => _menu?.SelectMany(c => c.Items).ToList() ?? [];
+
+    private List<MenuItemDto> Visible(MenuCategoryDto c) => c.Items.Where(i =>
+        (_search.Length == 0 || i.Name.Contains(_search, StringComparison.OrdinalIgnoreCase)) &&
+        _filter switch
+        {
+            "avail" => i.IsAvailable,
+            "sold" => !i.IsAvailable,
+            "star" => i.IsPopular,
+            _ => true
+        }).ToList();
+
+    /// <summary>Whether dishes without their own photo may borrow a stock picture here.</summary>
+    private bool _stockPhotos = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+        _stockPhotos = (await Api.GetMyRestaurantAsync())?.DishStockPhotos ?? true;
+    }
+
+    // The list travels without photos (api/menu?light=true): a menu of 300 dishes with four
+    // pictures each is many megabytes nobody looks at on this page. The edit dialog fetches
+    // the photos of the ONE product being edited.
+    private async Task Reload() => _menu = await Api.GetMyMenuOutlineAsync();
+
+    private async Task EditCategory(MenuCategoryDto? category)
+    {
+        var parameters = new DialogParameters<CategoryDialog> { { d => d.Existing, category } };
+        var dialog = await Dialogs.ShowAsync<CategoryDialog>(category is null ? L["partner.newCategory"] : L["common.edit"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled == false) await Reload();
+    }
+
+    private async Task DeleteCategory(MenuCategoryDto category)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["common.delete"],
+            string.Format(L["menu.delCat"], category.NameFor(L.Locale), category.Items.Count),
+            yesText: L["common.delete"], cancelText: L["common.keep"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.DeleteCategoryAsync(category.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error);
+        await Reload();
+    }
+
+    private async Task EditItem(MenuItemDto? item, MenuCategoryDto? presetCategory = null)
+    {
+        if (_menu is null || _menu.Count == 0) return;
+        var parameters = new DialogParameters<MenuItemDialog>
+        {
+            { d => d.Existing, item },
+            { d => d.Categories, presetCategory is null ? _menu : [presetCategory, .. _menu.Where(m => m.Id != presetCategory.Id)] }
+        };
+        var dialog = await Dialogs.ShowAsync<MenuItemDialog>(item is null ? L["partner.newDish"] : L["common.edit"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled != false) return;
+
+        // New products are reviewed before customers can see them — say so plainly
+        // rather than letting the owner wonder why it isn't on their store page.
+        if (result.Data as string == "pending")
+            Snackbar.Add(L["menu.pendingCreated"], Severity.Info);
+        await Reload();
+    }
+
+    private async Task ToggleAvailable(MenuItemDto item)
+    {
+        var (ok, error) = await Api.ToggleMenuItemAsync(item.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+        await Reload();
+    }
+
+    private async Task DeleteItem(MenuItemDto item)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["common.delete"],
+            string.Format(L["menu.delItem"], item.NameFor(L.Locale)),
+            yesText: L["common.delete"], cancelText: L["common.keep"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.DeleteMenuItemAsync(item.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error);
+        await Reload();
+    }
+}

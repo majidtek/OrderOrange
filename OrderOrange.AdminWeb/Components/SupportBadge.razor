@@ -1,0 +1,28 @@
+@inject ApiClient Api
+@implements IDisposable
+
+@* The little red count beside "Support" in the admin drawer: tickets with partner
+   news the desk has not opened yet. Polled once a minute. *@
+
+@if (_unread > 0)
+{
+    <span class="tk-navbadge">@(_unread > 99 ? "99+" : _unread.ToString())</span>
+}
+
+@code {
+    private int _unread;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+        _timer = new System.Threading.Timer(async _ => await InvokeAsync(async () => { await Refresh(); StateHasChanged(); }), null, 60000, 60000);
+    }
+
+    private async Task Refresh()
+    {
+        try { _unread = (await Api.AdminSupportSummaryAsync())?.Unread ?? 0; } catch { }
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

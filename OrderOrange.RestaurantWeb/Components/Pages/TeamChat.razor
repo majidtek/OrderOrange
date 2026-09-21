@@ -1,0 +1,127 @@
+﻿@page "/chat"
+@layout Layout.ChatLayout
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The team inbox: one row per teammate. Tapping a name opens that private
+   one-to-one thread. Same shape as the table-chat inbox, in the team's indigo. *@
+
+<PageTitle>Partner — Team chat</PageTitle>
+
+<div class="wa-desk team">
+    <div class="wa-home">
+        <div class="wa-hometop">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Style="color:#fff;"
+                           OnClick="@(() => Nav.NavigateTo("/"))" />
+            <b>@L["tchat.title"]</b>
+        </div>
+        <div class="wa-search">
+            <input @bind="_search" @bind:event="oninput" placeholder="🔍 @L["tchat.searchPeople"]" />
+        </div>
+
+        @if (_contacts is null)
+        {
+            <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+        }
+        else if (_contacts.Count == 0)
+        {
+            <div class="wa-empty">
+                <div style="font-size: 46px;">👥</div>
+                <b>@L["tchat.noTeam"]</b>
+                <span>@L["tchat.noTeamHint"]</span>
+            </div>
+        }
+        else
+        {
+            <div class="wa-rows">
+                @foreach (var c in Shown)
+                {
+                    var contact = c;
+                    <button type="button" class="wa-row" @onclick="@(() => Open(contact))">
+                        <span class="ava c@(contact.UserId % 8)">@Initials(contact.Name)</span>
+                        <span class="mid">
+                            <span class="top">
+                                <b>@contact.Name @if (contact.IsOwner) { <i class="tc-owner">★</i> }</b>
+                                @if (contact.LastAt is { } at)
+                                {
+                                    <small class="@(contact.Unread > 0 ? "hot" : "")">@ChatClock(at)</small>
+                                }
+                            </span>
+                            <span class="bot">
+                                <span class="preview @(contact.Unread > 0 ? "unread" : "")">
+                                    @(contact.LastFrom == "me" ? "✓ " : "")@(string.IsNullOrEmpty(contact.LastText) ? RoleLabel(contact.Role) : contact.LastText)
+                                </span>
+                                @if (contact.Unread > 0)
+                                {
+                                    <span class="wa-unread">@(contact.Unread > 99 ? "99+" : contact.Unread.ToString())</span>
+                                }
+                            </span>
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    @* Wide monitors: the open thread sits beside the list. *@
+    <div class="wa-side">
+        @if (_selected is { } sel)
+        {
+            <TeamChatPane OtherId="sel.UserId" OtherName="@sel.Name" @key="sel.UserId" />
+        }
+        else
+        {
+            <div class="wa-placeholder">
+                <div style="font-size: 56px;">💬</div>
+                <b>@L["tchat.pickPerson"]</b>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<TeamContactDto>? _contacts;
+    private TeamContactDto? _selected;
+    private string _search = "";
+    private System.Threading.Timer? _poll;
+
+    private IEnumerable<TeamContactDto> Shown =>
+        (_contacts ?? []).Where(c => string.IsNullOrWhiteSpace(_search) ||
+            c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        _poll = new System.Threading.Timer(async _ =>
+        {
+            try { await Load(); await InvokeAsync(StateHasChanged); } catch { }
+        }, null, 6000, 6000);
+    }
+
+    private async Task Load() => _contacts = await Api.GetTeamContactsAsync() ?? [];
+
+    /// <summary>Desktop opens the thread in the side pane; a phone leaves for its own page.</summary>
+    private async Task Open(TeamContactDto c)
+    {
+        var narrow = false;
+        // Must match food.css: the side pane (.wa-desk .wa-side) only exists from 1280px up.
+        try { narrow = await JS.InvokeAsync<bool>("eval", "window.innerWidth < 1280"); } catch { }
+        if (narrow) Nav.NavigateTo($"/chat/{c.UserId}?name={Uri.EscapeDataString(c.Name)}");
+        else _selected = c;
+    }
+
+    private string RoleLabel(string role) => L[$"trole.{role}"];
+
+    private static string Initials(string s) =>
+        string.IsNullOrWhiteSpace(s) ? "•" : s.Trim().Length <= 2 ? s.Trim() : s.Trim()[..2];
+
+    private string ChatClock(DateTime at) =>
+        at.Date == DateTime.Today ? at.ToString("HH:mm")
+        : at.Date == DateTime.Today.AddDays(-1) ? L["qc.yesterday"]
+        : at.ToString("dd/MM");
+
+    public void Dispose() => _poll?.Dispose();
+}

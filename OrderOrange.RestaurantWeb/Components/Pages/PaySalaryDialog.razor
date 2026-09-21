@@ -1,0 +1,100 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex align-center mb-4" style="gap: 12px;">
+            <div class="st-av sm">
+                @if (Member.Photo is not null)
+                {
+                    <img src="@Member.Photo" alt="@Member.FullName" />
+                }
+                else
+                {
+                    <span>@StaffRoles.Emoji(Member.Role)</span>
+                }
+            </div>
+            <div>
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;">@Member.FullName</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @L["srole." + Member.Role] · @(new DateTime(Year, Month, 1).ToString("MMMM yyyy"))
+                </MudText>
+            </div>
+        </div>
+
+        <div class="d-flex" style="gap: 12px;">
+            <MudNumericField @bind-Value="_bonus" Label="@L["w.bonus"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             Format="0.000" Min="0m" Step="5m" Class="mb-3" Immediate="true" />
+            <MudNumericField @bind-Value="_deduction" Label="@L["w.deduction"]" Variant="Variant.Outlined"
+                             Margin="Margin.Dense" Format="0.000" Min="0m" Step="5m" Class="mb-3" Immediate="true" />
+        </div>
+
+        <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-1">@L["pay.paidBy"]</MudText>
+        <div class="pv-seg mb-3" style="max-width: 300px;">
+            <button type="button" class="@(_method == "cash" ? "on" : "")" @onclick="@(() => _method = "cash")">@L["pay.cash"]</button>
+            <button type="button" class="@(_method == "bank" ? "on" : "")" @onclick="@(() => _method = "bank")">@L["pay.bank"]</button>
+            <button type="button" class="@(_method == "transfer" ? "on" : "")" @onclick="@(() => _method = "transfer")">@L["pay.transfer"]</button>
+        </div>
+
+        <MudTextField @bind-Value="_notes" Label="@L["common.notes"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Class="mb-3" MaxLength="300" />
+
+        <div class="pr-calc">
+            <div><span>@L["pay.baseSalary"]</span><span>@Fmt.Rial(Member.MonthlySalary)</span></div>
+            @if (_bonus > 0)
+            {
+                <div class="plus"><span>@L["w.bonus"]</span><span>+ @Fmt.Rial(_bonus)</span></div>
+            }
+            @if (_deduction > 0)
+            {
+                <div class="minus"><span>@L["w.deduction"]</span><span>− @Fmt.Rial(_deduction)</span></div>
+            }
+            <div class="net"><span>@L["pay.netToPay"]</span><span>@Fmt.Rial(Net)</span></div>
+        </div>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Payments"
+                   OnClick="Save" Disabled="_busy">
+            @L["pay.payBtn"] @Fmt.Rial(Net)
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public StaffDto Member { get; set; } = default!;
+    [Parameter] public int Year { get; set; }
+    [Parameter] public int Month { get; set; }
+
+    private decimal _bonus;
+    private decimal _deduction;
+    private string _method = "cash";
+    private string _notes = "";
+    private string? _error;
+    private bool _busy;
+
+    private decimal Net => Math.Max(0, Member.MonthlySalary + _bonus - _deduction);
+
+    private async Task Save()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.PaySalaryAsync(
+                new PaySalaryRequest(Member.Id, Year, Month, _bonus, _deduction, _method, _notes));
+            if (!ok) { _error = error ?? L["common.paymentFail"]; return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,48 @@
+@inherits LayoutComponentBase
+@inject LanguageService Lang
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* The registration wizard's own stage: theme, RTL and providers — no session
+   gate, because the person here does not have an account yet. *@
+
+<MudThemeProvider Theme="MainLayout.Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    @* The fixed rail above the wizard: brand on one side, the doors on the other. *@
+    <div class="rg-topbar">
+        <div class="brand">
+            <span class="mark"><img src="_content/OrderOrange.ClientCore/logo.svg?v=4" alt="OrderOrange" /></span>
+            <span class="tx">
+                <b>OrderOrange</b>
+                <small>PARTNER</small>
+            </span>
+        </div>
+        <span style="flex: 1;"></span>
+        <span class="rg-langbtn"><LanguageMenu Compact="true" /></span>
+        <button type="button" class="rg-loginbtn2" @onclick="@(() => Nav.NavigateTo("/"))">
+            <MudIcon Icon="@Icons.Material.Filled.Login" Style="width:16px;height:16px;" />
+            @Lang["login.signin"]
+        </button>
+    </div>
+    <div class="rg-shell">
+        @Body
+    </div>
+</MudRTLProvider>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // The page's form pass — the map/search doors ask for it back.
+        try { await JS.InvokeVoidAsync("eval", $"window.ooFT='{OrderOrange.Shared.FormToken.Create()}'"); } catch { }
+        await Lang.EnsureLoadedAsync();
+    }
+
+    protected override void OnInitialized() => Lang.Changed += OnLangChanged;
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.Changed -= OnLangChanged;
+}

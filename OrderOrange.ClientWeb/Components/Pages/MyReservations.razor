@@ -1,0 +1,99 @@
+@page "/reservations"
+@using OrderOrange.ClientCore.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject AppState State
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+@* The customer's booking book: every table they asked for, with the store's answer
+   as a live status. The push that says "confirmed" links here. *@
+
+<PageTitle>@L["rsv.mineTitle"] | OrderOrange</PageTitle>
+
+<div style="max-width: 760px; margin: 0 auto;">
+    <PageHeader Title="@L["rsv.mineTitle"]" Subtitle="" />
+
+    @if (State.Session is null)
+    {
+        <EmptyState Emoji="🔐" Title="@L["rsv.signInFirst"]" />
+    }
+    else if (_list is null)
+    {
+        <Loader />
+    }
+    else if (_list.Count == 0)
+    {
+        <EmptyState Emoji="📅" Title="@L["rsv.mineEmpty"]" />
+    }
+    else
+    {
+        <AutoRefresh OnRefresh="Load" Seconds="20" />
+        @foreach (var r in _list)
+        {
+            var res = r;
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3 rsvm-row">
+                <div class="when">
+                    <b>@res.At.ToString("HH:mm")</b>
+                    <small>→ @res.Until.ToString("HH:mm")</small>
+                    <small>@res.At.ToString("dd MMM")</small>
+                </div>
+                <div class="what">
+                    <b>@StoreText.Name(res.StoreName, res.StoreNames, L)</b>
+                    <small>
+                        👥 @res.Guests
+                        · 🍽️ @(string.IsNullOrWhiteSpace(res.TableName) ? L["rsv.anyTable"] : res.TableName)
+                        @if (res.Price > 0) { <span>· 💳 @Fmt.Rial(res.Price)</span> }
+                    </small>
+                    @if (!string.IsNullOrWhiteSpace(res.Note)) { <small class="note">💬 @res.Note</small> }
+                </div>
+                <div class="acts">
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@StatusColor(res.Status)">
+                        @L[$"rsv.st.{res.Status}"]
+                    </MudChip>
+                    @if (res.Status is "pending" or "confirmed" && res.At > DateTime.Now)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                   OnClick="@(() => Cancel(res))">@L["rsv.cancel"]</MudButton>
+                    }
+                </div>
+            </MudPaper>
+        }
+    }
+</div>
+
+@code {
+    private List<MyReservationDto>? _list;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnStateChanged;
+        if (State.Session is not null) await Load();
+    }
+
+    private async Task Load() => _list = await Api.GetMyReservationsAsync() ?? [];
+
+    private void OnStateChanged() => _ = InvokeAsync(async () =>
+    {
+        if (State.Session is not null && _list is null) await Load();
+        StateHasChanged();
+    });
+
+    private static Color StatusColor(string status) => status switch
+    {
+        "confirmed" => Color.Success,
+        "seated" => Color.Info,
+        "cancelled" => Color.Error,
+        _ => Color.Warning,
+    };
+
+    private async Task Cancel(MyReservationDto reservation)
+    {
+        var (updated, error) = await Api.CancelMyReservationAsync(reservation.Id);
+        if (updated is null) { Snackbar.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snackbar.Add(L["rsv.st.cancelled"], Severity.Info);
+        await Load();
+    }
+
+    public void Dispose() => State.Changed -= OnStateChanged;
+}

@@ -1,0 +1,21 @@
+@inject LanguageService L
+<MudDialog ContentClass="pa-2">
+    <DialogContent>
+        <MudTabs Elevation="0" ApplyEffectsToContainer="true" PanelClass="pt-3">
+            <MudTabPanel Text="@L["common.details"]" Icon="@Icons.Material.Filled.ReceiptLong">
+                <OrderView Order="Order" ShowRestaurant="false" />
+            </MudTabPanel>
+            <MudTabPanel Text="@L["nav.chats"]" Icon="@Icons.Material.Filled.Chat">
+                <ChatPanel OrderId="Order.Id" />
+            </MudTabPanel>
+        </MudTabs>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Close())">@L["common.close"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public OrderDto Order { get; set; } = default!;
+}

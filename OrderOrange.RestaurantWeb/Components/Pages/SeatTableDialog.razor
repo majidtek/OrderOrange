@@ -1,0 +1,98 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* Seating a party: someone from the customer book (searchable — their orders can then
+   be taken straight from the table) or just a walk-in name for the floor plan. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">
+            @string.Format(L["tables.seatAt"], Table.Name)
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField T="string" Value="_search" ValueChanged="OnSearch" Placeholder="@L["cust.search"]"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Clearable="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mb-2" />
+
+        <div class="oo-picker-list mb-3" style="max-height: 34vh;">
+            @foreach (var c in _customers ?? [])
+            {
+                var customer = c;
+                <button type="button" class="oo-picker-tile" @onclick="@(() => SeatCustomer(customer))">
+                    <span class="em">👤</span>
+                    <span class="nm">@customer.Name <small class="mf-ltr" style="color:#888;">@customer.Phone</small></span>
+                </button>
+            }
+            @if (_customers is { Count: 0 })
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="my-2">
+                    @L["cust.emptyTitle"]
+                </MudText>
+            }
+        </div>
+
+        <MudDivider Class="mb-3" />
+
+        @* A walk-in: no book entry, just a name so the floor knows who is where. *@
+        <MudTextField @bind-Value="_guestName" Label="@L["tables.walkIn"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" MaxLength="80" Immediate="true" />
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_busy || _guestName.Trim().Length == 0)"
+                   OnClick="SeatGuest">
+            @L["tables.seat"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public StoreTableDto Table { get; set; } = default!;
+
+    private List<StoreCustomerDto>? _customers;
+    private string _search = "";
+    private string _guestName = "";
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() =>
+        _customers = await Api.GetStoreCustomersAsync() ?? [];
+
+    private async Task OnSearch(string value)
+    {
+        _search = value ?? "";
+        _customers = await Api.GetStoreCustomersAsync(_search) ?? [];
+    }
+
+    // Seating goes through the TAB endpoint: the party is seated AND their open
+    // invoice starts in the same move — a seated table always has a bill running.
+    private async Task SeatCustomer(StoreCustomerDto customer)
+    {
+        _busy = true;
+        try
+        {
+            var (tab, error) = await Api.OpenTabAsync(new OpenTabRequest(Table.Id, customer.Id));
+            if (tab is null) { _error = error ?? L["common.saveFail"]; return; }
+            Dialog.Close(DialogResult.Ok(tab));
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task SeatGuest()
+    {
+        _busy = true;
+        try
+        {
+            var (tab, error) = await Api.OpenTabAsync(new OpenTabRequest(Table.Id, GuestName: _guestName));
+            if (tab is null) { _error = error ?? L["common.saveFail"]; return; }
+            Dialog.Close(DialogResult.Ok(tab));
+        }
+        finally { _busy = false; }
+    }
+}

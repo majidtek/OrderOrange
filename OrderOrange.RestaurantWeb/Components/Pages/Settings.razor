@@ -1,0 +1,881 @@
+﻿@page "/settings"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+
+<PageTitle>Partner — Settings</PageTitle>
+
+<PageHeader Title="@TypedTitle" Subtitle="@L["partner.storeSettingsSub"]" />
+
+@if (_restaurant is null || _cuisines is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="st-page" style="max-width: 1100px;">
+        <MudGrid Spacing="4">
+            <MudItem xs="12" md="7">
+                <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl">
+                    <MudText Typo="Typo.h6" Class="mb-4">@L["partner.profile"]</MudText>
+                    @* The same open/closed switch the top bar carries — here too, where
+                       every other decision about the shop is made. *@
+                    <MudSwitch T="bool" Value="_isOpen" ValueChanged="ToggleOpenNow" Color="Color.Success" Size="Size.Small" Class="mb-3"
+                               Label="@(_isOpen ? L["partner.open"] : L["partner.closed"])" />
+                    @* The TYPE leads: what it is decides what everything below is called. *@
+                    <MudSelect T="StoreType" Value="_storeType" ValueChanged="OnStoreTypeChanged" Label="@L["partner.storeType"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+                        <MudSelectItem T="StoreType" Value="StoreType.Restaurant">🍔 @L["st.restaurant"]</MudSelectItem>
+                        <MudSelectItem T="StoreType" Value="StoreType.Grocery">🛒 @L["st.grocery"]</MudSelectItem>
+                        <MudSelectItem T="StoreType" Value="StoreType.Pharmacy">💊 @L["st.pharmacy"]</MudSelectItem>
+                        <MudSelectItem T="StoreType" Value="StoreType.Flowers">💐 @L["st.flowers"]</MudSelectItem>
+                        <MudSelectItem T="StoreType" Value="StoreType.Shop">🛍️ @L["st.shop"]</MudSelectItem>
+                    </MudSelect>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">
+                        @string.Format(L["login.typedName"], L[$"st.{_storeType.ToString().ToLowerInvariant()}"])
+                    </MudText>
+                    <StoreNameFields Value="_names" ValueChanged="OnNamesSaved" />
+                    <MudTextField @bind-Value="_description" Label="@L["partner.description"]" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Class="mb-3" />
+                    @* A kitchen is not always one thing — an Iranian grill can be an
+                       Arabic one too. Same picker as the add-business wizard: the main
+                       type wears the star, further taps add the rest. A vertical store
+                       IS its vertical, so it keeps the single-choice picker. *@
+                    @if (_storeType == StoreType.Restaurant)
+                    {
+                        <CuisinePicker @bind-Value="_cuisineId" Label="@L["w.category"]" Class="mb-3"
+                            Choices="@FilteredCuisines" Multi="true"
+                            ExtraValues="_extraCuisineIds"
+                            ExtraValuesChanged="@(v => _extraCuisineIds = v.ToHashSet())" />
+                    }
+                    else
+                    {
+                        <CuisinePicker @bind-Value="_cuisineId" Label="@L["w.category"]" Class="mb-3"
+                            Choices="@FilteredCuisines" />
+                    }
+                    @* The real logo. It replaces the emoji everywhere the shop introduces
+                    itself, so it is the first thing on this card. *@
+                    <div class="oo-logo-row mb-3">
+                        <div class="shot">
+                            @if (!string.IsNullOrEmpty(_logoData))
+                            {
+                                <img src="@_logoData" alt="logo" />
+                            }
+                            else
+                            {
+                                <span class="em">@(string.IsNullOrWhiteSpace(_logoEmoji) ? "🍽️" : _logoEmoji)</span>
+                            }
+                        </div>
+                        <div class="tx">
+                            <b>@L["partner.logo"]</b>
+                            <small>@L["partner.logoHint"]</small>
+                            <div class="d-flex align-center mt-2" style="gap: 8px; flex-wrap: wrap;">
+                                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary"
+                                    StartIcon="@Icons.Material.Filled.Upload" Disabled="_uploadingLogo"
+                                    OnClick="UploadLogo">@L["partner.logoUpload"]</MudButton>
+                                    @if (!string.IsNullOrEmpty(_logoData))
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error"
+                                            StartIcon="@Icons.Material.Filled.DeleteOutline" Disabled="_uploadingLogo"
+                                            OnClick="ClearLogo">@L["common.delete"]</MudButton>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="d-flex" style="gap: 12px;">
+                                @* Tapped from the picker, never typed — an emoji keyboard is a
+                                different thing on every phone. *@
+                                <div @onclick="PickLogoEmoji" style="cursor: pointer; flex: 1;">
+                                    <MudTextField Value="@_logoEmoji" T="string" ReadOnly="true" Label="@L["partner.logoEmoji"]"
+                                        Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3"
+                                        Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.EmojiEmotions" />
+                                </div>
+                                <MudTextField @bind-Value="_bannerColor" Label="@L["partner.bannerColor"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3"
+                                    HelperText="@L["partner.hexHint"]" />
+                            </div>
+                            <div class="d-flex" style="gap: 12px;">
+                                <MudTextField @bind-Value="_area" Label="@L["addr.area"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                                <MudTextField @bind-Value="_street" Label="@L["addr.street"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+                            </div>
+                            @for (var i = 0; i < _phoneEntries.Count; i++)
+                            {
+                                var idx = i;
+                                <div class="d-flex align-center mb-3" style="gap: 8px;">
+                                    <span class="ph-kind">@(_phoneEntries[idx].IsMobile ? "📱" : "☎️")</span>
+                                    <div style="flex: 1;">
+                                        <PhoneField Value="@_phoneEntries[idx].Number" ValueChanged="@(v => _phoneEntries[idx].Number = v)"
+                                            Label="@(_phoneEntries[idx].IsMobile ? L["rg.mobile"] : L["common.phone"])" />
+                                    </div>
+                                    @if (idx > 0)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
+                                            OnClick="@(() => _phoneEntries.RemoveAt(idx))" />
+                                    }
+                                </div>
+                            }
+                            @if (_phoneEntries.Count < 4)
+                            {
+                                @* Adding a number begins with naming WHAT it is. *@
+                                <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Dense="true">
+                                    <ActivatorContent>
+                                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" Class="mb-2"
+                                            StartIcon="@Icons.Material.Filled.AddIcCall">
+                                            @L["rg.addPhone"]
+                                        </MudButton>
+                                    </ActivatorContent>
+                                    <ChildContent>
+                                        <MudMenuItem OnClick="@(() => _phoneEntries.Add(new PhoneEntry { IsMobile = true }))">📱 @L["rg.mobile"]</MudMenuItem>
+                                        <MudMenuItem OnClick="@(() => _phoneEntries.Add(new PhoneEntry { IsMobile = false }))">☎️ @L["common.phone"]</MudMenuItem>
+                                    </ChildContent>
+                                </MudMenu>
+                            }
+                        </MudPaper>
+
+                        @* Where the shop stands is its own subject — a map deserves its own card,
+                        not a footnote under the phone numbers. *@
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mt-4">
+                            <MudText Typo="Typo.h6" Class="mb-1">@L["loc.title"]</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-4">@L["loc.sub"]</MudText>
+                            <LocationPicker @bind-Lat="_lat" @bind-Lng="_lng" />
+                        </MudPaper>
+
+                        @* Everything else on the store's card: reachability and registration. *@
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mt-4">
+                            <MudText Typo="Typo.h6" Class="mb-1">@L["bi.title"]</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-4">@L["bi.sub"]</MudText>
+                            <div class="d-flex" style="gap: 12px;">
+                                <MudTextField @bind-Value="_email" Label="@L["bi.email"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr" InputType="InputType.Email"
+                                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Email" />
+                                <MudTextField @bind-Value="_whatsapp" Label="@L["bi.whatsapp"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr"
+                                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Chat" />
+                            </div>
+                            <div class="d-flex" style="gap: 12px;">
+                                <MudTextField @bind-Value="_website" Label="@L["bi.website"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr"
+                                    Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Language" />
+                                <MudTextField @bind-Value="_instagram" Label="@L["bi.instagram"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr"
+                                    Adornment="Adornment.Start" AdornmentText="@("@")" />
+                            </div>
+                            <MudTextField @bind-Value="_crNumber" Label="@L["bi.cr"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr"
+                                HelperText="@L["bi.crHint"]" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Verified" />
+                            @* The REAL VAT registration — printed on every receipt, so it is
+                               entered here once and never invented anywhere. *@
+                            <MudTextField @bind-Value="_vatNumber" Label="@L["bi.vat"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr"
+                                HelperText="@L["bi.vatHint"]" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.ReceiptLong" />
+                        </MudPaper>
+
+                        @* ---------- The shop's short address ----------
+                           orderorange.com/mazagh instead of /restaurant/5000217. Checked
+                           live while the owner types, saved on its own button: it has its
+                           own uniqueness rule, and holding the whole settings save hostage
+                           to a taken handle would be miserable. *@
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mt-4">
+                            <MudText Typo="Typo.h6" Class="mb-1">@L["slug.title"]</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-4">@L["slug.sub"]</MudText>
+                            <MudTextField T="string" Value="_slug" ValueChanged="OnSlugTyped" Immediate="true"
+                                          Label="@L["slug.label"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                          Class="mf-ltr mf-ascii" MaxLength="40"
+                                          Adornment="Adornment.Start" AdornmentText="orderorange.com/" />
+                            @if (_slugStatus is not null)
+                            {
+                                <MudText Typo="Typo.caption"
+                                         Color="@(_slugStatus == "free" ? Color.Success : Color.Error)"
+                                         Class="d-block mt-1">
+                                    @(_slugStatus switch
+                                    {
+                                        "free" => L["slug.free"],
+                                        "taken" => L["slug.taken"],
+                                        "reserved" => L["slug.reserved"],
+                                        _ => L["slug.invalid"],
+                                    })
+                                </MudText>
+                            }
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="mt-3"
+                                       Disabled="@(_slugStatus is not null && _slugStatus != "free" && _slug.Length > 0)"
+                                       OnClick="SaveSlug">
+                                @L["slug.save"]
+                            </MudButton>
+                            @if (_slugSaved)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Success" Class="d-inline-block ms-3">✓ @L["slug.saved"]</MudText>
+                            }
+                            @* The WHOLE link, ready to hand out — one tap copies it, so
+                               nobody retypes their own address from an input's pieces. *@
+                            @if (_slug is { Length: > 0 } && (_slugStatus is null or "free"))
+                            {
+                                <div class="slug-link mf-ltr">
+                                    <a href="@FullSlugUrl" target="_blank">@FullSlugUrl</a>
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.ContentCopy"
+                                               OnClick="CopySlugLink">@L["qr.copyLink"]</MudButton>
+                                </div>
+                            }
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" md="5">
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4">
+                            <MudText Typo="Typo.h6" Class="mb-4">@L["partner.deliveryTerms"]</MudText>
+                            <MudNumericField @bind-Value="_deliveryFee" Label="@L["partner.deliveryFeeOmr"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                Format="0.000" Min="0m" Step="0.100m" Class="mb-3" />
+                            <MudNumericField @bind-Value="_minOrder" Label="@L["partner.minOrderOmr"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                Format="0.000" Min="0m" Step="0.500m" Class="mb-3" />
+                            <MudNumericField @bind-Value="_prepMinutes" Label="@L["partner.prepTime"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                Min="5" Max="120" Class="mb-3" />
+                            <MudNumericField @bind-Value="_taxPercent" Label="@L["partner.taxPercent"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                Min="0m" Max="25m" Step="0.5m" Class="mb-3" Adornment="Adornment.End" AdornmentText="%"
+                                HelperText="@L["partner.taxHint"]" />
+                            @* Collection costs the shop no delivery at all, so it is on by default;
+                            turn it off only if customers genuinely cannot come to the counter. *@
+                            <MudSwitch T="bool" @bind-Value="_allowsPickup" Color="Color.Primary"
+                                Label="@L["partner.allowPickup"]" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                @L["partner.allowPickupHint"]
+                            </MudText>
+                            @* Some shops keep their own driver. Their orders then never reach the
+                            platform's riders — the shop runs them from its Deliveries page. *@
+                            @* Locked ON platform-wide: every store carries its own orders for
+                               now, so the switch shows the fact and refuses the finger. *@
+                            <MudSwitch T="bool" @bind-Value="_selfDelivery" Color="Color.Primary" Class="mt-2"
+                                Label="@L["partner.selfDelivery"]" Disabled="true" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                @L["partner.selfDeliveryHint"]
+                            </MudText>
+                            @* Which ending the POS save button offers first: park the bill, or settle it. *@
+                            <MudSwitch T="bool" @bind-Value="_posDefaultOpen" Color="Color.Primary" Class="mt-2"
+                                Label="@L["partner.posDefaultOpen"]" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                @L["partner.posDefaultOpenHint"]
+                            </MudText>
+                            @* The paper follows the money: settle a bill, get a receipt — no extra tap. *@
+                            <MudSwitch T="bool" @bind-Value="_directPrint" Color="Color.Primary" Class="mt-2"
+                                Label="@L["partner.directPrint"]" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                @L["partner.directPrintHint"]
+                            </MudText>
+                            @* Everything the kitchen printer prints — names, edits, headings — in one language. *@
+                            <MudSelect T="string" @bind-Value="_kitchenLanguage" Label="@L["partner.kitchenLang"]"
+                                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-3">
+                                <MudSelectItem T="string" Value="@("")">@L["partner.kitchenLangDefault"]</MudSelectItem>
+                                @foreach (var (lc, name) in KitchenLanguages)
+                                {
+                                    <MudSelectItem T="string" Value="@lc">@name</MudSelectItem>
+                                }
+                            </MudSelect>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                @L["partner.kitchenLangHint"]
+                            </MudText>
+                            @* What money is called on every screen and printout of this shop. *@
+                            <div class="st-cur mt-3">
+                                <MudSelect T="string" Value="_currency" ValueChanged="OnCurrency" Label="@L["partner.currency"]"
+                                           Variant="Variant.Outlined" Margin="Margin.Dense" Class="st-cur-pick">
+                                    @foreach (var (symbol, name) in Currencies)
+                                    {
+                                        <MudSelectItem T="string" Value="@symbol">@symbol — @name</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                <MudTextField T="string" @bind-Value="_currency" Label="@L["partner.currencyOwn"]"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="8" Class="st-cur-own" />
+                                <span class="st-cur-eg">@L["partner.currencyEg"] <b>@Fmt.Money(12.5m)</b></span>
+                            </div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                @L["partner.currencyHint"]
+                            </MudText>
+                            @* Photo-less dishes borrow a stock picture guessed from the name; a shop the
+                               guesser serves badly turns it off and gets clean emoji tiles. *@
+                            <MudSwitch T="bool" @bind-Value="_dishStockPhotos" Color="Color.Primary" Class="mt-2"
+                                Label="@L["set.stockPhotos"]" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                @L["set.stockPhotosHint"]
+                            </MudText>
+                            @* Table bookings from the store's public page — each one waits for this house's yes. *@
+                            <MudSwitch T="bool" @bind-Value="_onlineReservations" Color="Color.Primary" Class="mt-2"
+                                Label="@L["partner.onlineReservations"]" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                @L["partner.onlineReservationsHint"]
+                            </MudText>
+                            @* What a booking costs, if anything. Left at zero — the usual
+                               case — the guest is never shown a price at all. *@
+                            @if (_onlineReservations)
+                            {
+                                <div class="d-flex gap-3 mt-3">
+                                    <MudNumericField T="decimal" @bind-Value="_reservePricePerTable" Min="0" Max="999" Step="0.100m"
+                                                     Format="0.000" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                     Label="@L["partner.reservePricePerTable"]" />
+                                    <MudNumericField T="decimal" @bind-Value="_reservePricePerMinute" Min="0" Max="99" Step="0.010m"
+                                                     Format="0.000" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                     Label="@L["partner.reservePricePerMinute"]" />
+                                </div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                    @L["partner.reservePriceHint"]
+                                </MudText>
+                            }
+                        </MudPaper>
+                        @* The store's own mailbox — contracts and paperwork go out from
+                           here, wearing the store's address. Empty = the platform sends. *@
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4">
+                            <MudText Typo="Typo.h6" Class="mb-1">@L["partner.mailTitle"]</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">
+                                @L["partner.mailHint"]
+                            </MudText>
+                            <div class="d-flex gap-3">
+                                <MudTextField @bind-Value="_smtpHost" Label="@L["partner.mailHost"]" Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" Class="mb-3 mf-ltr" MaxLength="200"
+                                              Placeholder="smtp.gmail.com" Style="flex: 2;" />
+                                <MudNumericField T="int" @bind-Value="_smtpPort" Label="@L["partner.mailPort"]" Min="1" Max="65535"
+                                                 Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Style="flex: 1;" />
+                            </div>
+                            <MudTextField @bind-Value="_smtpUser" Label="@L["partner.mailUser"]" Variant="Variant.Outlined"
+                                          Margin="Margin.Dense" Class="mb-3 mf-ltr" MaxLength="200" />
+                            <MudTextField @bind-Value="_smtpPassword" Label="@L["partner.mailPassword"]" Variant="Variant.Outlined"
+                                          Margin="Margin.Dense" Class="mb-3 mf-ltr" MaxLength="200"
+                                          InputType="InputType.Password" HelperText="@L["partner.mailPasswordHint"]" />
+                            <MudTextField @bind-Value="_smtpFrom" Label="@L["partner.mailFrom"]" Variant="Variant.Outlined"
+                                          Margin="Margin.Dense" Class="mf-ltr" MaxLength="200" />
+                        </MudPaper>
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4">
+                            <MudText Typo="Typo.h6" Class="mb-1">@L["partner.workingHours"]</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">
+                                @L["partner.hoursHint"]
+                            </MudText>
+                            @foreach (var day in _hours)
+                            {
+                                var h = day;
+                                <div class="ph-row mb-1">
+                                    <span class="d">@DayNames[h.Day]</span>
+                                    <MudSwitch T="bool" @bind-Value="h.Closed" Color="Color.Error" Size="Size.Small" />
+                                    @if (!h.Closed)
+                                    {
+                                        <MfTimePicker @bind-Time="h.Open" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                            Class="ph-time" Adornment="Adornment.None" TimeFormat="HH:mm" />
+                                        <span class="sep">–</span>
+                                        <MfTimePicker @bind-Time="h.Close" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                            Class="ph-time" Adornment="Adornment.None" TimeFormat="HH:mm" />
+                                    }
+                                    else
+                                    {
+                                        <span class="ph-closed">@L["partner.closed"]</span>
+                                    }
+                                </div>
+                            }
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2" OnClick="SaveHours"
+                                StartIcon="@Icons.Material.Filled.Schedule" Disabled="_savingHours">@L["partner.saveHours"]</MudButton>
+                            </MudPaper>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Class="mt-4"
+                                OnClick="Save" Disabled="_saving" StartIcon="@Icons.Material.Filled.Save">
+                                @L["common.save"]
+                            </MudButton>
+                        </MudItem>
+                    </MudGrid>
+
+                    @* ---------- Store photo gallery — customers see these as the banner slideshow ---------- *@
+                    <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mt-4">
+                        <div class="d-flex align-center mb-1" style="gap: 8px;">
+                            <MudText Typo="Typo.h6">@L["partner.storePhotos"]</MudText>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@(_photos?.Count ?? 0)/4</MudChip>
+                        </div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                            @L["partner.storePhotosSub"]
+                        </MudText>
+                        @if (_photoPct >= 0)
+                        {
+                            <div class="qc-upload mb-2">
+                                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.CloudUpload" Style="width:17px;height:17px;" /></span>
+                                <span class="meta">
+                                    <small>@L["qc.uploading"]</small>
+                                    <span class="bar"><span class="fill" style="width:@(_photoPct)%"></span></span>
+                                </span>
+                                <b class="pct">@_photoPct%</b>
+                            </div>
+                        }
+                        <div class="pmn-gallery">
+                            @foreach (var photo in _photos ?? [])
+                            {
+                                var ph = photo;
+                                <div class="pmn-shot @(ph.IsMain ? "main" : "")">
+                                    <img src="@ph.Data" alt="@L["common.storePhoto"]" />
+                                    <button type="button" class="x" title="@L["common.delete"]" @onclick="@(() => DeletePhoto(ph))">✕</button>
+                                    <label class="pmn-main-ck" title="@L["partner.shownFirst"]">
+                                        <input type="checkbox" checked="@ph.IsMain" @onchange="@(() => SetMainPhoto(ph))" />
+                                        <span>@L["partner.mainCheck"]</span>
+                                    </label>
+                                </div>
+                            }
+                            @if ((_photos?.Count ?? 0) < 4)
+                            {
+                                <button type="button" class="pmn-shot add" @onclick="AddPhoto" disabled="@_uploadingPhoto">
+                                    @if (_uploadingPhoto)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.AddAPhoto" />
+                                        <span>@L["staff.addPhoto"]</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    </MudPaper>
+                </div>
+            }
+
+            @code {
+                private static readonly string[] DayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+                private sealed class HoursRow
+                {
+                    public int Day { get; init; }
+                    public bool Closed { get; set; }
+                    public TimeSpan? Open { get; set; }
+                    public TimeSpan? Close { get; set; }
+                }
+
+                private List<HoursRow> _hours = [];
+                    private bool _savingHours;
+
+                    [CascadingParameter] private Layout.MainLayout? Shell { get; set; }
+
+                    private MyRestaurantDto? _restaurant;
+                    private List<RestaurantPhotoDto>? _photos;
+                        private bool _uploadingPhoto;
+
+                        private sealed class PhotoPick
+                        {
+                            public string? DataUrl { get; set; }
+                            public string? Error { get; set; }
+                            public bool Image { get; set; }
+                        }
+
+                        private int _photoPct = -1;
+
+                        /// <summary>Slices cross the bridge 50KB at a time; the bar narrates the trip.</summary>
+                        private async Task<string?> PullChunks(string id, int size)
+                            {
+                                var sb = new System.Text.StringBuilder(size);
+                                for (var offset = 0; offset < size; offset += 50000)
+                                {
+                                    sb.Append(await JS.InvokeAsync<string>("mfBlob.chunk", id, offset, 50000));
+                                        _photoPct = (int)Math.Min(99, (offset + 50000) * 100L / size);
+                                        StateHasChanged();
+                                    }
+                                    await JS.InvokeVoidAsync("mfBlob.end", id);
+                                    return sb.Length == size ? sb.ToString() : null;
+                                }
+
+                                private bool _uploadingLogo;
+                                private string? _logoData;
+
+                                /// <summary>The shop's emoji comes from the same picker the products use.</summary>
+                                private async Task PickLogoEmoji()
+                                {
+                                    var parameters = new DialogParameters<EmojiPickerDialog> { { d => d.Current, _logoEmoji } };
+                                        var dialog = await Dialogs.ShowAsync<EmojiPickerDialog>("", parameters,
+                                            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+                                            var result = await dialog.Result;
+                                            if (result?.Canceled == false && result.Data is string picked) _logoEmoji = picked;
+                                        }
+
+                                        /// <summary>Picks, compresses and stores the shop's logo — same bridge as the photos.</summary>
+                                        private async Task UploadLogo()
+                                        {
+                                            _uploadingLogo = true;
+                                            try
+                                            {
+                                                var meta = await JS.InvokeAsync<string?>("mfImage.pick", false, 340000);
+                                                    if (string.IsNullOrEmpty(meta)) return;
+                                                    if (meta == "huge") { Snackbar.Add(L["common.photoOver5"], Severity.Warning); return; }
+                                                    if (meta == "too-big") { Snackbar.Add(L["common.photoTooLarge"], Severity.Warning); return; }
+                                                    var parked = System.Text.Json.JsonDocument.Parse(meta);
+                                                    var data = await PullChunks(parked.RootElement.GetProperty("id").GetString()!,
+                                                    parked.RootElement.GetProperty("size").GetInt32());
+                                                    if (string.IsNullOrEmpty(data)) return;
+                                                    var (ok, error) = await Api.SetMyStoreLogoAsync(data);
+                                                    if (!ok) { Snackbar.Add(error ?? L["common.uploadFail"], Severity.Error); return; }
+                                                    _logoData = data;
+                                                    Snackbar.Add(L["common.saved"], Severity.Success);
+                                                }
+                                                finally
+                                                {
+                                                    _uploadingLogo = false;
+                                                    _photoPct = -1;
+                                                    StateHasChanged();
+                                                }
+                                            }
+
+                                            private async Task ClearLogo()
+                                            {
+                                                var (ok, error) = await Api.SetMyStoreLogoAsync("");
+                                                if (!ok) { Snackbar.Add(error ?? L["common.updateFail"], Severity.Error); return; }
+                                                _logoData = null;
+                                            }
+
+                                            private async Task AddPhoto()
+                                            {
+                                                _uploadingPhoto = true;
+                                                try
+                                                {
+                                                    // Compressed on-device to fit the store-photo shelf, then pulled in slices.
+                                                    var meta = await JS.InvokeAsync<string?>("mfImage.pick", false, 680000);
+                                                        if (string.IsNullOrEmpty(meta)) return;
+                                                        if (meta == "huge") { Snackbar.Add(L["common.photoOver5"], Severity.Warning); return; }
+                                                        if (meta == "too-big") { Snackbar.Add(L["common.photoTooLarge"], Severity.Warning); return; }
+                                                        _photoPct = 0;
+                                                        var parked = System.Text.Json.JsonDocument.Parse(meta);
+                                                        var data = await PullChunks(parked.RootElement.GetProperty("id").GetString()!,
+                                                        parked.RootElement.GetProperty("size").GetInt32());
+                                                        if (string.IsNullOrEmpty(data)) return;
+                                                        var (ok, error) = await Api.AddMyStorePhotoAsync(data);
+                                                        if (!ok) { Snackbar.Add(error ?? L["common.uploadFail"], Severity.Error); return; }
+                                                        _photos = await Api.GetMyStorePhotosAsync();
+                                                    }
+                                                    finally
+                                                    {
+                                                        _uploadingPhoto = false;
+                                                        _photoPct = -1;
+                                                        StateHasChanged();
+                                                    }
+                                                }
+
+                                                private async Task DeletePhoto(RestaurantPhotoDto photo)
+                                                {
+                                                    var (ok, error) = await Api.DeleteMyStorePhotoAsync(photo.Id);
+                                                    if (!ok) { Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error); return; }
+                                                    _photos = await Api.GetMyStorePhotosAsync();
+                                                }
+
+                                                /// <summary>One main photo per store — checking a box moves that photo to the front.</summary>
+                                                private async Task SetMainPhoto(RestaurantPhotoDto photo)
+                                                {
+                                                    var (ok, error) = await Api.SetMainStorePhotoAsync(photo.Id);
+                                                    if (!ok) { Snackbar.Add(error ?? L["common.updateFail"], Severity.Error); return; }
+                                                    _photos = await Api.GetMyStorePhotosAsync();
+                                                }
+
+                                                private List<CuisineDto>? _cuisines;
+                                                    private bool _saving;
+
+                                                    /// <summary>Category names reserved for the non-food verticals — hidden from restaurants.</summary>
+                                                    private static readonly string[] VerticalCategories = ["Grocery", "Pharmacy", "Flowers & Gifts", "Flowers", "Shopping"];
+
+                                                    /// <summary>Each store type gets its own categories: verticals see theirs, restaurants see food cuisines.</summary>
+                                                    private List<CuisineDto> FilteredCuisines
+                                                        {
+                                                            get
+                                                            {
+                                                                if (_cuisines is null) return [];
+                                                                var filtered = _storeType switch
+                                                                {
+                                                                    StoreType.Grocery => _cuisines.Where(c => c.Name == "Grocery"),
+                                                                    StoreType.Pharmacy => _cuisines.Where(c => c.Name == "Pharmacy"),
+                                                                    StoreType.Flowers => _cuisines.Where(c => c.Name is "Flowers & Gifts" or "Flowers"),
+                                                                    StoreType.Shop => _cuisines.Where(c => c.Name == "Shopping"),
+                                                                    _ => _cuisines.Where(c => !VerticalCategories.Contains(c.Name))
+                                                                };
+                                                                var list = filtered.ToList();
+                                                                return list.Count > 0 ? list : _cuisines; // fresh DB without vertical rows — show everything
+                                                            }
+                                                        }
+
+                                                        private void OnStoreTypeChanged(StoreType type)
+                                                        {
+                                                            _storeType = type;
+                                                            SyncCuisineWithStoreType();
+                                                        }
+
+                                                        private void SyncCuisineWithStoreType()
+                                                        {
+                                                            var allowed = FilteredCuisines;
+                                                            if (allowed.All(c => c.Id != _cuisineId)) _cuisineId = allowed.FirstOrDefault()?.Id ?? _cuisineId;
+                                                        }
+
+                                                        private string _name = "";
+                                                        private Dictionary<string, string> _names = [];
+
+
+
+                                                            private string NamesSummary =>
+                                                            _names.Count == 0 ? _name : string.Join(" · ", new[] { "ar", "en" }
+                                                            .Where(_names.ContainsKey).Select(c => _names[c])
+                                                            .Concat(_names.Count > 2 ? [$"+{_names.Count - 2}"] : Array.Empty<string>()));
+
+                                                                private bool _namesDirty;
+
+                                                                private void OnNamesSaved(Dictionary<string, string> names)
+                                                                    {
+                                                                        _names = names;
+                                                                        _namesDirty = true;
+                                                                        _name = names.GetValueOrDefault("en") ?? names.GetValueOrDefault("ar") ?? _name;
+                                                                    }
+
+                                                                    private string _description = "";
+                                                                    private int _cuisineId;
+
+                                                                    /// <summary>The types beyond the main one — the Iranian grill that is Arabic too.</summary>
+                                                                    private IEnumerable<int> _extraCuisineIds = new HashSet<int>();
+                                                                    /// <summary>The page greets what it really is: restaurant settings, pharmacy settings…</summary>
+                                                                    private string TypedTitle => _restaurant is null
+                                                                    ? L["partner.storeSettings"]
+                                                                    : string.Format(L["typed.settings"], L[$"st.{_storeType.ToString().ToLowerInvariant()}"]);
+
+                                                                    private StoreType _storeType = StoreType.Restaurant;
+                                                                    private string _logoEmoji = "";
+                                                                    private string _bannerColor = "";
+                                                                    private string _area = "";
+                                                                    private string _street = "";
+                                                                    private sealed class PhoneEntry
+                                                                    {
+                                                                        public string Number { get; set; } = "";
+                                                                        public bool IsMobile { get; set; } = true;
+                                                                    }
+
+                                                                    private readonly List<PhoneEntry> _phoneEntries = [new() { IsMobile = true }];
+
+                                                                        private string JoinedPhones =>
+                                                                        string.Join("; ", _phoneEntries.Select(p => (p.Number ?? "").Trim()).Where(p => p.Length > 0).Distinct());
+                                                                        private decimal _deliveryFee;
+                                                                        private decimal _minOrder;
+                                                                        private int _prepMinutes;
+                                                                        private bool _allowsPickup = true;
+                                                                        private bool _selfDelivery;
+                                                                        private decimal _taxPercent = 5m;
+                                                                        private bool _posDefaultOpen = true;
+                                                                        private bool _directPrint;
+                                                                        private string _kitchenLanguage = "";
+                                                                        private static readonly (string, string)[] KitchenLanguages =
+                                                                        [
+                                                                            ("en", "English"), ("ar", "العربية"), ("fa", "فارسی"), ("tr", "Türkçe"), ("ur", "اردو"), ("hi", "हिन्दी"),
+                                                                            ("de", "Deutsch"), ("es", "Español"), ("fr", "Français"), ("it", "Italiano"), ("ja", "日本語"),
+                                                                            ("pt", "Português"), ("ru", "Русский"), ("zh", "中文"),
+                                                                        ];
+                                                                        /// <summary>Show the change at once: the example beside the box is the whole point of it.</summary>
+                                                                        private void OnCurrency(string symbol)
+                                                                        {
+                                                                            _currency = string.IsNullOrWhiteSpace(symbol) ? Fmt.DefaultSymbol : symbol.Trim();
+                                                                            Fmt.Symbol = _currency;
+                                                                        }
+
+                                                                        private string _currency = Fmt.DefaultSymbol;
+
+                                                                        /// <summary>The symbols shops here actually ask for; anything else goes in the box beside it.</summary>
+                                                                        private static readonly (string, string)[] Currencies =
+                                                                        [
+                                                                            ("OMR", "Omani rial"), ("\ufdfc", "Rial symbol"), ("ر.ع.", "ريال عماني"),
+                                                                            ("AED", "UAE dirham"), ("د.إ", "درهم إماراتي"), ("SAR", "Saudi riyal"),
+                                                                            ("QAR", "Qatari riyal"), ("BHD", "Bahraini dinar"), ("KWD", "Kuwaiti dinar"),
+                                                                            ("USD", "US dollar"), ("$", "Dollar sign"), ("EUR", "Euro"), ("\u20ac", "Euro sign"),
+                                                                            ("GBP", "Pound sterling"), ("\u00a3", "Pound sign"), ("INR", "Indian rupee"),
+                                                                            ("\u20b9", "Rupee sign"), ("PKR", "Pakistani rupee"), ("IRR", "Iranian rial"),
+                                                                            ("TRY", "Turkish lira"), ("\u20ba", "Lira sign"), ("EGP", "Egyptian pound"),
+                                                                        ];
+                                                                        private bool _dishStockPhotos = true;
+                                                                        private bool _onlineReservations;
+                                                                        private decimal _reservePricePerTable;
+                                                                        private decimal _reservePricePerMinute;
+                                                                        private string _smtpHost = "";
+                                                                        private int _smtpPort = 587;
+                                                                        private string _smtpUser = "";
+                                                                        private string _smtpPassword = "";
+                                                                        private string _smtpFrom = "";
+                                                                        private string _email = "";
+                                                                        private string _whatsapp = "";
+                                                                        private string _website = "";
+                                                                        private string _instagram = "";
+
+
+                                                                        private string _crNumber = "";
+                                                                        private string _vatNumber = "";
+                                                                        private double? _lat;
+                                                                        private double? _lng;
+
+                                                                        protected override async Task OnInitializedAsync()
+                                                                        {
+                                                                            _cuisines = await Api.GetCuisinesAsync();
+                                                                            _hours = (await Api.GetMyHoursAsync() ?? []).Select(d => new HoursRow
+                                                                            {
+                                                                                Day = d.Day,
+                                                                                Closed = d.IsClosed,
+                                                                                Open = TimeSpan.TryParse(d.Open, out var o) ? o : new TimeSpan(10, 0, 0),
+                                                                                Close = TimeSpan.TryParse(d.Close, out var c) ? c : new TimeSpan(23, 0, 0)
+                                                                            }).ToList();
+                                                                            _restaurant = await Api.GetMyRestaurantAsync();
+                                                                            _photos = await Api.GetMyStorePhotosAsync();
+                                                                            if (_restaurant is null) return;
+                                                                            _name = _restaurant.Name;
+                                                                            _names = _restaurant.Names ?? [];
+                                                                            _namesDirty = _names.Count > 0; // stores that already localized keep saving the set
+                                                                            if (_names.Count == 0 && _restaurant.Name.Length > 0) _names["en"] = _restaurant.Name;
+                                                                            _description = _restaurant.Description;
+                                                                            _cuisineId = _restaurant.CuisineId;
+                                                                            _extraCuisineIds = (_restaurant.CuisineIds ?? [])
+                                                                                .Where(id => id != _restaurant.CuisineId).ToHashSet();
+                                                                            _storeType = _restaurant.StoreType;
+                                                                            _logoEmoji = _restaurant.LogoEmoji;
+                                                                            _logoData = _restaurant.LogoData;
+                                                                            _bannerColor = _restaurant.BannerColor;
+                                                                            _area = _restaurant.Area;
+                                                                            _street = _restaurant.Street;
+                                                                            _phoneEntries.Clear();
+                                                                            var storedNumbers = _restaurant.Phone.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                                                                            for (var n = 0; n < storedNumbers.Length; n++)
+                                                                            _phoneEntries.Add(new PhoneEntry { Number = storedNumbers[n], IsMobile = n == 0 });
+                                                                            if (_phoneEntries.Count == 0) _phoneEntries.Add(new PhoneEntry { IsMobile = true });
+                                                                            _deliveryFee = _restaurant.DeliveryFee;
+                                                                            _minOrder = _restaurant.MinOrder;
+                                                                            _prepMinutes = _restaurant.AvgPrepMinutes;
+                                                                            _allowsPickup = _restaurant.AllowsPickup;
+                                                                            _selfDelivery = true;   // locked on — see the switch
+                                                                            _taxPercent = _restaurant.TaxPercent;
+                                                                            _posDefaultOpen = _restaurant.PosDefaultOpen;
+                                                                            _isOpen = _restaurant.IsOpen;
+                                                                            _directPrint = _restaurant.DirectPrint;
+                                                                            _kitchenLanguage = _restaurant.KitchenLanguage ?? "";
+                                                                            _currency = _restaurant.Currency is { Length: > 0 } cur ? cur : Fmt.DefaultSymbol;
+                                                                            _dishStockPhotos = _restaurant.DishStockPhotos;
+                                                                            _onlineReservations = _restaurant.OnlineReservations;
+                                                                            _reservePricePerTable = _restaurant.ReservePricePerTable;
+                                                                            _reservePricePerMinute = _restaurant.ReservePricePerMinute;
+                                                                            _smtpHost = _restaurant.SmtpHost;
+                                                                            _smtpPort = _restaurant.SmtpPort;
+                                                                            _smtpUser = _restaurant.SmtpUser;
+                                                                            _smtpPassword = _restaurant.SmtpPassword;
+                                                                            _smtpFrom = _restaurant.SmtpFrom;
+                                                                            _email = _restaurant.Email;
+                                                                            _whatsapp = _restaurant.Whatsapp;
+                                                                            _website = _restaurant.Website;
+                                                                            _instagram = _restaurant.Instagram;
+                                                                            _crNumber = _restaurant.CrNumber;
+                                                                            _vatNumber = _restaurant.VatNumber;
+                                                                            _slug = _restaurant.Slug;
+                                                                            _lat = _restaurant.Lat;
+                                                                            _lng = _restaurant.Lng;
+                                                                            SyncCuisineWithStoreType(); // stores saved with a mismatched category snap to a valid one
+
+                                                                            // Fresh from registration: one warm pointer at the photo shelf below.
+                                                                            if (new Uri(Nav.Uri).Query.Contains("welcome=1"))
+                                                                            Snackbar.Add(L["ptr.firstPhoto"], Severity.Info, o => o.VisibleStateDuration = 10000);
+                                                                        }
+
+                                                                        // ---------- The short address ----------
+                                                                        private string _slug = "";
+                                                                        private string? _slugStatus;
+                                                                        private bool _slugSaved;
+                                                                        private CancellationTokenSource? _slugCheckCts;
+
+                                                                        /// <summary>The complete short link, as it should be handed out.</summary>
+                                                                        private string FullSlugUrl => $"https://www.orderorange.com/{_slug}";
+
+                                                                        private async Task CopySlugLink()
+                                                                        {
+                                                                            try
+                                                                            {
+                                                                                await JS.InvokeVoidAsync("navigator.clipboard.writeText", FullSlugUrl);
+                                                                                Snackbar.Add(L["qr.copied"], Severity.Success);
+                                                                            }
+                                                                            catch (JSException)
+                                                                            {
+                                                                                Snackbar.Add(FullSlugUrl, Severity.Info);   // clipboard blocked: show it to copy by hand
+                                                                            }
+                                                                        }
+
+                                                                        private async Task OnSlugTyped(string value)
+                                                                        {
+                                                                            _slug = (value ?? "").Trim().ToLowerInvariant();
+                                                                            _slugSaved = false;
+                                                                            _slugStatus = null;
+                                                                            if (_slug.Length == 0) return;
+
+                                                                            // Debounced: one availability call after the typing pauses,
+                                                                            // not one per keystroke.
+                                                                            _slugCheckCts?.Cancel();
+                                                                            _slugCheckCts = new CancellationTokenSource();
+                                                                            var token = _slugCheckCts.Token;
+                                                                            try
+                                                                            {
+                                                                                await Task.Delay(450, token);
+                                                                                var check = await Api.CheckSlugAsync(_slug);
+                                                                                if (token.IsCancellationRequested) return;
+                                                                                _slugStatus = check is null ? null
+                                                                                    : check.Available ? "free"
+                                                                                    : check.Reason;
+                                                                                StateHasChanged();
+                                                                            }
+                                                                            catch (TaskCanceledException) { }
+                                                                        }
+
+                                                                        private async Task SaveSlug()
+                                                                        {
+                                                                            var (ok, error) = await Api.SetSlugAsync(_slug);
+                                                                            if (ok)
+                                                                            {
+                                                                                _slugSaved = true;
+                                                                                _slugStatus = null;
+                                                                            }
+                                                                            else
+                                                                            {
+                                                                                Snackbar.Add(error ?? L["slug.taken"], Severity.Error);
+                                                                            }
+                                                                        }
+
+                                                                        private async Task SaveHours()
+                                                                        {
+                                                                            _savingHours = true;
+                                                                            try
+                                                                            {
+                                                                                var days = _hours.Select(h => new DayHoursDto(h.Day, h.Closed,
+                                                                                (h.Open ?? new TimeSpan(10, 0, 0)).ToString(@"hh\:mm"),
+                                                                                (h.Close ?? new TimeSpan(23, 0, 0)).ToString(@"hh\:mm"))).ToList();
+                                                                                var (ok, error) = await Api.SaveMyHoursAsync(days);
+                                                                                Snackbar.Add(ok ? L["common.hoursSaved"] : error ?? L["common.saveFail"], ok ? Severity.Success : Severity.Error);
+                                                                            }
+                                                                            finally
+                                                                            {
+                                                                                _savingHours = false;
+                                                                            }
+                                                                        }
+
+                                                                        private bool _isOpen;
+
+                                                                        /// <summary>One tap opens or closes the shop — same endpoint as the bar's switch.</summary>
+                                                                        private async Task ToggleOpenNow(bool value)
+                                                                        {
+                                                                            var (ok, error) = await Api.ToggleOpenAsync();
+                                                                            if (!ok) { Snackbar.Add(L.ServerError(error) ?? L["common.saveFail"], Severity.Error); return; }
+                                                                            _isOpen = value;
+                                                                            if (Shell is not null) await Shell.RefreshRestaurant();
+                                                                        }
+
+                                                                        private async Task Save()
+                                                                        {
+                                                                            _saving = true;
+                                                                            try
+                                                                            {
+                                                                                var (ok, error) = await Api.UpdateMyRestaurantAsync(new UpdateRestaurantRequest(
+                                                                                _name, _description, _cuisineId, _logoEmoji, _bannerColor,
+                                                                                _area, _street, JoinedPhones, _deliveryFee, _minOrder, _prepMinutes, _storeType, _allowsPickup, _taxPercent, _posDefaultOpen,
+                                                                                _email, _whatsapp, _website, _instagram, _crNumber, _lat, _lng,
+                                                                                _namesDirty ? _names : null, null, _selfDelivery,
+                                                                                [_cuisineId, .. _extraCuisineIds.Where(id => id != _cuisineId)],
+                                                                                DirectPrint: _directPrint,
+                                                                                VatNumber: _vatNumber,
+                                                                                OnlineReservations: _onlineReservations,
+                                                                                ReservePricePerTable: _reservePricePerTable,
+                                                                                ReservePricePerMinute: _reservePricePerMinute,
+                                                                                SmtpHost: _smtpHost, SmtpPort: _smtpPort, SmtpUser: _smtpUser,
+                                                                                SmtpPassword: _smtpPassword, SmtpFrom: _smtpFrom,
+                                                                                DishStockPhotos: _dishStockPhotos,
+                                                                                KitchenLanguage: _kitchenLanguage,
+                                                                                Currency: _currency));
+                                                                                if (ok)
+                                                                                {
+                                                                                    Snackbar.Add(L["partner.settingsSaved"], Severity.Success);
+                                                                                    if (Shell is not null) await Shell.RefreshRestaurant();
+                                                                                }
+                                                                                else Snackbar.Add(error ?? L["common.saveFail"], Severity.Error);
+                                                                            }
+                                                                            finally
+                                                                            {
+                                                                                _saving = false;
+                                                                            }
+                                                                        }
+                                                                    }

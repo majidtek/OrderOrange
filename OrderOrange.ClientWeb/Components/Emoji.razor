@@ -1,0 +1,18 @@
+@namespace OrderOrange.ClientWeb.Components
+@using OrderOrange.ClientWeb.Services
+
+@* Renders an emoji as its 3D artwork when we have one, otherwise as the plain glyph.
+   Both branches are ordinary Blazor output, so nothing outside Blazor touches the DOM. *@
+
+@if (Emoji3d.PathFor(Glyph) is string art)
+{
+    <img class="mf-emoji3d" src="@art" alt="@Glyph" loading="lazy" />
+}
+else
+{
+    @Glyph
+}
+
+@code {
+    [Parameter] public string? Glyph { get; set; }
+}

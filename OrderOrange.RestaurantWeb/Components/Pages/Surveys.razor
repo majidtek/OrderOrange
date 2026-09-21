@@ -1,0 +1,271 @@
+@page "/surveys"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+@inject AppState State
+
+@* Ask the guests. A survey is a title and a handful of questions, each with the
+   answers a guest may tick; the store reads the counts here. Only the newest ACTIVE
+   survey is offered to guests, on the shop page and after a table order. *@
+
+<PageTitle>Partner — Surveys</PageTitle>
+
+<PageHeader Title="@L["sv.title"]" Subtitle="@L["sv.sub"]">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => BeginEdit(null))">@L["sv.new"]</MudButton>
+    </Actions>
+</PageHeader>
+
+@if (_surveys is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_surveys.Count == 0)
+{
+    <EmptyState Emoji="📝" Title="@L["sv.none"]" Subtitle="@L["sv.noneSub"]" />
+}
+else
+{
+    <div class="sv-grid">
+        @foreach (var s in _surveys)
+        {
+            var survey = s;
+            <div class="sv-card @(survey.IsActive ? "on" : "")">
+                <div class="hd">
+                    <b>@survey.Title</b>
+                    <span class="state">@(survey.IsActive ? L["sv.active"] : L["sv.inactive"])</span>
+                </div>
+                <small>@string.Format(L["sv.qCount"], survey.Questions.Count) · @string.Format(L["sv.responses"], survey.ResponseCount)</small>
+                <div class="acts">
+                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.BarChart"
+                               OnClick="@(() => ShowResults(survey))">@L["sv.results"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Link"
+                               OnClick="@(() => CopyLink())">@L["sv.share"]</MudButton>
+                    <MudSpacer />
+                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+                        <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => BeginEdit(survey))">@L["common.edit"]</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" IconColor="Color.Error" OnClick="@(() => Delete(survey))">@L["common.delete"]</MudMenuItem>
+                    </MudMenu>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* ---------- Writing a survey ---------- *@
+@if (_editorOpen)
+{
+    <div class="oo-modal" @onclick="@(() => _editorOpen = false)">
+        <div class="tm-sheet sv-sheet" @onclick:stopPropagation="true">
+            <div class="head">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Poll" /></span>
+                <b>@(_editing is null ? L["sv.new"] : _editing.Title)</b>
+            </div>
+
+            <MudTextField @bind-Value="_title" Label="@L["sv.name"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="120" />
+            <MudSwitch T="bool" @bind-Value="_active" Color="Color.Success" Size="Size.Small" Label="@L["sv.activeSwitch"]" />
+
+            @for (var qi = 0; qi < _questions.Count; qi++)
+            {
+                var q = _questions[qi];
+                var qIndex = qi;
+                <div class="sv-q">
+                    <div class="sv-q-head">
+                        <span class="n">@(qIndex + 1)</span>
+                        <MudTextField @bind-Value="q.Text" Label="@L["sv.question"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" Class="flex-grow-1" />
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => _questions.RemoveAt(qIndex))" />
+                    </div>
+                    <div class="sv-opts">
+                        @for (var oi = 0; oi < q.Options.Count; oi++)
+                        {
+                            var oIndex = oi;
+                            <div class="sv-opt">
+                                <span class="dot">@(q.Multi ? "☐" : "○")</span>
+                                <input value="@q.Options[oIndex]" placeholder="@($"{L["sv.option"]} {oIndex + 1}")" maxlength="80"
+                                       @oninput="@(e => q.Options[oIndex] = e.Value?.ToString() ?? "")" />
+                                <button type="button" class="x" title="@L["common.delete"]" @onclick="@(() => q.Options.RemoveAt(oIndex))">✕</button>
+                            </div>
+                        }
+                        <div class="sv-opt-acts">
+                            @if (q.Options.Count < 12)
+                            {
+                                <button type="button" class="add" @onclick="@(() => q.Options.Add(""))">＋ @L["sv.addOption"]</button>
+                            }
+                            <MudSwitch T="bool" @bind-Value="q.Multi" Color="Color.Primary" Size="Size.Small" Label="@L["sv.multi"]" />
+                        </div>
+                    </div>
+                </div>
+            }
+            <div class="sv-q-acts">
+                @if (_questions.Count < 20)
+                {
+                    <button type="button" class="sv-addq" @onclick="AddQuestion">＋ @L["sv.addQuestion"]</button>
+                }
+                @if (_questions.Count > 0)
+                {
+                    <button type="button" class="sv-clear" @onclick="@(() => _questions.Clear())">@L["sv.clearAll"]</button>
+                }
+            </div>
+
+            <div class="acts">
+                <MudButton OnClick="@(() => _editorOpen = false)">@L["common.cancel"]</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_busy"
+                           StartIcon="@Icons.Material.Filled.Save">@L["common.save"]</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@* ---------- Reading the answers ---------- *@
+@if (_results is not null)
+{
+    <div class="oo-modal" @onclick="@(() => _results = null)">
+        <div class="tm-sheet sv-sheet" @onclick:stopPropagation="true">
+            <div class="head">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.BarChart" /></span>
+                <b>@_results.Title</b>
+                <small class="ms-auto">@string.Format(L["sv.responses"], _results.Responses)</small>
+            </div>
+            @foreach (var q in _results.Questions)
+            {
+                var total = Math.Max(1, q.Counts.Sum());
+                <div class="sv-res">
+                    <b>@q.Text</b>
+                    @for (var i = 0; i < q.Options.Count; i++)
+                    {
+                        var n = i < q.Counts.Count ? q.Counts[i] : 0;
+                        var pct = (int)Math.Round(n * 100.0 / total);
+                        <div class="bar">
+                            <span class="lb">@q.Options[i]</span>
+                            <span class="track"><span class="fill" style="width:@(pct)%"></span></span>
+                            <span class="num">@n · @(pct)%</span>
+                        </div>
+                    }
+                </div>
+            }
+            @if (_results.Comments.Count > 0)
+            {
+                <div class="sv-res">
+                    <b>@L["sv.comments"]</b>
+                    @foreach (var c in _results.Comments)
+                    {
+                        <div class="cmt"><small>@c.At.ToString("dd MMM HH:mm")@(string.IsNullOrEmpty(c.Source) ? "" : $" · {c.Source}")</small><span>@c.Text</span></div>
+                    }
+                </div>
+            }
+            <div class="acts">
+                <MudButton OnClick="@(() => _results = null)">@L["common.close"]</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SurveyDto>? _surveys;
+    private bool _editorOpen;
+    private bool _busy;
+    private SurveyDto? _editing;
+    private string _title = "";
+    private bool _active = true;
+    private List<QuestionDraft> _questions = [];
+    private SurveyResultsDto? _results;
+
+    /// <summary>A question being written — mutable, unlike the DTO it becomes.</summary>
+    private sealed class QuestionDraft
+    {
+        public string Id { get; set; } = "";
+        public string Text { get; set; } = "";
+        public List<string> Options { get; set; } = ["", ""];
+        public bool Multi { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync() => await Reload();
+    private async Task Reload() => _surveys = await Api.GetSurveysAsync() ?? [];
+
+    private void BeginEdit(SurveyDto? survey)
+    {
+        _editing = survey;
+        _title = survey?.Title ?? L["sv.d.title"];
+        _active = survey?.IsActive ?? true;
+        _questions = survey is null
+            ? DefaultQuestions()
+            : survey.Questions.Select(q => new QuestionDraft { Id = q.Id, Text = q.Text, Options = [.. q.Options], Multi = q.Multi }).ToList();
+        _editorOpen = true;
+    }
+
+    /// <summary>
+    /// A new survey opens already written — the five questions every café ends up
+    /// asking — so the owner edits or deletes rather than starting from a blank box.
+    /// Every line can go: "Remove all" leaves an empty form.
+    /// </summary>
+    private List<QuestionDraft> DefaultQuestions()
+    {
+        List<string> scale = [L["sv.d.o.excellent"], L["sv.d.o.good"], L["sv.d.o.average"], L["sv.d.o.poor"]];
+        return
+        [
+            new() { Text = L["sv.d.q1"], Options = [.. scale] },                                   // overall experience (Majed dropped the food & drink one)
+            new() { Text = L["sv.d.qPrice"], Options = [L["sv.d.o.veryFair"], L["sv.d.o.fair"], L["sv.d.o.bitExpensive"], L["sv.d.o.tooExpensive"]] },
+            new() { Text = L["sv.d.qStaff"], Options = [L["sv.d.o.verySatisfied"], L["sv.d.o.satisfied"], L["sv.d.o.notReally"], L["sv.d.o.notAtAll"]] },
+            new() { Text = L["sv.d.qClean"], Options = [L["sv.d.o.veryClean"], L["sv.d.o.cleanEnough"], L["sv.d.o.couldBeBetter"], L["sv.d.o.no"]] },
+            new() { Text = L["sv.d.qWait"], Options = [L["sv.d.o.quick"], L["sv.d.o.acceptable"], L["sv.d.o.tooLong"]] },
+            new() { Text = L["sv.d.q4"], Options = [L["sv.d.o.yes"], L["sv.d.o.maybe"], L["sv.d.o.no"]] },  // recommend us?
+            new() { Text = L["sv.d.q5"], Options = [L["sv.d.o.friends"], L["sv.d.o.instagram"], L["sv.d.o.walkby"], L["sv.d.o.app"]], Multi = true },
+        ];
+    }
+
+    private void AddQuestion() => _questions.Add(new QuestionDraft());
+
+    private async Task Save()
+    {
+        if (_title.Trim().Length == 0) { Snackbar.Add(L["sv.e.title"], Severity.Warning); return; }
+        var questions = _questions
+            .Select(q => new SurveyQuestionDto(q.Id, q.Text.Trim(), q.Options.Select(o => o.Trim()).Where(o => o.Length > 0).ToList(), q.Multi))
+            .Where(q => q.Text.Length > 0 && q.Options.Count >= 2)
+            .ToList();
+        if (questions.Count == 0) { Snackbar.Add(L["sv.e.questions"], Severity.Warning); return; }
+
+        _busy = true;
+        try
+        {
+            var req = new SaveSurveyRequest(_title.Trim(), _active, questions);
+            var (saved, error) = _editing is null
+                ? await Api.CreateSurveyAsync(req)
+                : await Api.UpdateSurveyAsync(_editing.Id, req);
+            if (saved is null)
+            {
+                await Dialogs.ShowMessageBox(L["common.wentWrong"], L.ServerError(error) ?? L["common.saveFail"], yesText: L["common.close"]);
+                return;
+            }
+            _editorOpen = false;
+            await Reload();
+            Snackbar.Add(L["common.saved"], Severity.Success);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Delete(SurveyDto survey)
+    {
+        var ok = await Dialogs.ShowMessageBox(L["common.delete"], string.Format(L["sv.delConfirm"], survey.Title),
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (ok != true) return;
+        var (done, error) = await Api.DeleteSurveyAsync(survey.Id);
+        if (!done) { Snackbar.Add(L.ServerError(error) ?? L["common.deleteFail"], Severity.Error); return; }
+        await Reload();
+        Snackbar.Add(L["common.deleted"], Severity.Success);
+    }
+
+    private async Task ShowResults(SurveyDto survey) =>
+        _results = await Api.GetSurveyResultsAsync(survey.Id);
+
+    /// <summary>The guest-facing link — the same one the shop page and table page open.</summary>
+    private async Task CopyLink()
+    {
+        var link = $"https://www.orderorange.com/survey/{State.RestaurantId}";
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", link); Snackbar.Add(L["sv.copied"], Severity.Success); }
+        catch { Snackbar.Add(link, Severity.Info); }
+    }
+}

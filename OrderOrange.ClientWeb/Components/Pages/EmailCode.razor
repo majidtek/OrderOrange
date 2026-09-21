@@ -1,0 +1,48 @@
+@page "/signin/code"
+@layout Layout.AuthLayout
+@inject NavigationManager Nav
+@inject LanguageService L
+
+@* Typing the emailed code, on its own page. The address rides in the URL on purpose:
+   the customer leaves for their inbox, and a phone browser often reloads the tab on
+   the way back — a reload here re-renders THIS page with the email intact, instead of
+   throwing them back to an empty email field. The code they just read stays valid. *@
+
+<PageTitle>OrderOrange</PageTitle>
+
+@if (Email is { Length: > 0 })
+{
+    <LoginView AppName="OrderOrange"
+               LogoUrl="logo.svg?v=4"
+               Tagline="@L["auth.signInToContinue"]"
+               AllowedRoles="new[] { UserRole.Customer, UserRole.RestaurantOwner, UserRole.Driver }"
+               WrongRoleMessage="@L["login.clientWrong"]"
+               PresetEmail="@Email"
+               PresetWait="Wait"
+               OnChangeEmail="BackToEmail"
+               OnSignedIn="Done"
+               OnClose="Done" />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "email")] public string? Email { get; set; }
+    [SupplyParameterFromQuery(Name = "wait")] public int Wait { get; set; }
+
+    /// <summary>Where to go once they are in. Defaults home if we arrived here directly.</summary>
+    [SupplyParameterFromQuery(Name = "return")] public string? ReturnUrl { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // No address in the URL means nobody sent a code — start at the email step.
+        if (string.IsNullOrWhiteSpace(Email))
+            Nav.NavigateTo($"/signin/email?return={Uri.EscapeDataString(SafeReturn)}", replace: true);
+    }
+
+    private void BackToEmail() =>
+        Nav.NavigateTo($"/signin/email?return={Uri.EscapeDataString(SafeReturn)}");
+
+    private void Done() => Nav.NavigateTo(SafeReturn);
+
+    private string SafeReturn =>
+        ReturnUrl is { Length: > 0 } r && r.StartsWith('/') && !r.StartsWith("//") ? r : "/";
+}

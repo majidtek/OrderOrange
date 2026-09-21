@@ -1,0 +1,323 @@
+﻿@page "/discounts"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+
+@* The store's own discount codes: a code, what it takes off, and the RULE about who may
+   use it — first order, the regular with ten orders this month, the happy-hour crowd.
+   Valid at this store only; the customer types it at checkout. *@
+
+<PageTitle>Partner — Discount codes</PageTitle>
+
+<div class="tk-page">
+
+<PageHeader Title="@L["dc.title"]" Subtitle="@L["dc.sub"]">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => BeginEdit(null))">@L["dc.new"]</MudButton>
+    </Actions>
+</PageHeader>
+
+@if (_page is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="tk-stats">
+        <div class="tk-stat open"><b>@_page.Summary.Active</b><span>@L["dc.stat.active"]</span></div>
+        <div class="tk-stat prog"><b>@_page.Summary.UsesThisMonth</b><span>@L["dc.stat.usesMonth"]</span></div>
+        <div class="tk-stat done"><b>@Fmt.Rial(_page.Summary.SavedThisMonth)</b><span>@L["dc.stat.savedMonth"]</span></div>
+    </div>
+
+    @if (_page.Items.Count == 0)
+    {
+        <EmptyState Emoji="🏷️" Title="@L["dc.none"]" Subtitle="@L["dc.noneSub"]" />
+    }
+    else
+    {
+        <div class="dc-grid">
+            @foreach (var p in _page.Items)
+            {
+                var promo = p;
+                <div class="dc-card @(promo.IsActive ? "" : "off")">
+                    <div class="top">
+                        <button type="button" class="dc-code" title="@L["dc.copy"]" @onclick="@(() => Copy(promo.Code))">🏷️ @promo.Code</button>
+                        <span class="dc-value">@ValueLabel(promo.Type, promo.Value, promo.MaxDiscount)</span>
+                    </div>
+                    <b class="ttl">@promo.Title</b>
+                    @if (!string.IsNullOrWhiteSpace(promo.Description))
+                    {
+                        <p class="desc">@promo.Description</p>
+                    }
+                    <div class="dc-rule">
+                        <span class="pill @(promo.Rule == "any" ? "closed" : "prog")">@RuleIcon(promo.Rule) @RuleLabel(promo.Rule, promo.RuleValue, promo.RuleAmount)</span>
+                        @if (promo.MinOrder > 0)
+                        {
+                            <span class="pill closed">@string.Format(L["dc.c.minOrder"], promo.MinOrder.ToString("0.###"))</span>
+                        }
+                        @if (promo.OrderTypes != "all")
+                        {
+                            <span class="pill closed">@L[$"dc.ot.{promo.OrderTypes}"]</span>
+                        }
+                        @if (promo.Days.Count > 0)
+                        {
+                            <span class="pill closed">📅 @string.Join(" ", promo.Days.Select(d => L[$"dc.day.{d}"]))</span>
+                        }
+                        @if (promo.StartHour is int sh && promo.EndHour is int eh && sh != eh)
+                        {
+                            <span class="pill closed">🕒 @($"{sh:00}:00–{eh:00}:00")</span>
+                        }
+                        @if (promo.EndsAt is DateTime end)
+                        {
+                            <span class="pill @(end < DateTime.Now ? "wait" : "closed")">⏳ @string.Format(L["dc.c.until"], end.ToString("yyyy-MM-dd"))</span>
+                        }
+                        @if (!promo.IsPublic)
+                        {
+                            <span class="pill closed">🙈 @L["dc.f.private"]</span>
+                        }
+                    </div>
+                    <div class="foot">
+                        <small>@string.Format(L["dc.usedTimes"], promo.Uses)@(promo.MaxUses > 0 ? $" / {promo.MaxUses}" : "") · @string.Format(L["dc.saved"], promo.Saved.ToString("0.###"))</small>
+                        <MudSpacer />
+                        <MudSwitch T="bool" Value="promo.IsActive" ValueChanged="@(async (bool _) => await Toggle(promo))" Color="Color.Success" Size="Size.Small" Label="@(promo.IsActive ? L["dc.on"] : L["dc.off"])" />
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+                            <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => BeginEdit(promo))">@L["common.edit"]</MudMenuItem>
+                            <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" IconColor="Color.Error" OnClick="@(() => Delete(promo))">@L["common.delete"]</MudMenuItem>
+                        </MudMenu>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+}
+
+</div>
+
+@* ---------- The editor ---------- *@
+@if (_editorOpen)
+{
+    <div class="oo-modal" @onclick="@(() => _editorOpen = false)">
+        <div class="tm-sheet dc-sheet" @onclick:stopPropagation="true">
+            <div class="head">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.LocalOffer" /></span>
+                <b>@(_editing is null ? L["dc.new"] : _editing.Code)</b>
+            </div>
+
+            @if (_editing is null)
+            {
+                <small class="tk-hint">@L["dc.templatesHint"]</small>
+                <div class="dc-templates">
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => Template("first"))">🎉 @L["dc.t.first"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => Template("loyal"))">💛 @L["dc.t.loyal"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => Template("happy"))">🕒 @L["dc.t.happy"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => Template("big"))">🛒 @L["dc.t.big"]</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="@(() => Template("pickup"))">🏃 @L["dc.t.pickup"]</MudButton>
+                </div>
+            }
+
+            <div class="dc-form">
+                <MudTextField @bind-Value="_f.Code" Label="@L["dc.f.code"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="24"
+                              Class="mf-ltr dc-codefield" HelperText="@L["dc.f.codeHint"]" />
+                <MudTextField @bind-Value="_f.Title" Label="@L["dc.f.title"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="80" />
+                <MudTextField @bind-Value="_f.Description" Label="@L["dc.f.desc"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="300" Lines="2" Class="span2" />
+
+                @* Native selects: no MudBlazor popover to build per field, so the sheet opens at once. *@
+                <label class="dc-field"><span>@L["dc.f.type"]</span>
+                    <select class="dc-sel" @bind="_f.Type">
+                        <option value="percent">% @L["dc.type.percent"]</option>
+                        <option value="amount">@Fmt.Symbol @L["dc.type.amount"]</option>
+                    </select>
+                </label>
+                <MudNumericField T="decimal" @bind-Value="_f.Value" Label="@(_f.Type == "percent" ? L["dc.f.percent"] : L["dc.f.amount"])" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="@(_f.Type == "percent" ? 100 : 1000)" Step="@(_f.Type == "percent" ? 1m : 0.5m)" Class="mf-ltr" />
+                @if (_f.Type == "percent")
+                {
+                    <MudNumericField T="decimal" @bind-Value="_f.MaxDiscount" Label="@L["dc.f.maxDiscount"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Step="0.5m" Class="mf-ltr" HelperText="@L["dc.f.zeroUnlimited"]" />
+                }
+                <MudNumericField T="decimal" @bind-Value="_f.MinOrder" Label="@L["dc.f.minOrder"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Step="0.5m" Class="mf-ltr" />
+
+                <label class="dc-field span2"><span>@L["dc.f.rule"]</span>
+                    <select class="dc-sel" @bind="_f.Rule">
+                        @foreach (var r in PromoCatalog.Rules)
+                        {
+                            <option value="@r">@RuleIcon(r) @L[$"dc.rule.{r}"]</option>
+                        }
+                    </select>
+                </label>
+                @if (_f.Rule is "orders_month" or "orders_total" or "min_items")
+                {
+                    <MudNumericField T="int" @bind-Value="_f.RuleValue" Label="@L[$"dc.rv.{_f.Rule}"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="500" Class="mf-ltr" />
+                }
+                @if (_f.Rule == "spent_total")
+                {
+                    <MudNumericField T="decimal" @bind-Value="_f.RuleAmount" Label="@L["dc.rv.spent_total"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Step="5m" Class="mf-ltr" />
+                }
+
+                <label class="dc-field"><span>@L["dc.f.orderType"]</span>
+                    <select class="dc-sel" @bind="_f.OrderTypes">
+                        @foreach (var t in PromoCatalog.OrderTypes)
+                        {
+                            <option value="@t">@L[$"dc.ot.{t}"]</option>
+                        }
+                    </select>
+                </label>
+                <MudSelect T="int" @bind-SelectedValues="_days" MultiSelection="true" Label="@L["dc.f.days"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Placeholder="@L["dc.f.everyDay"]">
+                    @foreach (var d in new[] { 6, 0, 1, 2, 3, 4, 5 })
+                    {
+                        <MudSelectItem T="int" Value="@d">@L[$"dc.dayLong.{d}"]</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <label class="dc-field"><span>@L["dc.f.fromHour"]</span>
+                    <select class="dc-sel" @bind="_startHour">
+                        <option value="-1">— @L["dc.f.allDay"]</option>
+                        @for (var h = 0; h < 24; h++) { <option value="@h">@($"{h:00}:00")</option> }
+                    </select>
+                </label>
+                <label class="dc-field"><span>@L["dc.f.toHour"]</span>
+                    <select class="dc-sel" @bind="_endHour" disabled="@(_startHour < 0)">
+                        <option value="-1">—</option>
+                        @for (var h = 1; h <= 24; h++) { <option value="@h">@($"{h % 24:00}:00")</option> }
+                    </select>
+                </label>
+
+                <MfDatePicker @bind-Date="_f.StartsAt" Label="@L["dc.f.startsAt"]" DateFormat="yyyy-MM-dd" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+                <MfDatePicker @bind-Date="_f.EndsAt" Label="@L["dc.f.endsAt"]" DateFormat="yyyy-MM-dd" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" />
+
+                <MudNumericField T="int" @bind-Value="_f.MaxUses" Label="@L["dc.f.maxUses"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Class="mf-ltr" HelperText="@L["dc.f.zeroUnlimited"]" />
+                <MudNumericField T="int" @bind-Value="_f.MaxUsesPerCustomer" Label="@L["dc.f.perCustomer"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Class="mf-ltr" HelperText="@L["dc.f.zeroUnlimited"]" />
+
+                <div class="dc-switches span2">
+                    <MudSwitch T="bool" @bind-Value="_f.IsActive" Color="Color.Success" Size="Size.Small" Label="@L["dc.f.active"]" />
+                    <MudSwitch T="bool" @bind-Value="_f.IsPublic" Color="Color.Primary" Size="Size.Small" Label="@L["dc.f.public"]" />
+                </div>
+            </div>
+
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_error</MudAlert>
+            }
+            <div class="d-flex justify-end mt-3" style="gap: 8px;">
+                <MudButton OnClick="@(() => _editorOpen = false)">@L["common.cancel"]</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" Disabled="_busy" OnClick="Save">@L["common.save"]</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private PromotionPageDto? _page;
+    private bool _editorOpen, _busy;
+    private string? _error;
+    private PromotionDto? _editing;
+    private Form _f = new();
+    private IEnumerable<int> _days = [];
+    private int _startHour = -1, _endHour = -1;
+
+    private sealed class Form
+    {
+        public string Code = ""; public string Title = ""; public string? Description;
+        public string Type = "percent"; public decimal Value = 10; public decimal MaxDiscount; public decimal MinOrder;
+        public string Rule = "any"; public int RuleValue = 10; public decimal RuleAmount = 50;
+        public string OrderTypes = "all";
+        public DateTime? StartsAt; public DateTime? EndsAt;
+        public int MaxUses; public int MaxUsesPerCustomer;
+        public bool IsActive = true; public bool IsPublic = true;
+    }
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load() => _page = await Api.GetPromotionsAsync() ?? new([], new(0, 0, 0));
+
+    private void BeginEdit(PromotionDto? p)
+    {
+        _editing = p; _error = null;
+        if (p is null)
+        {
+            _f = new Form(); _days = []; _startHour = -1; _endHour = -1;
+        }
+        else
+        {
+            _f = new Form
+            {
+                Code = p.Code, Title = p.Title, Description = p.Description, Type = p.Type, Value = p.Value, MaxDiscount = p.MaxDiscount, MinOrder = p.MinOrder,
+                Rule = p.Rule, RuleValue = p.RuleValue == 0 ? 10 : p.RuleValue, RuleAmount = p.RuleAmount == 0 ? 50 : p.RuleAmount, OrderTypes = p.OrderTypes,
+                StartsAt = p.StartsAt, EndsAt = p.EndsAt, MaxUses = p.MaxUses, MaxUsesPerCustomer = p.MaxUsesPerCustomer, IsActive = p.IsActive, IsPublic = p.IsPublic,
+            };
+            _days = p.Days.ToList(); _startHour = p.StartHour ?? -1; _endHour = p.EndHour ?? -1;
+        }
+        _editorOpen = true;
+    }
+
+    /// <summary>The common cases, pre-filled — the owner only has to press Save.</summary>
+    private void Template(string which)
+    {
+        _f = which switch
+        {
+            "first" => new Form { Code = "WELCOME10", Title = L["dc.t.first"], Type = "percent", Value = 10, Rule = "first_order", MaxUsesPerCustomer = 1 },
+            "loyal" => new Form { Code = "LOYAL10", Title = L["dc.t.loyal"], Type = "percent", Value = 10, Rule = "orders_month", RuleValue = 10 },
+            "happy" => new Form { Code = "HAPPY15", Title = L["dc.t.happy"], Type = "percent", Value = 15 },
+            "big" => new Form { Code = "BIG5", Title = L["dc.t.big"], Type = "amount", Value = 5, MinOrder = 20 },
+            "pickup" => new Form { Code = "PICKUP5", Title = L["dc.t.pickup"], Type = "percent", Value = 5, OrderTypes = "pickup" },
+            _ => new Form(),
+        };
+        _days = []; _startHour = which == "happy" ? 15 : -1; _endHour = which == "happy" ? 18 : -1;
+    }
+
+    private async Task Save()
+    {
+        _error = null; _busy = true;
+        try
+        {
+            var req = new SavePromotionRequest(_f.Code.Trim().ToUpperInvariant(), _f.Title.Trim(), _f.Description, _f.Type, _f.Value, _f.MaxDiscount, _f.MinOrder,
+                _f.Rule, _f.RuleValue, _f.RuleAmount, _f.OrderTypes, _days.ToList(),
+                _startHour < 0 ? null : _startHour, _startHour < 0 || _endHour < 0 ? null : _endHour,
+                _f.StartsAt, _f.EndsAt, _f.MaxUses, _f.MaxUsesPerCustomer, _f.IsActive, _f.IsPublic);
+            var (saved, error) = _editing is null ? await Api.CreatePromotionAsync(req) : await Api.UpdatePromotionAsync(_editing.Id, req);
+            if (saved is null) { _error = error ?? L["common.saveFail"]; return; }
+            _editorOpen = false;
+            Snackbar.Add(L["common.saved"], Severity.Success);
+            await Load();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Toggle(PromotionDto p)
+    {
+        var (saved, error) = await Api.TogglePromotionAsync(p.Id);
+        if (saved is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        await Load();
+    }
+
+    private async Task Delete(PromotionDto p)
+    {
+        var ok = await Dialogs.ShowMessageBox(L["common.delete"], string.Format(L["dc.deleteAsk"], p.Code), yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (ok != true) return;
+        var (done, error) = await Api.DeletePromotionAsync(p.Id);
+        if (!done) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        await Load();
+    }
+
+    private async Task Copy(string code)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", code); Snackbar.Add(L["dc.copied"], Severity.Success); }
+        catch { Snackbar.Add(code, Severity.Info); }
+    }
+
+    private string ValueLabel(string type, decimal value, decimal cap) =>
+        type == "amount" ? $"−{value:0.###} {Fmt.Symbol}" : cap > 0 ? $"{value:0.#}% · ≤ {cap:0.###} {Fmt.Symbol}" : $"{value:0.#}%";
+
+    private static string RuleIcon(string rule) => rule switch
+    {
+        "first_order" => "🎉", "orders_month" => "💛", "orders_total" => "⭐", "spent_total" => "💎", "min_items" => "🛒", _ => "✅",
+    };
+
+    private string RuleLabel(string rule, int n, decimal amount) => rule switch
+    {
+        "orders_month" or "orders_total" or "min_items" => string.Format(L[$"dc.r.{rule}"], n),
+        "spent_total" => string.Format(L["dc.r.spent_total"], amount.ToString("0.###")),
+        _ => L[$"dc.r.{rule}"],
+    };
+}

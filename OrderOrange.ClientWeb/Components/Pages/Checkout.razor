@@ -1,0 +1,592 @@
+@page "/checkout"
+@using Microsoft.AspNetCore.Components.Sections
+@inject ApiClient Api
+@inject AppState State
+@inject CartState Cart
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject LanguageService L
+@implements IDisposable
+
+<PageTitle>OrderOrange — Checkout</PageTitle>
+
+@* No page header here — the cards say everything, and on a phone the title +
+   pep-talk line only pushed the address card below the fold. *@
+
+@if (Cart.Lines.Count == 0)
+{
+    <EmptyState Emoji="🧺" Title="@L["rest.emptyBasket"]">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Href="/">@L["orders.browse"]</MudButton>
+    </EmptyState>
+}
+else
+{
+    <MudGrid Spacing="4" Class="co-page">
+        <MudItem xs="12" md="7">
+            @* Delivered, or collected from the counter. Shown first because it changes
+               everything below it: a collection needs no address and pays no fee. *@
+            @if (PickupOffered)
+            {
+                <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4">
+                    <div class="co-mode">
+                        <button type="button" class="@(IsPickup ? "" : "on")" @onclick="@(() => _orderType = OrderType.Delivery)">
+                            <span class="ico">🛵</span>
+                            <span class="tx">
+                                <b>@L["checkout.delivery"]</b>
+                                <i>@Fmt.Rial(Cart.DeliveryFees)</i>
+                            </span>
+                        </button>
+                        <button type="button" class="@(IsPickup ? "on" : "")" @onclick="@(() => _orderType = OrderType.Pickup)">
+                            <span class="ico">🏪</span>
+                            <span class="tx">
+                                <b>@L["checkout.pickup"]</b>
+                                <i>@L["checkout.noFee"]</i>
+                            </span>
+                        </button>
+                    </div>
+                </MudPaper>
+            }
+
+            @if (IsPickup)
+            {
+                @* Where to go and collect it. No address picker — there is nothing to pick. *@
+                <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4">
+                    <MudText Typo="Typo.h6" Class="mb-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Storefront" Style="vertical-align: -4px;" Color="Color.Primary" /> @L["checkout.collectFrom"]
+                    </MudText>
+                    @foreach (var group in Cart.Groups)
+                    {
+                        <div class="mb-2">
+                            <MudText Typo="Typo.subtitle2" Style="font-weight: 800;">
+                                @group.Restaurant.LogoEmoji @group.Restaurant.Name
+                            </MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">@group.Restaurant.Area</MudText>
+                        </div>
+                    }
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">@L["checkout.pickupHint"]</MudAlert>
+                </MudPaper>
+            }
+            else
+            {
+            <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">
+                    <MudIcon Icon="@Icons.Material.Filled.Place" Style="vertical-align: -4px;" Color="Color.Primary" /> @L["checkout.address"]
+                </MudText>
+                @if (!State.IsAuthenticated)
+                {
+                    @* A guest has no saved addresses yet — tell them what happens next
+                       instead of showing an empty list or a spinner that never ends. *@
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                        @L["checkout.guestAddress"]
+                    </MudAlert>
+                }
+                else if (_addresses is null)
+                {
+                    <Loader />
+                }
+                else if (_addresses.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">@L["checkout.noAddresses"]</MudAlert>
+                }
+                else
+                {
+                    <MudRadioGroup T="int" @bind-Value="_addressId">
+                        @foreach (var address in _addresses)
+                        {
+                            var addr = address;
+                            <MudRadio T="int" Value="@addr.Id" Color="Color.Primary" Class="d-block mb-1">
+                                <b>@addr.Label</b>@{ var addressTail = string.Join("، ", new[] { addr.Building, addr.Street, addr.Area }.Where(p => !string.IsNullOrWhiteSpace(p))); } @(addressTail.Length > 0 ? "— " + addressTail : "")
+                            </MudRadio>
+                        }
+                    </MudRadioGroup>
+                }
+                @* A real door, not a whisper: adding an address is THE next step here. *@
+                <MudButton StartIcon="@Icons.Material.Filled.AddLocationAlt" Color="Color.Primary" Variant="Variant.Filled"
+                           FullWidth="true" Size="Size.Large" Class="rounded-xl mt-1 btn-breathe"
+                           OnClick="@(() => AddAddress())">@L["checkout.addAddress"]</MudButton>
+            </MudPaper>
+            }
+
+            <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4">
+                <MudText Typo="Typo.h6" Class="mb-3">
+                    <MudIcon Icon="@Icons.Material.Filled.Payments" Style="vertical-align: -4px;" Color="Color.Primary" /> @L["checkout.payment"]
+                </MudText>
+                <MudRadioGroup T="PaymentMethod" @bind-Value="_payment">
+                    <MudRadio T="PaymentMethod" Value="PaymentMethod.CashOnDelivery" Color="Color.Primary" Class="d-block mb-1">
+                        💵 @L["pay.CashOnDelivery"]
+                    </MudRadio>
+                    <MudRadio T="PaymentMethod" Value="PaymentMethod.CardOnDelivery" Color="Color.Primary" Class="d-block mb-1">
+                        💳 @L["pay.CardOnDelivery"]
+                    </MudRadio>
+                    @* Online card payment is not offered: the gateway was a TEST stub and a
+                       real shop must never show customers a payment that cannot take money.
+                       The server still understands the method, so switching it back on later
+                       is only a matter of restoring this option. *@
+                </MudRadioGroup>
+            </MudPaper>
+
+            <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl">
+                <MudText Typo="Typo.h6" Class="mb-3">
+                    <MudIcon Icon="@Icons.Material.Filled.LocalOffer" Style="vertical-align: -4px;" Color="Color.Primary" /> @L["checkout.couponNotes"]
+                </MudText>
+                <div class="d-flex align-start" style="gap: 8px;">
+                    <MudTextField @bind-Value="_couponCode" Label="@L["checkout.couponCode"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Placeholder="@L["checkout.couponPh"]" Disabled="@(_discount > 0)" Immediate="true"
+                                  OnKeyDown="@(e => e.Key == "Enter" ? ApplyCoupon() : Task.CompletedTask)"
+                                  Class="flex-grow-1" />
+                    @if (_discount > 0)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="RemoveCoupon"
+                                   Style="height: 40px; min-width: 72px; align-self: center;">@L["checkout.remove"]</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyCoupon"
+                                   Disabled="_checkingCoupon" Style="height: 40px; min-width: 72px; align-self: center;"
+                                   StartIcon="@Icons.Material.Filled.LocalOffer">@L["checkout.apply"]</MudButton>
+                    }
+                </div>
+                @if (_couponMessage is not null)
+                {
+                    <MudAlert Severity="@(_discount > 0 ? Severity.Success : Severity.Error)" Dense="true" Class="mt-2">
+                        @_couponMessage
+                    </MudAlert>
+                }
+                <MudTextField @bind-Value="_notes" Label="@L["checkout.notes"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Lines="2" Class="mt-3" Placeholder="@L["checkout.notesPh"]" />
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudPaper Elevation="2" Class="pa-5 rounded-xl mf-cart-panel">
+                @* One panel per restaurant: each becomes its own order with its own bill. *@
+                @if (Cart.IsMultiStore)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                        @string.Format(L["cart.separateOrders"], Cart.Groups.Count)
+                    </MudAlert>
+                }
+                @foreach (var group in Cart.Groups)
+                {
+                    var g = group;
+                    <div class="mb-3">
+                        <MudText Typo="Typo.subtitle1" Class="mb-1">@g.Restaurant.LogoEmoji @g.Restaurant.Name</MudText>
+                        @if (GroupLeadDays(g) is var lead && lead > 0)
+                        {
+                            @* This store's order is a promised-day order — say so BEFORE
+                               the button is pressed, with the actual date. *@
+                            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
+                                🗓️ @string.Format(L["track.scheduledFor"], DateTime.Today.AddDays(lead).ToString("dddd, dd MMM"))
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                                @L["checkout.estimated"] ~@(g.Restaurant.AvgPrepMinutes + 15) @L["common.min"]
+                            </MudText>
+                        }
+                        @foreach (var line in g.Lines)
+                        {
+                            var l = line;
+                            <div class="d-flex align-center py-1" style="gap: 4px;">
+                                <MudText Typo="Typo.body2" Class="flex-grow-1" Style="min-width: 0;">
+                                    @(l.Item.Names is { Count: > 0 } ? l.Item.NameFor(L.Locale) : L.Product(l.Item.Name))
+                                    @if (l.Item.LeadTimeDays > 0)
+                                    {
+                                        <span title="@string.Format(L["dish.leadDays"], l.Item.LeadTimeDays)">🗓️</span>
+                                    }
+                                </MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline" Size="Size.Small"
+                                               OnClick="@(() => ChangeQuantity(l, -1))" />
+                                <MudText Typo="Typo.body2">@l.Quantity</MudText>
+                                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small" Color="Color.Primary"
+                                               OnClick="@(() => ChangeQuantity(l, +1))" />
+                                <MudText Typo="Typo.body2" Style="width: 76px; text-align: right;">@Fmt.Rial(l.LineTotal)</MudText>
+                            </div>
+                        }
+                        @* Each store's own numbers matter only when there are several —
+                           with one store the row just repeated the totals underneath. *@
+                        @if (Cart.IsMultiStore)
+                        {
+                            <div class="d-flex justify-space-between mt-1">
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@L["common.subtotal"] · @L["common.deliveryFee"]</MudText>
+                                <MudText Typo="Typo.caption">@Fmt.Rial(g.Subtotal) · @Fmt.Rial(g.DeliveryFee)</MudText>
+                            </div>
+                        }
+                        @if (!g.MeetsMinimum)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                                @((MarkupString)string.Format(L["rest.minWarn"], Fmt.Rial(g.Restaurant.MinOrder), Fmt.Rial(g.Missing)))
+                            </MudAlert>
+                        }
+                    </div>
+                }
+                @* The money, receipt-style: quiet compact fee lines, then the total in
+                   its own green plate — the same green as the button that pays it. *@
+                <div class="co-bill">
+                    @if (Cart.ProductSavings > 0)
+                    {
+                        <div class="rw save"><span>🏷️ @L["checkout.prodDiscount"]</span><b>−@Fmt.Rial(Cart.ProductSavings)</b></div>
+                    }
+                    <div class="rw"><span>@L["common.subtotal"]</span><b>@Fmt.Rial(Cart.Subtotal)</b></div>
+                    @if (!IsPickup)
+                    {
+                        <div class="rw"><span>@L["common.deliveryFee"]</span><b>@Fmt.Rial(Cart.DeliveryFees)</b></div>
+                    }
+                    @if (ServiceFee > 0)
+                    {
+                        <div class="rw"><span>@L["common.serviceFee"]</span><b>@Fmt.Rial(ServiceFee * Cart.Groups.Count)</b></div>
+                    }
+                    @if (TaxTotal > 0)
+                    {
+                        <div class="rw"><span>@L["common.tax"]</span><b>@Fmt.Rial(TaxTotal)</b></div>
+                    }
+                    @if (_discount > 0)
+                    {
+                        <div class="rw save"><span>@L["checkout.coupon"] (@_couponCode.ToUpper())</span><b>−@Fmt.Rial(_discount)</b></div>
+                    }
+                    <div class="rw grand"><span>@L["common.total"]</span><b>@Fmt.Rial(Total)</b></div>
+                </div>
+
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+                }
+
+                @* Desktop: the button lives here in the card. Phones get the fixed
+                   bar below, teleported to the layout so nothing can bend it. *@
+                <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true" Size="Size.Large"
+                           Class="mt-4 d-none d-md-flex mf-pay-cta" OnClick="PlaceOrder"
+                           Disabled="@PayDisabled"
+                           StartIcon="@Icons.Material.Filled.CheckCircle">
+                    @PayLabel
+                </MudButton>
+                <SectionContent SectionName="oo-fixedbar">
+                    @* The money and the button are SEPARATE: the total stands beside a
+                       button that says only what it does — mixing the price into the
+                       label made the whole strip read as a banner, not a control. *@
+                    <div class="d-md-none co-paybar">
+                        <div class="tot">
+                            <small>@L["common.total"]</small>
+                            <b>@Fmt.Rial(Total)</b>
+                        </div>
+                        <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Large"
+                                   Class="mf-pay-cta" OnClick="PlaceOrder"
+                                   Disabled="@PayDisabled"
+                                   StartIcon="@Icons.Material.Filled.CheckCircle">
+                            @PayLabel
+                        </MudButton>
+                    </div>
+                </SectionContent>
+                @if (!IsPickup && _addressId == 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center" Class="d-block mt-2">
+                        @L["checkout.chooseAddress"]
+                    </MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    // Mirrors the server's Pricing.ServiceFee — zero since 2026-08-28.
+    private const decimal ServiceFee = 0m;
+
+    private List<AddressDto>? _addresses;
+    private List<CardDto>? _cards;
+    private int _addressId;
+    private int _cardId;
+    private PaymentMethod _payment = PaymentMethod.CashOnDelivery;
+    private string _couponCode = "";
+    private string? _couponMessage;
+    private decimal _discount;
+    private string _notes = "";
+    private string? _error;
+    private bool _placing;
+    private bool _checkingCoupon;
+
+    private OrderType _orderType = OrderType.Delivery;
+
+    private bool IsPickup => _orderType == OrderType.Pickup;
+
+    /// <summary>
+    /// Only offer collection when EVERY shop in the basket does it. A basket spanning
+    /// three stores becomes three orders, and "collect two, deliver one" is a promise
+    /// this checkout cannot make.
+    /// </summary>
+    private bool PickupOffered => Cart.Groups.Count > 0 && Cart.Groups.All(g => g.Restaurant.AllowsPickup);
+
+    /// <summary>The promised-day shift for one store's order — its longest lead item.</summary>
+    private static int GroupLeadDays(CartState.Group group) =>
+        group.Lines.Count == 0 ? 0 : group.Lines.Max(l => l.Item.LeadTimeDays);
+
+    /// <summary>Who the coupon lands on — mirrors the server: the biggest order.</summary>
+    private int CouponGroupId =>
+        Cart.Groups.Count == 0 ? 0 : Cart.Groups.OrderByDescending(g => g.Subtotal).First().Restaurant.Id;
+
+    /// <summary>
+    /// VAT per store, at that store's own rate, on goods after the coupon — the exact
+    /// arithmetic the server does, or the button's total would lie by a few baisa.
+    /// </summary>
+    private decimal TaxTotal => Cart.Groups.Sum(g =>
+        Math.Round((g.Subtotal - (_discount > 0 && g.Restaurant.Id == CouponGroupId ? _discount : 0m))
+                   * g.Restaurant.TaxPercent / 100m, 3));
+
+    // Every restaurant is its own order, so each carries its own delivery and service fee.
+    // Collecting it yourself means nobody drives, so there is no delivery fee to pay.
+    private decimal Total =>
+        Cart.Subtotal + (IsPickup ? 0m : Cart.DeliveryFees) + ServiceFee * Cart.Groups.Count - _discount + TaxTotal;
+
+    private bool _askSignInOnLoad;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Cart.Changed += OnCartChanged;
+        // A guest has neither, and asking the API for them would only 401 — the basket
+        // and totals still render, and both load the moment they sign in.
+        if (State.IsAuthenticated)
+        {
+            await LoadAddresses();
+            await LoadCards();
+            // The stored session may be a corpse: the loads above sign us out on 401.
+            // Ask for a fresh sign-in NOW, not after the form is filled.
+            _askSignInOnLoad = !State.IsAuthenticated;
+        }
+        else
+        {
+            // A guest is asked the moment they arrive — not after filling the page.
+            // Declining keeps the basket browsable; ordering asks again.
+            _askSignInOnLoad = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || !_askSignInOnLoad) return;
+        _askSignInOnLoad = false;
+        if (await SignIn())
+        {
+            await LoadAddresses();
+            await LoadCards();
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>Opens the sign-in sheet; true once the visitor has an account.</summary>
+    private async Task<bool> SignIn()
+    {
+        var parameters = new DialogParameters<SignInDialog>
+        {
+            { d => d.Reason, L["auth.reasonOrder"] }
+        };
+        var dialog = await Dialogs.ShowAsync<SignInDialog>("", parameters, new DialogOptions { FullScreen = true, NoHeader = true });
+        await dialog.Result;
+        return State.IsAuthenticated;
+    }
+
+    private async Task LoadCards()
+    {
+        _cards = await Api.GetCardsAsync() ?? [];
+        if (_cards.Count > 0 && _cardId == 0)
+            _cardId = _cards[0].Id;
+    }
+
+    private async Task AddCard()
+    {
+        var dialog = await Dialogs.ShowAsync<CardDialog>(L["checkout.addTestCard"]);
+        var result = await dialog.Result;
+        if (result?.Canceled == false) await LoadCards();
+    }
+
+    private async Task LoadAddresses()
+    {
+        _addresses = await Api.GetAddressesAsync();
+        if (_addresses is { Count: > 0 } && _addressId == 0)
+        {
+            // Prefer the address picked in the home hero, else the first saved one.
+            _addressId = Cart.PreferredAddressId is { } preferred && _addresses.Any(a => a.Id == preferred)
+                ? preferred
+                : _addresses[0].Id;
+        }
+    }
+
+    private async Task DeleteAddress(AddressDto address)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["addr.deleteTitle"],
+            string.Format(L["addr.deleteAsk"], address.Label),
+            yesText: L["common.delete"], cancelText: L["common.keep"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.DeleteAddressAsync(address.Id);
+        if (!ok) { Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error); return; }
+        if (_addressId == address.Id) _addressId = 0; // the removed one can't stay chosen
+        await LoadAddresses();
+    }
+
+    private async Task AddAddress(bool forOrder = false)
+    {
+        // The door checks the key BEFORE the form is filled, never after.
+        if (!State.IsAuthenticated && !await SignIn()) return;
+        await LoadAddresses(); // doubles as a session probe — a dead token signs us out here
+        if (!State.IsAuthenticated)
+        {
+            if (!await SignIn()) return;
+            await LoadAddresses();
+        }
+
+        // Reached from the order button, the dialog's save button IS the order button.
+        var parameters = new DialogParameters<AddressDialog>
+        {
+            { d => d.SaveLabel, forOrder ? L["checkout.placeOrder"] : null }
+        };
+        var dialog = await Dialogs.ShowAsync<AddressDialog>(L["checkout.newAddress"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled != false) return;
+        await LoadAddresses();
+        // The address born just now is the one to deliver to — not whichever was first.
+        if (forOrder && _addresses is { Count: > 0 })
+            _addressId = _addresses.Max(a => a.Id);
+    }
+
+    private async Task ApplyCoupon()
+    {
+        _couponMessage = null;
+        _discount = 0;
+        if (string.IsNullOrWhiteSpace(_couponCode))
+        {
+            _couponMessage = "Type a coupon code first — e.g. WELCOME10.";
+            return;
+        }
+        _checkingCoupon = true;
+        try
+        {
+            // The store's own codes first — judged on THAT store's part of the basket, the
+            // one the code will land on. Unknown there? Then it may be a platform coupon.
+            var group = Cart.Groups.OrderByDescending(g => g.Subtotal).FirstOrDefault();
+            if (group is not null)
+            {
+                var items = Cart.ToOrderItems(group.Restaurant.Id).Sum(i => i.Quantity);
+                var (check, _) = await Api.CheckPromotionAsync(new CheckPromotionRequest(group.Restaurant.Id, _couponCode, group.Subtotal, items, _orderType));
+                if (check is { Known: true })
+                {
+                    _discount = check.Valid ? check.Discount : 0;
+                    _couponMessage = check.Valid
+                        ? string.Format(L["dc.applied"], check.Title ?? _couponCode.ToUpper(), check.Discount.ToString("0.000"))
+                        : check.ErrorCode is { } ec && L[$"dc.e.{ec}"] != $"dc.e.{ec}"
+                            ? string.Format(L[$"dc.e.{ec}"], check.Args.Cast<object>().ToArray())
+                            : check.Message;
+                    return;
+                }
+            }
+            var (result, error) = await Api.ValidateCouponAsync(_couponCode, Cart.Subtotal);
+            if (result is null) { _couponMessage = error; return; }
+            _couponMessage = result.Message;
+            _discount = result.Valid ? result.Discount : 0;
+        }
+        finally
+        {
+            _checkingCoupon = false;
+        }
+    }
+
+    private void RemoveCoupon()
+    {
+        _couponCode = "";
+        _couponMessage = null;
+        _discount = 0;
+    }
+
+    private async Task ChangeQuantity(CartState.Line line, int delta)
+    {
+        if (delta > 0) Cart.Increment(line);
+        else Cart.Decrement(line);
+        // The subtotal moved, so a previously valid coupon may not be anymore — re-check it.
+        if (_discount > 0) await ApplyCoupon();
+    }
+
+    // A missing address never greys this button out — pressing it OPENS the address
+    // dialog, which beats a dead button nobody understands.
+    private bool PayDisabled => _placing;
+
+    // The price is NOT in the label — it stands beside the button, separate.
+    private string PayLabel =>
+        _placing ? L["checkout.processing"].ToString() : L["checkout.placeOrder"].ToString();
+
+    private async Task PlaceOrder()
+    {
+        if (Cart.Lines.Count == 0) return;
+
+        // Guests build their basket freely; the account is only needed here, because an
+        // order has to belong to someone. After signing in, load their addresses and
+        // cards and let them carry on rather than starting over.
+        if (!State.IsAuthenticated)
+        {
+            if (!await SignIn()) return;
+            await LoadAddresses();
+            await LoadCards();
+        }
+
+        // No address picked yet? The button opens the address dialog, whose save
+        // button says "Place order" — saving it drops straight through to placing.
+        if (!IsPickup && _addressId == 0)
+        {
+            await AddAddress(forOrder: true);
+            if (_addressId == 0) return; // dialog dismissed — nothing to deliver to
+        }
+
+        _error = null;
+        _placing = true;
+        try
+        {
+            // One order per restaurant — separate bills, separate kitchens, separate drivers.
+            // A coupon belongs to a single order, so it goes to the biggest one.
+            var groups = Cart.Groups;
+            var couponGroupId = groups.OrderByDescending(g => g.Subtotal).First().Restaurant.Id;
+            var placed = new List<OrderDto>();
+
+            foreach (var group in groups)
+            {
+                var request = new PlaceOrderRequest(
+                    group.Restaurant.Id,
+                    _addressId,
+                    _payment,
+                    _discount > 0 && group.Restaurant.Id == couponGroupId ? _couponCode : null,
+                    string.IsNullOrWhiteSpace(_notes) ? null : _notes,
+                    Cart.ToOrderItems(group.Restaurant.Id),
+                    null,   // no online card payment is offered
+                    _orderType);
+
+                var (order, error) = await Api.PlaceOrderAsync(request);
+                if (order is null)
+                {
+                    // Whatever already went through stays placed; drop only those lines so the
+                    // customer can fix the failed restaurant without losing the rest.
+                    // Coded refusals come out translated and already name the store.
+                    var friendly = L.ServerError(error);
+                    _error = error is null ? $"{group.Restaurant.Name}: {L["common.orderFail"]}"
+                        : friendly != error ? friendly!
+                        : $"{group.Restaurant.Name}: {error}";
+                    foreach (var done in placed) Cart.ClearGroup(done.RestaurantId);
+                    // In their face, not buried mid-page: on a phone the inline alert
+                    // sits above the fixed bar and is easy to never see.
+                    await Dialogs.ShowMessageBox(L["checkout.failTitle"], _error, yesText: L["common.close"]);
+                    return;
+                }
+                placed.Add(order);
+            }
+
+            Cart.Clear();
+            // Several orders have no single tracking page — send them to the list.
+            Nav.NavigateTo(placed.Count == 1 ? $"/track/{placed[0].Id}" : "/orders");
+        }
+        finally
+        {
+            _placing = false;
+        }
+    }
+
+    private void OnCartChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Cart.Changed -= OnCartChanged;
+}

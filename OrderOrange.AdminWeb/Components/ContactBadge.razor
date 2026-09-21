@@ -1,0 +1,56 @@
+@inject ApiClient Api
+@inject ISnackbar Snack
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject LanguageService L
+@implements IDisposable
+
+@* The count beside "Contact messages" in the admin drawer. Polled every 30 seconds; when a
+   new message arrives while the panel is open, a toast appears and — if the browser has
+   already been allowed — a desktop notification. *@
+
+@if (_unread > 0)
+{
+    <span class="tk-navbadge">@(_unread > 99 ? "99+" : _unread.ToString())</span>
+}
+
+@code {
+    private int _unread;
+    private DateTime? _latestSeen;
+    private bool _first = true;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Refresh();
+        _timer = new System.Threading.Timer(async _ => await InvokeAsync(async () => { await Refresh(); StateHasChanged(); }), null, 30000, 30000);
+    }
+
+    private async Task Refresh()
+    {
+        ContactSummaryDto? s = null;
+        try { s = await Api.AdminContactSummaryAsync(); } catch { }
+        if (s is null) return;
+        _unread = s.Unread;
+        var isNew = !_first && s.LatestAt is { } at && (_latestSeen is null || at > _latestSeen);
+        if (s.LatestAt is { } l && (_latestSeen is null || l > _latestSeen)) _latestSeen = l;
+        _first = false;
+        if (!isNew) return;
+
+        var title = string.IsNullOrWhiteSpace(s.LatestTitle) ? L["contact.a.title"] : s.LatestTitle;
+        Snack.Add($"{L["contact.a.newMsg"]}: {title}", Severity.Info, o =>
+        {
+            o.Action = L["contact.a.open"];
+            o.OnClick = _ => { Nav.NavigateTo("/contact-messages"); return Task.CompletedTask; };
+            o.VisibleStateDuration = 12000;
+        });
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "if(window.Notification&&Notification.permission==='granted'){try{new Notification('OrderOrange',{body:" + System.Text.Json.JsonSerializer.Serialize($"{L["contact.a.newMsg"]}: {title}") + ",tag:'contact'})}catch(e){}}");
+        }
+        catch { }
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

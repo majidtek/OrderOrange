@@ -1,0 +1,41 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+
+@* Cancelling is irreversible and lands in the removed-invoices report with this reason
+   attached, so the dialog says exactly what is about to happen and to which invoice. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-1">
+            @string.Format(L["inv.cancelAsk"], Row.Number)
+        </MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">
+            @Fmt.Rial(Row.Total) · @Row.ItemCount @L["inv.items"] · @Row.PlacedAt.ToString("MM-dd HH:mm")
+        </MudText>
+        <MudTextField Margin="Margin.Dense" @bind-Value="_reason" Label="@L["inv.reason"]" Variant="Variant.Outlined"
+                      Lines="2" MaxLength="400" HelperText="@L["inv.reasonHint"]" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="_busy" OnClick="Confirm">
+            @L["inv.cancelConfirm"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public InvoiceRowDto Row { get; set; } = default!;
+
+    private string _reason = "";
+    private bool _busy;
+
+    private async Task Confirm()
+    {
+        _busy = true;
+        var (ok, error) = await Api.CancelInvoiceAsync(Row.Id, _reason);
+        _busy = false;
+        if (ok) Dialog.Close(DialogResult.Ok(true));
+        else Snackbar.Add(error ?? L["common.error"], Severity.Error);
+    }
+}

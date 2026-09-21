@@ -1,0 +1,5587 @@
+[
+  {
+    "locale": "en",
+    "connectors": [
+      "and",
+      "plus",
+      "also",
+      "with also",
+      "comma",
+      "and also",
+      "then",
+      "as well as",
+      "along with",
+      "n",
+      "&",
+      "aswell as",
+      "and then",
+      "plus also",
+      "add"
+    ],
+    "multi": [
+      {
+        "text": "2 pizzas and a coke",
+        "items": [
+          {
+            "qty": 2,
+            "product": "pizzas"
+          },
+          {
+            "qty": 1,
+            "product": "coke"
+          }
+        ]
+      },
+      {
+        "text": "can i get a cheeseburger and large fries pls",
+        "items": [
+          {
+            "qty": 1,
+            "product": "cheeseburger"
+          },
+          {
+            "qty": 1,
+            "product": "large fries"
+          }
+        ]
+      },
+      {
+        "text": "hi id like 3 chicken shawarma plus 2 garlic breads",
+        "items": [
+          {
+            "qty": 3,
+            "product": "chicken shawarma"
+          },
+          {
+            "qty": 2,
+            "product": "garlic breads"
+          }
+        ]
+      },
+      {
+        "text": "one large pepperoni pizza, two cokes and a chocolate cake",
+        "items": [
+          {
+            "qty": 1,
+            "product": "large pepperoni pizza"
+          },
+          {
+            "qty": 2,
+            "product": "cokes"
+          },
+          {
+            "qty": 1,
+            "product": "chocolate cake"
+          }
+        ]
+      },
+      {
+        "text": "i want chiken nuggets and also a milkshake",
+        "items": [
+          {
+            "qty": 1,
+            "product": "chiken nuggets"
+          },
+          {
+            "qty": 1,
+            "product": "milkshake"
+          }
+        ]
+      },
+      {
+        "text": "burger x2 fries x1 and a sprite",
+        "items": [
+          {
+            "qty": 2,
+            "product": "burger"
+          },
+          {
+            "qty": 1,
+            "product": "fries"
+          },
+          {
+            "qty": 1,
+            "product": "sprite"
+          }
+        ]
+      },
+      {
+        "text": "gimme 4 falafel wraps n 2 hummus",
+        "items": [
+          {
+            "qty": 4,
+            "product": "falafel wraps"
+          },
+          {
+            "qty": 2,
+            "product": "hummus"
+          }
+        ]
+      },
+      {
+        "text": "ill take the grilled chicken meal, a caesar salad and 3 waters",
+        "items": [
+          {
+            "qty": 1,
+            "product": "grilled chicken meal"
+          },
+          {
+            "qty": 1,
+            "product": "caesar salad"
+          },
+          {
+            "qty": 3,
+            "product": "waters"
+          }
+        ]
+      },
+      {
+        "text": "two beef burgers plz and one veggie burger",
+        "items": [
+          {
+            "qty": 2,
+            "product": "beef burgers"
+          },
+          {
+            "qty": 1,
+            "product": "veggie burger"
+          }
+        ]
+      },
+      {
+        "text": "order: pizza margherita 1, coca cola 2, tiramisu 1",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pizza margherita"
+          },
+          {
+            "qty": 2,
+            "product": "coca cola"
+          },
+          {
+            "qty": 1,
+            "product": "tiramisu"
+          }
+        ]
+      },
+      {
+        "text": "can u send 5 samosas as well as a mango lassi",
+        "items": [
+          {
+            "qty": 5,
+            "product": "samosas"
+          },
+          {
+            "qty": 1,
+            "product": "mango lassi"
+          }
+        ]
+      },
+      {
+        "text": "sushi platter and misso soup and 2 green teas",
+        "items": [
+          {
+            "qty": 1,
+            "product": "sushi platter"
+          },
+          {
+            "qty": 1,
+            "product": "misso soup"
+          },
+          {
+            "qty": 2,
+            "product": "green teas"
+          }
+        ]
+      },
+      {
+        "text": "hey i need 3 shawrma sandwitches, 1 fatteh and 2 ayran",
+        "items": [
+          {
+            "qty": 3,
+            "product": "shawrma sandwitches"
+          },
+          {
+            "qty": 1,
+            "product": "fatteh"
+          },
+          {
+            "qty": 2,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "a family bucket along with 2 corn on the cob",
+        "items": [
+          {
+            "qty": 1,
+            "product": "family bucket"
+          },
+          {
+            "qty": 2,
+            "product": "corn on the cob"
+          }
+        ]
+      },
+      {
+        "text": "chicken wings 6 pcs and onion rings and a diet coke",
+        "items": [
+          {
+            "qty": 6,
+            "product": "chicken wings"
+          },
+          {
+            "qty": 1,
+            "product": "onion rings"
+          },
+          {
+            "qty": 1,
+            "product": "diet coke"
+          }
+        ]
+      },
+      {
+        "text": "ill have the lamb kabsa then a bottle of water",
+        "items": [
+          {
+            "qty": 1,
+            "product": "lamb kabsa"
+          },
+          {
+            "qty": 1,
+            "product": "bottle of water"
+          }
+        ]
+      },
+      {
+        "text": "2 spagheti bolognese & 1 garlic bread thx",
+        "items": [
+          {
+            "qty": 2,
+            "product": "spagheti bolognese"
+          },
+          {
+            "qty": 1,
+            "product": "garlic bread"
+          }
+        ]
+      },
+      {
+        "text": "can i order four donuts and a large capuccino",
+        "items": [
+          {
+            "qty": 4,
+            "product": "donuts"
+          },
+          {
+            "qty": 1,
+            "product": "large capuccino"
+          }
+        ]
+      },
+      {
+        "text": "double cheeseburger, chicken sandwich, medium fries and 2 pepsi",
+        "items": [
+          {
+            "qty": 1,
+            "product": "double cheeseburger"
+          },
+          {
+            "qty": 1,
+            "product": "chicken sandwich"
+          },
+          {
+            "qty": 1,
+            "product": "medium fries"
+          },
+          {
+            "qty": 2,
+            "product": "pepsi"
+          }
+        ]
+      },
+      {
+        "text": "i wanna order 3 mixed grill plates plus 2 tabouleh salads please",
+        "items": [
+          {
+            "qty": 3,
+            "product": "mixed grill plates"
+          },
+          {
+            "qty": 2,
+            "product": "tabouleh salads"
+          }
+        ]
+      },
+      {
+        "text": "one shrimp fried rice with also a spring roll",
+        "items": [
+          {
+            "qty": 1,
+            "product": "shrimp fried rice"
+          },
+          {
+            "qty": 1,
+            "product": "spring roll"
+          }
+        ]
+      },
+      {
+        "text": "add 2 icecreams and 1 brownie to my order",
+        "items": [
+          {
+            "qty": 2,
+            "product": "icecreams"
+          },
+          {
+            "qty": 1,
+            "product": "brownie"
+          }
+        ]
+      },
+      {
+        "text": "chiken biryani 2 and raita 1 and 3 naan",
+        "items": [
+          {
+            "qty": 2,
+            "product": "chiken biryani"
+          },
+          {
+            "qty": 1,
+            "product": "raita"
+          },
+          {
+            "qty": 3,
+            "product": "naan"
+          }
+        ]
+      },
+      {
+        "text": "gd evening pls send me a quatro formaggi pizza and six buffalo wings",
+        "items": [
+          {
+            "qty": 1,
+            "product": "quatro formaggi pizza"
+          },
+          {
+            "qty": 6,
+            "product": "buffalo wings"
+          }
+        ]
+      },
+      {
+        "text": "im getting the fish and chips, also 2 lemonades",
+        "items": [
+          {
+            "qty": 1,
+            "product": "fish and chips"
+          },
+          {
+            "qty": 2,
+            "product": "lemonades"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "a burger with cheese",
+      "tea with milk and sugar",
+      "pizza with extra olives",
+      "chicken shawarma with extra garlic sauce",
+      "one cheeseburger with no pickles and extra ketchup",
+      "large latte with oat milk please",
+      "i want the chicken burger with fries on the side",
+      "steak well done with mushroom sauce",
+      "2 pizzas with extra cheese and mushrooms",
+      "hot chocolate with whipped cream and marshmellows",
+      "beef shawarma wrap with pickles and no onions",
+      "spagetti with meatballs",
+      "a coffee with cream also no sugar",
+      "waffle with nutella and bananas",
+      "grilled chicken sandwich with lettuce tomato and mayo"
+    ]
+  },
+  {
+    "locale": "ar",
+    "connectors": [
+      "و",
+      "وبعد",
+      "بعد",
+      "وكمان",
+      "كمان",
+      "مع",
+      "ومعاه",
+      "ومعاها",
+      "ويا",
+      "وايضا",
+      "ثم",
+      "بلس",
+      "زياده",
+      "واضف"
+    ],
+    "multi": [
+      {
+        "text": "بغيت ثنتين شاورما دجاج وبيبسي",
+        "items": [
+          {
+            "qty": 2,
+            "product": "شاورما دجاج"
+          },
+          {
+            "qty": 1,
+            "product": "بيبسي"
+          }
+        ]
+      },
+      {
+        "text": "ابا 3 برجر لحم و 2 بطاطس وسط",
+        "items": [
+          {
+            "qty": 3,
+            "product": "برجر لحم"
+          },
+          {
+            "qty": 2,
+            "product": "بطاطس وسط"
+          }
+        ]
+      },
+      {
+        "text": "عطني بيتزا بيبروني كبيره وبعد صحن حمص",
+        "items": [
+          {
+            "qty": 1,
+            "product": "بيتزا بيبروني كبيره"
+          },
+          {
+            "qty": 1,
+            "product": "صحن حمص"
+          }
+        ]
+      },
+      {
+        "text": "ابي مندي دجاج نص وبرياني لحم وموية بارده",
+        "items": [
+          {
+            "qty": 1,
+            "product": "مندي دجاج نص"
+          },
+          {
+            "qty": 1,
+            "product": "برياني لحم"
+          },
+          {
+            "qty": 1,
+            "product": "موية بارده"
+          }
+        ]
+      },
+      {
+        "text": "٤ مشاكيك وشاي كرك اثنين",
+        "items": [
+          {
+            "qty": 4,
+            "product": "مشاكيك"
+          },
+          {
+            "qty": 2,
+            "product": "شاي كرك"
+          }
+        ]
+      },
+      {
+        "text": "ابغى شاورنا عربي وعصير مانجو وبطاطش حاره",
+        "items": [
+          {
+            "qty": 1,
+            "product": "شاورنا عربي"
+          },
+          {
+            "qty": 1,
+            "product": "عصير مانجو"
+          },
+          {
+            "qty": 1,
+            "product": "بطاطش حاره"
+          }
+        ]
+      },
+      {
+        "text": "لو سمحت ابي 2 بروست دجاج و 1 كوكاكولا دايت",
+        "items": [
+          {
+            "qty": 2,
+            "product": "بروست دجاج"
+          },
+          {
+            "qty": 1,
+            "product": "كوكاكولا دايت"
+          }
+        ]
+      },
+      {
+        "text": "ثلاث سمبوسه لحم وسندويش فلافل",
+        "items": [
+          {
+            "qty": 3,
+            "product": "سمبوسه لحم"
+          },
+          {
+            "qty": 1,
+            "product": "سندويش فلافل"
+          }
+        ]
+      },
+      {
+        "text": "ابا برياااني دجاج وسلطه فتوش وكولا",
+        "items": [
+          {
+            "qty": 1,
+            "product": "برياااني دجاج"
+          },
+          {
+            "qty": 1,
+            "product": "سلطه فتوش"
+          },
+          {
+            "qty": 1,
+            "product": "كولا"
+          }
+        ]
+      },
+      {
+        "text": "ودي بيتزا خضار وسط وباستا الفريدو وليمون نعناع",
+        "items": [
+          {
+            "qty": 1,
+            "product": "بيتزا خضار وسط"
+          },
+          {
+            "qty": 1,
+            "product": "باستا الفريدو"
+          },
+          {
+            "qty": 1,
+            "product": "ليمون نعناع"
+          }
+        ]
+      },
+      {
+        "text": "٢ كبسه لحم و٣ لقيمات وقهوه عربيه",
+        "items": [
+          {
+            "qty": 2,
+            "product": "كبسه لحم"
+          },
+          {
+            "qty": 3,
+            "product": "لقيمات"
+          },
+          {
+            "qty": 1,
+            "product": "قهوه عربيه"
+          }
+        ]
+      },
+      {
+        "text": "بغيت برحر دبل تشيز وايس كريم شوكلاته",
+        "items": [
+          {
+            "qty": 1,
+            "product": "برحر دبل تشيز"
+          },
+          {
+            "qty": 1,
+            "product": "ايس كريم شوكلاته"
+          }
+        ]
+      },
+      {
+        "text": "اضف لي رول دجاج وبطاطس ودجز وسبرايت",
+        "items": [
+          {
+            "qty": 1,
+            "product": "رول دجاج"
+          },
+          {
+            "qty": 1,
+            "product": "بطاطس ودجز"
+          },
+          {
+            "qty": 1,
+            "product": "سبرايت"
+          }
+        ]
+      },
+      {
+        "text": "خمس شاورما لحم وخمس شاورما دجاج وكرتون بيبسي",
+        "items": [
+          {
+            "qty": 5,
+            "product": "شاورما لحم"
+          },
+          {
+            "qty": 5,
+            "product": "شاورما دجاج"
+          },
+          {
+            "qty": 1,
+            "product": "كرتون بيبسي"
+          }
+        ]
+      },
+      {
+        "text": "ابي مشكك ٦ وشاى كرك ٢ وخبز رقاق",
+        "items": [
+          {
+            "qty": 6,
+            "product": "مشكك"
+          },
+          {
+            "qty": 2,
+            "product": "شاى كرك"
+          },
+          {
+            "qty": 1,
+            "product": "خبز رقاق"
+          }
+        ]
+      },
+      {
+        "text": "بغيت شاورما دجاج ومعاها عصير برتقال طازج",
+        "items": [
+          {
+            "qty": 1,
+            "product": "شاورما دجاج"
+          },
+          {
+            "qty": 1,
+            "product": "عصير برتقال طازج"
+          }
+        ]
+      },
+      {
+        "text": "ابا زنجر برجر وايس تي بالخوخ",
+        "items": [
+          {
+            "qty": 1,
+            "product": "زنجر برجر"
+          },
+          {
+            "qty": 1,
+            "product": "ايس تي بالخوخ"
+          }
+        ]
+      },
+      {
+        "text": "ثنين مضروبه ووحده عرسيه وثلاث ماء صغير",
+        "items": [
+          {
+            "qty": 2,
+            "product": "مضروبه"
+          },
+          {
+            "qty": 1,
+            "product": "عرسيه"
+          },
+          {
+            "qty": 3,
+            "product": "ماء صغير"
+          }
+        ]
+      },
+      {
+        "text": "لو سمحت 2 بيتزا مارجريتا و1 خبز بالتوم و4 صوص رانش",
+        "items": [
+          {
+            "qty": 2,
+            "product": "بيتزا مارجريتا"
+          },
+          {
+            "qty": 1,
+            "product": "خبز بالتوم"
+          },
+          {
+            "qty": 4,
+            "product": "صوص رانش"
+          }
+        ]
+      },
+      {
+        "text": "ابغى ٣ هريس ولبن رايب",
+        "items": [
+          {
+            "qty": 3,
+            "product": "هريس"
+          },
+          {
+            "qty": 1,
+            "product": "لبن رايب"
+          }
+        ]
+      },
+      {
+        "text": "بغيت تشيكن برجر وسلطه سيزر وبيبسى دايت",
+        "items": [
+          {
+            "qty": 1,
+            "product": "تشيكن برجر"
+          },
+          {
+            "qty": 1,
+            "product": "سلطه سيزر"
+          },
+          {
+            "qty": 1,
+            "product": "بيبسى دايت"
+          }
+        ]
+      },
+      {
+        "text": "ابي اثنين شاورما صاج وواحد كولا زيرو وثلاثه كاسات ليمون",
+        "items": [
+          {
+            "qty": 2,
+            "product": "شاورما صاج"
+          },
+          {
+            "qty": 1,
+            "product": "كولا زيرو"
+          },
+          {
+            "qty": 3,
+            "product": "كاسات ليمون"
+          }
+        ]
+      },
+      {
+        "text": "٦ سمبوسه جبن و٢ سبرنق رول وصحن تمر",
+        "items": [
+          {
+            "qty": 6,
+            "product": "سمبوسه جبن"
+          },
+          {
+            "qty": 2,
+            "product": "سبرنق رول"
+          },
+          {
+            "qty": 1,
+            "product": "صحن تمر"
+          }
+        ]
+      },
+      {
+        "text": "ودي مكرونه بولونيز وسلطه خضراء وخبز ثووم",
+        "items": [
+          {
+            "qty": 1,
+            "product": "مكرونه بولونيز"
+          },
+          {
+            "qty": 1,
+            "product": "سلطه خضراء"
+          },
+          {
+            "qty": 1,
+            "product": "خبز ثووم"
+          }
+        ]
+      },
+      {
+        "text": "اطلب لي دجاج مشوي كامل وارز بخاري وثلاث موية صغيره",
+        "items": [
+          {
+            "qty": 1,
+            "product": "دجاج مشوي كامل"
+          },
+          {
+            "qty": 1,
+            "product": "ارز بخاري"
+          },
+          {
+            "qty": 3,
+            "product": "موية صغيره"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "ابي برجر لحم مع جبن اضافي",
+      "شاي مع حليب لو سمحت",
+      "بيتزا مع زياده زيتون",
+      "شاورما دجاج مع صوص حار",
+      "بروست مع صوص الثوم",
+      "قهوه مع حليب قليل",
+      "برجر بدون بصل ومع مخلل زياده",
+      "ساندويش فلافل مع طحينه",
+      "كرك مع زعفران",
+      "بيتزا دجاج مع فطر وفلفل",
+      "مندي دجاج مع الشوربه",
+      "ابغى شاورما عربي مع بطاطس فوقها",
+      "عصير مانجو مع ثلج",
+      "ايس كريم فانيلا مع صوص شوكلاته",
+      "ابا كبسه لحم مع دقوس زياده"
+    ]
+  },
+  {
+    "locale": "fa",
+    "connectors": [
+      "و",
+      "با",
+      "بعلاوه",
+      "به علاوه",
+      "پلاس",
+      "همچنین",
+      "ضمنا",
+      "در ضمن",
+      "راستی",
+      "هم",
+      "همینطور",
+      "بعدشم",
+      "به همراه",
+      "همراه با",
+      "ویرگول"
+    ],
+    "multi": [
+      {
+        "text": "سلام دو تا پیتزا پپرونی و یه نوشابه مشکی میخوام",
+        "items": [
+          {
+            "qty": 2,
+            "product": "پیتزا پپرونی"
+          },
+          {
+            "qty": 1,
+            "product": "نوشابه مشکی"
+          }
+        ]
+      },
+      {
+        "text": "یه پرس چلوکباب کوبیده با دو تا دوغ لطفا",
+        "items": [
+          {
+            "qty": 1,
+            "product": "چلوکباب کوبیده"
+          },
+          {
+            "qty": 2,
+            "product": "دوغ"
+          }
+        ]
+      },
+      {
+        "text": "۳ تا ساندویچ فلافل و یه سیب زمینی سرخ کرده بفرستین",
+        "items": [
+          {
+            "qty": 3,
+            "product": "ساندویچ فلافل"
+          },
+          {
+            "qty": 1,
+            "product": "سیب زمینی سرخ کرده"
+          }
+        ]
+      },
+      {
+        "text": "یه جوجه کباب میخوام ضمنا یه سالاد شیرازی هم برام بزنین",
+        "items": [
+          {
+            "qty": 1,
+            "product": "جوجه کباب"
+          },
+          {
+            "qty": 1,
+            "product": "سالاد شیرازی"
+          }
+        ]
+      },
+      {
+        "text": "دوتا هامبرگر و یه نوشاابه و یه سیب زمینی متوسط",
+        "items": [
+          {
+            "qty": 2,
+            "product": "هامبرگر"
+          },
+          {
+            "qty": 1,
+            "product": "نوشاابه"
+          },
+          {
+            "qty": 1,
+            "product": "سیب زمینی متوسط"
+          }
+        ]
+      },
+      {
+        "text": "یک پرس قورمه سبزی یک پرس قیمه و دو تا نوشابه خانواده",
+        "items": [
+          {
+            "qty": 1,
+            "product": "قورمه سبزی"
+          },
+          {
+            "qty": 1,
+            "product": "قیمه"
+          },
+          {
+            "qty": 2,
+            "product": "نوشابه خانواده"
+          }
+        ]
+      },
+      {
+        "text": "پیتزا مخصوص ۲ تا بفرستید و یه دلستر لیمو",
+        "items": [
+          {
+            "qty": 2,
+            "product": "پیتزا مخصوص"
+          },
+          {
+            "qty": 1,
+            "product": "دلستر لیمو"
+          }
+        ]
+      },
+      {
+        "text": "برام یه لازانیا بیارین راستی یه نون سیر هم اضافه کنین",
+        "items": [
+          {
+            "qty": 1,
+            "product": "لازانیا"
+          },
+          {
+            "qty": 1,
+            "product": "نون سیر"
+          }
+        ]
+      },
+      {
+        "text": "سه تا ساندویج مرغ و دو تا اب معدنی میخام",
+        "items": [
+          {
+            "qty": 3,
+            "product": "ساندویج مرغ"
+          },
+          {
+            "qty": 2,
+            "product": "اب معدنی"
+          }
+        ]
+      },
+      {
+        "text": "یه کباب برگ با یه زرشک پلو با مرغ و سه تا دوغ",
+        "items": [
+          {
+            "qty": 1,
+            "product": "کباب برگ"
+          },
+          {
+            "qty": 1,
+            "product": "زرشک پلو با مرغ"
+          },
+          {
+            "qty": 3,
+            "product": "دوغ"
+          }
+        ]
+      },
+      {
+        "text": "دو پرس دیزی و یه سالاد فصل و یه ماست موصیر",
+        "items": [
+          {
+            "qty": 2,
+            "product": "دیزی"
+          },
+          {
+            "qty": 1,
+            "product": "سالاد فصل"
+          },
+          {
+            "qty": 1,
+            "product": "ماست موصیر"
+          }
+        ]
+      },
+      {
+        "text": "چهار تا جوجه کباب و دو تا کوبیده لطفا زودتر",
+        "items": [
+          {
+            "qty": 4,
+            "product": "جوجه کباب"
+          },
+          {
+            "qty": 2,
+            "product": "کوبیده"
+          }
+        ]
+      },
+      {
+        "text": "يه چيزبرگر و يه ميلک شيک شکلاتي ميخوام",
+        "items": [
+          {
+            "qty": 1,
+            "product": "چيزبرگر"
+          },
+          {
+            "qty": 1,
+            "product": "ميلک شيک شکلاتي"
+          }
+        ]
+      },
+      {
+        "text": "یه قهوه لاته و یه کیک شکلاتی برای من بفرست",
+        "items": [
+          {
+            "qty": 1,
+            "product": "قهوه لاته"
+          },
+          {
+            "qty": 1,
+            "product": "کیک شکلاتی"
+          }
+        ]
+      },
+      {
+        "text": "۲ تا پاستا آلفردو بعلاوه یه سوپ جو",
+        "items": [
+          {
+            "qty": 2,
+            "product": "پاستا آلفردو"
+          },
+          {
+            "qty": 1,
+            "product": "سوپ جو"
+          }
+        ]
+      },
+      {
+        "text": "یه پیتزا سبزیجات و سلاد سزار و آب پرتقال طبیعی",
+        "items": [
+          {
+            "qty": 1,
+            "product": "پیتزا سبزیجات"
+          },
+          {
+            "qty": 1,
+            "product": "سلاد سزار"
+          },
+          {
+            "qty": 1,
+            "product": "آب پرتقال طبیعی"
+          }
+        ]
+      },
+      {
+        "text": "دوتا بال سوخاری با یه ناگت مرغ و یه نوشابه رژیمی",
+        "items": [
+          {
+            "qty": 2,
+            "product": "بال سوخاری"
+          },
+          {
+            "qty": 1,
+            "product": "ناگت مرغ"
+          },
+          {
+            "qty": 1,
+            "product": "نوشابه رژیمی"
+          }
+        ]
+      },
+      {
+        "text": "پنج تا فلافل و سه تا نوشابه قوتی بدید",
+        "items": [
+          {
+            "qty": 5,
+            "product": "فلافل"
+          },
+          {
+            "qty": 3,
+            "product": "نوشابه قوتی"
+          }
+        ]
+      },
+      {
+        "text": "۲ تا کباب کوبیده و یک پرس ته چین مرغ و ۳ تا دوغ آبعلی",
+        "items": [
+          {
+            "qty": 2,
+            "product": "کباب کوبیده"
+          },
+          {
+            "qty": 1,
+            "product": "ته چین مرغ"
+          },
+          {
+            "qty": 3,
+            "product": "دوغ آبعلی"
+          }
+        ]
+      },
+      {
+        "text": "یه پیزا قارچ و گوشت و دوتا نوشابه بفرستین زود",
+        "items": [
+          {
+            "qty": 1,
+            "product": "پیزا قارچ و گوشت"
+          },
+          {
+            "qty": 2,
+            "product": "نوشابه"
+          }
+        ]
+      },
+      {
+        "text": "سه تا چای نبات و دو تا بستنی سنتی همچنین یه فالوده",
+        "items": [
+          {
+            "qty": 3,
+            "product": "چای نبات"
+          },
+          {
+            "qty": 2,
+            "product": "بستنی سنتی"
+          },
+          {
+            "qty": 1,
+            "product": "فالوده"
+          }
+        ]
+      },
+      {
+        "text": "یه شاورما و یه سیب زمینی با پنیر و یه نوشابه",
+        "items": [
+          {
+            "qty": 1,
+            "product": "شاورما"
+          },
+          {
+            "qty": 1,
+            "product": "سیب زمینی با پنیر"
+          },
+          {
+            "qty": 1,
+            "product": "نوشابه"
+          }
+        ]
+      },
+      {
+        "text": "2تا چیزبرگر و 1 عدد نوشابه زرد میخوام ممنون",
+        "items": [
+          {
+            "qty": 2,
+            "product": "چیزبرگر"
+          },
+          {
+            "qty": 1,
+            "product": "نوشابه زرد"
+          }
+        ]
+      },
+      {
+        "text": "یه عدد پیتزا آمریکایی و یه ساندویچ هات داگ لطفن",
+        "items": [
+          {
+            "qty": 1,
+            "product": "پیتزا آمریکایی"
+          },
+          {
+            "qty": 1,
+            "product": "ساندویچ هات داگ"
+          }
+        ]
+      },
+      {
+        "text": "دو تا اسپرسو و یه کاپوچینو و یه برونی میخواستم",
+        "items": [
+          {
+            "qty": 2,
+            "product": "اسپرسو"
+          },
+          {
+            "qty": 1,
+            "product": "کاپوچینو"
+          },
+          {
+            "qty": 1,
+            "product": "برونی"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "یه همبرگر با پنیر اضافه میخوام",
+      "چای با شیر بدید لطفا",
+      "یه پیتزا مخصوص با خمیر نازک لطفا",
+      "زرشک پلو با مرغ میخوام",
+      "یه سیب زمینی سرخ کرده با پنیر و قارچ",
+      "یه ساندویچ مرغ با سس مخصوص بفرستین",
+      "یه قهوه با شیر کم چرب",
+      "یه چیزبرگر با سس قارچ و بدون خیارشور",
+      "یه پیزا پپرونی با فلفل تند اضافه",
+      "یه شاورمای مخصوص با سیب زمینی داخلش",
+      "یه ماکارونی با سس بلونز میخوام",
+      "یه املت با گوجه اضافه بفرستین",
+      "یه کاپوچینو با شیر بادام لطفا",
+      "یه چلو کباب برگ با برنج ایرانی"
+    ]
+  },
+  {
+    "locale": "ur",
+    "connectors": [
+      "اور",
+      "اور ساتھ",
+      "ساتھ میں",
+      "ساتھ ہی",
+      "کے ساتھ",
+      "پلس",
+      "بھی",
+      "اور بھی",
+      "اسکے علاوہ",
+      "مزید",
+      "پھر",
+      "ایک اور",
+      "او",
+      "نیز"
+    ],
+    "multi": [
+      {
+        "text": "دو زنگر برگر اور ایک کوک بھیج دیں",
+        "items": [
+          {
+            "qty": 2,
+            "product": "زنگر برگر"
+          },
+          {
+            "qty": 1,
+            "product": "کوک"
+          }
+        ]
+      },
+      {
+        "text": "ایک چکن بریانی اور دو نان چاہیے",
+        "items": [
+          {
+            "qty": 1,
+            "product": "چکن بریانی"
+          },
+          {
+            "qty": 2,
+            "product": "نان"
+          }
+        ]
+      },
+      {
+        "text": "مجھے 3 شوارما اور 2 فرائز چاہییں",
+        "items": [
+          {
+            "qty": 3,
+            "product": "شوارما"
+          },
+          {
+            "qty": 2,
+            "product": "فرائز"
+          }
+        ]
+      },
+      {
+        "text": "ایک لارج پزا اور دو پیپسی بھیج دو",
+        "items": [
+          {
+            "qty": 1,
+            "product": "لارج پزا"
+          },
+          {
+            "qty": 2,
+            "product": "پیپسی"
+          }
+        ]
+      },
+      {
+        "text": "چکن کڑاہی ایک پلیٹ اور چار روٹی",
+        "items": [
+          {
+            "qty": 1,
+            "product": "چکن کڑاہی"
+          },
+          {
+            "qty": 4,
+            "product": "روٹی"
+          }
+        ]
+      },
+      {
+        "text": "بریانی دو اور رائتہ ایک بھیج دیں",
+        "items": [
+          {
+            "qty": 2,
+            "product": "بریانی"
+          },
+          {
+            "qty": 1,
+            "product": "رائتہ"
+          }
+        ]
+      },
+      {
+        "text": "ایک نہاری دو کلچے اور ایک بوتل سپرائٹ",
+        "items": [
+          {
+            "qty": 1,
+            "product": "نہاری"
+          },
+          {
+            "qty": 2,
+            "product": "کلچے"
+          },
+          {
+            "qty": 1,
+            "product": "سپرائٹ"
+          }
+        ]
+      },
+      {
+        "text": "مجھے دو بگر ایک فرایز اور ایک کولڈ درنک منگوا دیں",
+        "items": [
+          {
+            "qty": 2,
+            "product": "بگر"
+          },
+          {
+            "qty": 1,
+            "product": "فرایز"
+          },
+          {
+            "qty": 1,
+            "product": "کولڈ درنک"
+          }
+        ]
+      },
+      {
+        "text": "4 سموسے اور 2 پکوڑے پلس ایک چائے",
+        "items": [
+          {
+            "qty": 4,
+            "product": "سموسے"
+          },
+          {
+            "qty": 2,
+            "product": "پکوڑے"
+          },
+          {
+            "qty": 1,
+            "product": "چائے"
+          }
+        ]
+      },
+      {
+        "text": "پانچ چکن رول اور تین سیخ کباب بھیجیں",
+        "items": [
+          {
+            "qty": 5,
+            "product": "چکن رول"
+          },
+          {
+            "qty": 3,
+            "product": "سیخ کباب"
+          }
+        ]
+      },
+      {
+        "text": "ایک مٹن کڑاھی ساتھ میں چھ نان اور ایک سلاد",
+        "items": [
+          {
+            "qty": 1,
+            "product": "مٹن کڑاھی"
+          },
+          {
+            "qty": 6,
+            "product": "نان"
+          },
+          {
+            "qty": 1,
+            "product": "سلاد"
+          }
+        ]
+      },
+      {
+        "text": "دو انڈا پراٹھا اور ایک کپ چائے بھیج دیں پلیز",
+        "items": [
+          {
+            "qty": 2,
+            "product": "انڈا پراٹھا"
+          },
+          {
+            "qty": 1,
+            "product": "چائے"
+          }
+        ]
+      },
+      {
+        "text": "تین بریاںی اور دو زنگر بگر جلدی بھیجو",
+        "items": [
+          {
+            "qty": 3,
+            "product": "بریاںی"
+          },
+          {
+            "qty": 2,
+            "product": "زنگر بگر"
+          }
+        ]
+      },
+      {
+        "text": "ایک فیملی پیزا دو گارلک بریڈ اور تین کوک",
+        "items": [
+          {
+            "qty": 1,
+            "product": "فیملی پیزا"
+          },
+          {
+            "qty": 2,
+            "product": "گارلک بریڈ"
+          },
+          {
+            "qty": 3,
+            "product": "کوک"
+          }
+        ]
+      },
+      {
+        "text": "2 چکن تکہ 1 دال ماش اور 4 تندوری روٹی",
+        "items": [
+          {
+            "qty": 2,
+            "product": "چکن تکہ"
+          },
+          {
+            "qty": 1,
+            "product": "دال ماش"
+          },
+          {
+            "qty": 4,
+            "product": "تندوری روٹی"
+          }
+        ]
+      },
+      {
+        "text": "مجھے ایک بروسٹ چکن اور دو ملک شیک چاہیے",
+        "items": [
+          {
+            "qty": 1,
+            "product": "بروسٹ چکن"
+          },
+          {
+            "qty": 2,
+            "product": "ملک شیک"
+          }
+        ]
+      },
+      {
+        "text": "دو حلوہ پوری اور ایک لسسی بھیج دیں",
+        "items": [
+          {
+            "qty": 2,
+            "product": "حلوہ پوری"
+          },
+          {
+            "qty": 1,
+            "product": "لسسی"
+          }
+        ]
+      },
+      {
+        "text": "ایک قورمہ ایک پلاؤ اور دو کولڈ ڈرنک",
+        "items": [
+          {
+            "qty": 1,
+            "product": "قورمہ"
+          },
+          {
+            "qty": 1,
+            "product": "پلاؤ"
+          },
+          {
+            "qty": 2,
+            "product": "کولڈ ڈرنک"
+          }
+        ]
+      },
+      {
+        "text": "چار جلبی اور چھ گلاب جامن پیک کر دیں",
+        "items": [
+          {
+            "qty": 4,
+            "product": "جلبی"
+          },
+          {
+            "qty": 6,
+            "product": "گلاب جامن"
+          }
+        ]
+      },
+      {
+        "text": "ایک بیف برگر ایک چکن برگر اور ایک لارج فرائز",
+        "items": [
+          {
+            "qty": 1,
+            "product": "بیف برگر"
+          },
+          {
+            "qty": 1,
+            "product": "چکن برگر"
+          },
+          {
+            "qty": 1,
+            "product": "لارج فرائز"
+          }
+        ]
+      },
+      {
+        "text": "دو چاے اور چار رس بھیج دو",
+        "items": [
+          {
+            "qty": 2,
+            "product": "چاے"
+          },
+          {
+            "qty": 4,
+            "product": "رس"
+          }
+        ]
+      },
+      {
+        "text": "ایک چکن سوپ دو گارلک ناں اور ایک آئس کریم",
+        "items": [
+          {
+            "qty": 1,
+            "product": "چکن سوپ"
+          },
+          {
+            "qty": 2,
+            "product": "گارلک ناں"
+          },
+          {
+            "qty": 1,
+            "product": "آئس کریم"
+          }
+        ]
+      },
+      {
+        "text": "3 شورما 2 فرایز اور 1 پپسی جلدی",
+        "items": [
+          {
+            "qty": 3,
+            "product": "شورما"
+          },
+          {
+            "qty": 2,
+            "product": "فرایز"
+          },
+          {
+            "qty": 1,
+            "product": "پپسی"
+          }
+        ]
+      },
+      {
+        "text": "دو پلیٹ حلیم اور ایک نان بھیج دو",
+        "items": [
+          {
+            "qty": 2,
+            "product": "حلیم"
+          },
+          {
+            "qty": 1,
+            "product": "نان"
+          }
+        ]
+      },
+      {
+        "text": "ایک چکن چاؤمین اور ایک منچورین اور دو اسپرنگ رول",
+        "items": [
+          {
+            "qty": 1,
+            "product": "چکن چاؤمین"
+          },
+          {
+            "qty": 1,
+            "product": "منچورین"
+          },
+          {
+            "qty": 2,
+            "product": "اسپرنگ رول"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "ایک برگر چیز کے ساتھ بھیج دیں",
+      "چائے دودھ کے ساتھ",
+      "پیزا ایکسٹرا زیتون کے ساتھ چاہیے",
+      "بریانی رائتے کے ساتھ بھیج دو",
+      "شوارما ساتھ میں گارلک ساس ڈال دینا",
+      "ایک چکن رول ایکسٹرا چٹنی کے ساتھ",
+      "فرائز کیچپ کے ساتھ بھیجیں",
+      "ایک چکن کڑاہی کم مرچ اور زیادہ ادرک کے ساتھ",
+      "ایک ملک شیک بغیر آئس کریم کے",
+      "پراٹھا مکھن کے ساتھ بنا دیں",
+      "برگر پیاز کے بغیر اور ایکسٹرا چیز کے ساتھ",
+      "ایک پیزا آدھا چکن اور آدھا ویجی والا",
+      "زنگر برگر ساتھ میں مایونیز زیادہ",
+      "ایک لسی نمکین اور ٹھنڈی والی"
+    ]
+  },
+  {
+    "locale": "tr",
+    "connectors": [
+      "ve",
+      "bir de",
+      "birde",
+      "bide",
+      "bi de",
+      "ayrıca",
+      "ayrica",
+      "artı",
+      "arti",
+      "ek olarak",
+      "sonra",
+      "bir tane de",
+      "yanına da",
+      "hem de",
+      "ilaveten"
+    ],
+    "multi": [
+      {
+        "text": "2 lahmacun ve bir ayran alabilir miyim",
+        "items": [
+          {
+            "qty": 2,
+            "product": "lahmacun"
+          },
+          {
+            "qty": 1,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "bir adana kebap bir de kola olsun abi",
+        "items": [
+          {
+            "qty": 1,
+            "product": "adana kebap"
+          },
+          {
+            "qty": 1,
+            "product": "kola"
+          }
+        ]
+      },
+      {
+        "text": "3 tavuk dürüm birde 2 ayran istiyorum",
+        "items": [
+          {
+            "qty": 3,
+            "product": "tavuk dürüm"
+          },
+          {
+            "qty": 2,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "iskender 2 porsiyon ayrıca bir künefe",
+        "items": [
+          {
+            "qty": 2,
+            "product": "iskender"
+          },
+          {
+            "qty": 1,
+            "product": "künefe"
+          }
+        ]
+      },
+      {
+        "text": "bana bir karışık pizza bir patates kızartması ve bir kola lütfen",
+        "items": [
+          {
+            "qty": 1,
+            "product": "karışık pizza"
+          },
+          {
+            "qty": 1,
+            "product": "patates kızartması"
+          },
+          {
+            "qty": 1,
+            "product": "kola"
+          }
+        ]
+      },
+      {
+        "text": "4 lahmacn 1 salgam 1 kunefe lutfen",
+        "items": [
+          {
+            "qty": 4,
+            "product": "lahmacn"
+          },
+          {
+            "qty": 1,
+            "product": "salgam"
+          },
+          {
+            "qty": 1,
+            "product": "kunefe"
+          }
+        ]
+      },
+      {
+        "text": "iki mercimek çorbası ve bir porsiyon pilav yollayın",
+        "items": [
+          {
+            "qty": 2,
+            "product": "mercimek çorbası"
+          },
+          {
+            "qty": 1,
+            "product": "pilav"
+          }
+        ]
+      },
+      {
+        "text": "bir tavuk döner dürüm artı bir şalgam alayım",
+        "items": [
+          {
+            "qty": 1,
+            "product": "tavuk döner dürüm"
+          },
+          {
+            "qty": 1,
+            "product": "şalgam"
+          }
+        ]
+      },
+      {
+        "text": "5 tane lahmacun 2 tane ayran bide 1 künefe",
+        "items": [
+          {
+            "qty": 5,
+            "product": "lahmacun"
+          },
+          {
+            "qty": 2,
+            "product": "ayran"
+          },
+          {
+            "qty": 1,
+            "product": "künefe"
+          }
+        ]
+      },
+      {
+        "text": "hamburger menü 2 adet sonra 1 büyük kola",
+        "items": [
+          {
+            "qty": 2,
+            "product": "hamburger menü"
+          },
+          {
+            "qty": 1,
+            "product": "büyük kola"
+          }
+        ]
+      },
+      {
+        "text": "kasarli pide 1 kusbasili pide 1 ve 2 ayran",
+        "items": [
+          {
+            "qty": 1,
+            "product": "kasarli pide"
+          },
+          {
+            "qty": 1,
+            "product": "kusbasili pide"
+          },
+          {
+            "qty": 2,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "bir porsiyon çiğ köfte yanına da iki ayran",
+        "items": [
+          {
+            "qty": 1,
+            "product": "çiğ köfte"
+          },
+          {
+            "qty": 2,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "2 iskender bir ayran ve bir sütlaç göndersenize",
+        "items": [
+          {
+            "qty": 2,
+            "product": "iskender"
+          },
+          {
+            "qty": 1,
+            "product": "ayran"
+          },
+          {
+            "qty": 1,
+            "product": "sütlaç"
+          }
+        ]
+      },
+      {
+        "text": "üç adet su böreği ve iki çay lütfen",
+        "items": [
+          {
+            "qty": 3,
+            "product": "su böreği"
+          },
+          {
+            "qty": 2,
+            "product": "çay"
+          }
+        ]
+      },
+      {
+        "text": "1 adana 1 urfa 2 ayran",
+        "items": [
+          {
+            "qty": 1,
+            "product": "adana"
+          },
+          {
+            "qty": 1,
+            "product": "urfa"
+          },
+          {
+            "qty": 2,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "bir porsiyon mantı ile bir ayran alabilir miyim",
+        "items": [
+          {
+            "qty": 1,
+            "product": "mantı"
+          },
+          {
+            "qty": 1,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "2 durum 1 kola 1 baklava lutfen",
+        "items": [
+          {
+            "qty": 2,
+            "product": "durum"
+          },
+          {
+            "qty": 1,
+            "product": "kola"
+          },
+          {
+            "qty": 1,
+            "product": "baklava"
+          }
+        ]
+      },
+      {
+        "text": "bi tane tavuk şiş bi tane kuzu şiş ve şalgam",
+        "items": [
+          {
+            "qty": 1,
+            "product": "tavuk şiş"
+          },
+          {
+            "qty": 1,
+            "product": "kuzu şiş"
+          },
+          {
+            "qty": 1,
+            "product": "şalgam"
+          }
+        ]
+      },
+      {
+        "text": "lahmacun 6 tane ayran 2 tane olsun",
+        "items": [
+          {
+            "qty": 6,
+            "product": "lahmacun"
+          },
+          {
+            "qty": 2,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "2 kokoreç bir de turşu suyu",
+        "items": [
+          {
+            "qty": 2,
+            "product": "kokoreç"
+          },
+          {
+            "qty": 1,
+            "product": "turşu suyu"
+          }
+        ]
+      },
+      {
+        "text": "menemen 1 poğaça 3 bi de çay",
+        "items": [
+          {
+            "qty": 1,
+            "product": "menemen"
+          },
+          {
+            "qty": 3,
+            "product": "poğaça"
+          },
+          {
+            "qty": 1,
+            "product": "çay"
+          }
+        ]
+      },
+      {
+        "text": "4 tane simit birde 2 çay alayım",
+        "items": [
+          {
+            "qty": 4,
+            "product": "simit"
+          },
+          {
+            "qty": 2,
+            "product": "çay"
+          }
+        ]
+      },
+      {
+        "text": "tavuk şnitzel 2 porsiyon ayrica 1 çoban salata",
+        "items": [
+          {
+            "qty": 2,
+            "product": "tavuk şnitzel"
+          },
+          {
+            "qty": 1,
+            "product": "çoban salata"
+          }
+        ]
+      },
+      {
+        "text": "iki tane tost bir ayran bir de portakal suyu",
+        "items": [
+          {
+            "qty": 2,
+            "product": "tost"
+          },
+          {
+            "qty": 1,
+            "product": "ayran"
+          },
+          {
+            "qty": 1,
+            "product": "portakal suyu"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "bol soğanlı ve bol maydanozlu bir dürüm olsun",
+      "acılı ve sarımsaklı bir adana kebap istiyorum",
+      "bir hamburger ekstra kaşarlı ve az soslu olsun",
+      "ekstra zeytinli bir pizza alabilir miyim",
+      "iskender bol yoğurtlu ve tereyağlı olsun",
+      "patates kızartması yanında ketçap ve mayonez olsun",
+      "künefe üstüne dondurma ile birlikte gelsin",
+      "sosisli sandviç hardallı ve turşulu olsun",
+      "bir çay sütlü ve az şekerli olsun",
+      "mercimek çorbasının yanına limon ve kruton koyun",
+      "pideyi yumurtalı ve kaşarlı yapın",
+      "bir çiğ köfte dürüm nar ekşili ve marullu olsun",
+      "bir lahmacun ama soğansız ve az acılı",
+      "tostu üçgen kesin ve yanında turşu olsun"
+    ]
+  },
+  {
+    "locale": "fr",
+    "connectors": [
+      "et",
+      "plus",
+      "avec",
+      "aussi",
+      "et aussi",
+      "puis",
+      "et puis",
+      "ensuite",
+      "ainsi que",
+      "également",
+      "en plus",
+      "et avec ça",
+      "avec ça",
+      "sinon",
+      "virgule"
+    ],
+    "multi": [
+      {
+        "text": "bonjour je voudrais 2 pizzas margherita et une bouteille de coca svp",
+        "items": [
+          {
+            "qty": 2,
+            "product": "pizzas margherita"
+          },
+          {
+            "qty": 1,
+            "product": "bouteille de coca"
+          }
+        ]
+      },
+      {
+        "text": "slt un tacos poulet et 2 frite stp",
+        "items": [
+          {
+            "qty": 1,
+            "product": "tacos poulet"
+          },
+          {
+            "qty": 2,
+            "product": "frite"
+          }
+        ]
+      },
+      {
+        "text": "je prends 3 kebabs plus 2 canettes de fanta",
+        "items": [
+          {
+            "qty": 3,
+            "product": "kebabs"
+          },
+          {
+            "qty": 2,
+            "product": "canettes de fanta"
+          }
+        ]
+      },
+      {
+        "text": "bonsoir deux cheeseburgers, une salade césar et un tiramisu",
+        "items": [
+          {
+            "qty": 2,
+            "product": "cheeseburgers"
+          },
+          {
+            "qty": 1,
+            "product": "salade césar"
+          },
+          {
+            "qty": 1,
+            "product": "tiramisu"
+          }
+        ]
+      },
+      {
+        "text": "bjr jvoudré une assiette kebab et des frites",
+        "items": [
+          {
+            "qty": 1,
+            "product": "assiette kebab"
+          },
+          {
+            "qty": 1,
+            "product": "frites"
+          }
+        ]
+      },
+      {
+        "text": "menu maxi best of x2 et 1 mcflurry oreo",
+        "items": [
+          {
+            "qty": 2,
+            "product": "menu maxi best of"
+          },
+          {
+            "qty": 1,
+            "product": "mcflurry oreo"
+          }
+        ]
+      },
+      {
+        "text": "je voudrais commander 4 nems, 2 rouleaux de printemps et un riz cantonais",
+        "items": [
+          {
+            "qty": 4,
+            "product": "nems"
+          },
+          {
+            "qty": 2,
+            "product": "rouleaux de printemps"
+          },
+          {
+            "qty": 1,
+            "product": "riz cantonais"
+          }
+        ]
+      },
+      {
+        "text": "un poulet rôti avec 2 parts de gratin et une baguette",
+        "items": [
+          {
+            "qty": 1,
+            "product": "poulet rôti"
+          },
+          {
+            "qty": 2,
+            "product": "parts de gratin"
+          },
+          {
+            "qty": 1,
+            "product": "baguette"
+          }
+        ]
+      },
+      {
+        "text": "bonjur je prend un sandwitch thon crudité et une eau plate",
+        "items": [
+          {
+            "qty": 1,
+            "product": "sandwitch thon crudité"
+          },
+          {
+            "qty": 1,
+            "product": "eau plate"
+          }
+        ]
+      },
+      {
+        "text": "3 tacos et 3 coca svp merci",
+        "items": [
+          {
+            "qty": 3,
+            "product": "tacos"
+          },
+          {
+            "qty": 3,
+            "product": "coca"
+          }
+        ]
+      },
+      {
+        "text": "je vais prendre le poke bowl saumon plus des edamames",
+        "items": [
+          {
+            "qty": 1,
+            "product": "poke bowl saumon"
+          },
+          {
+            "qty": 1,
+            "product": "edamames"
+          }
+        ]
+      },
+      {
+        "text": "deux pizzas reine, une pizza chèvre miel et une grande bouteille de coca",
+        "items": [
+          {
+            "qty": 2,
+            "product": "pizzas reine"
+          },
+          {
+            "qty": 1,
+            "product": "pizza chèvre miel"
+          },
+          {
+            "qty": 1,
+            "product": "grande bouteille de coca"
+          }
+        ]
+      },
+      {
+        "text": "bonsoir 1 chicken burger 1 tiramisu et 2 sprite",
+        "items": [
+          {
+            "qty": 1,
+            "product": "chicken burger"
+          },
+          {
+            "qty": 1,
+            "product": "tiramisu"
+          },
+          {
+            "qty": 2,
+            "product": "sprite"
+          }
+        ]
+      },
+      {
+        "text": "coucou je voudrait 2 crepes nutella et 1 chocolat chaud",
+        "items": [
+          {
+            "qty": 2,
+            "product": "crepes nutella"
+          },
+          {
+            "qty": 1,
+            "product": "chocolat chaud"
+          }
+        ]
+      },
+      {
+        "text": "un couscous royal et aussi une pastilla",
+        "items": [
+          {
+            "qty": 1,
+            "product": "couscous royal"
+          },
+          {
+            "qty": 1,
+            "product": "pastilla"
+          }
+        ]
+      },
+      {
+        "text": "je commande 5 samoussas, 2 beignets crevette et un thé à la menthe",
+        "items": [
+          {
+            "qty": 5,
+            "product": "samoussas"
+          },
+          {
+            "qty": 2,
+            "product": "beignets crevette"
+          },
+          {
+            "qty": 1,
+            "product": "thé à la menthe"
+          }
+        ]
+      },
+      {
+        "text": "bjr 2 boite de sushi saumon et 1 soupe miso stp",
+        "items": [
+          {
+            "qty": 2,
+            "product": "boite de sushi saumon"
+          },
+          {
+            "qty": 1,
+            "product": "soupe miso"
+          }
+        ]
+      },
+      {
+        "text": "je prendrai une entrecôte, des frites et deux verres de vin rouge",
+        "items": [
+          {
+            "qty": 1,
+            "product": "entrecôte"
+          },
+          {
+            "qty": 1,
+            "product": "frites"
+          },
+          {
+            "qty": 2,
+            "product": "verres de vin rouge"
+          }
+        ]
+      },
+      {
+        "text": "un menu big mac, un menu nuggets et 3 sundae caramel",
+        "items": [
+          {
+            "qty": 1,
+            "product": "menu big mac"
+          },
+          {
+            "qty": 1,
+            "product": "menu nuggets"
+          },
+          {
+            "qty": 3,
+            "product": "sundae caramel"
+          }
+        ]
+      },
+      {
+        "text": "bonsoir jve 2 pizza peperoni et 1 tirmisu",
+        "items": [
+          {
+            "qty": 2,
+            "product": "pizza peperoni"
+          },
+          {
+            "qty": 1,
+            "product": "tirmisu"
+          }
+        ]
+      },
+      {
+        "text": "une salade greque, un houmou et 4 falafell sil vous plait",
+        "items": [
+          {
+            "qty": 1,
+            "product": "salade greque"
+          },
+          {
+            "qty": 1,
+            "product": "houmou"
+          },
+          {
+            "qty": 4,
+            "product": "falafell"
+          }
+        ]
+      },
+      {
+        "text": "2 wraps poulet plus 1 portion de potatoes et une limonade",
+        "items": [
+          {
+            "qty": 2,
+            "product": "wraps poulet"
+          },
+          {
+            "qty": 1,
+            "product": "portion de potatoes"
+          },
+          {
+            "qty": 1,
+            "product": "limonade"
+          }
+        ]
+      },
+      {
+        "text": "pizza calzone x2 et tiramisu x1 svp",
+        "items": [
+          {
+            "qty": 2,
+            "product": "pizza calzone"
+          },
+          {
+            "qty": 1,
+            "product": "tiramisu"
+          }
+        ]
+      },
+      {
+        "text": "cc jaurai voulu 1 burger vege et 2 jus dorange",
+        "items": [
+          {
+            "qty": 1,
+            "product": "burger vege"
+          },
+          {
+            "qty": 2,
+            "product": "jus dorange"
+          }
+        ]
+      },
+      {
+        "text": "trois cafés et deux croissants pour la livraison",
+        "items": [
+          {
+            "qty": 3,
+            "product": "cafés"
+          },
+          {
+            "qty": 2,
+            "product": "croissants"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "un burger avec du cheddar en plus",
+      "je voudrais un thé avec du lait svp",
+      "une pizza avec supplément olives",
+      "un tacos poulet avec sauce algérienne",
+      "un café avec un sucre s'il vous plait",
+      "une salade césar sans croutons et avec extra parmesan",
+      "un kebab galette avec les frites dedans",
+      "je prends le menu burger avec des frites et une boisson",
+      "un poke bowl avec supplément avocat",
+      "une crepe au sucre avec de la chantilly",
+      "1 chicken burger avec extra bacon et sauce barbecue",
+      "des pâtes bolognaise avec du parmesan râpé dessus",
+      "je voudré un jus dorange avec des glaçons",
+      "un sandwich jambon beurre avec cornichons"
+    ]
+  },
+  {
+    "locale": "es",
+    "connectors": [
+      "y",
+      "e",
+      "más",
+      "mas",
+      "también",
+      "tambien",
+      "además",
+      "ademas",
+      "aparte",
+      "y aparte",
+      "y también",
+      "y de paso",
+      "junto con",
+      "coma",
+      "tmb"
+    ],
+    "multi": [
+      {
+        "text": "quiero 2 hamburguesas y una coca cola",
+        "items": [
+          {
+            "qty": 2,
+            "product": "hamburguesas"
+          },
+          {
+            "qty": 1,
+            "product": "coca cola"
+          }
+        ]
+      },
+      {
+        "text": "me traes una pizza margarita y unas papas fritas grandes porfa",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pizza margarita"
+          },
+          {
+            "qty": 1,
+            "product": "papas fritas grandes"
+          }
+        ]
+      },
+      {
+        "text": "3 tacos al pastor, 2 quesadillas y un agua de horchata",
+        "items": [
+          {
+            "qty": 3,
+            "product": "tacos al pastor"
+          },
+          {
+            "qty": 2,
+            "product": "quesadillas"
+          },
+          {
+            "qty": 1,
+            "product": "agua de horchata"
+          }
+        ]
+      },
+      {
+        "text": "kiero dos empanadas de carne y un jugo de naranja",
+        "items": [
+          {
+            "qty": 2,
+            "product": "empanadas de carne"
+          },
+          {
+            "qty": 1,
+            "product": "jugo de naranja"
+          }
+        ]
+      },
+      {
+        "text": "una ensalada cesar mas 4 alitas bbq",
+        "items": [
+          {
+            "qty": 1,
+            "product": "ensalada cesar"
+          },
+          {
+            "qty": 4,
+            "product": "alitas bbq"
+          }
+        ]
+      },
+      {
+        "text": "pizza pepperoni x2 y coca cola x1",
+        "items": [
+          {
+            "qty": 2,
+            "product": "pizza pepperoni"
+          },
+          {
+            "qty": 1,
+            "product": "coca cola"
+          }
+        ]
+      },
+      {
+        "text": "hamburguesa doble x1 y papas medianas x2",
+        "items": [
+          {
+            "qty": 1,
+            "product": "hamburguesa doble"
+          },
+          {
+            "qty": 2,
+            "product": "papas medianas"
+          }
+        ]
+      },
+      {
+        "text": "porfabor 1 lomo saltado 1 ceviche y 2 chichas moradas",
+        "items": [
+          {
+            "qty": 1,
+            "product": "lomo saltado"
+          },
+          {
+            "qty": 1,
+            "product": "ceviche"
+          },
+          {
+            "qty": 2,
+            "product": "chichas moradas"
+          }
+        ]
+      },
+      {
+        "text": "me mandas un pollo asado entero y tambien 6 arepas de queso",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pollo asado entero"
+          },
+          {
+            "qty": 6,
+            "product": "arepas de queso"
+          }
+        ]
+      },
+      {
+        "text": "quiero cuatro tequeños y dos cervezas frias",
+        "items": [
+          {
+            "qty": 4,
+            "product": "tequeños"
+          },
+          {
+            "qty": 2,
+            "product": "cervezas frias"
+          }
+        ]
+      },
+      {
+        "text": "2 rollos california, 1 sopa miso y un te verde",
+        "items": [
+          {
+            "qty": 2,
+            "product": "rollos california"
+          },
+          {
+            "qty": 1,
+            "product": "sopa miso"
+          },
+          {
+            "qty": 1,
+            "product": "te verde"
+          }
+        ]
+      },
+      {
+        "text": "dame un burrito de pollo, unos nachos con queso y una limonada",
+        "items": [
+          {
+            "qty": 1,
+            "product": "burrito de pollo"
+          },
+          {
+            "qty": 1,
+            "product": "nachos con queso"
+          },
+          {
+            "qty": 1,
+            "product": "limonada"
+          }
+        ]
+      },
+      {
+        "text": "3 cafes con leche y 2 medialunas porfa",
+        "items": [
+          {
+            "qty": 3,
+            "product": "cafes con leche"
+          },
+          {
+            "qty": 2,
+            "product": "medialunas"
+          }
+        ]
+      },
+      {
+        "text": "un menu del dia una sopa de fideos y dos panes de ajo",
+        "items": [
+          {
+            "qty": 1,
+            "product": "menu del dia"
+          },
+          {
+            "qty": 1,
+            "product": "sopa de fideos"
+          },
+          {
+            "qty": 2,
+            "product": "panes de ajo"
+          }
+        ]
+      },
+      {
+        "text": "quiero 5 alitas picantes mas una porcion de papas y una gaseosa de litro",
+        "items": [
+          {
+            "qty": 5,
+            "product": "alitas picantes"
+          },
+          {
+            "qty": 1,
+            "product": "porcion de papas"
+          },
+          {
+            "qty": 1,
+            "product": "gaseosa de litro"
+          }
+        ]
+      },
+      {
+        "text": "buenas, me pones 2 shawarmas de pollo y una racion de hummus",
+        "items": [
+          {
+            "qty": 2,
+            "product": "shawarmas de pollo"
+          },
+          {
+            "qty": 1,
+            "product": "racion de hummus"
+          }
+        ]
+      },
+      {
+        "text": "necesito 10 empanaditas y 3 botellas de agua sin gas",
+        "items": [
+          {
+            "qty": 10,
+            "product": "empanaditas"
+          },
+          {
+            "qty": 3,
+            "product": "botellas de agua sin gas"
+          }
+        ]
+      },
+      {
+        "text": "una milanesa napolitana, un flan y una coca zero",
+        "items": [
+          {
+            "qty": 1,
+            "product": "milanesa napolitana"
+          },
+          {
+            "qty": 1,
+            "product": "flan"
+          },
+          {
+            "qty": 1,
+            "product": "coca zero"
+          }
+        ]
+      },
+      {
+        "text": "2 helados de vainilla y un brownie con helado",
+        "items": [
+          {
+            "qty": 2,
+            "product": "helados de vainilla"
+          },
+          {
+            "qty": 1,
+            "product": "brownie con helado"
+          }
+        ]
+      },
+      {
+        "text": "quiero un combo de pollo y aparte unas papas grandes y un refresco",
+        "items": [
+          {
+            "qty": 1,
+            "product": "combo de pollo"
+          },
+          {
+            "qty": 1,
+            "product": "papas grandes"
+          },
+          {
+            "qty": 1,
+            "product": "refresco"
+          }
+        ]
+      },
+      {
+        "text": "mandame dos pizzas medianas mas seis alitas y dos gaseosas",
+        "items": [
+          {
+            "qty": 2,
+            "product": "pizzas medianas"
+          },
+          {
+            "qty": 6,
+            "product": "alitas"
+          },
+          {
+            "qty": 2,
+            "product": "gaseosas"
+          }
+        ]
+      },
+      {
+        "text": "kisiera 1 sandwich de pollo, 1 ensalada y 2 aguas",
+        "items": [
+          {
+            "qty": 1,
+            "product": "sandwich de pollo"
+          },
+          {
+            "qty": 1,
+            "product": "ensalada"
+          },
+          {
+            "qty": 2,
+            "product": "aguas"
+          }
+        ]
+      },
+      {
+        "text": "3 churros con chocolate y 2 cafes americanos",
+        "items": [
+          {
+            "qty": 3,
+            "product": "churros con chocolate"
+          },
+          {
+            "qty": 2,
+            "product": "cafes americanos"
+          }
+        ]
+      },
+      {
+        "text": "quiero 4 hamburgesas con queso y 4 papas fritas",
+        "items": [
+          {
+            "qty": 4,
+            "product": "hamburgesas con queso"
+          },
+          {
+            "qty": 4,
+            "product": "papas fritas"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "una hamburguesa con queso y bacon",
+      "un cafe con leche bien caliente porfa",
+      "quiero una pizza con extra aceitunas",
+      "un te con leche y azucar",
+      "dame un hot dog con todo",
+      "una arepa con queso y jamon",
+      "quiero un burrito con guacamole aparte",
+      "un pollo a la brasa con papas fritas",
+      "unos nachos con extra queso y jalapeños",
+      "una ensalada cesar con pollo",
+      "un helado de chocolate con chispas",
+      "quiero mi hamburguesa sin cebolla y con doble carne",
+      "unas papas con cheddar y tocino"
+    ]
+  },
+  {
+    "locale": "de",
+    "connectors": [
+      "und",
+      "plus",
+      "dazu",
+      "und dazu",
+      "noch",
+      "und noch",
+      "dann noch",
+      "außerdem",
+      "ausserdem",
+      "auch",
+      "und auch",
+      "bitte auch",
+      "sowie",
+      "komma",
+      "zusätzlich"
+    ],
+    "multi": [
+      {
+        "text": "2 döner und eine cola bitte",
+        "items": [
+          {
+            "qty": 2,
+            "product": "döner"
+          },
+          {
+            "qty": 1,
+            "product": "cola"
+          }
+        ]
+      },
+      {
+        "text": "ich hätte gern eine pizza salami und 3x fanta",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pizza salami"
+          },
+          {
+            "qty": 3,
+            "product": "fanta"
+          }
+        ]
+      },
+      {
+        "text": "einmal currywurst pommes dazu 2 bier",
+        "items": [
+          {
+            "qty": 1,
+            "product": "currywurst pommes"
+          },
+          {
+            "qty": 2,
+            "product": "bier"
+          }
+        ]
+      },
+      {
+        "text": "hallo ich möchte bitte 1 schnitzel mit pommes und einen gemischten salat",
+        "items": [
+          {
+            "qty": 1,
+            "product": "schnitzel mit pommes"
+          },
+          {
+            "qty": 1,
+            "product": "gemischten salat"
+          }
+        ]
+      },
+      {
+        "text": "3 falafel wraps plus zwei ayran",
+        "items": [
+          {
+            "qty": 3,
+            "product": "falafel wraps"
+          },
+          {
+            "qty": 2,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "einmal margarita pizza und ne portion knoblauchsoße",
+        "items": [
+          {
+            "qty": 1,
+            "product": "margarita pizza"
+          },
+          {
+            "qty": 1,
+            "product": "portion knoblauchsoße"
+          }
+        ]
+      },
+      {
+        "text": "2 cheeseburger 1 pommes und 1 sprite",
+        "items": [
+          {
+            "qty": 2,
+            "product": "cheeseburger"
+          },
+          {
+            "qty": 1,
+            "product": "pommes"
+          },
+          {
+            "qty": 1,
+            "product": "sprite"
+          }
+        ]
+      },
+      {
+        "text": "ich nehme die lasagne dazu ein tiramisu und ne flasche wasser",
+        "items": [
+          {
+            "qty": 1,
+            "product": "lasagne"
+          },
+          {
+            "qty": 1,
+            "product": "tiramisu"
+          },
+          {
+            "qty": 1,
+            "product": "flasche wasser"
+          }
+        ]
+      },
+      {
+        "text": "bitte 4 chicken nuggts und einmal pommes mit ketchup",
+        "items": [
+          {
+            "qty": 4,
+            "product": "chicken nuggts"
+          },
+          {
+            "qty": 1,
+            "product": "pommes mit ketchup"
+          }
+        ]
+      },
+      {
+        "text": "einmal pad thai und einmal frühlingsrollen bitte",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pad thai"
+          },
+          {
+            "qty": 1,
+            "product": "frühlingsrollen"
+          }
+        ]
+      },
+      {
+        "text": "zwei große pizzen hawaii sowie eine kleine pizza funghi",
+        "items": [
+          {
+            "qty": 2,
+            "product": "große pizzen hawaii"
+          },
+          {
+            "qty": 1,
+            "product": "kleine pizza funghi"
+          }
+        ]
+      },
+      {
+        "text": "hätte gerne 1 dürüm mit scharf und 2 flaschen apfelschorle",
+        "items": [
+          {
+            "qty": 1,
+            "product": "dürüm mit scharf"
+          },
+          {
+            "qty": 2,
+            "product": "flaschen apfelschorle"
+          }
+        ]
+      },
+      {
+        "text": "3x sushi box lachs 1x miso suppe und 2x edamame",
+        "items": [
+          {
+            "qty": 3,
+            "product": "sushi box lachs"
+          },
+          {
+            "qty": 1,
+            "product": "miso suppe"
+          },
+          {
+            "qty": 2,
+            "product": "edamame"
+          }
+        ]
+      },
+      {
+        "text": "einmal döner teller außerdem noch ne cola zero",
+        "items": [
+          {
+            "qty": 1,
+            "product": "döner teller"
+          },
+          {
+            "qty": 1,
+            "product": "cola zero"
+          }
+        ]
+      },
+      {
+        "text": "ich möchte gern 2 hamburgr und einen milchshake vanille",
+        "items": [
+          {
+            "qty": 2,
+            "product": "hamburgr"
+          },
+          {
+            "qty": 1,
+            "product": "milchshake vanille"
+          }
+        ]
+      },
+      {
+        "text": "ein hähnchen curry mit reis und ein mango lassi",
+        "items": [
+          {
+            "qty": 1,
+            "product": "hähnchen curry mit reis"
+          },
+          {
+            "qty": 1,
+            "product": "mango lassi"
+          }
+        ]
+      },
+      {
+        "text": "guten abend 2 mal spaghetti bolognese und 1 mal caesar salad",
+        "items": [
+          {
+            "qty": 2,
+            "product": "spaghetti bolognese"
+          },
+          {
+            "qty": 1,
+            "product": "caesar salad"
+          }
+        ]
+      },
+      {
+        "text": "einmal veggie burguer plus süßkartoffelpommes und ne limo",
+        "items": [
+          {
+            "qty": 1,
+            "product": "veggie burguer"
+          },
+          {
+            "qty": 1,
+            "product": "süßkartoffelpommes"
+          },
+          {
+            "qty": 1,
+            "product": "limo"
+          }
+        ]
+      },
+      {
+        "text": "kann ich bitte 5 chicken wings 1 caesar wrap 2 wasser und einmal pommes haben",
+        "items": [
+          {
+            "qty": 5,
+            "product": "chicken wings"
+          },
+          {
+            "qty": 1,
+            "product": "caesar wrap"
+          },
+          {
+            "qty": 2,
+            "product": "wasser"
+          },
+          {
+            "qty": 1,
+            "product": "pommes"
+          }
+        ]
+      },
+      {
+        "text": "moin einmal pizza quattro stagioni und zwei portionen tzatziki bitet",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pizza quattro stagioni"
+          },
+          {
+            "qty": 2,
+            "product": "portionen tzatziki"
+          }
+        ]
+      },
+      {
+        "text": "ich nehm einen dönerteller ohne zwiebeln und einen ayran",
+        "items": [
+          {
+            "qty": 1,
+            "product": "dönerteller ohne zwiebeln"
+          },
+          {
+            "qty": 1,
+            "product": "ayran"
+          }
+        ]
+      },
+      {
+        "text": "2 x lahmacun und 1 x türkischer salt dazu 3 tee",
+        "items": [
+          {
+            "qty": 2,
+            "product": "lahmacun"
+          },
+          {
+            "qty": 1,
+            "product": "türkischer salt"
+          },
+          {
+            "qty": 3,
+            "product": "tee"
+          }
+        ]
+      },
+      {
+        "text": "einmal nudeln mit sahnesoße noch einmal knoblauchbrot und 2 cola",
+        "items": [
+          {
+            "qty": 1,
+            "product": "nudeln mit sahnesoße"
+          },
+          {
+            "qty": 1,
+            "product": "knoblauchbrot"
+          },
+          {
+            "qty": 2,
+            "product": "cola"
+          }
+        ]
+      },
+      {
+        "text": "bitte ein burrito mit extra käse und zwei tacos vegetarich",
+        "items": [
+          {
+            "qty": 1,
+            "product": "burrito mit extra käse"
+          },
+          {
+            "qty": 2,
+            "product": "tacos vegetarich"
+          }
+        ]
+      },
+      {
+        "text": "vier brötchen zwei croissants einen kaffee to go und 1 orangensaft",
+        "items": [
+          {
+            "qty": 4,
+            "product": "brötchen"
+          },
+          {
+            "qty": 2,
+            "product": "croissants"
+          },
+          {
+            "qty": 1,
+            "product": "kaffee to go"
+          },
+          {
+            "qty": 1,
+            "product": "orangensaft"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "einmal burger mit käse bitte",
+      "ein tee mit milch",
+      "pizza mit extra oliven",
+      "einen kaffee mit zucker",
+      "ich hätte gern ein schnitzel mit pommes",
+      "döner mit alles und scharfer soße",
+      "einmal salat mit hähnchenstreifen",
+      "ne currywurst mit extra soße bitte",
+      "burger ohne zwiebeln aber mit bacon",
+      "einmal nudeln mit tomatensauce und basilikum",
+      "ein cappuccino mit hafermilch",
+      "pommes mit mayo und ketchup",
+      "einmal pizza margherita mit extra käse und oregano",
+      "ein wrap mit hähnchen und salat",
+      "eine limo mit eis bitte"
+    ]
+  },
+  {
+    "locale": "it",
+    "connectors": [
+      "e",
+      "ed",
+      "più",
+      "e anche",
+      "anche",
+      "e poi",
+      "poi",
+      "in più",
+      "con anche",
+      "oltre a",
+      "insieme a",
+      "pure",
+      "e pure",
+      "virgola"
+    ],
+    "multi": [
+      {
+        "text": "2 margherite e una coca",
+        "items": [
+          {
+            "qty": 2,
+            "product": "margherite"
+          },
+          {
+            "qty": 1,
+            "product": "coca"
+          }
+        ]
+      },
+      {
+        "text": "vorrei una diavola più due birre medie",
+        "items": [
+          {
+            "qty": 1,
+            "product": "diavola"
+          },
+          {
+            "qty": 2,
+            "product": "birre medie"
+          }
+        ]
+      },
+      {
+        "text": "mi porti tre kebab e una fanta grazie",
+        "items": [
+          {
+            "qty": 3,
+            "product": "kebab"
+          },
+          {
+            "qty": 1,
+            "product": "fanta"
+          }
+        ]
+      },
+      {
+        "text": "una carbonara, un tiramisù e acqua naturale",
+        "items": [
+          {
+            "qty": 1,
+            "product": "carbonara"
+          },
+          {
+            "qty": 1,
+            "product": "tiramisù"
+          },
+          {
+            "qty": 1,
+            "product": "acqua naturale"
+          }
+        ]
+      },
+      {
+        "text": "2 pizze margerita e 1 porzione di patatine fritte",
+        "items": [
+          {
+            "qty": 2,
+            "product": "pizze margerita"
+          },
+          {
+            "qty": 1,
+            "product": "porzione di patatine fritte"
+          }
+        ]
+      },
+      {
+        "text": "buonasera vorrei un pollo al curry e anche il riso basmati",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pollo al curry"
+          },
+          {
+            "qty": 1,
+            "product": "riso basmati"
+          }
+        ]
+      },
+      {
+        "text": "per favore 4 arancini e 2 supplì",
+        "items": [
+          {
+            "qty": 4,
+            "product": "arancini"
+          },
+          {
+            "qty": 2,
+            "product": "supplì"
+          }
+        ]
+      },
+      {
+        "text": "vorrei du calzoni e tre coche",
+        "items": [
+          {
+            "qty": 2,
+            "product": "calzoni"
+          },
+          {
+            "qty": 3,
+            "product": "coche"
+          }
+        ]
+      },
+      {
+        "text": "un panino con la porchetta e una birra grande",
+        "items": [
+          {
+            "qty": 1,
+            "product": "panino con la porchetta"
+          },
+          {
+            "qty": 1,
+            "product": "birra grande"
+          }
+        ]
+      },
+      {
+        "text": "mi dai una insalata cesar, una piadina e due caffe",
+        "items": [
+          {
+            "qty": 1,
+            "product": "insalata cesar"
+          },
+          {
+            "qty": 1,
+            "product": "piadina"
+          },
+          {
+            "qty": 2,
+            "product": "caffe"
+          }
+        ]
+      },
+      {
+        "text": "3 cornetti alla crema piu 2 cappuccini",
+        "items": [
+          {
+            "qty": 3,
+            "product": "cornetti alla crema"
+          },
+          {
+            "qty": 2,
+            "product": "cappuccini"
+          }
+        ]
+      },
+      {
+        "text": "un sushi misto e una zuppa di miso",
+        "items": [
+          {
+            "qty": 1,
+            "product": "sushi misto"
+          },
+          {
+            "qty": 1,
+            "product": "zuppa di miso"
+          }
+        ]
+      },
+      {
+        "text": "volevo 1 lasagna 1 cotoletta e 2 acque frizzanti",
+        "items": [
+          {
+            "qty": 1,
+            "product": "lasagna"
+          },
+          {
+            "qty": 1,
+            "product": "cotoletta"
+          },
+          {
+            "qty": 2,
+            "product": "acque frizzanti"
+          }
+        ]
+      },
+      {
+        "text": "due poke bowl e una limonata grazie",
+        "items": [
+          {
+            "qty": 2,
+            "product": "poke bowl"
+          },
+          {
+            "qty": 1,
+            "product": "limonata"
+          }
+        ]
+      },
+      {
+        "text": "ordino un kebab piccante patatine grandi e una sprite",
+        "items": [
+          {
+            "qty": 1,
+            "product": "kebab piccante"
+          },
+          {
+            "qty": 1,
+            "product": "patatine grandi"
+          },
+          {
+            "qty": 1,
+            "product": "sprite"
+          }
+        ]
+      },
+      {
+        "text": "mi mandi 2 tiramisu e un caffe",
+        "items": [
+          {
+            "qty": 2,
+            "product": "tiramisu"
+          },
+          {
+            "qty": 1,
+            "product": "caffe"
+          }
+        ]
+      },
+      {
+        "text": "una pizza 4 formaggi e due bibite",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pizza 4 formaggi"
+          },
+          {
+            "qty": 2,
+            "product": "bibite"
+          }
+        ]
+      },
+      {
+        "text": "vorrei 2 hamburger con bacon e 3 birre piccole",
+        "items": [
+          {
+            "qty": 2,
+            "product": "hamburger con bacon"
+          },
+          {
+            "qty": 3,
+            "product": "birre piccole"
+          }
+        ]
+      },
+      {
+        "text": "due gelati al pistachio e una brioche",
+        "items": [
+          {
+            "qty": 2,
+            "product": "gelati al pistachio"
+          },
+          {
+            "qty": 1,
+            "product": "brioche"
+          }
+        ]
+      },
+      {
+        "text": "prendo la parmigiana il polpo alla griglia e due calici di vino bianco",
+        "items": [
+          {
+            "qty": 1,
+            "product": "parmigiana"
+          },
+          {
+            "qty": 1,
+            "product": "polpo alla griglia"
+          },
+          {
+            "qty": 2,
+            "product": "calici di vino bianco"
+          }
+        ]
+      },
+      {
+        "text": "1 menu bambino e 1 nuggets",
+        "items": [
+          {
+            "qty": 1,
+            "product": "menu bambino"
+          },
+          {
+            "qty": 1,
+            "product": "nuggets"
+          }
+        ]
+      },
+      {
+        "text": "vorei un poke salmone e 2 birre moretti",
+        "items": [
+          {
+            "qty": 1,
+            "product": "poke salmone"
+          },
+          {
+            "qty": 2,
+            "product": "birre moretti"
+          }
+        ]
+      },
+      {
+        "text": "1 hamburgher e una coca zero e patatine",
+        "items": [
+          {
+            "qty": 1,
+            "product": "hamburgher"
+          },
+          {
+            "qty": 1,
+            "product": "coca zero"
+          },
+          {
+            "qty": 1,
+            "product": "patatine"
+          }
+        ]
+      },
+      {
+        "text": "sei cannoli siciliani e una bottiglia di acqua naturale",
+        "items": [
+          {
+            "qty": 6,
+            "product": "cannoli siciliani"
+          },
+          {
+            "qty": 1,
+            "product": "bottiglia di acqua naturale"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "un hamburger con il formaggio",
+      "vorrei un tè con il latte",
+      "una pizza con extra olive",
+      "un panino con prosciutto e mozzarella",
+      "pasta al ragù con il parmigiano sopra",
+      "un kebab con salsa piccante e cipolla",
+      "insalata mista con tonno e mais",
+      "un caffè macchiato con poco latte",
+      "vorrei una piadina con crudo e stracchino",
+      "hamburger senza cipolla ma con doppio bacon",
+      "pizza margherita con la bufala al posto della fiordilatte",
+      "un cono gelato con la panna",
+      "patatine fritte con maionese e ketchup",
+      "una crepe nutella e banana",
+      "toast prosciutto e formaggio"
+    ]
+  },
+  {
+    "locale": "pt",
+    "connectors": [
+      "e",
+      "mais",
+      "também",
+      "e também",
+      "e mais",
+      "com mais",
+      "junto com",
+      "e ainda",
+      "ainda",
+      "além de",
+      "e por último",
+      "vírgula",
+      "tambem",
+      "tb"
+    ],
+    "multi": [
+      {
+        "text": "oi, quero 2 x-tudo e uma coca lata",
+        "items": [
+          {
+            "qty": 2,
+            "product": "x-tudo"
+          },
+          {
+            "qty": 1,
+            "product": "coca lata"
+          }
+        ]
+      },
+      {
+        "text": "me ve tres coxinhas mais dois pasteis de queijo",
+        "items": [
+          {
+            "qty": 3,
+            "product": "coxinhas"
+          },
+          {
+            "qty": 2,
+            "product": "pasteis de queijo"
+          }
+        ]
+      },
+      {
+        "text": "boa noite, gostaria de uma pizza portuguesa, uma pizza de frango com catupiry e um guaraná 1 litro",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pizza portuguesa"
+          },
+          {
+            "qty": 1,
+            "product": "pizza de frango com catupiry"
+          },
+          {
+            "qty": 1,
+            "product": "guaraná 1 litro"
+          }
+        ]
+      },
+      {
+        "text": "manda 1 açaí 500ml e 2 água sem gás pfv",
+        "items": [
+          {
+            "qty": 1,
+            "product": "açaí 500ml"
+          },
+          {
+            "qty": 2,
+            "product": "água sem gás"
+          }
+        ]
+      },
+      {
+        "text": "quero um hamburguer duplo, batata frita grande e milkshake de morango",
+        "items": [
+          {
+            "qty": 1,
+            "product": "hamburguer duplo"
+          },
+          {
+            "qty": 1,
+            "product": "batata frita grande"
+          },
+          {
+            "qty": 1,
+            "product": "milkshake de morango"
+          }
+        ]
+      },
+      {
+        "text": "quero 4 esfihas de carne e tambem 2 esfihas de queijo",
+        "items": [
+          {
+            "qty": 4,
+            "product": "esfihas de carne"
+          },
+          {
+            "qty": 2,
+            "product": "esfihas de queijo"
+          }
+        ]
+      },
+      {
+        "text": "1 marmitex de frango com salada e 1 suco de laranja",
+        "items": [
+          {
+            "qty": 1,
+            "product": "marmitex de frango com salada"
+          },
+          {
+            "qty": 1,
+            "product": "suco de laranja"
+          }
+        ]
+      },
+      {
+        "text": "por favor 2 sanduiches natural, 1 salada caesar e 3 sucos de uva",
+        "items": [
+          {
+            "qty": 2,
+            "product": "sanduiches natural"
+          },
+          {
+            "qty": 1,
+            "product": "salada caesar"
+          },
+          {
+            "qty": 3,
+            "product": "sucos de uva"
+          }
+        ]
+      },
+      {
+        "text": "vou querer dois pratos feitos, uma porção de farofa e duas cervejas long neck",
+        "items": [
+          {
+            "qty": 2,
+            "product": "pratos feitos"
+          },
+          {
+            "qty": 1,
+            "product": "porção de farofa"
+          },
+          {
+            "qty": 2,
+            "product": "cervejas long neck"
+          }
+        ]
+      },
+      {
+        "text": "traz 1 pizza calabreza grande e 1 pizza doce de chocolate",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pizza calabreza grande"
+          },
+          {
+            "qty": 1,
+            "product": "pizza doce de chocolate"
+          }
+        ]
+      },
+      {
+        "text": "me manda 3 pastel de carne mais 1 caldo de cana",
+        "items": [
+          {
+            "qty": 3,
+            "product": "pastel de carne"
+          },
+          {
+            "qty": 1,
+            "product": "caldo de cana"
+          }
+        ]
+      },
+      {
+        "text": "queria 1 lasanha a bolonhesa, 2 refri lata e uma sobremesa de pudim",
+        "items": [
+          {
+            "qty": 1,
+            "product": "lasanha a bolonhesa"
+          },
+          {
+            "qty": 2,
+            "product": "refri lata"
+          },
+          {
+            "qty": 1,
+            "product": "sobremesa de pudim"
+          }
+        ]
+      },
+      {
+        "text": "5 pães de queijo e 2 cafés com leite",
+        "items": [
+          {
+            "qty": 5,
+            "product": "pães de queijo"
+          },
+          {
+            "qty": 2,
+            "product": "cafés com leite"
+          }
+        ]
+      },
+      {
+        "text": "manda 2 combos de frango frito com molho barbecue e 1 refrigerante",
+        "items": [
+          {
+            "qty": 2,
+            "product": "combos de frango frito com molho barbecue"
+          },
+          {
+            "qty": 1,
+            "product": "refrigerante"
+          }
+        ]
+      },
+      {
+        "text": "oi tudo bem? queria uma feijoada completa, 1 caipirinha e 2 águas de coco",
+        "items": [
+          {
+            "qty": 1,
+            "product": "feijoada completa"
+          },
+          {
+            "qty": 1,
+            "product": "caipirinha"
+          },
+          {
+            "qty": 2,
+            "product": "águas de coco"
+          }
+        ]
+      },
+      {
+        "text": "vc pode mandar 6 coxinhas, 6 kibes e 1 refri de 2 litros",
+        "items": [
+          {
+            "qty": 6,
+            "product": "coxinhas"
+          },
+          {
+            "qty": 6,
+            "product": "kibes"
+          },
+          {
+            "qty": 1,
+            "product": "refri de 2 litros"
+          }
+        ]
+      },
+      {
+        "text": "quero 1 pizza meia calabresa meia mussarela e duas coca zero",
+        "items": [
+          {
+            "qty": 1,
+            "product": "pizza meia calabresa meia mussarela"
+          },
+          {
+            "qty": 2,
+            "product": "coca zero"
+          }
+        ]
+      },
+      {
+        "text": "boa tarde, 2 tapiocas de coco com queijo e 1 vitamina de banana",
+        "items": [
+          {
+            "qty": 2,
+            "product": "tapiocas de coco com queijo"
+          },
+          {
+            "qty": 1,
+            "product": "vitamina de banana"
+          }
+        ]
+      },
+      {
+        "text": "me ve um misto quente, um suco de acerola e uma agua com gas",
+        "items": [
+          {
+            "qty": 1,
+            "product": "misto quente"
+          },
+          {
+            "qty": 1,
+            "product": "suco de acerola"
+          },
+          {
+            "qty": 1,
+            "product": "agua com gas"
+          }
+        ]
+      },
+      {
+        "text": "quero 3 hamburgueres, 2 porçoes de onion rings e 4 refris",
+        "items": [
+          {
+            "qty": 3,
+            "product": "hamburgueres"
+          },
+          {
+            "qty": 2,
+            "product": "porçoes de onion rings"
+          },
+          {
+            "qty": 4,
+            "product": "refris"
+          }
+        ]
+      },
+      {
+        "text": "manda pra mim uma yakisoba de frango, um rolinho primavera e 2 refri",
+        "items": [
+          {
+            "qty": 1,
+            "product": "yakisoba de frango"
+          },
+          {
+            "qty": 1,
+            "product": "rolinho primavera"
+          },
+          {
+            "qty": 2,
+            "product": "refri"
+          }
+        ]
+      },
+      {
+        "text": "quero 10 espetinhos de carne e 5 espetinhos de frango e 3 cervejas",
+        "items": [
+          {
+            "qty": 10,
+            "product": "espetinhos de carne"
+          },
+          {
+            "qty": 5,
+            "product": "espetinhos de frango"
+          },
+          {
+            "qty": 3,
+            "product": "cervejas"
+          }
+        ]
+      },
+      {
+        "text": "vou levar duas marmitas grandes, um refrigerante 600ml e uma sobremesa",
+        "items": [
+          {
+            "qty": 2,
+            "product": "marmitas grandes"
+          },
+          {
+            "qty": 1,
+            "product": "refrigerante 600ml"
+          },
+          {
+            "qty": 1,
+            "product": "sobremesa"
+          }
+        ]
+      },
+      {
+        "text": "oi, 1 açai com granola e leite condensado e 1 pizza de calabresa",
+        "items": [
+          {
+            "qty": 1,
+            "product": "açai com granola e leite condensado"
+          },
+          {
+            "qty": 1,
+            "product": "pizza de calabresa"
+          }
+        ]
+      },
+      {
+        "text": "quero 2 sopas de legumes mais 1 pao frances e 1 cha de camomila",
+        "items": [
+          {
+            "qty": 2,
+            "product": "sopas de legumes"
+          },
+          {
+            "qty": 1,
+            "product": "pao frances"
+          },
+          {
+            "qty": 1,
+            "product": "cha de camomila"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "quero um x-burguer com queijo extra",
+      "me ve um cha com leite",
+      "1 pizza de mussarela com borda recheada",
+      "quero um cafe com leite e canela",
+      "uma coxinha com catupiry por favor",
+      "quero um açaí com granola e banana",
+      "um misto quente com ovo",
+      "quero uma esfiha de carne com azeitona",
+      "me manda um hamburguer com bacon e cheddar",
+      "uma agua com gas bem gelada",
+      "quero um pf de bife acebolado com arroz feijao e salada",
+      "pizza de frango com catupiry sem cebola",
+      "quero um suco de laranja com acerola",
+      "um sanduiche natural com maionese verde"
+    ]
+  },
+  {
+    "locale": "ru",
+    "connectors": [
+      "и",
+      "плюс",
+      "ещё",
+      "еще",
+      "а ещё",
+      "и ещё",
+      "а также",
+      "также",
+      "запятая",
+      "потом",
+      "и потом",
+      "вдобавок",
+      "в придачу",
+      "да"
+    ],
+    "multi": [
+      {
+        "text": "две пиццы пепперони и колу",
+        "items": [
+          {
+            "qty": 2,
+            "product": "пиццы пепперони"
+          },
+          {
+            "qty": 1,
+            "product": "колу"
+          }
+        ]
+      },
+      {
+        "text": "мне бургер и картошку фри 2 штуки",
+        "items": [
+          {
+            "qty": 1,
+            "product": "бургер"
+          },
+          {
+            "qty": 2,
+            "product": "картошку фри"
+          }
+        ]
+      },
+      {
+        "text": "3 шаурмы плюс айран",
+        "items": [
+          {
+            "qty": 3,
+            "product": "шаурмы"
+          },
+          {
+            "qty": 1,
+            "product": "айран"
+          }
+        ]
+      },
+      {
+        "text": "пиццу маргарита 2 шт и 4 колы пожалуйста",
+        "items": [
+          {
+            "qty": 2,
+            "product": "пиццу маргарита"
+          },
+          {
+            "qty": 4,
+            "product": "колы"
+          }
+        ]
+      },
+      {
+        "text": "хочю роллы филадельфия и суп мисо",
+        "items": [
+          {
+            "qty": 1,
+            "product": "роллы филадельфия"
+          },
+          {
+            "qty": 1,
+            "product": "суп мисо"
+          }
+        ]
+      },
+      {
+        "text": "давайте два лаваша с курицей и один компот",
+        "items": [
+          {
+            "qty": 2,
+            "product": "лаваша с курицей"
+          },
+          {
+            "qty": 1,
+            "product": "компот"
+          }
+        ]
+      },
+      {
+        "text": "борщ, пельмени и черный хлеб",
+        "items": [
+          {
+            "qty": 1,
+            "product": "борщ"
+          },
+          {
+            "qty": 1,
+            "product": "пельмени"
+          },
+          {
+            "qty": 1,
+            "product": "черный хлеб"
+          }
+        ]
+      },
+      {
+        "text": "2 чизбургера и картошка фри болшая",
+        "items": [
+          {
+            "qty": 2,
+            "product": "чизбургера"
+          },
+          {
+            "qty": 1,
+            "product": "картошка фри болшая"
+          }
+        ]
+      },
+      {
+        "text": "мне пожалуйста один латте, круассан и воду без газа",
+        "items": [
+          {
+            "qty": 1,
+            "product": "латте"
+          },
+          {
+            "qty": 1,
+            "product": "круассан"
+          },
+          {
+            "qty": 1,
+            "product": "воду без газа"
+          }
+        ]
+      },
+      {
+        "text": "5 хачапури и две бутылки лимонада",
+        "items": [
+          {
+            "qty": 5,
+            "product": "хачапури"
+          },
+          {
+            "qty": 2,
+            "product": "лимонада"
+          }
+        ]
+      },
+      {
+        "text": "хочу заказать плов, лепешку и зеленый чай",
+        "items": [
+          {
+            "qty": 1,
+            "product": "плов"
+          },
+          {
+            "qty": 1,
+            "product": "лепешку"
+          },
+          {
+            "qty": 1,
+            "product": "зеленый чай"
+          }
+        ]
+      },
+      {
+        "text": "мне бы пиццу четыре сыра и 2 латэ",
+        "items": [
+          {
+            "qty": 1,
+            "product": "пиццу четыре сыра"
+          },
+          {
+            "qty": 2,
+            "product": "латэ"
+          }
+        ]
+      },
+      {
+        "text": "возьму дабл чизбургер, наггетсы 9 штук и молочный коктейль клубничный",
+        "items": [
+          {
+            "qty": 1,
+            "product": "дабл чизбургер"
+          },
+          {
+            "qty": 9,
+            "product": "наггетсы"
+          },
+          {
+            "qty": 1,
+            "product": "молочный коктейль клубничный"
+          }
+        ]
+      },
+      {
+        "text": "две шаурмы в лаваше плюс 1 картошку по деревенски и соус сырный",
+        "items": [
+          {
+            "qty": 2,
+            "product": "шаурмы в лаваше"
+          },
+          {
+            "qty": 1,
+            "product": "картошку по деревенски"
+          },
+          {
+            "qty": 1,
+            "product": "соус сырный"
+          }
+        ]
+      },
+      {
+        "text": "закажите 3 пицы пепперони и 2 колы",
+        "items": [
+          {
+            "qty": 3,
+            "product": "пицы пепперони"
+          },
+          {
+            "qty": 2,
+            "product": "колы"
+          }
+        ]
+      },
+      {
+        "text": "мне сет филадельфия, мисо суп и зелёный чай",
+        "items": [
+          {
+            "qty": 1,
+            "product": "сет филадельфия"
+          },
+          {
+            "qty": 1,
+            "product": "мисо суп"
+          },
+          {
+            "qty": 1,
+            "product": "зелёный чай"
+          }
+        ]
+      },
+      {
+        "text": "будте добры 4 самсы и айран 2 штуки",
+        "items": [
+          {
+            "qty": 4,
+            "product": "самсы"
+          },
+          {
+            "qty": 2,
+            "product": "айран"
+          }
+        ]
+      },
+      {
+        "text": "хачу два донера и фанту",
+        "items": [
+          {
+            "qty": 2,
+            "product": "донера"
+          },
+          {
+            "qty": 1,
+            "product": "фанту"
+          }
+        ]
+      },
+      {
+        "text": "мне гречку с котлетой и салат цезарь",
+        "items": [
+          {
+            "qty": 1,
+            "product": "гречку с котлетой"
+          },
+          {
+            "qty": 1,
+            "product": "салат цезарь"
+          }
+        ]
+      },
+      {
+        "text": "три шашлыка из свинины плюс лаваш и аджику",
+        "items": [
+          {
+            "qty": 3,
+            "product": "шашлыка из свинины"
+          },
+          {
+            "qty": 1,
+            "product": "лаваш"
+          },
+          {
+            "qty": 1,
+            "product": "аджику"
+          }
+        ]
+      },
+      {
+        "text": "2 капучино и чизкеик нью йорк",
+        "items": [
+          {
+            "qty": 2,
+            "product": "капучино"
+          },
+          {
+            "qty": 1,
+            "product": "чизкеик нью йорк"
+          }
+        ]
+      },
+      {
+        "text": "оформите пиццу 4 сыра 30 см, крылышки барбекю и пепси 1 литр",
+        "items": [
+          {
+            "qty": 1,
+            "product": "пиццу 4 сыра 30 см"
+          },
+          {
+            "qty": 1,
+            "product": "крылышки барбекю"
+          },
+          {
+            "qty": 1,
+            "product": "пепси 1 литр"
+          }
+        ]
+      },
+      {
+        "text": "два американо без сахара и один сырник",
+        "items": [
+          {
+            "qty": 2,
+            "product": "американо без сахара"
+          },
+          {
+            "qty": 1,
+            "product": "сырник"
+          }
+        ]
+      },
+      {
+        "text": "нужно 6 хинкали и хачапури по аджарски",
+        "items": [
+          {
+            "qty": 6,
+            "product": "хинкали"
+          },
+          {
+            "qty": 1,
+            "product": "хачапури по аджарски"
+          }
+        ]
+      },
+      {
+        "text": "привет хочу заказть окрошку и два морса",
+        "items": [
+          {
+            "qty": 1,
+            "product": "окрошку"
+          },
+          {
+            "qty": 2,
+            "product": "морса"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "бургер с сыром и беконом",
+      "чай с молоком",
+      "пиццу с двойными оливками",
+      "картошку фри с соусом сырным",
+      "шаурму с курицей и острым соусом",
+      "капучино с корицей",
+      "пельмени со сметаной",
+      "блинчики с творогом и изюмом",
+      "кофе с молоком без сахара",
+      "хот дог с горчицей и кетчупом",
+      "роллы с лососем и авокадо",
+      "пиццу пепперони с дополнительным сыром",
+      "лапшу вок с курицей и овощами",
+      "мороженое с шоколадной крошкой",
+      "салат цезарь с креветками а не с курицей"
+    ]
+  },
+  {
+    "locale": "hi",
+    "connectors": [
+      "और",
+      "अउर",
+      "और साथ में",
+      "साथ में",
+      "साथ ही",
+      "प्लस",
+      "भी",
+      "और भी",
+      "तथा",
+      "व",
+      "फिर",
+      "कॉमा",
+      "aur",
+      "plus",
+      "bhi"
+    ],
+    "multi": [
+      {
+        "text": "2 बटर नान और एक दाल मखनी भेज दो",
+        "items": [
+          {
+            "qty": 2,
+            "product": "बटर नान"
+          },
+          {
+            "qty": 1,
+            "product": "दाल मखनी"
+          }
+        ]
+      },
+      {
+        "text": "एक पनीर टिक्का पिज़्ज़ा और दो कोक भेज देना",
+        "items": [
+          {
+            "qty": 1,
+            "product": "पनीर टिक्का पिज़्ज़ा"
+          },
+          {
+            "qty": 2,
+            "product": "कोक"
+          }
+        ]
+      },
+      {
+        "text": "तीन समोसे, दो जलेबी और एक चाय",
+        "items": [
+          {
+            "qty": 3,
+            "product": "समोसे"
+          },
+          {
+            "qty": 2,
+            "product": "जलेबी"
+          },
+          {
+            "qty": 1,
+            "product": "चाय"
+          }
+        ]
+      },
+      {
+        "text": "मुझे चिकन बिरयानी 2 प्लेट चाहिए और रायता 1",
+        "items": [
+          {
+            "qty": 2,
+            "product": "चिकन बिरयानी"
+          },
+          {
+            "qty": 1,
+            "product": "रायता"
+          }
+        ]
+      },
+      {
+        "text": "1 वेज थाली प्लस 1 गुलब जामुन",
+        "items": [
+          {
+            "qty": 1,
+            "product": "वेज थाली"
+          },
+          {
+            "qty": 1,
+            "product": "गुलब जामुन"
+          }
+        ]
+      },
+      {
+        "text": "दो मसाला डोसा और एक फिल्टर कॉफ़ी भेजना भाई",
+        "items": [
+          {
+            "qty": 2,
+            "product": "मसाला डोसा"
+          },
+          {
+            "qty": 1,
+            "product": "फिल्टर कॉफ़ी"
+          }
+        ]
+      },
+      {
+        "text": "एक चिकन बरगर और दो फ्रेच फ्राईज",
+        "items": [
+          {
+            "qty": 1,
+            "product": "चिकन बरगर"
+          },
+          {
+            "qty": 2,
+            "product": "फ्रेच फ्राईज"
+          }
+        ]
+      },
+      {
+        "text": "4 रोटी 1 शाही पनीर और 1 जीरा राइस",
+        "items": [
+          {
+            "qty": 4,
+            "product": "रोटी"
+          },
+          {
+            "qty": 1,
+            "product": "शाही पनीर"
+          },
+          {
+            "qty": 1,
+            "product": "जीरा राइस"
+          }
+        ]
+      },
+      {
+        "text": "2 chai aur 1 samosa plate bhej do",
+        "items": [
+          {
+            "qty": 2,
+            "product": "chai"
+          },
+          {
+            "qty": 1,
+            "product": "samosa"
+          }
+        ]
+      },
+      {
+        "text": "एक तंदूरी चिकन और दो बटर नान भी",
+        "items": [
+          {
+            "qty": 1,
+            "product": "तंदूरी चिकन"
+          },
+          {
+            "qty": 2,
+            "product": "बटर नान"
+          }
+        ]
+      },
+      {
+        "text": "दो चिली पनीर औप एक हक्का नूडल्स",
+        "items": [
+          {
+            "qty": 2,
+            "product": "चिली पनीर"
+          },
+          {
+            "qty": 1,
+            "product": "हक्का नूडल्स"
+          }
+        ]
+      },
+      {
+        "text": "मटन रोगन जोश एक, नान तीन",
+        "items": [
+          {
+            "qty": 1,
+            "product": "मटन रोगन जोश"
+          },
+          {
+            "qty": 3,
+            "product": "नान"
+          }
+        ]
+      },
+      {
+        "text": "छोले भटुरे 2 प्लेट और लस्सी 1 गिलास",
+        "items": [
+          {
+            "qty": 2,
+            "product": "छोले भटुरे"
+          },
+          {
+            "qty": 1,
+            "product": "लस्सी"
+          }
+        ]
+      },
+      {
+        "text": "एक कोल्ड कॉफी और एक चॉकलेट ब्राउनी मंगवा दो",
+        "items": [
+          {
+            "qty": 1,
+            "product": "कोल्ड कॉफी"
+          },
+          {
+            "qty": 1,
+            "product": "चॉकलेट ब्राउनी"
+          }
+        ]
+      },
+      {
+        "text": "1 veg biryani aur 2 raita bhej do plz",
+        "items": [
+          {
+            "qty": 1,
+            "product": "veg biryani"
+          },
+          {
+            "qty": 2,
+            "product": "raita"
+          }
+        ]
+      },
+      {
+        "text": "दो अंडा करी और चार तंदूरी रोटी और एक सलाद",
+        "items": [
+          {
+            "qty": 2,
+            "product": "अंडा करी"
+          },
+          {
+            "qty": 4,
+            "product": "तंदूरी रोटी"
+          },
+          {
+            "qty": 1,
+            "product": "सलाद"
+          }
+        ]
+      },
+      {
+        "text": "मुझे 3 इडली और 1 मेदू वड़ा और 2 सांभर चाहिए",
+        "items": [
+          {
+            "qty": 3,
+            "product": "इडली"
+          },
+          {
+            "qty": 1,
+            "product": "मेदू वड़ा"
+          },
+          {
+            "qty": 2,
+            "product": "सांभर"
+          }
+        ]
+      },
+      {
+        "text": "एक पनीर रोल औऱ एक चिकन रोल",
+        "items": [
+          {
+            "qty": 1,
+            "product": "पनीर रोल"
+          },
+          {
+            "qty": 1,
+            "product": "चिकन रोल"
+          }
+        ]
+      },
+      {
+        "text": "5 समोसे भी और 2 कचौरी भी लेते आना",
+        "items": [
+          {
+            "qty": 5,
+            "product": "समोसे"
+          },
+          {
+            "qty": 2,
+            "product": "कचौरी"
+          }
+        ]
+      },
+      {
+        "text": "एक प्लेट चाउमीन और एक प्लेट मंचूरीयन",
+        "items": [
+          {
+            "qty": 1,
+            "product": "चाउमीन"
+          },
+          {
+            "qty": 1,
+            "product": "मंचूरीयन"
+          }
+        ]
+      },
+      {
+        "text": "2 mutton biryni aur 1 cofee aur 1 gulab jamun",
+        "items": [
+          {
+            "qty": 2,
+            "product": "mutton biryni"
+          },
+          {
+            "qty": 1,
+            "product": "cofee"
+          },
+          {
+            "qty": 1,
+            "product": "gulab jamun"
+          }
+        ]
+      },
+      {
+        "text": "दाल फ्राई एक बटर रोटी चार और एक स्वीट लस्सी",
+        "items": [
+          {
+            "qty": 1,
+            "product": "दाल फ्राई"
+          },
+          {
+            "qty": 4,
+            "product": "बटर रोटी"
+          },
+          {
+            "qty": 1,
+            "product": "स्वीट लस्सी"
+          }
+        ]
+      },
+      {
+        "text": "भैया 2 वड़ा पाव और 1 कटिंग चाय जल्दी",
+        "items": [
+          {
+            "qty": 2,
+            "product": "वड़ा पाव"
+          },
+          {
+            "qty": 1,
+            "product": "कटिंग चाय"
+          }
+        ]
+      },
+      {
+        "text": "एक पीज़ा और दो गार्लिक ब्रेड मंगा दो",
+        "items": [
+          {
+            "qty": 1,
+            "product": "पीज़ा"
+          },
+          {
+            "qty": 2,
+            "product": "गार्लिक ब्रेड"
+          }
+        ]
+      },
+      {
+        "text": "3 पराठे और एक दही और एक अचार भेज दीजिए",
+        "items": [
+          {
+            "qty": 3,
+            "product": "पराठे"
+          },
+          {
+            "qty": 1,
+            "product": "दही"
+          },
+          {
+            "qty": 1,
+            "product": "अचार"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "एक बर्गर एक्स्ट्रा चीज़ के साथ",
+      "एक कटिंग चाय कम शक्कर के साथ",
+      "पिज़्ज़ा एक्स्ट्रा ऑलिव के साथ भेजना",
+      "एक मसाला डोसा सांभर और चटनी के साथ",
+      "चिकन बिरयानी रायते के साथ एक भेज दो",
+      "एक प्लेट मोमोज़ तीखी चटनी के साथ",
+      "एक वेज थाली सलाद और पापड़ के साथ",
+      "एक कोल्ड कॉफी विद आइसक्रीम",
+      "एक पाव भाजी एक्स्ट्रा बटर के साथ",
+      "1 फ्राइड राइस मंचूरियन ग्रेवी के साथ",
+      "एक चिकन रोल मेयो और प्याज़ के साथ",
+      "एक ब्रेड ऑमलेट बिना प्याज़ के और ज्यादा काली मिर्च के साथ",
+      "एक बटर नान लहसुन वाला और ऊपर से थोड़ा मक्खन",
+      "1 chai kam cheeni aur adrak wali",
+      "एक मैगी एक्स्ट्रा चीज़ और वेजिटेबल डालकर"
+    ]
+  },
+  {
+    "locale": "zh",
+    "connectors": [
+      "和",
+      "还有",
+      "再来",
+      "再要",
+      "再",
+      "加",
+      "加上",
+      "跟",
+      "另外",
+      "还要",
+      "然后",
+      "以及",
+      "外加",
+      "顺便"
+    ],
+    "multi": [
+      {
+        "text": "来两份薯条和一杯可乐",
+        "items": [
+          {
+            "qty": 2,
+            "product": "薯条"
+          },
+          {
+            "qty": 1,
+            "product": "可乐"
+          }
+        ]
+      },
+      {
+        "text": "我要一个牛肉汉堡 再来两个鸡翅 谢谢",
+        "items": [
+          {
+            "qty": 1,
+            "product": "牛肉汉堡"
+          },
+          {
+            "qty": 2,
+            "product": "鸡翅"
+          }
+        ]
+      },
+      {
+        "text": "3份炒面加2瓶可乐",
+        "items": [
+          {
+            "qty": 3,
+            "product": "炒面"
+          },
+          {
+            "qty": 2,
+            "product": "可乐"
+          }
+        ]
+      },
+      {
+        "text": "麻辣烫一份 米饭两碗 还有一瓶王老吉",
+        "items": [
+          {
+            "qty": 1,
+            "product": "麻辣烫"
+          },
+          {
+            "qty": 2,
+            "product": "米饭"
+          },
+          {
+            "qty": 1,
+            "product": "王老吉"
+          }
+        ]
+      },
+      {
+        "text": "两份小龙包和一碗豆将",
+        "items": [
+          {
+            "qty": 2,
+            "product": "小龙包"
+          },
+          {
+            "qty": 1,
+            "product": "豆将"
+          }
+        ]
+      },
+      {
+        "text": "老板给我来个宫保鸡丁 再加一份米饭 另外要两瓶啤酒",
+        "items": [
+          {
+            "qty": 1,
+            "product": "宫保鸡丁"
+          },
+          {
+            "qty": 1,
+            "product": "米饭"
+          },
+          {
+            "qty": 2,
+            "product": "啤酒"
+          }
+        ]
+      },
+      {
+        "text": "帮我下单 一份意面 一份凯撒沙拉 还有一杯拿铁",
+        "items": [
+          {
+            "qty": 1,
+            "product": "意面"
+          },
+          {
+            "qty": 1,
+            "product": "凯撒沙拉"
+          },
+          {
+            "qty": 1,
+            "product": "拿铁"
+          }
+        ]
+      },
+      {
+        "text": "来一个吵饭 加两串考串",
+        "items": [
+          {
+            "qty": 1,
+            "product": "吵饭"
+          },
+          {
+            "qty": 2,
+            "product": "考串"
+          }
+        ]
+      },
+      {
+        "text": "两杯珍珠奶茶 一份鸡米花 顺便加个烤玉米",
+        "items": [
+          {
+            "qty": 2,
+            "product": "珍珠奶茶"
+          },
+          {
+            "qty": 1,
+            "product": "鸡米花"
+          },
+          {
+            "qty": 1,
+            "product": "烤玉米"
+          }
+        ]
+      },
+      {
+        "text": "我想要四个包子和一碗粥",
+        "items": [
+          {
+            "qty": 4,
+            "product": "包子"
+          },
+          {
+            "qty": 1,
+            "product": "粥"
+          }
+        ]
+      },
+      {
+        "text": "一份酸辣份 一瓶矿泉水 还有两个茶叶蛋",
+        "items": [
+          {
+            "qty": 1,
+            "product": "酸辣份"
+          },
+          {
+            "qty": 1,
+            "product": "矿泉水"
+          },
+          {
+            "qty": 2,
+            "product": "茶叶蛋"
+          }
+        ]
+      },
+      {
+        "text": "点个九寸披萨 再来两份鸡翅和一瓶雪碧",
+        "items": [
+          {
+            "qty": 1,
+            "product": "九寸披萨"
+          },
+          {
+            "qty": 2,
+            "product": "鸡翅"
+          },
+          {
+            "qty": 1,
+            "product": "雪碧"
+          }
+        ]
+      },
+      {
+        "text": "麻婆豆腐一份 鱼香肉丝一份 米饭三碗",
+        "items": [
+          {
+            "qty": 1,
+            "product": "麻婆豆腐"
+          },
+          {
+            "qty": 1,
+            "product": "鱼香肉丝"
+          },
+          {
+            "qty": 3,
+            "product": "米饭"
+          }
+        ]
+      },
+      {
+        "text": "两个汗堡 一份书条 一杯咖非",
+        "items": [
+          {
+            "qty": 2,
+            "product": "汗堡"
+          },
+          {
+            "qty": 1,
+            "product": "书条"
+          },
+          {
+            "qty": 1,
+            "product": "咖非"
+          }
+        ]
+      },
+      {
+        "text": "老板要2份小炒肉再加1份西红柿炒蛋",
+        "items": [
+          {
+            "qty": 2,
+            "product": "小炒肉"
+          },
+          {
+            "qty": 1,
+            "product": "西红柿炒蛋"
+          }
+        ]
+      },
+      {
+        "text": "给我来杯美式 还有一个可颂",
+        "items": [
+          {
+            "qty": 1,
+            "product": "美式"
+          },
+          {
+            "qty": 1,
+            "product": "可颂"
+          }
+        ]
+      },
+      {
+        "text": "一份麻辣趟 两瓶冰红茶",
+        "items": [
+          {
+            "qty": 1,
+            "product": "麻辣趟"
+          },
+          {
+            "qty": 2,
+            "product": "冰红茶"
+          }
+        ]
+      },
+      {
+        "text": "三个鸡腿堡 两份薯条 四杯可乐 谢谢啦",
+        "items": [
+          {
+            "qty": 3,
+            "product": "鸡腿堡"
+          },
+          {
+            "qty": 2,
+            "product": "薯条"
+          },
+          {
+            "qty": 4,
+            "product": "可乐"
+          }
+        ]
+      },
+      {
+        "text": "要一份烤冷面 再来两个烤肠 还有一杯豆浆",
+        "items": [
+          {
+            "qty": 1,
+            "product": "烤冷面"
+          },
+          {
+            "qty": 2,
+            "product": "烤肠"
+          },
+          {
+            "qty": 1,
+            "product": "豆浆"
+          }
+        ]
+      },
+      {
+        "text": "点一份牛肉免 加一份泡菜",
+        "items": [
+          {
+            "qty": 1,
+            "product": "牛肉免"
+          },
+          {
+            "qty": 1,
+            "product": "泡菜"
+          }
+        ]
+      },
+      {
+        "text": "螺蛳粉来两份 再要一瓶可乐",
+        "items": [
+          {
+            "qty": 2,
+            "product": "螺蛳粉"
+          },
+          {
+            "qty": 1,
+            "product": "可乐"
+          }
+        ]
+      },
+      {
+        "text": "来一个冰其淋和两个蛋挞",
+        "items": [
+          {
+            "qty": 1,
+            "product": "冰其淋"
+          },
+          {
+            "qty": 2,
+            "product": "蛋挞"
+          }
+        ]
+      },
+      {
+        "text": "我要两份寿司拼盘和一份味增汤",
+        "items": [
+          {
+            "qty": 2,
+            "product": "寿司拼盘"
+          },
+          {
+            "qty": 1,
+            "product": "味增汤"
+          }
+        ]
+      },
+      {
+        "text": "来两份炸鸡 还要可乐 谢谢",
+        "items": [
+          {
+            "qty": 2,
+            "product": "炸鸡"
+          },
+          {
+            "qty": 1,
+            "product": "可乐"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "一个汉堡加芝士",
+      "一杯奶茶加珍珠",
+      "来个披萨多加橄榄",
+      "一杯咖啡加奶不加糖",
+      "牛肉面加个卤蛋",
+      "薯条配番茄酱",
+      "鸡排饭多放辣椒",
+      "一份炒饭要加个煎蛋",
+      "热干面少放芝麻酱",
+      "汉堡不要酸黄瓜",
+      "麻辣烫要微辣加香菜",
+      "一杯拿铁换成燕麦奶",
+      "珍珠奶茶三分糖去冰",
+      "烤鸡腿饭多加点酱"
+    ]
+  },
+  {
+    "locale": "ja",
+    "connectors": [
+      "と",
+      "それと",
+      "あと",
+      "あとは",
+      "それから",
+      "そして",
+      "プラス",
+      "ついでに",
+      "追加で",
+      "も",
+      "で",
+      "や"
+    ],
+    "multi": [
+      {
+        "text": "唐揚げ弁当2つとコーラ1本お願いします",
+        "items": [
+          {
+            "qty": 2,
+            "product": "唐揚げ弁当"
+          },
+          {
+            "qty": 1,
+            "product": "コーラ"
+          }
+        ]
+      },
+      {
+        "text": "とんこつラーメン一杯と餃子3人前ください",
+        "items": [
+          {
+            "qty": 1,
+            "product": "とんこつラーメン"
+          },
+          {
+            "qty": 3,
+            "product": "餃子"
+          }
+        ]
+      },
+      {
+        "text": "マルゲリタLサイズ1枚、それとフライドポテトMとコーラ2本で",
+        "items": [
+          {
+            "qty": 1,
+            "product": "マルゲリタLサイズ"
+          },
+          {
+            "qty": 1,
+            "product": "フライドポテトM"
+          },
+          {
+            "qty": 2,
+            "product": "コーラ"
+          }
+        ]
+      },
+      {
+        "text": "カルボナラとシーザーサラダおねがいしまs",
+        "items": [
+          {
+            "qty": 1,
+            "product": "カルボナラ"
+          },
+          {
+            "qty": 1,
+            "product": "シーザーサラダ"
+          }
+        ]
+      },
+      {
+        "text": "牛丼並2つ、味噌汁1つ、あとお新香もつけてください",
+        "items": [
+          {
+            "qty": 2,
+            "product": "牛丼並"
+          },
+          {
+            "qty": 1,
+            "product": "味噌汁"
+          },
+          {
+            "qty": 1,
+            "product": "お新香"
+          }
+        ]
+      },
+      {
+        "text": "チキンカレー2人前とナン3枚、ラッシー1つでお願いします",
+        "items": [
+          {
+            "qty": 2,
+            "product": "チキンカレー"
+          },
+          {
+            "qty": 3,
+            "product": "ナン"
+          },
+          {
+            "qty": 1,
+            "product": "ラッシー"
+          }
+        ]
+      },
+      {
+        "text": "ハンバーガー3個とナゲット5ピース、バニラシェイク1つ",
+        "items": [
+          {
+            "qty": 3,
+            "product": "ハンバーガー"
+          },
+          {
+            "qty": 5,
+            "product": "ナゲット"
+          },
+          {
+            "qty": 1,
+            "product": "バニラシェイク"
+          }
+        ]
+      },
+      {
+        "text": "焼き鳥盛り合わせ1つ、生ビール2杯、あと枝豆も",
+        "items": [
+          {
+            "qty": 1,
+            "product": "焼き鳥盛り合わせ"
+          },
+          {
+            "qty": 2,
+            "product": "生ビール"
+          },
+          {
+            "qty": 1,
+            "product": "枝豆"
+          }
+        ]
+      },
+      {
+        "text": "天丼ふたつと冷やし中華ひとつ、あと烏龍茶を1本",
+        "items": [
+          {
+            "qty": 2,
+            "product": "天丼"
+          },
+          {
+            "qty": 1,
+            "product": "冷やし中華"
+          },
+          {
+            "qty": 1,
+            "product": "烏龍茶"
+          }
+        ]
+      },
+      {
+        "text": "勝つ丼1つとざるそば1枚たのむ",
+        "items": [
+          {
+            "qty": 1,
+            "product": "勝つ丼"
+          },
+          {
+            "qty": 1,
+            "product": "ざるそば"
+          }
+        ]
+      },
+      {
+        "text": "ペペロンチーノとテイラミスください",
+        "items": [
+          {
+            "qty": 1,
+            "product": "ペペロンチーノ"
+          },
+          {
+            "qty": 1,
+            "product": "テイラミス"
+          }
+        ]
+      },
+      {
+        "text": "チャハン2つ、春巻き1皿、麻婆豆腐も1つおねがいします",
+        "items": [
+          {
+            "qty": 2,
+            "product": "チャハン"
+          },
+          {
+            "qty": 1,
+            "product": "春巻き"
+          },
+          {
+            "qty": 1,
+            "product": "麻婆豆腐"
+          }
+        ]
+      },
+      {
+        "text": "ピザ2枚とチキンウィング6ピース、あとコーラゼロ1本",
+        "items": [
+          {
+            "qty": 2,
+            "product": "ピザ"
+          },
+          {
+            "qty": 6,
+            "product": "チキンウィング"
+          },
+          {
+            "qty": 1,
+            "product": "コーラゼロ"
+          }
+        ]
+      },
+      {
+        "text": "からあげべんとう1つとポテトサラダ2つおねがいします",
+        "items": [
+          {
+            "qty": 1,
+            "product": "からあげべんとう"
+          },
+          {
+            "qty": 2,
+            "product": "ポテトサラダ"
+          }
+        ]
+      },
+      {
+        "text": "アイスコーヒーLを2杯とホットドッグ1個で",
+        "items": [
+          {
+            "qty": 2,
+            "product": "アイスコーヒーL"
+          },
+          {
+            "qty": 1,
+            "product": "ホットドッグ"
+          }
+        ]
+      },
+      {
+        "text": "サーモン寿司3貫、まぐろ2貫、あら汁も1つ",
+        "items": [
+          {
+            "qty": 3,
+            "product": "サーモン寿司"
+          },
+          {
+            "qty": 2,
+            "product": "まぐろ"
+          },
+          {
+            "qty": 1,
+            "product": "あら汁"
+          }
+        ]
+      },
+      {
+        "text": "タピオカミルクティー2つ プラス チーズケーキ1個",
+        "items": [
+          {
+            "qty": 2,
+            "product": "タピオカミルクティー"
+          },
+          {
+            "qty": 1,
+            "product": "チーズケーキ"
+          }
+        ]
+      },
+      {
+        "text": "カツカレー大盛り1つ、サラダ1つ、烏龍茶1本くだいさ",
+        "items": [
+          {
+            "qty": 1,
+            "product": "カツカレー大盛り"
+          },
+          {
+            "qty": 1,
+            "product": "サラダ"
+          },
+          {
+            "qty": 1,
+            "product": "烏龍茶"
+          }
+        ]
+      },
+      {
+        "text": "エビフライ定食2つと生姜焼き定食1つお願いします",
+        "items": [
+          {
+            "qty": 2,
+            "product": "エビフライ定食"
+          },
+          {
+            "qty": 1,
+            "product": "生姜焼き定食"
+          }
+        ]
+      },
+      {
+        "text": "ミックスピザ1枚それとガーリックトースト2つあとオレンジジュス3本",
+        "items": [
+          {
+            "qty": 1,
+            "product": "ミックスピザ"
+          },
+          {
+            "qty": 2,
+            "product": "ガーリックトースト"
+          },
+          {
+            "qty": 3,
+            "product": "オレンジジュス"
+          }
+        ]
+      },
+      {
+        "text": "うな重ひとつと肝吸い1つでおねがいします",
+        "items": [
+          {
+            "qty": 1,
+            "product": "うな重"
+          },
+          {
+            "qty": 1,
+            "product": "肝吸い"
+          }
+        ]
+      },
+      {
+        "text": "クロワッサン4個、カフェラテ2杯、いちごタルト1個お願いします",
+        "items": [
+          {
+            "qty": 4,
+            "product": "クロワッサン"
+          },
+          {
+            "qty": 2,
+            "product": "カフェラテ"
+          },
+          {
+            "qty": 1,
+            "product": "いちごタルト"
+          }
+        ]
+      },
+      {
+        "text": "照り焼きバーガーセット2つとナゲット1つ、あとアイスティーも",
+        "items": [
+          {
+            "qty": 2,
+            "product": "照り焼きバーガーセット"
+          },
+          {
+            "qty": 1,
+            "product": "ナゲット"
+          },
+          {
+            "qty": 1,
+            "product": "アイスティー"
+          }
+        ]
+      },
+      {
+        "text": "たこ焼き2パックとびーる1本たのみます",
+        "items": [
+          {
+            "qty": 2,
+            "product": "たこ焼き"
+          },
+          {
+            "qty": 1,
+            "product": "びーる"
+          }
+        ]
+      }
+    ],
+    "single": [
+      "チーズバーガーをピクルス抜きで1つお願いします",
+      "ミルクティーを砂糖多めでひとつ",
+      "ラーメン1つ味玉トッピングでお願いします",
+      "ピザをオリーブ多めでおねがいします",
+      "カフェラテのホットをミルク多めで1つ",
+      "牛丼のつゆだくで大盛り1つください",
+      "ハンバーガーをチーズ追加でお願いします",
+      "唐揚げ弁当1つ、レモン抜きで",
+      "アイスコーヒー1つガムシロップ2個つけてください",
+      "そばを大盛りネギ多めでひとつ",
+      "サラダのドレッシングを和風でお願いします",
+      "パンケーキにホイップクリーム追加でおねがいしまs",
+      "お好み焼きをマヨネーズ多めで1枚",
+      "ペペロンチーノを唐辛子少なめで1つたのみます"
+    ]
+  }
+]

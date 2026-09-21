@@ -1,0 +1,658 @@
+@page "/reserve-table/{Id:int}"
+@using System.Globalization
+@using OrderOrange.ClientCore.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject AppState State
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* Booking a table, as four plainly numbered questions: when, how many, where, who.
+   Each step says what it wants in words; nothing here needs to be guessed at. *@
+
+<PageTitle>@L["rsv.title"] | OrderOrange</PageTitle>
+
+@if (_store is null || _floor is null)
+{
+    @* Whoever is booking came for THIS restaurant, so the wait wears ITS name and
+       logo — never the platform's. The store's card is fetched first for exactly
+       that reason; in the eyeblink before it lands there is nothing honest to show,
+       so the mark is simply left off. *@
+    <Loader FullPage="true"
+            HideBrand="@(_store is null)"
+            BrandName="@(_store is null ? null : StoreText.Name(_store.Name, _store.Names, L))"
+            BrandLogo="@(_store?.LogoPhoto)"
+            BrandEmoji="@(_store?.LogoEmoji)" />
+}
+else
+{
+    <div class="rtp">
+        @* The restaurant leads: its mark on a white plate, its NAME as the headline,
+           and one quiet meta line (rating, area) beneath — the card a good hotel
+           would print. What the page is for sits above as a small tracked line. *@
+        <div class="rtp-hero">
+            <div class="rtp-mark">
+                @if (_store.LogoPhoto is { Length: > 0 } logo) { <img src="@logo" alt="@_store.Name" /> }
+                else { <span>@(string.IsNullOrWhiteSpace(_store.LogoEmoji) ? "🍽️" : _store.LogoEmoji)</span> }
+            </div>
+            <div class="who">
+                <span class="eyebrow">@L["rsv.title"]</span>
+                <h1>@StoreText.Name(_store.Name, _store.Names, L)</h1>
+                <div class="meta">
+                    @if (_store.Rating > 0)
+                    {
+                        <span class="r">★ @_store.Rating.ToString("0.0")</span>
+                        <span class="sep">·</span>
+                    }
+                    <span class="a">@_store.Area</span>
+                </div>
+            </div>
+        </div>
+
+        @if (_done is null)
+        {
+            <div class="rtp-card">
+                @* ---- 1. When ---- *@
+                <div class="rtp-step">
+                    <span class="ttl">@L["rsv.stepWhen"]</span>
+                </div>
+
+
+                @* Compact: YYYY / MM / DD · HH : mm — the separators carry the meaning,
+                   so the fields need no labels and take a fraction of the room. *@
+                <div class="rtp-dt" dir="ltr">
+                    <MudNumericField @bind-Value="_yearN" @bind-Value:after="RefreshBusy"
+                                     Margin="Margin.Dense" Variant="Variant.Outlined"
+                                     Class="f y"
+                                     Min="@DateTime.Today.Year" Max="@(DateTime.Today.Year + 2)" />
+                    <span class="sep">/</span>
+                    <MudNumericField @bind-Value="_monthN" @bind-Value:after="RefreshBusy"
+                                     Margin="Margin.Dense" Variant="Variant.Outlined"
+                                     Class="f" Min="1" Max="12" Format="00" />
+                    <span class="sep">/</span>
+                    <MudNumericField @bind-Value="_dayN" @bind-Value:after="RefreshBusy"
+                                     Margin="Margin.Dense" Variant="Variant.Outlined"
+                                     Class="f" Min="1" Max="31" Format="00" />
+                    <span class="gap"></span>
+                    <MudNumericField @bind-Value="_hourN" @bind-Value:after="RefreshBusy"
+                                     Margin="Margin.Dense" Variant="Variant.Outlined"
+                                     Class="f" Min="0" Max="23" Format="00" />
+                    <span class="sep">:</span>
+                    <MudNumericField @bind-Value="_minuteN" @bind-Value:after="RefreshBusy"
+                                     Margin="Margin.Dense" Variant="Variant.Outlined"
+                                     Class="f" Min="0" Max="59" Format="00" />
+                </div>
+                <div class="rtp-dt-hint">@L["rsv.year"] / @L["w.month"] / @L["rsv.day"] · @L["rsv.hour"] : @L["rsv.minute"]</div>
+
+                @* ---- 2. How long — the guest's own estimate, so the house knows
+                   when the table comes free again. ---- *@
+                <div class="rtp-step">
+                    <span class="ttl">@L["rsv.stepHowLong"]</span>
+                </div>
+                @* One line, half an hour per arrow tap. Pinned LTR like the date row, so
+                   which arrow means "longer" reads the same in every language. *@
+                <div class="rtp-durs-wrap" dir="ltr">
+                    <button type="button" class="nav" disabled="@(_duration <= Durations[0])"
+                            @onclick="@(() => StepDuration(-30))" aria-label="−30">‹</button>
+                    @* A real scroller: a thumb swipes it, the arrows step it, and the
+                       chosen length is scrolled back to the middle either way. *@
+                    <div class="rtp-durs-view">
+                        <div class="rtp-durs">
+                            @foreach (var minutes in Durations)
+                            {
+                                var m = minutes;
+                                <button type="button" id="@($"dur-{m}")" class="dur @(_duration == m ? "on" : "")"
+                                        @onclick="@(() => PickDuration(m))">
+                                    @DurationText(m)
+                                </button>
+                            }
+                        </div>
+                    </div>
+                    <button type="button" class="nav" disabled="@(_duration >= Durations[^1])"
+                            @onclick="@(() => StepDuration(30))" aria-label="+30">›</button>
+                </div>
+
+                @* ---- 3. How many ---- *@
+                <div class="rtp-step">
+                    <span class="ttl">@L["rsv.stepGuests"]</span>
+                </div>
+                @* The count is the loud part: it swaps with a little rise or fall, so
+                   a tap is felt without anything else decorating the row. *@
+                <div class="rtp-guests">
+                    <button type="button" class="stp" disabled="@(_guests <= 1)" @onclick="@(() => Guests(-1))">−</button>
+                    <div class="n">
+                        <b @key="_guests" class="@(_up ? "up" : "down")">@_guests</b>
+                        <small>@L["rsv.guests"]</small>
+                    </div>
+                    <button type="button" class="stp" disabled="@(_guests >= 20)" @onclick="@(() => Guests(1))">+</button>
+                </div>
+
+                @* ---- 4. Where — the guest picks their table, or several of them ---- *@
+                @if (_floor is { Count: > 0 })
+                {
+                    <div class="rtp-step">
+                        <span class="ttl">@L["rsv.stepWhere"]</span>
+                    </div>
+                    <div class="rtp-hint">@L["rsv.multiTableHint"]</div>
+
+                    @* Only salons with something to offer wear a chip — a room whose
+                       tables are all gone (or that has none) is not a choice. *@
+                    @if (_floor.Count > 1)
+                    {
+                        <div class="rtp-salons">
+                            @foreach (var salon in Salons)
+                            {
+                                var s = salon;
+                                <button type="button" class="sal @(_salon == s.Id ? "on" : "")"
+                                        @onclick="@(() => PickSalon(s))">
+                                    @(s.Id == 0 ? L["rsv.mainHall"] : s.Name)
+                                </button>
+                            }
+                        </div>
+                    }
+                    <div class="rtp-tables">
+                        @foreach (var table in CurrentSalon?.Tables ?? [])
+                        {
+                            var t = table;
+                            var busy = _busyTables.Contains(t.Id);
+                            <button type="button" class="tbl @(_tables.Contains(t.Id) ? "on" : "") @(busy ? "busy" : "")"
+                                    disabled="@busy" @onclick="@(() => Toggle(t.Id))">
+                                <span class="shape @t.Shape">@TypeEmoji(t.Type)</span>
+                                <b>@t.Name</b>
+                                <small>@(busy ? L["rsv.taken"] : $"{t.Seats} 👥")</small>
+                                @if (_tables.Contains(t.Id)) { <span class="tick">✓</span> }
+                            </button>
+                        }
+                    </div>
+                }
+
+                @* ---- 4. Who — a signed-in customer with a phone on file skips the form:
+                   the account already answers it. Guests (or profiles missing a phone)
+                   still get the fields. ---- *@
+                <div class="rtp-step">
+                    <span class="ttl">@L["rsv.stepWho"]</span>
+                </div>
+                @if (KnownGuest)
+                {
+                    <div class="rtp-me">
+                        <span class="ava">👤</span>
+                        <div class="w">
+                            <b>@_name</b>
+                            <small class="mf-ltr">@_phone</small>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+                    </div>
+                }
+                else
+                {
+                    <MudTextField @bind-Value="_name" Label="@L["rsv.name"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  MaxLength="60" Class="mb-3" />
+                    <MudTextField @bind-Value="_phone" Label="@L["rsv.phone"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  InputMode="InputMode.tel" MaxLength="20" HelperText="@L["rsv.phoneHint"]"
+                                  Class="mb-3 mf-ltr" />
+                }
+                <MudTextField @bind-Value="_note" Label="@L["rsv.note"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Lines="2" MaxLength="200" />
+
+                @* What is about to be sent, in one plain sentence. *@
+                <div class="rtp-summary @(IsPast || BadDate ? "past" : "")">
+                    <div class="row"><span>🗓️</span><b>@_date.ToString("dddd, dd MMMM", PickerCulture)</b></div>
+                    <div class="row"><span>🕐</span><b>@TimeText</b><small>@L["rsv.until"] @UntilText · @DurationText(_duration)</small></div>
+                    <div class="row"><span>👥</span><b>@_guests</b></div>
+                    <div class="row"><span>🍽️</span><b>@PickedTableName</b></div>
+                    @* Only a house that charges shows a price; free booking says nothing. *@
+                    @if (Charges)
+                    {
+                        <div class="row price"><span>💳</span><b>@Fmt.Rial(BookingPrice)</b><small>@PriceBreakdown</small></div>
+                    }
+                </div>
+                @* Nothing complains while the form is still being filled in: a guest
+                   mid-thought should not be scolded. Every refusal — bad date, a time
+                   gone by, no table, too big a party, the store's own answers — waits
+                   for the tap on Reserve and arrives as one dialog. See Submit. *@
+
+                <button type="button" class="rtp-cta" disabled="@_busy" @onclick="Submit">
+                    @if (_busy) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" /> }
+                    else { <MudIcon Icon="@Icons.Material.Filled.EventAvailable" /> }
+                    @L["rsv.submit"]
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="rtp-card rtp-done">
+                <div class="tick">✓</div>
+                <div class="ttl">@L["rsv.doneTitle"]</div>
+                <div class="sub">@string.Format(L["rsv.doneBody"], StoreText.Name(_store.Name, _store.Names, L))</div>
+                <div class="facts">
+                    <span>🗓️ @_done.At.ToString("dd MMM · HH:mm")–@_done.Until.ToString("HH:mm")</span>
+                    <span>👥 @_done.Guests</span>
+                    <span>🍽️ @(string.IsNullOrWhiteSpace(_done.TableName) ? L["rsv.anyTable"] : _done.TableName)</span>
+                    @if (_done.Price > 0) { <span>💳 @Fmt.Rial(_done.Price)</span> }
+                    <span class="no">@L["rsv.number"] @_done.Id</span>
+                </div>
+                <MudChip T="string" Color="Color.Warning" Variant="Variant.Text">@L["rsv.st.pending"]</MudChip>
+                <div class="rtp-done-acts">
+                    @if (State.Session is not null)
+                    {
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                                   OnClick="@(() => Nav.NavigateTo("/reservations"))">@L["rsv.mineTitle"]</MudButton>
+                    }
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                               OnClick="@(() => Nav.NavigateTo(StorePath))">@StoreText.Name(_store.Name, _store.Names, L)</MudButton>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* One dialog for every refusal, raised by the tap on Reserve and nothing else. The
+   form is left exactly as it was behind it, so closing this returns the guest to the
+   thing they need to change. *@
+<MudDialog @bind-Visible="_errorOpen" Options="_errorDialog" Class="rtp-errdlg">
+    <TitleContent></TitleContent>
+    <DialogContent>
+        <div class="rtp-err">
+            <div class="mark">⚠️</div>
+            <div class="msg">@_error</div>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                   OnClick="@(() => _errorOpen = false)">@L["common.close"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private RestaurantCardDto? _store;
+    private List<PublicSalonDto>? _floor;
+    private int _salon;
+
+    /// <summary>Every table the guest ticked — a party too big for one takes two or three.</summary>
+    private readonly HashSet<int> _tables = [];
+
+    /// <summary>How long they mean to keep it. 90 minutes is the ordinary dinner.</summary>
+    private int _duration = 90;
+
+    /// <summary>Half an hour to six, half an hour at a time — one arrow tap per step.</summary>
+    private static readonly int[] Durations =
+        Enumerable.Range(1, 12).Select(i => i * 30).ToArray();
+
+
+    /// <summary>Tables another party already holds at the chosen hour — not offered.</summary>
+    private HashSet<int> _busyTables = [];
+
+    private int _guests = 2;
+
+    /// <summary>Which way the count last moved — the number animates in that direction.</summary>
+    private bool _up = true;
+
+    private void Guests(int delta)
+    {
+        _up = delta > 0;
+        _guests = Math.Clamp(_guests + delta, 1, 20);
+    }
+    private string _name = "";
+    private string _phone = "";
+    private string? _note;
+    private string? _error;
+
+    /// <summary>The refusal dialog: raised only by the tap on Reserve.</summary>
+    private bool _errorOpen;
+    private static readonly DialogOptions _errorDialog = new()
+    {
+        MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true,
+        BackdropClick = true, Position = DialogPosition.Center,
+    };
+    private bool _busy;
+    private ReservationDto? _done;
+
+    // The field's raw text, exactly as typed ("30/08", "30/08/2026", "۳۰/۸"…).
+    // Defaults come from the next slot the house could actually take; unreadable or
+    // empty text falls back to that same suggestion when the booking is composed.
+    private int _dayN = 1;
+    private int _monthN = 1;
+    private int _yearN = 2026;
+    private int _hourN = 19;
+    private int _minuteN;
+    private (DateTime Date, TimeSpan Time) _slot;
+
+    /// <summary>Now + 90 minutes, rounded up to the half hour; past 23:00 it is tomorrow evening.</summary>
+    private static (DateTime Date, TimeSpan Time) NextSlot()
+    {
+        var soon = DateTime.Now.AddMinutes(90);
+        var minutes = (int)Math.Ceiling(soon.TimeOfDay.TotalMinutes / 30) * 30;
+        if (minutes > 23 * 60) return (DateTime.Today.AddDays(1), new TimeSpan(19, 0, 0));
+        return (soon.Date, TimeSpan.FromMinutes(minutes));
+    }
+
+    /// <summary>A day the chosen month simply doesn't have (31/02). Blocks sending.</summary>
+    private bool BadDate =>
+        _dayN > DateTime.DaysInMonth(
+            Math.Clamp(_yearN, DateTime.Today.Year, DateTime.Today.Year + 2),
+            Math.Clamp(_monthN, 1, 12));
+
+    /// <summary>The five numbers as one moment; display clamps, sending is blocked instead.</summary>
+    private DateTime _date
+    {
+        get
+        {
+            var year = Math.Clamp(_yearN, DateTime.Today.Year, DateTime.Today.Year + 2);
+            var month = Math.Clamp(_monthN, 1, 12);
+            var day = Math.Clamp(_dayN, 1, DateTime.DaysInMonth(year, month));
+            return new DateTime(year, month, day);
+        }
+    }
+
+    private TimeSpan Time => new(Math.Clamp(_hourN, 0, 23), Math.Clamp(_minuteN, 0, 59), 0);
+    private string TimeText => Time.ToString(@"hh\:mm");
+
+    // Eastern digits normalised, then clamped — a Farsi keyboard types ۲۱ and means 21.
+    private static int? ParseDigits(string? raw)
+    {
+        var ascii = new string((raw ?? "").Where(char.IsDigit)
+            .Select(c => (char)('0' + (int)char.GetNumericValue(c))).ToArray());
+        return int.TryParse(ascii, out var n) ? n : null;
+    }
+
+
+    /// <summary>The chosen moment, and whether it has already gone by.</summary>
+    private DateTime ChosenAt => _date.Date + Time;
+    private bool IsPast => ChosenAt < DateTime.Now.AddMinutes(-10);
+
+    private string StorePath => $"/p/{Id}";
+
+    private string PickedTableName
+    {
+        get
+        {
+            var names = (_floor ?? []).SelectMany(s => s.Tables)
+                .Where(t => _tables.Contains(t.Id)).Select(t => t.Name).ToList();
+            return names.Count == 0 ? "—" : string.Join(" + ", names);
+        }
+    }
+
+    private bool NeedsTable => _floor is { Count: > 0 } && _tables.Count == 0;
+
+    /// <summary>How many the chosen tables seat between them.</summary>
+    private int PickedSeats => (_floor ?? []).SelectMany(s => s.Tables)
+        .Where(t => _tables.Contains(t.Id)).Sum(t => t.Seats);
+
+    /// <summary>
+    /// More guests than chairs. Said here, before the tap, rather than as a refusal
+    /// afterwards — the server checks the same thing and would say no.
+    /// </summary>
+    private bool TooManyGuests => _tables.Count > 0 && PickedSeats > 0 && _guests > PickedSeats;
+
+    /// <summary>"1h 30min" in the reader's own words — never a bare number of minutes.</summary>
+    private string DurationText(int minutes)
+    {
+        var hours = minutes / 60;
+        var rest = minutes % 60;
+        var parts = new List<string>();
+        if (hours > 0) parts.Add($"{hours}{L["rsv.hourShort"]}");
+        if (rest > 0) parts.Add($"{rest}{L["rsv.minShort"]}");
+        return string.Join(" ", parts);
+    }
+
+    private string UntilText => ChosenAt.AddMinutes(_duration).ToString(@"HH\:mm");
+
+    /// <summary>
+    /// Does this house charge for a booking at all? Most don't, and for those the page
+    /// never mentions money — no zero, no empty row, nothing.
+    /// </summary>
+    private bool Charges =>
+        _store is not null && (_store.ReservePricePerTable > 0 || _store.ReservePricePerMinute > 0);
+
+    /// <summary>The same sum the server will do: per table held, plus per minute kept.</summary>
+    private decimal BookingPrice =>
+        _store is null ? 0m : Math.Round(
+            _store.ReservePricePerTable * Math.Max(_tables.Count, 1)
+            + _store.ReservePricePerMinute * _duration, 3);
+
+    /// <summary>Where the figure comes from, so it never looks arbitrary.</summary>
+    private string PriceBreakdown
+    {
+        get
+        {
+            if (_store is null) return "";
+            var parts = new List<string>();
+            if (_store.ReservePricePerTable > 0)
+                parts.Add($"{Math.Max(_tables.Count, 1)} × {Fmt.Amount(_store.ReservePricePerTable)} {L["rsv.perTable"]}");
+            if (_store.ReservePricePerMinute > 0)
+                parts.Add($"{_duration} × {Fmt.Amount(_store.ReservePricePerMinute)} {L["rsv.perMinute"]}");
+            return string.Join(" + ", parts);
+        }
+    }
+
+    /// <summary>Tick a table on or off — the party may need more than one.</summary>
+    private void Toggle(int tableId)
+    {
+        if (_busyTables.Contains(tableId)) return;
+        if (!_tables.Remove(tableId)) _tables.Add(tableId);
+    }
+
+    private async Task PickDuration(int minutes)
+    {
+        _duration = minutes;
+        await CentreDuration();
+        // A longer stay can run into a later booking, so the floor is asked again.
+        await RefreshBusy();
+    }
+
+    /// <summary>An arrow: half an hour more, or half an hour less, within the strip.</summary>
+    private Task StepDuration(int delta) =>
+        PickDuration(Math.Clamp(_duration + delta, Durations[0], Durations[^1]));
+
+    /// <summary>
+    /// Slide the chosen length back into the middle of the strip. The strip is an
+    /// ordinary scroller — a thumb may have pushed it anywhere — so the browser's own
+    /// smooth scrolling does the animation, and nothing here guesses pixel widths.
+    /// </summary>
+    private async Task CentreDuration()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                $"document.getElementById('dur-{_duration}')?.scrollIntoView({{inline:'center',block:'nearest',behavior:'smooth'}})");
+        }
+        catch (JSException) { }
+        catch (InvalidOperationException) { }   // pre-render: no browser to talk to yet
+    }
+
+    /// <summary>
+    /// Which tables are already spoken for at the chosen hour. Asked again on every
+    /// change of time or length, so a guest never picks a table they cannot have —
+    /// the server refuses the clash regardless, this only spares them the round trip.
+    /// </summary>
+    private async Task RefreshBusy()
+    {
+        if (_floor is not { Count: > 0 }) return;
+        var when = ChosenAt;
+        var minutes = _duration;
+        var busy = await Api.GetBusyTablesAsync(Id, when, minutes);
+        // A slow answer about an older hour must not overwrite a newer question.
+        if (when != ChosenAt || minutes != _duration) return;
+        _busyTables = busy?.ToHashSet() ?? [];
+        _tables.RemoveWhere(_busyTables.Contains);
+        // The salon they were looking at may have just emptied out; move to one that
+        // still has a table rather than leaving them staring at nothing.
+        if (Salons.All(s => s.Id != _salon)) _salon = Salons.FirstOrDefault()?.Id ?? 0;
+        StateHasChanged();
+    }
+
+    /// <summary>Signed in AND the profile already carries a name and phone.</summary>
+    private bool KnownGuest =>
+        State.Session is not null
+        && !string.IsNullOrWhiteSpace(_name)
+        && !string.IsNullOrWhiteSpace(_phone);
+
+    /// <summary>
+    /// The UI language as a real culture, so the calendar's month and weekday names read
+    /// in it — pinned to the GREGORIAN calendar: fa-IR's default is the Persian (Jalali)
+    /// calendar, and a booking made for "8 Shahrivar" while the kitchen reads "30 August"
+    /// is a reservation for the wrong day.
+    /// </summary>
+    private CultureInfo PickerCulture
+    {
+        get
+        {
+            try
+            {
+                var culture = (CultureInfo)CultureInfo.GetCultureInfo(L.Locale switch
+                {
+                    "fa" => "fa-IR", "ar" => "ar-OM", "zh" => "zh-CN",
+                    "hi" => "hi-IN", "ur" => "ur-PK", "ja" => "ja-JP",
+                    _ => L.Locale,
+                }).Clone();
+                if (culture.DateTimeFormat.Calendar is not GregorianCalendar &&
+                    culture.OptionalCalendars.OfType<GregorianCalendar>().FirstOrDefault() is { } gregorian)
+                    culture.DateTimeFormat.Calendar = gregorian;
+
+                // Farsi and Arabic ship no short weekday forms — the calendar's seven
+                // header cells then carry the FULL names and collide into one another.
+                // The single-letter forms are what paper calendars in both languages use.
+                // Arrays run Sunday..Saturday, as DateTimeFormatInfo demands.
+                string[]? letters = L.Locale switch
+                {
+                    "fa" => ["ی", "د", "س", "چ", "پ", "ج", "ش"],
+                    "ar" => ["ح", "ن", "ث", "ر", "خ", "ج", "س"],
+                    _ => null,
+                };
+                if (letters is not null)
+                {
+                    culture.DateTimeFormat.AbbreviatedDayNames = letters;
+                    culture.DateTimeFormat.ShortestDayNames = letters;
+                }
+                return culture;
+            }
+            catch (CultureNotFoundException) { return CultureInfo.InvariantCulture; }
+        }
+    }
+
+    /// <summary>
+    /// The salons worth showing: those with a table the guest could actually take at
+    /// the chosen hour. A room with no tables, or one whose tables are all held by
+    /// other parties, is not offered — except when the whole floor is gone, and then
+    /// the plan is shown as it is so the guest can see why.
+    /// </summary>
+    private List<PublicSalonDto> Salons
+    {
+        get
+        {
+            var floor = _floor ?? [];
+            var open = floor
+                .Where(s => s.Tables.Any(t => !_busyTables.Contains(t.Id) || _tables.Contains(t.Id)))
+                .ToList();
+            return open.Count > 0 ? open : floor;
+        }
+    }
+
+    private PublicSalonDto? CurrentSalon =>
+        Salons.FirstOrDefault(s => s.Id == _salon) ?? Salons.FirstOrDefault();
+
+    private void PickSalon(PublicSalonDto salon) => _salon = salon.Id;
+
+    private static string TypeEmoji(string type) => type switch
+    {
+        "outdoor" => "🌿",
+        "vip" => "👑",
+        "family" => "👨‍👩‍👧",
+        "counter" => "🍸",
+        _ => "🪑",
+    };
+
+    private async Task OpenSignIn()
+    {
+        var parameters = new DialogParameters<SignInDialog> { { d => d.Reason, L["rsv.loginToBook"] } };
+        var dialog = await Dialogs.ShowAsync<SignInDialog>("", parameters,
+            new DialogOptions { FullScreen = true, NoHeader = true });
+        await dialog.Result;
+        // Whatever happened in there, the session is the truth; prefill from it.
+        _name = State.Session?.FullName ?? _name;
+        _phone = string.IsNullOrWhiteSpace(State.Phone) ? _phone : State.Phone;
+    }
+
+    /// <summary>The strip opens on the chosen length, not on its left edge.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _done is null) await CentreDuration();
+    }
+
+    private void OnStateChanged() => _ = InvokeAsync(StateHasChanged);
+
+    protected override void OnInitialized() => State.Changed += OnStateChanged;
+    public void Dispose() => State.Changed -= OnStateChanged;
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // The field must SHOW the suggested date, not just imply it — filled once and
+        // then never touched again: it belongs to the person typing.
+        _slot = NextSlot();
+        if (_dayN == 1 && _monthN == 1 && _yearN == 2026)
+        {
+            _dayN = _slot.Date.Day;
+            _monthN = _slot.Date.Month;
+            _yearN = _slot.Date.Year;
+            _hourN = _slot.Time.Hours;
+            _minuteN = _slot.Time.Minutes;
+        }
+        // The card alone — this page needs the store's name and logo, not its whole
+        // menu, and by-ids returns in a fraction of the full detail call. It is
+        // awaited FIRST so the page can wear the restaurant's own name and logo the
+        // moment they are known; the floor follows behind it.
+        var floor = Api.GetPublicFloorAsync(Id);
+        _store = (await Api.GetRestaurantsByIdsAsync([Id]))?.FirstOrDefault();
+        // Booking is the owner's opt-in; a cold link to a store without it goes home.
+        if (_store is not null && !_store.OnlineReservations) Nav.NavigateTo(StorePath, replace: true);
+        // Paint the wait in the restaurant's own colours before the floor arrives.
+        StateHasChanged();
+        _floor = await floor ?? [];
+        _salon = Salons.FirstOrDefault()?.Id ?? 0;
+        _name = State.Session?.FullName ?? "";
+        _phone = State.Phone;
+        await RefreshBusy();
+    }
+
+    /// <summary>Say no, in the one place the guest is now looking.</summary>
+    private void Refuse(string reason)
+    {
+        _error = reason;
+        _errorOpen = true;
+    }
+
+    private async Task Submit()
+    {
+        _error = null;
+        if (BadDate) { Refuse(L["rsv.badDate"]); return; }
+        if (IsPast) { Refuse(L["rsv.pastTime"]); return; }
+        if (NeedsTable) { Refuse(L["rsv.needTable"]); return; }
+        if (TooManyGuests) { Refuse(string.Format(L["rsv.e.seats"], PickedSeats, _guests)); return; }
+        if (string.IsNullOrWhiteSpace(_name)) { Refuse(L["rsv.needName"]); return; }
+        if (string.IsNullOrWhiteSpace(_phone)) { Refuse(L["rsv.needPhone"]); return; }
+
+        _busy = true;
+        try
+        {
+            var (reservation, error) = await Api.ReserveStoreTableAsync(Id,
+                new PublicReserveRequest(_name.Trim(), _phone.Trim(), _guests, ChosenAt, _note,
+                    _tables.FirstOrDefault(), _duration, _tables.ToList()));
+            if (reservation is null)
+            {
+                // The server's refusals travel as codes; they are read out here in
+                // whatever language the guest is booking in.
+                Refuse(L.ServerError(error) ?? L["common.wentWrong"]);
+                // Someone may have taken it a second before us — show the floor as it is now.
+                await RefreshBusy();
+                return;
+            }
+            _done = reservation;
+        }
+        finally { _busy = false; }
+    }
+}

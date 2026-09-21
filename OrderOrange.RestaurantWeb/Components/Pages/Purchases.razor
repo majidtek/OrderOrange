@@ -1,0 +1,545 @@
+﻿@page "/materials/purchases"
+@using OrderOrange.RestaurantWeb.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snack
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+@* Receiving, built like the till: tiles on one side, the invoice on the other, a
+   code box on top. Purple where the POS is orange — buying, not selling. Materials
+   and finished products share the grid; only materials land on the shelf. *@
+
+<PageTitle>Partner — Purchases</PageTitle>
+
+@if (_materials is null || _menu is null || _page is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="pp">
+        @* ---------- Left: code box, filters, tiles ---------- *@
+        <div class="pp-left">
+            <div class="pp-code mf-ltr">
+                <span class="ic">⌨</span>
+                <input id="pp-code" placeholder="@L["pur.codeHint"]" autocomplete="off"
+                       @bind="_codeEntry" @bind:event="oninput" @onkeydown="OnCodeKeyAsync" />
+            </div>
+            <div class="pp-tools">
+                <div class="pp-tabs">
+                    <button type="button" class="@(_source == "all" ? "on" : "")" @onclick="@(() => _source = "all")">@L["rv.all"]</button>
+                    <button type="button" class="@(_source == "materials" ? "on" : "")" @onclick="@(() => _source = "materials")">📦 @L["mat.title"]</button>
+                    <button type="button" class="@(_source == "products" ? "on" : "")" @onclick="@(() => _source = "products")">🍽️ @L["nav.products"]</button>
+                </div>
+                <div class="pp-search">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" />
+                    <input placeholder="@L["mat.search"]" @bind="_filter" @bind:event="oninput" />
+                </div>
+            </div>
+            <div class="pp-tiles">
+                @if (_source is "all" or "materials")
+                {
+                    @foreach (var material in FilteredMaterials.Take(30))
+                    {
+                        var on = _lines.Any(l => !l.IsProduct && l.ItemId == material.Id);
+                        <button type="button" class="pp-tile @(on ? "on" : "")" @onclick="@(() => AddMaterial(material, 1))">
+                            <span class="ic">@MatIcon(material.Category)</span>
+                            <b>@material.Name</b>
+                            <small class="mf-ltr">@material.LabelCode · @Fmt.Rial(material.UnitCost)/@L[$"mat.unit.{material.Unit}"]</small>
+                        </button>
+                    }
+                    @* A delivery often carries a brand-new ingredient. The shelf must be
+                       creatable right here — hunting for the stock page mid-delivery is
+                       how "there is no form to add material" gets reported. *@
+                    <button type="button" class="pp-tile pp-newmat" @onclick="NewMaterialAsync">
+                        <span class="ic">➕</span>
+                        <b>@L["mat.add"]</b>
+                        <small>@L["pur.newMatHint"]</small>
+                    </button>
+                }
+                @if (_source is "all" or "products")
+                {
+                    @foreach (var item in FilteredProducts.Take(30))
+                    {
+                        var on = _lines.Any(l => l.IsProduct && l.ItemId == item.Id);
+                        <button type="button" class="pp-tile prod @(on ? "on" : "")" @onclick="@(() => AddProduct(item, 1))">
+                            @if (FoodPhoto.ForDish(item.Name) is string photo)
+                            {
+                                <img class="ph" src="@photo" alt="@item.Name" loading="lazy" />
+                            }
+                            else
+                            {
+                                <span class="ic">🍽️</span>
+                            }
+                            <b>@item.NameFor(L.Locale)</b>
+                            <small class="mf-ltr">@ProductCode(item.Id) · @Fmt.Rial(item.FinalPrice)</small>
+                        </button>
+                    }
+                }
+            </div>
+        </div>
+
+        @* ---------- Right: the invoice ticket ---------- *@
+        <div class="pp-ticket">
+            <div class="hd">
+                🚚 @L["pur.new"]
+                <button type="button" class="hist" @onclick="OpenHistoryAsync">
+                    🧾 @_page.MonthCount <span class="chev">▾</span>
+                </button>
+            </div>
+            @* Saved shopping lists live together: pick one, or save the current ticket. *@
+            <div class="tpl-row">
+                @if (_templates is { Count: > 0 })
+                {
+                    <button type="button" class="pp-tplbtn" @onclick="PickTemplateAsync">
+                        📋 @L["tpl.pick"] <i>@_templates.Count</i>
+                    </button>
+                }
+                @if (_lines.Count > 0)
+                {
+                    <button type="button" class="pp-tplbtn" @onclick="SaveTemplateAsync">
+                        💾 @L["tpl.saveAs"]
+                    </button>
+                }
+            </div>
+
+            @* The supplier: a SHORT box for its number + Enter; the chosen name lives
+               in the label beside it, never inside the box. 🚚 opens the dialog. *@
+            <div class="pp-sup">
+                <input class="code mf-ltr" placeholder="۱⏎" maxlength="4" autocomplete="off"
+                       @bind="_supCode" @bind:event="oninput" @onkeydown="OnSupplierKeyAsync" />
+                <button type="button" class="sel @(_supplier.Length > 0 ? "on" : "")" @onclick="PickSupplierAsync">
+                    @(_supplier.Length > 0 ? _supplier : L["mat.supplier"])
+                </button>
+                @if (_supplier.Length > 0)
+                {
+                    <button type="button" class="clr" title="@L["lbl.clear"]"
+                            @onclick="@(() => _supplier = "")">✕</button>
+                }
+                <button type="button" class="book" title="@L["sup.title"]" @onclick="PickSupplierAsync">🚚</button>
+            </div>
+            <div class="two">
+                <MudTextField @bind-Value="_number" Label="@L["pur.number"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MfDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_date" Label="@L["pur.date"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </div>
+
+            <div class="lines">
+                @if (_lines.Count == 0)
+                {
+                    <div class="rc-empty">🧾 @L["pur.scanHint"]</div>
+                }
+                @if (_lines.Count > 0)
+                {
+                    @* One header names the columns; the rows stay plain. *@
+                    <div class="plh">
+                        <span></span>
+                        <span>@L["pur.qty"]</span>
+                        <span>@L["mat.unitCost"]</span>
+                        <span class="e">@L["pur.lineTotal"]</span>
+                        <span></span>
+                    </div>
+                }
+                @foreach (var line in _lines)
+                {
+                    <div class="plr">
+                        <span class="nm">@(line.IsProduct ? "🍽️" : "📦") @line.Name</span>
+                        <span class="q mf-ltr">
+                            <input type="number" step="0.01" min="0"
+                                   value="@(line.Quantity == 0 ? "" : line.Quantity)"
+                                   @onchange="@(e => Patch(line, qty: e.Value?.ToString()))" />
+                            <i>@L[$"mat.unit.{line.Unit}"]</i>
+                        </span>
+                        <input class="c mf-ltr" type="number" step="0.001" min="0"
+                               value="@(line.UnitCost == 0 ? "" : line.UnitCost)"
+                               @onchange="@(e => Patch(line, cost: e.Value?.ToString()))" />
+                        <b class="t mf-ltr">@Fmt.Rial(line.Quantity * line.UnitCost)</b>
+                        <button type="button" class="rm" @onclick="@(() => _lines.Remove(line))">✕</button>
+                    </div>
+                }
+            </div>
+
+            <div class="foot">
+                <span></span>
+                <span class="total mf-ltr">@Fmt.Rial(Total)</span>
+            </div>
+            @* The POS pattern: cash/card right here for money that moves now;
+               "more" opens the dialog for later and installments. *@
+            <div class="payrow">
+                <div class="seg">
+                    <button type="button" class="@(IsQuick("cash") ? "on" : "")"
+                            @onclick="@(() => _choice = new PaymentDialog.Choice("now", "cash", null, null))">
+                        💵 @L["pay.m.cash"]
+                    </button>
+                    <button type="button" class="@(IsQuick("card") ? "on" : "")"
+                            @onclick="@(() => _choice = new PaymentDialog.Choice("now", "card", null, null))">
+                        💳 @L["pay.m.card"]
+                    </button>
+                </div>
+                <button type="button" class="more @(_choice.Timing != "now" ? "on" : "")" @onclick="ChangePaymentAsync">
+                    🕓 @L["pay.more"] ▾
+                </button>
+            </div>
+            @if (_choice.Timing != "now")
+            {
+                <button type="button" class="pay-line" @onclick="ChangePaymentAsync">
+                    <span class="k">@L["pay.title"]</span>
+                    <span class="v">@ChoiceSummary</span>
+                    <span class="chg">@L["pay.change"] ▾</span>
+                </button>
+            }
+            <button type="button" class="receive" disabled="@_busy" @onclick="ReceiveAsync">
+                @(_busy ? L["common.saving"] : $"🚚 {L["pur.receive"]}")
+            </button>
+        </div>
+    </div>
+
+}
+
+@code {
+    private MaterialPurchasePageDto? _page;
+    private StoreMaterialsDto? _materials;
+    private List<MenuCategoryDto>? _menu;
+    private List<SupplierDto>? _suppliers;
+
+    // Materials first: a delivery truck usually carries rice, not kababs.
+    private string _source = "materials";
+    private string _filter = "";
+    private string _codeEntry = "";
+
+    private string _supplier = "";
+    private string _number = "";
+    private DateTime? _date = DateTime.Today;
+    private bool _busy;
+
+
+    private sealed class Line
+    {
+        public bool IsProduct;
+        public int ItemId;
+        public string Name = "";
+        public string Unit = "pcs";
+        public decimal Quantity;
+        public decimal UnitCost;
+    }
+    private readonly List<Line> _lines = [];
+
+    private decimal Total => _lines.Sum(l => l.Quantity * l.UnitCost);
+
+    private List<MenuItemDto> AllProducts => (_menu ?? []).SelectMany(c => c.Items).ToList();
+
+    private IEnumerable<StoreMaterialDto> FilteredMaterials
+    {
+        get
+        {
+            if (_filter.Trim().Length == 0) return _materials!.Items;
+            var folded = PosBotNlu.Fold(_filter);
+            return _materials!.Items.Where(m => PosBotNlu.Fold(m.Name).Contains(folded)
+                || m.LabelCode.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private IEnumerable<MenuItemDto> FilteredProducts
+    {
+        get
+        {
+            if (_filter.Trim().Length == 0) return AllProducts;
+            var folded = PosBotNlu.Fold(_filter);
+            return AllProducts.Where(i => PosBotNlu.Fold(i.NameFor(L.Locale)).Contains(folded)
+                || PosBotNlu.Fold(i.Name).Contains(folded));
+        }
+    }
+
+    /// <summary>The same sequence the POS and the labels use: available items, from 1.</summary>
+    private string ProductCode(int id)
+    {
+        var ordered = AllProducts.Where(i => i.IsAvailable).OrderBy(i => i.Id).ToList();
+        var index = ordered.FindIndex(i => i.Id == id);
+        return index >= 0 ? $"P{index + 1}" : $"P{id}";
+    }
+
+    private List<PurchaseTemplateDto>? _templates;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _materials = await Api.GetMaterialsAsync();
+        _menu = await Api.GetMyMenuBasicAsync() ?? [];
+        _page = await Api.GetPurchasesAsync();
+        _suppliers = await Api.GetSuppliersAsync();
+        _templates = await Api.GetPurchaseTemplatesAsync();
+
+        // "?add=7" — the stock page sent someone here to BUY that material: it
+        // lands on the ticket with its usual supplier already picked.
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+        if (int.TryParse(query["add"], out var addId)
+            && _materials?.Items.FirstOrDefault(m => m.Id == addId) is { } wanted)
+        {
+            AddMaterial(wanted, 1);
+            if (string.IsNullOrWhiteSpace(_supplier) && wanted.Supplier is { Length: > 0 } usual)
+                _supplier = usual;
+        }
+    }
+
+    /// <summary>One tap: the template's supplier and every line land on the ticket.</summary>
+    private void ApplyTemplate(PurchaseTemplateDto template)
+    {
+        _lines.Clear();
+        _supplier = template.Supplier;
+        foreach (var line in template.Lines)
+        {
+            if (line.IsProduct)
+            {
+                var item = AllProducts.FirstOrDefault(i => i.Id == line.ItemId);
+                if (item is not null) AddProduct(item, line.Quantity);
+            }
+            else
+            {
+                var material = _materials!.Items.FirstOrDefault(m => m.Id == line.ItemId);
+                if (material is not null) AddMaterial(material, line.Quantity);
+            }
+        }
+        Snack.Add($"📋 {template.Name}", Severity.Success);
+    }
+
+    private string _supCode = "";
+
+    /// <summary>"1⏎" — the number box resolves to a name in the label, then empties.</summary>
+    private Task OnSupplierKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return Task.CompletedTask;
+        var raw = PosBotNlu.AsciiDigits(_supCode.Trim());
+        _supCode = "";
+        if (_suppliers is { Count: > 0 } && int.TryParse(raw, out var number)
+            && number >= 1 && number <= _suppliers.Count)
+        {
+            _supplier = _suppliers[number - 1].Name;
+            Snack.Add($"🚚 {_supplier}", Severity.Success);
+        }
+        else if (raw.Length > 0)
+        {
+            Snack.Add(string.Format(L["pos.codeNotFound"], raw), Severity.Warning);
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>The supplier dialog: numbered rows — see 3 today, type 3⏎ tomorrow.</summary>
+    private async Task PickSupplierAsync()
+    {
+        var parameters = new DialogParameters { ["Suppliers"] = _suppliers ?? [] };
+        var dialog = await Dialogs.ShowAsync<SupplierPickerDialog>(L["sup.title"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is { Canceled: false, Data: string name }) _supplier = name;
+    }
+
+    /// <summary>The picker dialog hands back the chosen list; applying stays here.</summary>
+    private async Task PickTemplateAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            ["Templates"] = _templates ?? [],
+            ["Materials"] = _materials,
+            ["Menu"] = _menu ?? [],
+        };
+        var dialog = await Dialogs.ShowAsync<TemplatePickerDialog>(L["tpl.pick"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: PurchaseTemplateDto picked }) ApplyTemplate(picked);
+        // Deletions inside the picker mutate the shared list — refresh to stay honest.
+        _templates = await Api.GetPurchaseTemplatesAsync();
+    }
+
+    private async Task SaveTemplateAsync()
+    {
+        // The template needs a name — the supplier's name is the natural default.
+        var parameters = new DialogParameters { ["DefaultName"] = _supplier };
+        var dialog = await Dialogs.ShowAsync<TemplateNameDialog>(L["tpl.saveAs"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string name } || name.Trim().Length == 0) return;
+
+        var request = new SavePurchaseTemplateRequest(name.Trim(), _supplier,
+            _lines.Where(l => l.Quantity > 0)
+                  .Select(l => new PurchaseTemplateLineDto(l.ItemId, l.IsProduct, l.Quantity)).ToList());
+        var (ok, error) = await Api.SavePurchaseTemplateAsync(request);
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(L["tpl.saved"], Severity.Success);
+        _templates = await Api.GetPurchaseTemplatesAsync();
+    }
+
+
+    private async Task OnCodeKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        await ApplyCodeAsync();
+    }
+
+    /// <summary>
+    /// CODE first, then how much: "7*20⏎". Materials answer to their code or the
+    /// supplier's barcode; "P5" (or "p5") reaches the fifth product instead.
+    /// </summary>
+    private async Task ApplyCodeAsync()
+    {
+        var raw = PosBotNlu.AsciiDigits(_codeEntry.Trim());
+        _codeEntry = "";
+        if (raw.Length == 0) return;
+
+        var qty = 1m;
+        var code = raw;
+        var split = raw.Split('*', 'x', 'X', '×');
+        if (split.Length == 2 && decimal.TryParse(split[1].Trim(), out var q) && q is > 0 and <= 10000)
+        {
+            qty = q;
+            code = split[0].Trim();
+        }
+
+        if (code.StartsWith("P", StringComparison.OrdinalIgnoreCase) && int.TryParse(code[1..], out var pSeq))
+        {
+            var ordered = AllProducts.Where(i => i.IsAvailable).OrderBy(i => i.Id).ToList();
+            var product = pSeq >= 1 && pSeq <= ordered.Count ? ordered[pSeq - 1]
+                : AllProducts.FirstOrDefault(i => i.Id == pSeq);
+            if (product is not null) { AddProduct(product, qty); await RefocusAsync(qty, product.NameFor(L.Locale)); return; }
+        }
+
+        var material = FindMaterial(code);
+        if (material is not null) { AddMaterial(material, qty); await RefocusAsync(qty, material.Name); return; }
+
+        Snack.Add(string.Format(L["pos.codeNotFound"], raw), Severity.Warning);
+    }
+
+    private async Task RefocusAsync(decimal qty, string name)
+    {
+        Snack.Add($"➕ {qty:0.##} × {name}", Severity.Success);
+        try { await JS.InvokeVoidAsync("mfPos.focus", "#pp-code"); } catch { }
+    }
+
+    private StoreMaterialDto? FindMaterial(string code)
+    {
+        var items = _materials!.Items;
+        return items.FirstOrDefault(m => m.Barcode is not null && string.Equals(m.Barcode, code, StringComparison.OrdinalIgnoreCase))
+            ?? items.FirstOrDefault(m => string.Equals(m.LabelCode, code, StringComparison.OrdinalIgnoreCase))
+            ?? (int.TryParse(code.StartsWith("M", StringComparison.OrdinalIgnoreCase) ? code[1..] : code, out var id)
+                ? items.FirstOrDefault(m => m.Id == id)
+                : null);
+    }
+
+    /// <summary>
+    /// Creates a material without leaving the receiving desk, then drops it straight
+    /// onto the invoice — the truck is standing outside, after all.
+    /// </summary>
+    private async Task NewMaterialAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<MaterialDialog>(L["mat.add"],
+            new DialogParameters(), new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is not { Canceled: false }) return;
+
+        var before = _materials?.Items.Select(m => m.Id).ToHashSet() ?? [];
+        _materials = await Api.GetMaterialsAsync();
+        if (_materials?.Items.FirstOrDefault(m => !before.Contains(m.Id)) is { } created)
+            AddMaterial(created, 1);
+    }
+
+    private void AddMaterial(StoreMaterialDto material, decimal qty)
+    {
+        var line = _lines.FirstOrDefault(l => !l.IsProduct && l.ItemId == material.Id);
+        if (line is null)
+            _lines.Add(new Line { ItemId = material.Id, Name = material.Name, Unit = material.Unit, Quantity = qty, UnitCost = material.UnitCost });
+        else
+            line.Quantity += qty;
+    }
+
+    private void AddProduct(MenuItemDto item, decimal qty)
+    {
+        var line = _lines.FirstOrDefault(l => l.IsProduct && l.ItemId == item.Id);
+        if (line is null)
+            _lines.Add(new Line { IsProduct = true, ItemId = item.Id, Name = item.NameFor(L.Locale), Unit = "pcs", Quantity = qty, UnitCost = item.FinalPrice });
+        else
+            line.Quantity += qty;
+    }
+
+    private static void Patch(Line line, string? qty = null, string? cost = null)
+    {
+        if (qty is not null && decimal.TryParse(qty, out var q) && q >= 0) line.Quantity = q;
+        if (cost is not null && decimal.TryParse(cost, out var c) && c >= 0) line.UnitCost = c;
+    }
+
+    /// <summary>The standing answer to "how is this paid?" — starts at the common case.</summary>
+    private PaymentDialog.Choice _choice = new("now", "cash", null, null);
+
+    private string ChoiceSummary => _choice.Timing switch
+    {
+        "later" => string.Format(L["pay.sumLater2"], Fmt.Money(Total), _choice.DueDate?.ToString("dd MMM") ?? ""),
+        "plan" => $"📆 {L["pay.plan"]} · {_choice.Plan?.Count ?? 0} × {Fmt.Money((_choice.Plan?.FirstOrDefault()?.Amount) ?? 0)}",
+        _ => $"✅ {L["pay.now"]} · {L[$"pay.m.{_choice.Method}"]}",
+    };
+
+    private bool IsQuick(string method) => _choice.Timing == "now" && _choice.Method == method;
+
+    private bool ValidateTicket()
+    {
+        if (string.IsNullOrWhiteSpace(_supplier)) { Snack.Add(L["pur.supplierNeeded"], Severity.Warning); return false; }
+        if (!_lines.Any(l => l.Quantity > 0)) { Snack.Add(L["pur.linesNeeded"], Severity.Warning); return false; }
+        return true;
+    }
+
+    /// <summary>The sentence is a button: tap it, decide in the dialog, come back.</summary>
+    private async Task ChangePaymentAsync()
+    {
+        var parameters = new DialogParameters { ["Total"] = Total };
+        var dialog = await Dialogs.ShowAsync<PaymentDialog>(L["pay.title"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is { Canceled: false, Data: PaymentDialog.Choice choice })
+            _choice = choice;
+    }
+
+    /// <summary>One button. It does exactly what the sentence above it says.</summary>
+    private async Task ReceiveAsync()
+    {
+        if (_busy || !ValidateTicket()) return;
+        await CreateAsync(_choice);
+    }
+
+    private async Task CreateAsync(PaymentDialog.Choice choice)
+    {
+        var lines = _lines.Where(l => l.Quantity > 0).ToList();
+
+        _busy = true;
+        var (ok, error) = await Api.CreatePurchaseAsync(new SavePurchaseRequest(
+            _number, _supplier, _date ?? DateTime.Today,
+            IsPaid: choice.Timing == "now",
+            lines.Select(l => new SavePurchaseLineRequest(l.ItemId, l.Quantity, l.UnitCost, l.IsProduct)).ToList(),
+            null,
+            Method: choice.Method,
+            DueDate: choice.DueDate,
+            Installments: choice.Plan));
+        _busy = false;
+
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(L["pur.received"], Severity.Success);
+        _lines.Clear();
+        _supplier = "";
+        _number = "";
+        _date = DateTime.Today;
+        _choice = new PaymentDialog.Choice("now", "cash", null, null);   // back to the common case
+        _materials = await Api.GetMaterialsAsync();
+        _page = await Api.GetPurchasesAsync();
+    }
+
+    /// <summary>The paper trail lives in a dialog — deletions there move stock, so reload.</summary>
+    private async Task OpenHistoryAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<PurchaseHistoryDialog>(L["pur.title"], new DialogParameters(),
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is { Data: true })
+        {
+            _materials = await Api.GetMaterialsAsync();
+            _page = await Api.GetPurchasesAsync();
+        }
+    }
+
+    private static string MatIcon(string category) => category switch
+    {
+        "grain" => "🌾", "oil" => "🫒", "meat" => "🥩", "dairy" => "🧀",
+        "vegetable" => "🥬", "spice" => "🧂", "drink" => "🥤", "packaging" => "📦",
+        _ => "🧺",
+    };
+}

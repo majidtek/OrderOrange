@@ -1,0 +1,209 @@
+@page "/materials"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snack
+@inject NavigationManager Nav
+
+@* The kitchen's store cupboard: what is on the shelf, what it is worth, and what is
+   about to run out. Not menu items — nobody orders a sack of rice. *@
+
+<PageTitle>Partner — Materials</PageTitle>
+
+<PageHeader Title="@L["mat.title"]" Subtitle="@L["mat.sub"]" />
+
+@if (_data is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    @* ---------- Three numbers that matter before anything else ---------- *@
+    <div class="mt-top">
+        <div class="mt-sum v">
+            <span class="ic">📦</span>
+            <div>
+                <b class="mf-ltr">@Fmt.Rial(_data.TotalValue)</b>
+                <small>@L["mat.stockValue"]</small>
+            </div>
+        </div>
+        <button type="button" class="mt-sum w @(_only == "low" ? "on" : "")" @onclick="@(() => Only("low"))">
+            <span class="ic">⚠️</span>
+            <div>
+                <b>@_data.LowCount</b>
+                <small>@L["mat.runningLow"]</small>
+            </div>
+        </button>
+        <button type="button" class="mt-sum d @(_only == "out" ? "on" : "")" @onclick="@(() => Only("out"))">
+            <span class="ic">🚫</span>
+            <div>
+                <b>@_data.OutCount</b>
+                <small>@L["mat.outOfStock"]</small>
+            </div>
+        </button>
+        <button type="button" class="mt-add" @onclick="@(() => EditAsync(null))">
+            <MudIcon Icon="@Icons.Material.Filled.Add" /> @L["mat.add"]
+        </button>
+    </div>
+
+    @* ---------- Search + category filter ---------- *@
+    <div class="mt-tools">
+        <div class="mt-search">
+            <MudIcon Icon="@Icons.Material.Filled.Search" />
+            <input placeholder="@L["mat.search"]" value="@_search"
+                   @oninput="@(e => { _search = e.Value?.ToString() ?? ""; _page = 0; })"
+                   @onkeyup="@(async e => { if (e.Key == "Enter") await LoadAsync(); })" />
+            @if (_search.Length > 0)
+            {
+                <button type="button" @onclick="@(async () => { _search = ""; await LoadAsync(); })">✕</button>
+            }
+        </div>
+        <div class="mt-cats">
+            @foreach (var category in AllCategories)
+            {
+                <button type="button" class="@(_category == category ? "on" : "")" @onclick="@(() => PickCategory(category))">
+                    @CategoryIcon(category) @L[$"mat.cat.{category}"]
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (Visible.Count == 0)
+    {
+        <EmptyState Emoji="🧺" Title="@L["mat.none"]" Subtitle="@L["mat.noneSub"]" />
+    }
+    else
+    {
+        <div class="mt-grid">
+            @foreach (var item in Visible.Skip(_page * PageSize).Take(PageSize))
+            {
+                <article class="mt-card @(item.IsOut ? "out" : item.IsLow ? "low" : "")">
+                    <div class="hd">
+                        <span class="ic">@CategoryIcon(item.Category)</span>
+                        <div class="nm">
+                            <b>@item.Name</b>
+                            <small>@L[$"mat.cat.{item.Category}"]@(item.Supplier is null ? "" : $" · {item.Supplier}")</small>
+                        </div>
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight">
+                            <MudMenuItem OnClick="@(() => EditAsync(item))">@L["common.edit"]</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => DeleteAsync(item))">@L["common.delete"]</MudMenuItem>
+                        </MudMenu>
+                    </div>
+
+                    <div class="qty">
+                        <span class="big mf-ltr">@Trim(item.Quantity)</span>
+                        <span class="un">@L[$"mat.unit.{item.Unit}"]</span>
+                        @if (item.IsOut)
+                        {
+                            <span class="flag out">@L["mat.outOfStock"]</span>
+                        }
+                        else if (item.IsLow)
+                        {
+                            <span class="flag low">@L["mat.runningLow"]</span>
+                        }
+                    </div>
+
+                    @if (item.MinQuantity > 0)
+                    {
+                        var pct = item.MinQuantity <= 0 ? 100
+                            : (double)Math.Min(100, item.Quantity / (item.MinQuantity * 3) * 100);
+                        <div class="bar" title="@($"{L["mat.minLevel"]}: {Trim(item.MinQuantity)}")">
+                            <span class="fill" style="width:@pct.ToString("0.#")%"></span>
+                            <span class="mark"></span>
+                        </div>
+                    }
+
+                    <div class="ft">
+                        <span class="cost mf-ltr">@Fmt.Rial(item.UnitCost)<i>/@L[$"mat.unit.{item.Unit}"]</i></span>
+                        <span class="val mf-ltr">@Fmt.Rial(item.Value)</span>
+                    </div>
+
+                    @* Stock is not a number to fiddle with — it moves ONLY through purchase
+                       invoices (in) and order consumption (out). The button starts an invoice. *@
+                    <div class="acts">
+                        <button type="button" class="rs" @onclick="@(() => Nav.NavigateTo($"/materials/purchases?add={item.Id}"))">
+                            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Style="width:15px;height:15px;" /> @L["mat.buy"]
+                        </button>
+                    </div>
+                </article>
+            }
+        </div>
+        @if (Visible.Count > PageSize)
+        {
+            <Pager Page="_page" Pages="@(((Visible.Count - 1) / PageSize) + 1)" PageChanged="@(p => _page = p)" />
+        }
+    }
+}
+
+@code {
+    private StoreMaterialsDto? _data;
+    private string _category = "all";
+    private string _search = "";
+
+    private const int PageSize = 24;
+    private int _page;
+
+    /// <summary>"low" or "out" narrows the grid to what needs buying; null shows all.</summary>
+    private string? _only;
+
+    private static readonly string[] AllCategories =
+        ["all", "grain", "oil", "meat", "dairy", "vegetable", "spice", "drink", "packaging", "other"];
+
+    private List<StoreMaterialDto> Visible =>
+        (_data?.Items ?? [])
+            .Where(m => _only switch { "low" => m.IsLow, "out" => m.IsOut, _ => true })
+            .ToList();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _data = await Api.GetMaterialsAsync(_category, _search);
+
+    private async Task PickCategory(string category)
+    {
+        _category = category;
+        await LoadAsync();
+    }
+
+    private void Only(string kind) => _only = _only == kind ? null : kind;
+
+    /// <summary>3.000 kg reads worse than 3 kg — drop the noise, keep real decimals.</summary>
+    private static string Trim(decimal value) =>
+        value == Math.Floor(value) ? ((long)value).ToString("N0") : value.ToString("0.##");
+
+    private static string CategoryIcon(string category) => category switch
+    {
+        "grain" => "🌾",
+        "oil" => "🫒",
+        "meat" => "🥩",
+        "dairy" => "🧀",
+        "vegetable" => "🥬",
+        "spice" => "🧂",
+        "drink" => "🥤",
+        "packaging" => "📦",
+        "all" => "🍽️",
+        _ => "🧺",
+    };
+
+
+    private async Task EditAsync(StoreMaterialDto? item)
+    {
+        var parameters = new DialogParameters { ["Material"] = item };
+        var dialog = await Dialogs.ShowAsync<MaterialDialog>(
+            item is null ? L["mat.add"] : L["common.edit"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        if ((await dialog.Result) is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteAsync(StoreMaterialDto item)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(
+            L["common.areYouSure"], string.Format(L["mat.deleteAsk"], item.Name),
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (confirmed != true) return;
+
+        var (ok, error) = await Api.DeleteMaterialAsync(item.Id);
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(L["mat.deleted"], Severity.Success);
+        await LoadAsync();
+    }
+}

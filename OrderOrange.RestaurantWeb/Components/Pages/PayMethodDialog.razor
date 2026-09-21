@@ -1,0 +1,33 @@
+@inject LanguageService L
+
+@* The question that was postponed until the money actually moves: HOW is this
+   payment being made, today, at the till or the bank? *@
+
+<MudDialog>
+    <DialogContent>
+        <div class="pm-amt">
+            <small>@L["pay.paying"]</small>
+            <b class="mf-ltr">@Fmt.Rial(Amount)</b>
+            <span class="who">@Who</span>
+        </div>
+        <div class="pm-grid">
+            @foreach (var (key, icon) in new[] { ("cash", "💵"), ("card", "💳"), ("transfer", "🏦"), ("cheque", "📝") })
+            {
+                <button type="button" class="pm-opt" @onclick="@(() => Dialog.Close(DialogResult.Ok(key)))">
+                    <span class="ic">@icon</span>
+                    <b>@L[$"pay.m.{key}"]</b>
+                </button>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public decimal Amount { get; set; }
+    [Parameter] public string Who { get; set; } = "";
+}

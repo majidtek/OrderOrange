@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="bot-corpus.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="bot-corpus-hard.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="bot-locale-corpus.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OrderOrange.ApiServer\OrderOrange.ApiServer.csproj" />
+    <!-- Aliased: ClientWeb also has a top-level Program, which would collide
+         with the ApiServer Program used by WebApplicationFactory. -->
+    <ProjectReference Include="..\OrderOrange.ClientWeb\OrderOrange.ClientWeb.csproj" Aliases="clientweb" />
+    <!-- Aliased for the same reason — the partner app has its own Program too. -->
+    <ProjectReference Include="..\OrderOrange.RestaurantWeb\OrderOrange.RestaurantWeb.csproj" Aliases="partnerweb" />
+    <ProjectReference Include="..\OrderOrange.Shared\OrderOrange.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

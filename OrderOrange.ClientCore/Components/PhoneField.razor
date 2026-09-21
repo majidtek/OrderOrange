@@ -1,0 +1,152 @@
+@namespace OrderOrange.ClientCore.Components
+
+@* A phone number the modern way: a searchable country drop with real flags, the
+   digits grouped as they land, "+968 9512 0250" emitted upward. Kept COMPACT. *@
+
+<div class="pf-field @(_focus ? "on" : "")">
+    <div class="pf-ccwrap">
+        <button type="button" class="pf-ccbtn" @onclick="@(() => _open = !_open)">
+            <img class="pf-flag" src="https://flagcdn.com/w40/@(_country.Code).png" alt="@_country.Name" />
+            <span class="cd mf-ascii">@_country.Dial</span>
+            <MudIcon Icon="@Icons.Material.Filled.ExpandMore" Style="width:13px;height:13px;" />
+        </button>
+        @if (_open)
+        {
+            <div class="pf-veil" @onclick="@(() => _open = false)"></div>
+            <div class="pf-drop">
+                <input class="q" value="@_query" @oninput="@(e => _query = e.Value?.ToString() ?? "")"
+                       placeholder="🔍" autocomplete="off" />
+                <div class="list">
+                    @foreach (var option in Filtered)
+                    {
+                        var country = option;
+                        <button type="button" class="@(country.Code == _country.Code ? "on" : "")"
+                                @onclick="@(() => PickCountry(country))">
+                            <img class="pf-flag" src="https://flagcdn.com/w40/@(country.Code).png" alt="" />
+                            <b>@country.Name</b>
+                            <i>@country.Dial</i>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+    <div class="pf-in">
+        <label>@Label</label>
+        @* @onchange, NOT @oninput: typing stays in the browser at native speed and
+           the grouping lands when the finger leaves — no per-keystroke round trip. *@
+        <input value="@_number" @onchange="OnChange" inputmode="numeric" autocomplete="off"
+               placeholder="@_country.Hint"
+               @onfocus="@(() => _focus = true)" @onblur="@(() => _focus = false)" />
+    </div>
+</div>
+
+@code {
+    public sealed record Country(string Code, string Name, string Dial, int MaxDigits, string Hint);
+
+    /// <summary>Oman leads; the region follows; the rest of the world is a search away.</summary>
+    public static readonly Country[] Countries =
+    [
+        new("om", "Oman", "+968", 8, "9XXX XXXX"),
+        new("ae", "UAE", "+971", 9, "5X XXX XXXX"),
+        new("sa", "Saudi Arabia", "+966", 9, "5X XXX XXXX"),
+        new("qa", "Qatar", "+974", 8, "XXXX XXXX"),
+        new("kw", "Kuwait", "+965", 8, "XXXX XXXX"),
+        new("bh", "Bahrain", "+973", 8, "XXXX XXXX"),
+        new("ye", "Yemen", "+967", 9, "7XX XXX XXX"),
+        new("iq", "Iraq", "+964", 10, "7XX XXX XXXX"),
+        new("jo", "Jordan", "+962", 9, "7X XXX XXXX"),
+        new("lb", "Lebanon", "+961", 8, "XX XXX XXX"),
+        new("sy", "Syria", "+963", 9, "9XX XXX XXX"),
+        new("eg", "Egypt", "+20", 10, "1X XXXX XXXX"),
+        new("ma", "Morocco", "+212", 9, "6XX XXX XXX"),
+        new("dz", "Algeria", "+213", 9, "5XX XXX XXX"),
+        new("tn", "Tunisia", "+216", 8, "XX XXX XXX"),
+        new("ly", "Libya", "+218", 9, "9X XXX XXXX"),
+        new("sd", "Sudan", "+249", 9, "9XX XXX XXX"),
+        new("ir", "Iran", "+98", 10, "9XX XXX XXXX"),
+        new("pk", "Pakistan", "+92", 10, "3XX XXXXXXX"),
+        new("in", "India", "+91", 10, "XXXXX XXXXX"),
+        new("bd", "Bangladesh", "+880", 10, "1XXX XXXXXX"),
+        new("lk", "Sri Lanka", "+94", 9, "7X XXX XXXX"),
+        new("np", "Nepal", "+977", 10, "98XX XXX XXX"),
+        new("ph", "Philippines", "+63", 10, "9XX XXX XXXX"),
+        new("id", "Indonesia", "+62", 11, "8XX XXXX XXXX"),
+        new("my", "Malaysia", "+60", 10, "1X XXX XXXX"),
+        new("cn", "China", "+86", 11, "1XX XXXX XXXX"),
+        new("tr", "Türkiye", "+90", 10, "5XX XXX XXXX"),
+        new("ru", "Russia", "+7", 10, "9XX XXX XXXX"),
+        new("gb", "United Kingdom", "+44", 10, "7XXX XXXXXX"),
+        new("de", "Germany", "+49", 11, "15XX XXXXXXX"),
+        new("fr", "France", "+33", 9, "6 XX XX XX XX"),
+        new("es", "Spain", "+34", 9, "6XX XXX XXX"),
+        new("it", "Italy", "+39", 10, "3XX XXX XXXX"),
+        new("us", "USA", "+1", 10, "XXX XXX XXXX"),
+        new("ca", "Canada", "+1", 10, "XXX XXX XXXX"),
+    ];
+
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string Label { get; set; } = "";
+
+    private Country _country = Countries[0];
+    private string _number = "";
+    private string _query = "";
+    private bool _focus;
+    private bool _open;
+    private bool _parsed;
+
+    private IEnumerable<Country> Filtered =>
+        string.IsNullOrWhiteSpace(_query)
+            ? Countries
+            : Countries.Where(c =>
+                c.Name.Contains(_query.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                c.Dial.Contains(_query.Trim(), StringComparison.Ordinal) ||
+                c.Code.Contains(_query.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>An incoming "+971 5x…" picks its own flag; digits fall into groups.</summary>
+    protected override void OnParametersSet()
+    {
+        if (_parsed) return;
+        _parsed = true;
+        var value = (Value ?? "").Trim();
+        if (value.Length == 0) return;
+        var match = Countries.OrderByDescending(c => c.Dial.Length).FirstOrDefault(c => value.StartsWith(c.Dial));
+        if (match is not null)
+        {
+            _country = match;
+            value = value[match.Dial.Length..];
+        }
+        _number = Group(Digits(value));
+    }
+
+    private static string Digits(string raw) => new(raw.Where(char.IsDigit).ToArray());
+
+    private static string Group(string digits) =>
+        string.Join(" ", Enumerable.Range(0, (digits.Length + 3) / 4)
+            .Select(i => digits.Substring(i * 4, Math.Min(4, digits.Length - i * 4))));
+
+    private async Task PickCountry(Country country)
+    {
+        _country = country;
+        _open = false;
+        _query = "";
+        var digits = Digits(_number);
+        if (digits.Length > country.MaxDigits) _number = Group(digits[..country.MaxDigits]);
+        await Emit();
+    }
+
+    private async Task OnChange(ChangeEventArgs e)
+    {
+        var digits = Digits(e.Value?.ToString() ?? "");
+        if (digits.Length > _country.MaxDigits) digits = digits[.._country.MaxDigits];
+        _number = Group(digits);
+        await Emit();
+    }
+
+    private Task Emit()
+    {
+        var digits = Digits(_number);
+        return ValueChanged.InvokeAsync(digits.Length == 0 ? "" : $"{_country.Dial} {_number}");
+    }
+}

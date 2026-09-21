@@ -1,0 +1,889 @@
+﻿@inherits LayoutComponentBase
+@using OrderOrange.RestaurantWeb.Components.Pages
+@inject AppState State
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject LanguageService Lang
+@inject IJSRuntime JS
+@inject IDialogService Dialogs
+@inject ISessionPersistence Persistence
+@inject OrderOrange.RestaurantWeb.Services.ReceiptPrinter Printer
+@implements IDisposable
+
+<MudThemeProvider Theme="Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    @* These three render OUTSIDE the page tree — dialogs, menus, toasts. They must sit
+       inside the RTL provider or none of what they draw ever flips for Arabic/Persian/
+       Urdu, which is exactly the bug this fixed. *@
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    @* First visit: ONLY the picker renders; the portal loads once, in that language. *@
+    <LanguageGate />
+@if (!_gateOnly)
+{
+<SessionGate>
+    <SignedOut>
+        <LoginView AppName="OrderOrange Partner" GuideUrl="guide.html"
+                   Tagline="@Lang["login.ptrTagline"]"
+                   LogoUrl="_content/OrderOrange.ClientCore/logo.svg?v=4"
+                   PartnerRegister="true"
+                   RegisterHref="/register"
+                   PasswordOnly="true"
+                   GooglePartner="true"
+                   AllowedRoles="new[] { UserRole.RestaurantOwner }"
+                   WrongRoleMessage="@Lang["login.ptrWrong"]" />
+    </SignedOut>
+    <SignedIn>
+        @* One email may own several businesses. Until this session knows which one it is
+           working in, the choice screen sits over everything — same pattern as the
+           language gate. One store skips it entirely. *@
+        @if (_stores is { Count: > 1 } && !_storeChosen)
+        {
+            <div class="oo-storegate">
+                <div class="oo-storegate-card">
+                    <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mb-1">@Lang["partner.chooseStore"]</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@Lang["partner.chooseStoreSub"]</MudText>
+                    @foreach (var s in _stores)
+                    {
+                        var store = s;
+                        <button type="button" class="oo-store-tile @(store.Id == State.RestaurantId ? "on" : "")"
+                                @onclick="@(() => PickStore(store))" disabled="@_switching">
+                            @* Each business is recognised by its own logo when it has one. *@
+                            <span class="logo @(string.IsNullOrEmpty(store.LogoData) ? "" : "has-logo")">
+                                @if (store.LogoData is { Length: > 0 } gateLogo)
+                                {
+                                    <img src="@gateLogo" alt="@store.Name" />
+                                }
+                                else
+                                {
+                                    @store.LogoEmoji
+                                }
+                            </span>
+                            <span class="tx">
+                                <b>@store.Name</b>
+                                <i>@(store.IsApproved ? (store.IsOpen ? Lang["partner.open"] : Lang["partner.closed"]) : Lang["partner.awaiting"])</i>
+                            </span>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+        <CommandPalette @ref="_palette" />
+        @* The assistant now lives in the layout rather than on the dashboard, so the
+           app-bar spark and its floating button reach it from every page. *@
+        <PosBot @ref="_bot" />
+        @* Direct printing's hidden slip — hosted HERE so every page that settles an
+           invoice prints through the same door (see ReceiptPrinter). *@
+        @if (_printOrder is not null && _restaurant is not null)
+        {
+            <div class="pos-print-host">
+                <ReceiptView Order="_printOrder" Store="_restaurant" Design="@(_printDesign ?? ReceiptDesignDto.Default)" />
+            </div>
+        }
+        <MudLayout>
+            <MudAppBar Elevation="0" Class="mf-appbar mf-appbar-partner">
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                               OnClick="@(() => { _navSearch = ""; _navOpen = true; })" />
+                @if (_stores is { Count: > 1 })
+                {
+                    @* The brand doubles as the business switcher when there is a choice. *@
+                    <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Class="ml-2" ListClass="mf-me-list" Dense="true">
+                        <ActivatorContent>
+                            <div class="mf-brand" style="cursor: pointer;">
+                                <div class="mf-brand-mark @(string.IsNullOrEmpty(_restaurant?.LogoData) ? "" : "has-logo")">
+                                    @if (_restaurant?.LogoData is { Length: > 0 } brandLogo)
+                                    {
+                                        <img src="@brandLogo" alt="@State.RestaurantName" />
+                                    }
+                                    else
+                                    {
+                                        @(_restaurant?.LogoEmoji ?? "🏪")
+                                    }
+                                </div>
+                                <span class="mf-brand-name d-none d-sm-inline">@(State.RestaurantName ?? "OrderOrange Partner")</span>
+                                <MudIcon Icon="@Icons.Material.Filled.ExpandMore" Size="Size.Small" />
+                            </div>
+                        </ActivatorContent>
+                        <ChildContent>
+                            @foreach (var s in _stores)
+                            {
+                                var store = s;
+                                <MudMenuItem Disabled="@(store.Id == State.RestaurantId)"
+                                             OnClick="@(() => PickStore(store))">
+                                    <span class="oo-switch-row">
+                                        @if (store.LogoData is { Length: > 0 } menuLogo)
+                                        {
+                                            <img class="lg" src="@menuLogo" alt="@store.Name" />
+                                        }
+                                        else
+                                        {
+                                            <span class="em">@store.LogoEmoji</span>
+                                        }
+                                        @store.Name
+                                    </span>
+                                </MudMenuItem>
+                            }
+                            <MudDivider />
+                            <MudMenuItem Icon="@Icons.Material.Filled.AddBusiness" OnClick="AddBusiness">
+                                @Lang["partner.addBusiness"]
+                            </MudMenuItem>
+                        </ChildContent>
+                    </MudMenu>
+                }
+                else
+                {
+                    <div class="mf-brand ml-2">
+                        <div class="mf-brand-mark @(string.IsNullOrEmpty(_restaurant?.LogoData) ? "" : "has-logo")">
+                                    @if (_restaurant?.LogoData is { Length: > 0 } brandLogo)
+                                    {
+                                        <img src="@brandLogo" alt="@State.RestaurantName" />
+                                    }
+                                    else
+                                    {
+                                        @(_restaurant?.LogoEmoji ?? "🏪")
+                                    }
+                                </div>
+                        <span class="mf-brand-name d-none d-sm-inline">@(State.RestaurantName ?? "OrderOrange Partner")</span>
+                    </div>
+                }
+                <MudSpacer />
+                @* The everything-door: one box that reaches every page and record. *@
+                <button type="button" class="cp-launch d-none d-md-flex" @onclick="@(() => _palette?.Open())">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" Style="width:16px;height:16px;" />
+                    <span>@Lang["cp.placeholder"]</span>
+                    <kbd>Ctrl K</kbd>
+                </button>
+                <MudIconButton Icon="@Icons.Material.Filled.Search" Class="d-flex d-md-none"
+                               OnClick="@(() => _palette?.Open())" />
+                @* The spark: the order assistant, reachable from the bar as well as from
+                   its floating button. Same component either way — one conversation, not
+                   two that forget each other. *@
+                <button type="button" class="oo-spark" @onclick="OpenBot"
+                        title="@Lang["pbot.name"]" aria-label="@Lang["pbot.name"]">
+                    <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" />
+                </button>
+                @* Fullscreen toggle — plain onclick so the browser keeps the gesture. *@
+                <button type="button" class="mf-full-btn" onclick="mfFull.toggle()" title="@Lang["nav.fullscreen"]">
+                    <MudIcon Icon="@Icons.Material.Filled.Fullscreen" />
+                </button>
+                @* Rings when an order's deduction pushes an ingredient under its minimum. *@
+                <NotificationBell />
+                @if (_restaurant is not null)
+                {
+                    @if (!_restaurant.IsApproved)
+                    {
+                        <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" Size="Size.Small"
+                                 Class="mr-3 d-none d-sm-flex">
+                            @Lang["partner.awaiting"]
+                        </MudChip>
+                    }
+                    @* The open/closed switch moved to Settings — the bar shows only the STATE
+                       when the shop is closed, so a shut door is still impossible to miss. *@
+                    @if (!_restaurant.IsOpen)
+                    {
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Class="mr-2">
+                            @Lang["partner.closed"]
+                        </MudChip>
+                    }
+                }
+                <LanguageMenu Compact="true" />
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" ListClass="mf-me-list" Dense="true">
+                    <ActivatorContent>
+                        <MudAvatar Color="Color.Primary">
+                            @if (State.AvatarPhoto is { Length: > 0 } myFace)
+                            {
+                                <img src="@myFace" alt="" style="width:100%;height:100%;object-fit:cover;" />
+                            }
+                            else
+                            {
+                                @Initial
+                            }
+                        </MudAvatar>
+                    </ActivatorContent>
+                    <ChildContent>
+                        @* Your own face, changed where you already look for your name. *@
+                        <div class="px-3 py-2 mf-me-head">
+                            <AvatarPicker />
+                            <MudText Typo="Typo.subtitle2" Class="mt-2">@State.FullName</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mf-ltr">@State.Email</MudText>
+                        </div>
+                        <MudDivider />
+                        @* Also here, so a partner with ONE business (no switcher yet) can
+                           still open their second — the entry point must exist somewhere. *@
+                        <MudMenuItem Icon="@Icons.Material.Filled.AddBusiness" OnClick="AddBusiness">
+                            @Lang["partner.addBusiness"]
+                        </MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="SignOut">@Lang["common.signout"]</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+            </MudAppBar>
+            @* The navigation, as a modern fullscreen dialog: one search box, every door
+               of the app as a tile, grouped the way the old drawer grouped them. The
+               drawer itself is gone — this opens from the ☰ button on every screen size. *@
+            <MudDialog @bind-Visible="_navOpen" Options="NavDlgOptions" Class="pnav-dialog">
+                <DialogContent>
+                    <div class="pnav-top">
+                        <div class="pnav-search">
+                            <MudIcon Icon="@Icons.Material.Filled.Search" />
+                            <input placeholder="@($"{Lang["cp.placeholder"]}")" value="@_navSearch"
+                                   @oninput="@(e => _navSearch = e.Value?.ToString() ?? "")" />
+                            @if (_navSearch.Length > 0)
+                            {
+                                <button type="button" @onclick="@(() => _navSearch = "")">✕</button>
+                            }
+                        </div>
+                        <button type="button" class="pnav-close" @onclick="@(() => _navOpen = false)">✕</button>
+                    </div>
+
+                    @foreach (var section in NavSections)
+                    {
+                        var sec = section;
+                        if (sec.Show is not null && !sec.Show()) { continue; }
+                        var items = sec.Items.Where(i => (i.Show is null || i.Show()) && NavMatches(i)).ToList();
+                        if (items.Count == 0) { continue; }
+                        <div class="pnav-sec" style="--acc: @sec.Accent">
+                            @if (sec.Key.Length > 0)
+                            {
+                                <div class="pnav-h"><MudIcon Icon="@sec.Icon" /> @Lang[sec.Key]</div>
+                            }
+                            <div class="pnav-grid">
+                                @foreach (var entry in items)
+                                {
+                                    var item = entry;
+                                    var badge = item.Badge?.Invoke() ?? 0;
+                                    <button type="button" class="pnav-tile @(NavCurrent(item.Href) ? "on" : "")"
+                                            @onclick="@(() => GoNav(item.Href))">
+                                        <span class="ic">
+                                            <MudIcon Icon="@item.Icon" />
+                                            @if (badge > 0)
+                                            {
+                                                <span class="bd">@(badge > 99 ? "99+" : badge.ToString())</span>
+                                            }
+                                        </span>
+                                        <span class="lb">@Lang[item.Key]</span>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (_stores is { Count: > 0 } && RoleIn("owner") && _navSearch.Length == 0)
+                    {
+                        <div class="pnav-sec">
+                            <div class="pnav-h"><MudIcon Icon="@Icons.Material.Filled.Storefront" /> @Lang["partner.myBusinesses"]</div>
+                            <div class="pnav-grid">
+                                @foreach (var s in _stores)
+                                {
+                                    var store = s;
+                                    <button type="button" class="pnav-tile biz @(store.Id == State.RestaurantId ? "on" : "")"
+                                            disabled="@(store.Id == State.RestaurantId)"
+                                            @onclick="@(() => { _navOpen = false; _ = PickStore(store); })">
+                                        <span class="ic">
+                                            @if (store.LogoData is { Length: > 0 } navLogo)
+                                            {
+                                                <img src="@navLogo" alt="@store.Name" />
+                                            }
+                                            else
+                                            {
+                                                <span class="em">@store.LogoEmoji</span>
+                                            }
+                                        </span>
+                                        <span class="lb">@store.Name</span>
+                                    </button>
+                                }
+                                <button type="button" class="pnav-tile add" @onclick="@(() => { _navOpen = false; AddBusiness(); })">
+                                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.AddBusiness" /></span>
+                                    <span class="lb">@Lang["partner.addBusiness"]</span>
+                                </button>
+                            </div>
+                        </div>
+                    }
+
+                    @* Who you are, at the FOOT of the menu: face, name, and the two
+                       doors — another business (owner only) and out. One quiet row. *@
+                    @if (_navSearch.Length == 0)
+                    {
+                        <div class="pnav-me">
+                            <div class="id">
+                                <AvatarPicker />
+                                <div class="who">
+                                    <b>@State.FullName</b>
+                                    <small class="mf-ltr">@State.Email</small>
+                                </div>
+                            </div>
+                            @if (RoleIn("owner"))
+                            {
+                                <button type="button" class="row" @onclick="@(() => { _navOpen = false; AddBusiness(); })">
+                                    <MudIcon Icon="@Icons.Material.Filled.AddBusiness" /> @Lang["partner.addBusiness"]
+                                </button>
+                            }
+                            <button type="button" class="row exit" @onclick="@(() => { _navOpen = false; _ = SignOut(); })">
+                                <MudIcon Icon="@Icons.Material.Filled.Logout" /> @Lang["common.signout"]
+                            </button>
+                        </div>
+                    }
+
+                    @* "There is more" — in BOTH directions: a fade and chevron at the
+                       fold while rows wait below, and a matching up-chevron under the
+                       search bar once the top has scrolled away. The script keeps each
+                       honest, so neither shows when its direction is exhausted. *@
+                    <div class="pnav-fade"></div>
+                    <button type="button" class="pnav-more-hint" tabindex="-1" aria-hidden="true">▾</button>
+                    <button type="button" class="pnav-up-hint" tabindex="-1" aria-hidden="true">▴</button>
+                </DialogContent>
+            </MudDialog>
+
+            <MudMainContent Class="@(IsChat ? "pb-0" : IsPos ? "pb-2" : IsBoard ? "pb-2 mf-bg" : "pb-12 mf-bg")">
+                @* The POS is a till, the chat is a messenger, and the tables board
+                   is a floor: all three get the whole screen. *@
+                <MudContainer MaxWidth="@(IsPos || IsChat || IsBoard ? MaxWidth.False : MaxWidth.ExtraLarge)"
+                              Class="@(IsChat ? "pa-0" : IsPos || IsBoard ? "pt-3 px-3" : "pt-6")">
+                    <CascadingValue Value="this">
+                        @* Keyed by path: every navigation re-mounts this div, so each
+                           page ARRIVES instead of just appearing. *@
+                        <div class="pg-anim" @key="@(new Uri(Nav.Uri).AbsolutePath)">
+                            @Body
+                        </div>
+                    </CascadingValue>
+                </MudContainer>
+            </MudMainContent>
+        </MudLayout>
+    </SignedIn>
+</SessionGate>
+}
+</MudRTLProvider>
+
+@code {
+    internal static readonly MudTheme Theme = FoodTheme.Build();
+
+    private bool _drawerOpen = true;
+
+    // ---------- The navigation dialog (replaces the drawer) ----------
+    private bool _gateOnly;
+    private bool _navOpen;
+    private string _navSearch = "";
+
+    private static readonly DialogOptions NavDlgOptions = new()
+    {
+        FullScreen = true,
+        NoHeader = true,
+        CloseOnEscapeKey = true,
+    };
+
+    private sealed record NavItem(string Key, string Href, string Icon, Func<bool>? Show = null, Func<int>? Badge = null);
+    private sealed record NavSection(string Key, string Icon, List<NavItem> Items, Func<bool>? Show = null, string Accent = "#FF5A00");
+
+    /// <summary>
+    /// Every door of the app, grouped as the old drawer grouped them. Visibility lambdas
+    /// mirror the drawer's role/permission gates exactly — the dialog must never show a
+    /// page the server would 403.
+    /// </summary>
+    private List<NavSection> NavSections =>
+    [
+        new("", "",
+        [
+            new("nav.dashboard", "/", Icons.Material.Filled.Dashboard),
+            new("tchat.title", "/chat", Icons.Material.Filled.Forum, Badge: () => _teamUnread),
+            new("nav.tableChats", "/table-chats", Icons.Material.Filled.ChatBubbleOutline, Badge: () => _chatUnread),
+            new("nav.support", "/support", Icons.Material.Filled.SupportAgent, () => Can(Perm.Support)),
+        ]),
+        new("nav.operations", Icons.Material.Filled.PointOfSale,
+        [
+            new("nav.pos", "/pos", Icons.Material.Filled.PointOfSale, () => Can(Perm.Pos)),
+            new("nav.posTablet", "/pos-tablet", Icons.Material.Filled.TabletMac, () => Can(Perm.Pos)),
+            new("nav.liveorders", "/orders", Icons.Material.Filled.ReceiptLong),
+            new("kds.title", "/kds", Icons.Material.Filled.Tv, () => Can(Perm.Orders)),
+            new("deliv.title", "/deliveries", Icons.Material.Filled.DeliveryDining, () => _restaurant?.SelfDelivery == true && Can(Perm.Deliveries)),
+            new("nav.reservations", "/reservations", Icons.Material.Filled.EventAvailable, () => Can(Perm.Reservations)),
+            new("dc.title", "/discounts", Icons.Material.Filled.LocalOffer, () => Can(Perm.Discounts)),
+            new("ig.nav", "/instagram", OrderOrange.ClientCore.Services.BrandIcons.Instagram, () => Can(Perm.Settings)),
+            new("igp.nav", "/instagram/schedule", Icons.Material.Filled.Schedule, () => Can(Perm.Settings)),
+            new("igm.nav", "/instagram/menu", Icons.Material.Filled.PhotoSizeSelectActual, () => Can(Perm.Settings)),
+            new("nav.calendar", "/calendar", Icons.Material.Filled.CalendarMonth),
+            new("ct.title", "/contracts", Icons.Material.Filled.HistoryEdu, () => Can(Perm.Contracts)),
+            new("nav.allBills", "/bills", Icons.Material.Filled.ListAlt, () => Can(Perm.Bills)),
+            new("inv.title", "/invoices", Icons.Material.Filled.ReceiptLong, () => Can(Perm.InvoiceCancel) || Can(Perm.InvoiceEdit) || Can(Perm.Reports)),
+            new("nav.activeDeliveries", "/delivery", Icons.Material.Filled.TwoWheeler, () => Can(Perm.Deliveries)),
+            new("pur.title", "/materials/purchases", Icons.Material.Filled.LocalShipping, () => Can(Perm.Inventory)),
+            new("payp.title", "/materials/payments", Icons.Material.Filled.Payments, () => Can(Perm.Payments)),
+            new("nav.paySalaries", "/staff/payroll", Icons.Material.Filled.Payments, () => Can(Perm.Payroll)),
+            new("nav.attendance", "/attendance", Icons.Material.Filled.WhereToVote),
+            new("rcp.title", "/materials/recipes", Icons.Material.Filled.MenuBook, () => Can(Perm.InventoryView)),
+        ]),
+        // Every door here answers to its OWN key now — a custom role picks exactly
+        // which of them exist for its holder. The group shows if anything inside does.
+        new("nav.basicInfo", Icons.Material.Filled.Info,
+        [
+            new("nav.products", "/menu", Icons.Material.Filled.Inventory2, () => Can(Perm.MenuView)),
+            new("nav.customers", "/customers", Icons.Material.Filled.ContactPhone, () => Can(Perm.CustomersView)),
+            new("ly.title", "/loyalty", Icons.Material.Filled.Loyalty, () => Can(Perm.Customers)),
+            new("nav.surveys", "/surveys", Icons.Material.Filled.Poll, () => Can(Perm.Surveys)),
+            new("mat.title", "/materials", Icons.Material.Filled.Kitchen, () => Can(Perm.InventoryView)),
+            new("wh.title", "/warehouses", Icons.Material.Filled.Warehouse, () => Can(Perm.Inventory)),
+            new("waste.title", "/waste", Icons.Material.Filled.DeleteSweep, () => Can(Perm.Inventory)),
+            new("sup.title", "/materials/suppliers", Icons.Material.Filled.Contacts, () => Can(Perm.SuppliersView)),
+            new("nav.tables", "/tables", Icons.Material.Filled.TableRestaurant, () => Can(Perm.TablesView)),
+            new("nav.tableQr", "/table-qr", Icons.Material.Filled.QrCode, () => Can(Perm.TablesView)),
+            new("lbl.title", "/labels", Icons.Material.Filled.QrCode2, () => Can(Perm.MenuView)),
+            new("pr.title", "/print-routing", Icons.Material.Filled.Print, () => Can(Perm.Settings)),
+            new("nav.storeQr", "/qr", Icons.Material.Filled.QrCode2, () => Can(Perm.Settings)),
+        ], () => Can(Perm.MenuView) || Can(Perm.CustomersView) || Can(Perm.InventoryView)
+              || Can(Perm.SuppliersView) || Can(Perm.TablesView) || Can(Perm.Settings), "#0EA5E9"),
+        new("nav.reports", Icons.Material.Filled.Assessment,
+        [
+            new("drep.title", "/daily-report", Icons.Material.Filled.Today),
+            new("nav.sales", "/reports", Icons.Material.Filled.TrendingUp),
+            new("nav.products", "/reports/products", Icons.Material.Filled.Inventory2),
+            new("nav.customersR", "/reports/customers", Icons.Material.Filled.Group),
+            new("nav.chatHistory", "/chat-history", Icons.Material.Filled.History),
+            new("nav.visits", "/visits", Icons.Material.Filled.Insights),
+            new("cons.title", "/materials/report", Icons.Material.Filled.DonutSmall),
+            new("cap.title", "/materials/capacity", Icons.Material.Filled.Insights),
+            new("nav.salaryReport", "/staff/salary-report", Icons.Material.Filled.Assessment),
+            new("nav.attendanceReport", "/attendance/report", Icons.Material.Filled.Schedule, () => Can(Perm.Staff)),
+            new("nav.delivered", "/delivery/done", Icons.Material.Filled.TaskAlt),
+            new("nav.billReport", "/bills/report", Icons.Material.Filled.PieChart),
+            new("nav.reviews", "/reviews", Icons.Material.Filled.Star),
+            new("nav.surveyReport", "/surveys/report", Icons.Material.Filled.Poll, () => Can(Perm.Surveys)),
+        ], () => RoleIn("owner", "manager"), "#8B5CF6"),
+        new("nav.settings", Icons.Material.Filled.Settings,
+        [
+            new("nav.settings", "/settings", Icons.Material.Filled.Storefront),
+            new("nav.invoiceDesigner", "/invoice-design", Icons.Material.Filled.Brush),
+        ], () => Can(Perm.Settings), "#64748B"),
+        new("nav.userMgmt", Icons.Material.Filled.ManageAccounts,
+        [
+            new("nav.teamUsers", "/team-users", Icons.Material.Filled.AdminPanelSettings, () => Can(Perm.Team)),
+            new("roles.title", "/team-roles", Icons.Material.Filled.Key, () => Can(Perm.Team)),
+            new("ua.title", "/team-activity", Icons.Material.Filled.MonitorHeart, () => Can(Perm.Team)),
+            new("nav.staff", "/staff", Icons.Material.Filled.Groups, () => Can(Perm.Staff)),
+        ], () => Can(Perm.Team) || Can(Perm.Staff), "#10B981"),
+    ];
+
+    private bool NavMatches(NavItem item) =>
+        _navSearch.Trim() is not { Length: > 0 } t
+        || Lang[item.Key].ToString().Contains(t, StringComparison.OrdinalIgnoreCase);
+
+    private bool NavCurrent(string href)
+    {
+        var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].TrimEnd('/');
+        return href == "/" ? path == "/" : path.Equals(href, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void GoNav(string href)
+    {
+        _navOpen = false;
+        Nav.NavigateTo(href);
+    }
+
+
+    // ---------- Chat badges: table-guest unread + team-DM unread, on a quiet poll ----------
+    private int _chatUnread;
+    private int _teamUnread;
+    private System.Threading.Timer? _chatTimer;
+    private System.Threading.Timer? _beatTimer;
+
+    private async Task PollChatUnread()
+    {
+        if (!State.IsAuthenticated) return;
+        try
+        {
+            var unread = await Api.GetTableChatUnreadAsync();
+            if (unread is not null)
+            {
+                var previous = _chatUnread;
+                if (unread.Count != previous)
+                {
+                    _chatUnread = unread.Count;
+                    await InvokeAsync(StateHasChanged);
+                }
+                if (unread.Count > previous)
+                {
+                    // New words from a table: say it, and ring it.
+                    Snackbar.Add(Lang["tc.newMsg"], Severity.Info, options => { options.Icon = Icons.Material.Filled.ChatBubble; });
+                    try { await JS.InvokeVoidAsync("mfDing"); } catch { }
+                }
+            }
+
+            // Team direct messages waiting for me.
+            var team = await Api.GetTeamUnreadAsync();
+            if (team != _teamUnread)
+            {
+                _teamUnread = team;
+                await InvokeAsync(StateHasChanged);
+            }
+
+            // Share the counts with the rest of the circuit — the dashboard shortcut and
+            // the command palette badge off these rather than polling again themselves.
+            State.SetChatUnread(_chatUnread, _teamUnread);
+        }
+        catch { /* the next poll will try again */ }
+    }
+
+    /// <summary>Which drawer rooms this session's key opens. No role claim = an owner.</summary>
+    /// <summary>
+    /// Does this session's key open that door? Same catalog the API enforces with,
+    /// so a hidden menu item is a genuinely closed endpoint, not just a tidy screen.
+    /// </summary>
+    private bool Can(string permission) => Perm.Allows(State.StoreRole, State.Perms, permission);
+
+    private bool RoleIn(params string[] roles) =>
+        roles.Contains(string.IsNullOrEmpty(State.StoreRole) ? "owner" : State.StoreRole);
+
+    private CommandPalette? _palette;
+    private PosBot? _bot;
+
+    private Task OpenBot() => _bot?.OpenAsync() ?? Task.CompletedTask;
+
+    // The drawer is an accordion: at most one group open, opening one closes the rest.
+    private string? _openGroup;
+
+    private void ToggleGroup(string name, bool open) =>
+        _openGroup = open ? name : (_openGroup == name ? null : _openGroup);
+
+    /// <summary>The inbox page calls this after marking everything seen.</summary>
+    public void ClearChatBadge()
+    {
+        _chatUnread = 0;
+        StateHasChanged();
+    }
+
+    /// <summary>The tables board is a floor — it too gets the full window.</summary>
+    private bool IsBoard => new Uri(Nav.Uri).AbsolutePath.StartsWith("/tables", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The till wants every pixel — the layout drops its width cap for /pos.</summary>
+    private bool IsPos => new Uri(Nav.Uri).AbsolutePath.StartsWith("/pos", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The chat is a messenger screen: no container, no padding, full bleed.</summary>
+    private bool IsChat => new Uri(Nav.Uri).AbsolutePath.StartsWith("/table-chats", StringComparison.OrdinalIgnoreCase);
+
+    private MyRestaurantDto? _restaurant;
+
+    private string Initial => string.IsNullOrEmpty(State.FullName) ? "?" : State.FullName[..1].ToUpper();
+
+    // Running in the browser, every API call carries the visitor's own address — nothing
+    // to capture here; the API records what it sees.
+    private string? _visitorIp;
+
+    protected override void OnInitialized()
+    {
+        Printer.Fire += OnDirectPrint;
+        Api.PermissionRefused += OnPermissionRefused;
+        State.Changed += OnStateChanged;
+        Lang.Changed += OnLangChanged;
+        Nav.LocationChanged += OnLocationChanged;
+        _chatTimer = new System.Threading.Timer(async _ => await PollChatUnread(), null, 8000, 12000);
+        // Presence decays after three minutes; beat well inside that.
+        _beatTimer = new System.Threading.Timer(async _ =>
+        {
+            if (!State.IsAuthenticated) return;
+            try { await Api.TeamBeatAsync(new Uri(Nav.Uri).AbsolutePath); } catch { }
+        }, null, 3000, 90000);
+    }
+
+    /// <summary>All businesses this account owns; the gate shows when there are several.</summary>
+    private List<StoreSummaryDto>? _stores;
+
+    /// <summary>
+    /// True once THIS browser tab has picked (or confirmed) which business to work in.
+    /// Kept in sessionStorage: switching forces a full reload, and without the stored
+    /// flag the gate would greet the reload by asking all over again.
+    /// </summary>
+    private bool _storeChosen = true;   // assume chosen until the browser says otherwise — no flash
+
+    private const string ChosenKey = "oo.storeChosen";
+
+    private bool _switching;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (State.IsAuthenticated && _restaurant is null)
+        {
+            _restaurant = await Api.GetMyRestaurantAsync();
+            ApplyCurrency();
+            _stores ??= await Api.GetMyStoresAsync();
+            await IssueFormPassAsync();
+            await NudgeUnfinishedStoreAsync();
+        }
+    }
+
+    private bool _completionChecked;
+
+    /// <summary>
+    /// A store that walked away mid-wizard gets carried back to its exact step
+    /// on the next sign-in; a finished store lands on the dashboard, always.
+    /// </summary>
+    private bool _gateIssued;
+
+    private async Task IssueFormPassAsync()
+    {
+        if (_gateIssued) return;
+        _gateIssued = true;
+        try { await JS.InvokeVoidAsync("eval", $"window.ooFT='{OrderOrange.Shared.FormToken.Create()}'"); } catch { }
+    }
+
+    private async Task NudgeUnfinishedStoreAsync()
+    {
+        if (_completionChecked || _restaurant is not { IsApproved: false } ||
+            !RoleIn("owner") || new Uri(Nav.Uri).AbsolutePath != "/")
+        {
+            return;
+        }
+        _completionChecked = true;
+        // Mid-wizard? Straight back to the exact step they left. A finished
+        // registration stays on the dashboard — no detours to settings.
+        if (_restaurant.SetupStep >= 0)
+        {
+            Nav.NavigateTo("/register");
+        }
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Working in another business means a fresh token scoped to it — the server
+    /// re-issues the session, and a full reload makes every page refetch as that store.
+    /// Picking the one already active just closes the gate.
+    /// </summary>
+    // Its own page, not a dialog — comfortable on a phone, and the draft survives an
+    // unwanted reload. The page switches into the new business itself on success.
+    private void AddBusiness() => Nav.NavigateTo("/add-business");
+
+    private async Task PickStore(StoreSummaryDto store)
+    {
+        try { await JS.InvokeVoidAsync("sessionStorage.setItem", ChosenKey, "1"); } catch { }
+
+        if (store.Id == State.RestaurantId)
+        {
+            _storeChosen = true;
+            return;
+        }
+
+        _switching = true;
+        try
+        {
+            var (session, error) = await Api.SwitchStoreAsync(store.Id);
+            if (session is null)
+            {
+                Snackbar.Add(error ?? Lang["common.updateFail"], Severity.Error);
+                return;
+            }
+            State.SignIn(session);
+            // Saved HERE, not left to the fire-and-forget mirror: the reload below races
+            // that mirror, and losing the race restored the previous business.
+            try { await Persistence.SaveAsync(session); } catch { }
+            Nav.NavigateTo("/", forceLoad: true);
+        }
+        finally
+        {
+            _switching = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // While the nav dialog is open, keep its "more below" cue wired — the call
+        // is idempotent, and rows appear/disappear as the search box is typed in.
+        if (_navOpen)
+        {
+            try { await JS.InvokeVoidAsync("mfNavHint.attach"); } catch { }
+        }
+
+        if (firstRender)
+        {
+            await Lang.EnsureLoadedAsync();
+            // A first-timer picks a language BEFORE the portal loads — once, not twice.
+            // The language question is no longer asked on arrival: the portal opens in
+            // English and the language button changes it. Gating here left the whole
+            // app blank once the welcome picker was removed.
+            await TryImpersonateFromUrlAsync();
+
+            // Fresh tab (no stored choice) = ask, once the store list shows there is
+            // actually something to choose between.
+            try
+            {
+                var chosen = await JS.InvokeAsync<string?>("sessionStorage.getItem", ChosenKey);
+                if (chosen is null)
+                {
+                    _storeChosen = false;
+                    StateHasChanged();
+                }
+            }
+            catch { /* storage unavailable — never block the app on the gate */ }
+        }
+    }
+
+    /// <summary>
+    /// "Open as partner" from the admin panel arrives here as ?impersonate=CODE. The code
+    /// is single-use and two minutes old at most; trading it in signs this browser in as
+    /// the partner. The query string is stripped afterwards so a copied or bookmarked URL
+    /// carries a dead code and nothing else.
+    /// </summary>
+    private async Task TryImpersonateFromUrlAsync()
+    {
+        var query = new Uri(Nav.Uri).Query;
+        var code = System.Web.HttpUtility.ParseQueryString(query).Get("impersonate");
+        if (string.IsNullOrWhiteSpace(code)) return;
+
+        var (user, error) = await Api.RedeemImpersonationAsync(code);
+        if (user is not null && user.Role == UserRole.RestaurantOwner)
+        {
+            State.SignIn(user);
+            Snackbar.Add($"Signed in as {user.FullName}", Severity.Info);
+        }
+        else if (error is not null)
+        {
+            Snackbar.Add(error, Severity.Error);
+        }
+        Nav.NavigateTo("/", replace: true);
+    }
+
+
+    /// <summary>
+    /// Teaches the shared formatter what this shop calls its money, so every price in the
+    /// portal — till, reports, invoices, the kitchen screen — says the same thing. Safe as
+    /// a static here: the partner app is WebAssembly, one browser per person.
+    /// </summary>
+    private void ApplyCurrency() =>
+        Fmt.Symbol = _restaurant?.Currency is { Length: > 0 } c ? c : Fmt.DefaultSymbol;
+
+    /// <summary>Pages call this after saving settings so the app bar reflects the change.</summary>
+    public async Task RefreshRestaurant()
+    {
+        _restaurant = await Api.GetMyRestaurantAsync();
+        ApplyCurrency();
+        StateHasChanged();
+    }
+
+    private async Task ToggleOpen(bool _)
+    {
+        var (ok, error) = await Api.ToggleOpenAsync();
+        if (!ok) Snackbar.Add(error ?? Lang["common.updateFail"], Severity.Error);
+        await RefreshRestaurant();
+        Snackbar.Add(_restaurant?.IsOpen == true ? Lang["partner.nowOpen"] : Lang["partner.nowClosed"],
+            _restaurant?.IsOpen == true ? Severity.Success : Severity.Warning);
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => TrackVisit();
+
+    private void TrackVisit()
+    {
+        if (!State.IsAuthenticated) return;
+        var page = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+        _ = Api.TrackVisitAsync("Partner", page, _visitorIp);
+        _ = Api.TeamBeatAsync(page);          // presence, not a log line
+    }
+
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnStateChanged() => _ = InvokeAsync(async () =>
+    {
+        // A waiter's home is the tablet till: signing in (or coming back to the site)
+        // as a waiter lands on /pos-tablet instead of the dashboard.
+        if (State.IsAuthenticated && string.Equals(State.StoreRole, "waiter", StringComparison.OrdinalIgnoreCase))
+        {
+            var here = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+            if (here == "/") Nav.NavigateTo("/pos-tablet", replace: true);
+        }
+
+        // The session switched to a DIFFERENT business (add-business or the picker):
+        // drop the loaded store so the app bar and switch toggle refetch as the new one.
+        if (State.IsAuthenticated && _restaurant is not null &&
+            State.RestaurantId is { } rid && rid != _restaurant.Id)
+        {
+            _restaurant = null;
+            _stores = null;
+        }
+
+        if (State.IsAuthenticated && _restaurant is null)
+        {
+            _restaurant = await Api.GetMyRestaurantAsync();
+            ApplyCurrency();
+            _stores ??= await Api.GetMyStoresAsync();
+        }
+        if (!State.IsAuthenticated)
+            _restaurant = null;
+        TrackVisit();
+        StateHasChanged();
+    });
+
+    private async Task SignOut()
+    {
+        // The business choice belongs to the SESSION, not the tab: whoever signs in next
+        // — even the same person — must be asked again. Clearing it here is what makes
+        // the picker greet every fresh login, while reloads mid-session stay quiet.
+        try { await JS.InvokeVoidAsync("sessionStorage.removeItem", ChosenKey); } catch { }
+        _storeChosen = false;
+
+        // And the previous owner's store must not flash under the next login.
+        _restaurant = null;
+        _stores = null;
+
+        State.SignOut();
+        Nav.NavigateTo("/");
+    }
+
+    // ---------- Direct printing, centralised ----------
+    private OrderDto? _printOrder;
+    private ReceiptDesignDto? _printDesign;
+
+    /// <summary>
+    /// Every settled invoice arrives here. The Settings gate lives HERE, once —
+    /// callers just report the order and the layout decides whether paper moves.
+    /// </summary>
+    private async Task OnDirectPrint(OrderDto order)
+    {
+        if (_restaurant?.DirectPrint != true) return;
+        try
+        {
+            if (await JS.InvokeAsync<bool>("mfPrint.isAndroid"))
+            {
+                // Render on THIS page and fire RawBT inside the tap's grace window.
+                _printDesign ??= await Api.GetMyReceiptDesignAsync() ?? ReceiptDesignDto.Default;
+                _printOrder = order;
+                StateHasChanged();
+                await Task.Delay(120);
+                await JS.InvokeVoidAsync("mfPrint.rawbtNow");
+                _ = ClearPrintHostSoon();
+                return;
+            }
+            await JS.InvokeVoidAsync("mfPrint.direct", $"/invoice/{order.Id}?print=1");
+        }
+        catch { /* printing is a convenience — it must never block the till */ }
+    }
+
+    private async Task ClearPrintHostSoon()
+    {
+        await Task.Delay(6000);
+        _printOrder = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// A member tried a door their role does not open. A DIALOG, not a toast: sheets
+    /// sit over the page, and a refusal must be seen from anywhere, every time.
+    /// </summary>
+    private void OnPermissionRefused(string message) =>
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                var parameters = new DialogParameters<PermDeniedDialog> { { d => d.Message, message } };
+                await Dialogs.ShowAsync<PermDeniedDialog>("", parameters,
+                    new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
+            }
+            catch { /* a closing circuit must not crash on a courtesy */ }
+        });
+
+    public void Dispose()
+    {
+        Printer.Fire -= OnDirectPrint;
+        Api.PermissionRefused -= OnPermissionRefused;
+        State.Changed -= OnStateChanged;
+        Lang.Changed -= OnLangChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+        _chatTimer?.Dispose();
+        _beatTimer?.Dispose();
+    }
+}

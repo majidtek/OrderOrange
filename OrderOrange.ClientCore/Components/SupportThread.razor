@@ -1,0 +1,125 @@
+@namespace OrderOrange.ClientCore.Components
+@using OrderOrange.ClientCore.Services
+@inject IJSRuntime JS
+@inject LanguageService L
+
+@* One ticket, read top to bottom: the timeline strip, then every message and status
+   change, then the reply box. Side says which bubbles are "mine". *@
+
+@if (Detail is not null)
+{
+    var t = Detail.Ticket;
+    var step = SupportUi.TimelineStep(t.Status);
+    <div class="tk-timeline">
+        @foreach (var (label, i) in new[] { ("tk.timeline.opened", 0), ("tk.timeline.working", 1), ("tk.timeline.resolved", 2), ("tk.timeline.closed", 3) })
+        {
+            <div class="tk-step @(i < step ? "done" : i == step ? "now" : "")">
+                <span class="dot">@(i < step ? "✓" : "")</span>
+                <small>@L[label]</small>
+            </div>
+        }
+    </div>
+
+    <div class="tk-thread">
+        @foreach (var m in Detail.Messages)
+        {
+            var msg = m;
+            if (msg.Kind == "status")
+            {
+                <div class="tk-sys">
+                    <span class="pill @SupportUi.StatusCss(msg.StatusTo ?? "open")">@L[$"tk.s.{msg.StatusTo ?? "open"}"]</span>
+                    <small>@msg.AuthorName · @Fmt.TimeAgo(msg.At, L)</small>
+                    @if (!string.IsNullOrWhiteSpace(msg.Text))
+                    {
+                        <p>@msg.Text</p>
+                    }
+                </div>
+                continue;
+            }
+            var mine = msg.From == Side;
+            <div class="tk-msg @(mine ? "mine" : "theirs") @(msg.From == "support" ? "support" : "")">
+                <div class="who">
+                    <span class="av">@(msg.From == "support" ? "🎧" : "🏪")</span>
+                    <b>@(mine ? L["tk.you"] : msg.From == "support" ? L["tk.support"] : msg.AuthorName)</b>
+                    <small title="@msg.At.ToString("yyyy-MM-dd HH:mm")">@Fmt.TimeAgo(msg.At, L)</small>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(msg.Text))
+                {
+                    <p>@msg.Text</p>
+                }
+                @if (msg.Attachments.Count > 0)
+                {
+                    <div class="tk-atts">
+                        @foreach (var a in msg.Attachments)
+                        {
+                            var att = a;
+                            <button type="button" class="tk-att @(att.IsImage ? "img" : "")" @onclick="@(() => OpenAttachment(att))" disabled="@(_opening == att.Id)">
+                                <span class="ic">@(att.IsImage ? "🖼️" : "📄")</span>
+                                <span class="nm">@att.Name</span>
+                                <small>@SupportUi.HumanSize(att.Size)@(_opening == att.Id ? " …" : "")</small>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (CanReply)
+    {
+        <SupportComposer @ref="_composer" Placeholder="@(ReplyHint ?? L["tk.f.reply"])" OnSend="Send" Compact="true" Lines="2" />
+    }
+
+    @if (_lightbox is not null)
+    {
+        <div class="oo-modal tk-light" @onclick="@(() => _lightbox = null)">
+            <img src="@_lightbox.Data" alt="@_lightbox.Name" @onclick:stopPropagation="true" />
+            <div class="tk-light-bar" @onclick:stopPropagation="true">
+                <b>@_lightbox.Name</b>
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                           OnClick="@(() => Download(_lightbox))">@L["tk.download"]</MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => _lightbox = null)" />
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public SupportTicketDetailDto? Detail { get; set; }
+    /// <summary>"partner" or "support" — whose bubbles sit on the right.</summary>
+    [Parameter] public string Side { get; set; } = "partner";
+    [Parameter] public bool CanReply { get; set; } = true;
+    [Parameter] public string? ReplyHint { get; set; }
+    [Parameter] public EventCallback<TicketReplyRequest> OnReply { get; set; }
+    /// <summary>Fetches one attachment's bytes — the two apps use different endpoints.</summary>
+    [Parameter] public Func<string, Task<SupportFileDto?>>? FetchFile { get; set; }
+
+    private SupportComposer? _composer;
+    private string? _opening;
+    private SupportFileDto? _lightbox;
+
+    private async Task Send(TicketReplyRequest req)
+    {
+        await OnReply.InvokeAsync(req);
+        _composer?.Clear();
+    }
+
+    private async Task OpenAttachment(SupportAttachmentDto att)
+    {
+        if (FetchFile is null) return;
+        _opening = att.Id;
+        try
+        {
+            var file = await FetchFile(att.Id);
+            if (file is null) return;
+            if (att.IsImage) _lightbox = file;
+            else await Download(file);
+        }
+        finally { _opening = null; }
+    }
+
+    private async Task Download(SupportFileDto file)
+    {
+        try { await JS.InvokeVoidAsync("mfSupport.download", file.Data, file.Name); } catch { }
+    }
+}

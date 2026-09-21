@@ -1,0 +1,103 @@
+﻿@page "/reports"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Admin — Reports</PageTitle>
+
+<PageHeader Title="@L["nav.reports"]" Subtitle="@L["admin.reportsSub"]">
+    <Actions>
+        <div style="max-width: 300px;">
+            <MfDateRangePicker @bind-DateRange="_range" Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Assessment"
+                   OnClick="Reload">@L["admin.run"]</MudButton>
+    </Actions>
+</PageHeader>
+
+@if (_report is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <MudGrid Spacing="3" Class="mb-2">
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.ordersCount"]" Value="@_report.Orders.ToString()" Icon="@Icons.Material.Filled.ReceiptLong" Color="Color.Primary"
+                      Hint="@($"{_report.Delivered} ✓ · {_report.Cancelled + _report.Rejected} ✗")" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.revenue"]" Value="@Fmt.Rial(_report.Revenue).Value" Icon="@Icons.Material.Filled.Payments" Color="Color.Success" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.commission"]" Value="@Fmt.Rial(_report.Commission).Value" Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.avgOrder"]" Value="@Fmt.Rial(_report.AvgOrderValue).Value" Icon="@Icons.Material.Filled.TrendingUp" Color="Color.Warning"
+                      Hint="@($"{L["admin.newCustomers"]}: {_report.NewCustomers}")" />
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+        <MudText Typo="Typo.h6" Class="mb-1">@L["admin.revenuePerDay"]</MudText>
+        <MudChart ChartType="ChartType.Line" ChartSeries="_series" XAxisLabels="_labels"
+                  Height="300px" Width="100%" ChartOptions="ChartOpts" />
+    </MudPaper>
+
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl">
+        <MudText Typo="Typo.h6" Class="mb-3">@L["admin.perRestaurant"]</MudText>
+        <MudTable Items="_report.PerRestaurant" Hover="true" Dense="true" Elevation="0" RowsPerPage="25">
+            <HeaderContent>
+                <MudTh>@L["nav.restaurants"]</MudTh>
+                <MudTh>@L["admin.ordersCount"]</MudTh>
+                <MudTh>@L["status.Delivered"]</MudTh>
+                <MudTh>@L["admin.revenue"]</MudTh>
+                <MudTh>@L["admin.commission"]</MudTh>
+                <MudTh>@L["admin.rating"]</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.LogoEmoji @context.Name</MudTd>
+                <MudTd>@context.Orders</MudTd>
+                <MudTd>@context.Delivered</MudTd>
+                <MudTd><b>@Fmt.Rial(context.Revenue)</b></MudTd>
+                <MudTd>@Fmt.Rial(context.Commission)</MudTd>
+                <MudTd>@(context.Rating > 0 ? $"{context.Rating:0.0} ★" : "—")</MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager RowsPerPageOptions="new[] { 10, 25, 50 }" />
+            </PagerContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private static readonly ChartOptions ChartOpts = new()
+    {
+        LineStrokeWidth = 3,
+        InterpolationOption = InterpolationOption.NaturalSpline
+    };
+
+    private AdminReportDto? _report;
+    private DateRange _range = new(DateTime.Today.AddDays(-29), DateTime.Today);
+    private List<ChartSeries> _series = [];
+    private string[] _labels = [];
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        var from = _range.Start ?? DateTime.Today.AddDays(-29);
+        var to = _range.End ?? DateTime.Today;
+        // Reports are capped at one month per run — keeps them instant at big-data scale.
+        if (to > from.AddMonths(1)) { to = from.AddMonths(1); _range = new DateRange(from, to); }
+        _report = await Api.GetReportAsync(from, to);
+        if (_report is null) return;
+
+        var step = Math.Max(1, _report.PerDay.Count / 8);
+        _labels = _report.PerDay.Select((d, i) => i % step == 0 ? d.Date.ToString("dd/MM") : "").ToArray();
+        _series =
+        [
+            new ChartSeries { Name = L["admin.revenue"], Data = _report.PerDay.Select(d => (double)d.Revenue).ToArray() },
+            new ChartSeries { Name = L["admin.ordersCount"], Data = _report.PerDay.Select(d => (double)d.Orders).ToArray() }
+        ];
+    }
+}

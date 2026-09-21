@@ -1,0 +1,288 @@
+@page "/visits"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Partner — Visits</PageTitle>
+
+@* ---------- Command-center hero: period chips + glass stat tiles ---------- *@
+<div class="pv-hero mb-4">
+    <div class="pv-glow g1"></div>
+    <div class="pv-glow g2"></div>
+    <div class="pv-hero-top">
+        <div>
+            <div class="t">📊 @L["vis.title"]</div>
+            <div class="s">@L["vis.sub"]</div>
+        </div>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <ReportExport Title="@L["vis.title"]" Subtitle="@L["vis.sub"]" RangeLabel="@RangeLabel"
+                          Columns="@ExportColumns" Fetch="ExportRows" FetchTotals="ExportTotals" />
+            <span class="pv-live"><span class="dot"></span> @L["vis.live"]</span>
+        </div>
+    </div>
+    <div class="pv-chips">
+        <button type="button" class="@(_period == "day" ? "on" : "")" @onclick="@(() => Load("day"))">@L["vis.today"]</button>
+        <button type="button" class="@(_period == "week" ? "on" : "")" @onclick="@(() => Load("week"))">@L["vis.days7"]</button>
+        <button type="button" class="@(_period == "month" ? "on" : "")" @onclick="@(() => Load("month"))">@L["vis.days30"]</button>
+        <button type="button" class="@(_period == "year" ? "on" : "")" @onclick="@(() => Load("year"))">@L["vis.year"]</button>
+    </div>
+    <div class="pv-tiles">
+        <div class="pv-tile">
+            <div class="ic">🏪</div>
+            <div class="v">@(_stats?.StoreVisits.ToString("N0") ?? "…")</div>
+            <div class="k">@L["vis.storeVisits"]</div>
+            @if (_stats is not null && _stats.PrevStoreVisits > 0)
+            {
+                var delta = Delta(_stats.StoreVisits, _stats.PrevStoreVisits);
+                <span class="tr @(delta >= 0 ? "up" : "down") mf-ltr">@(delta >= 0 ? "▲" : "▼") @Math.Abs(delta).ToString("0.#")%</span>
+            }
+        </div>
+        <div class="pv-tile">
+            <div class="ic">👀</div>
+            <div class="v">@(_stats?.ProductViews.ToString("N0") ?? "…")</div>
+            <div class="k">@L["vis.productViews"]</div>
+            @if (_stats is not null && _stats.PrevProductViews > 0)
+            {
+                var delta = Delta(_stats.ProductViews, _stats.PrevProductViews);
+                <span class="tr @(delta >= 0 ? "up" : "down") mf-ltr">@(delta >= 0 ? "▲" : "▼") @Math.Abs(delta).ToString("0.#")%</span>
+            }
+        </div>
+        <div class="pv-tile">
+            <div class="ic">⚡</div>
+            <div class="v">@PeakValue</div>
+            <div class="k">@L["vis.peak"] · @PeakLabel</div>
+        </div>
+        <div class="pv-tile">
+            <div class="ic">📅</div>
+            <div class="v">@Average</div>
+            <div class="k">@string.Format(L["vis.avgPer"], UnitName)</div>
+        </div>
+    </div>
+</div>
+
+@if (_stats is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    @* ---------- Traffic chart ---------- *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4 pv-card">
+        <div class="d-flex align-center mb-4" style="gap: 8px;">
+            <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["vis.traffic"]</MudText>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">@RangeLabel</MudChip>
+        </div>
+        @if (_stats.Buckets.All(b => b.Count == 0))
+        {
+            <div class="pv-empty">
+                <span class="em">🌱</span>
+                <MudText Typo="Typo.body1" Style="font-weight: 700;">@L["vis.noVisits"]</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@L["vis.noVisitsSub"]</MudText>
+            </div>
+        }
+        else
+        {
+            var max = Math.Max(1, _stats.Buckets.Max(b => b.Count));
+            var mean = _stats.Buckets.Average(b => b.Count);
+            var dense = _stats.Buckets.Count > 14;   // 30-day and hourly views crowd their labels
+            <div class="pv-plot">
+                @* The average as a dashed rule: every bar can be read against it. *@
+                <div class="pv-mean" style="bottom:@((mean * 100 / max).ToString("0.#"))%">
+                    <span class="mf-ltr">@L["vis.avgLine"] @mean.ToString("0")</span>
+                </div>
+                <div class="pv-bars @(dense ? "dense" : "")">
+                    @for (var i = 0; i < _stats.Buckets.Count; i++)
+                    {
+                        var bucket = _stats.Buckets[i];
+                        var showLabel = !dense || i % (_stats.Buckets.Count / 7 + 1) == 0;
+                        <div class="pv-col @(bucket.Count == max ? "top" : "")" title="@($"{bucket.Label}: {bucket.Count}")">
+                            @if (bucket.Count > 0 && !dense)
+                            {
+                                <span class="n">@bucket.Count</span>
+                            }
+                            <div class="bar" style="height: @(Math.Max(3, bucket.Count * 100 / max))%"></div>
+                            <span class="lb">@(showLabel ? bucket.Label : "")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* ---------- What the shape of that chart actually means ---------- *@
+            <div class="pv-insights">
+                <div class="pv-ins">
+                    <span class="ic">🏆</span>
+                    <div><b>@BusiestLabel</b><small>@L["vis.busiest"]</small></div>
+                </div>
+                <div class="pv-ins">
+                    <span class="ic">🌙</span>
+                    <div><b>@QuietestLabel</b><small>@L["vis.quietest"]</small></div>
+                </div>
+                <div class="pv-ins">
+                    <span class="ic">🔎</span>
+                    <div><b class="mf-ltr">@ViewsPerVisit</b><small>@L["vis.perVisit"]</small></div>
+                </div>
+            </div>
+        }
+    </MudPaper>
+
+    @* ---------- Product leaderboard ---------- *@
+    <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+        <div class="d-flex align-center mb-4" style="gap: 8px;">
+            <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["vis.mostViewed"]</MudText>
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">@L["vis.topN"] @_stats.TopProducts.Count</MudChip>
+        </div>
+        @if (_stats.TopProducts.Count == 0)
+        {
+            <div class="pv-empty">
+                <span class="em">🔍</span>
+                <MudText Typo="Typo.body1" Style="font-weight: 700;">@L["vis.noViews"]</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@L["vis.noViewsSub"]</MudText>
+            </div>
+        }
+        else
+        {
+            var top = Math.Max(1, _stats.TopProducts[0].Views);
+            for (var i = 0; i < _stats.TopProducts.Count; i++)
+            {
+                var product = _stats.TopProducts[i];
+                var rank = i + 1;
+                <div class="pv-prod">
+                    <span class="rk r@(Math.Min(rank, 4))">@rank</span>
+                    @if (FoodPhoto.ForDish(product.Name) is string photo)
+                    {
+                        <img class="th" src="@photo" alt="@product.Name" loading="lazy" />
+                    }
+                    else
+                    {
+                        <span class="th em">🛍️</span>
+                    }
+                    <div class="mid">
+                        <span class="nm">@product.Name</span>
+                        <div class="meter"><div class="fill" style="width: @(product.Views * 100 / top)%"></div></div>
+                    </div>
+                    <span class="ct">
+                        @product.Views.ToString("N0")
+                        <small>
+                            @if (_stats.ProductViews > 0)
+                            {
+                                @($"{product.Views * 100.0 / _stats.ProductViews:0.#}% · ")
+                            }
+                            @L["vis.views"]
+                        </small>
+                    </span>
+                </div>
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    private StoreVisitStatsDto? _stats;
+    private string _period = "week";
+
+    private string UnitName => _period switch { "day" => L["w.hour"], "year" => L["w.month"], _ => L["w.date"] };
+
+    private string RangeLabel => _period switch
+    {
+        "day" => L["vis.todayHour"],
+        "month" => L["vis.last30"],
+        "year" => L["vis.last12m"],
+        _ => L["vis.last7"]
+    };
+
+    // ---------- Export ----------
+    // The traffic curve, one row per bucket, with the most-viewed dishes appended so
+    // the sheet answers both "when were they here" and "what were they looking at".
+
+    private List<ExportColumnDto> ExportColumns =>
+    [
+        new(UnitName, Width: 18),
+        new(L["vis.storeVisits"], Numeric: true),
+    ];
+
+    private Task<List<List<string>>> ExportRows()
+    {
+        if (_stats is null) return Task.FromResult(new List<List<string>>());
+        var rows = _stats.Buckets
+            .Select(b => new List<string> { b.Label, b.Count.ToString() })
+            .ToList();
+
+        if (_stats.TopProducts.Count > 0)
+        {
+            rows.Add(["", ""]);
+            rows.Add([L["vis.mostViewed"], L["vis.productViews"]]);
+            rows.AddRange(_stats.TopProducts.Select(p => new List<string> { p.Name, p.Views.ToString() }));
+        }
+        return Task.FromResult(rows);
+    }
+
+    private Task<List<string>?> ExportTotals() =>
+        Task.FromResult<List<string>?>(_stats is null ? null :
+            [L["common.total"], _stats.StoreVisits.ToString()]);
+
+    private string PeakValue
+    {
+        get
+        {
+            var peak = _stats?.Buckets.MaxBy(b => b.Count);
+            return peak is null || peak.Count == 0 ? "—" : peak.Count.ToString("N0");
+        }
+    }
+
+    private string PeakLabel
+    {
+        get
+        {
+            var peak = _stats?.Buckets.MaxBy(b => b.Count);
+            return peak is null || peak.Count == 0 ? L["vis.quiet"] : _period == "day" ? $"{peak.Label}:00" : peak.Label;
+        }
+    }
+
+    private string Average
+    {
+        get
+        {
+            if (_stats is null || _stats.Buckets.Count == 0) return "…";
+            return ((double)_stats.StoreVisits / _stats.Buckets.Count).ToString("0.#");
+        }
+    }
+
+    /// <summary>Percent change against the same length of time just before this one.</summary>
+    private static double Delta(int now, int before) =>
+        before == 0 ? 0 : (now - before) * 100.0 / before;
+
+    private string BusiestLabel
+    {
+        get
+        {
+            var peak = _stats?.Buckets.Where(b => b.Count > 0).MaxBy(b => b.Count);
+            return peak is null ? "—" : _period == "day" ? $"{peak.Label}:00" : peak.Label;
+        }
+    }
+
+    private string QuietestLabel
+    {
+        get
+        {
+            // Buckets that are still in the future would always win "quietest".
+            var seen = _stats?.Buckets.Where(b => b.Count > 0).ToList();
+            if (seen is not { Count: > 1 }) return "—";
+            var low = seen.MinBy(b => b.Count)!;
+            return _period == "day" ? $"{low.Label}:00" : low.Label;
+        }
+    }
+
+    /// <summary>How many dishes the average visitor opens — browse depth.</summary>
+    private string ViewsPerVisit =>
+        _stats is null || _stats.StoreVisits == 0
+            ? "—"
+            : ((double)_stats.ProductViews / _stats.StoreVisits).ToString("0.0");
+
+    protected override Task OnInitializedAsync() => Load(_period);
+
+    private async Task Load(string period)
+    {
+        _period = period;
+        _stats = null;
+        _stats = await Api.GetMyVisitStatsAsync(period);
+    }
+}

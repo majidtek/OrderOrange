@@ -1,0 +1,53 @@
+@namespace OrderOrange.ClientCore.Components
+@inject IDialogService Dialogs
+
+@* Time twin of MfDatePicker: read-only field, 24-hour clock in the top-level dialog layer
+   (CalendarDialog with Time=true, closed by its OK button). Time/TimeChanged so @bind-Time works. *@
+<MudTextField T="string" Value="@Text" ReadOnly="true" Label="@Label" Variant="Variant" Margin="Margin"
+              Class="@("mf-date mf-time " + Class)" Style="@Style" Disabled="Disabled"
+              Adornment="Adornment" AdornmentIcon="@Icons.Material.Filled.Schedule"
+              OnAdornmentClick="OpenAsync" @onclick="OpenAsync"
+              Clearable="Clearable" OnClearButtonClick="ClearAsync" />
+
+@code {
+    [Parameter] public TimeSpan? Time { get; set; }
+    [Parameter] public EventCallback<TimeSpan?> TimeChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string TimeFormat { get; set; } = "HH:mm";
+    [Parameter] public Variant Variant { get; set; } = Variant.Outlined;
+    [Parameter] public Margin Margin { get; set; } = Margin.Dense;
+    [Parameter] public Adornment Adornment { get; set; } = Adornment.End;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public bool Clearable { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private string Text => Time is { } t
+        ? DateTime.Today.Add(t).ToString(TimeFormat, System.Globalization.CultureInfo.InvariantCulture)
+        : "";
+
+    private async Task OpenAsync()
+    {
+        if (Disabled) return;
+        var parameters = new DialogParameters
+        {
+            [nameof(CalendarDialog.Time)] = true,
+            [nameof(CalendarDialog.TimeValue)] = Time,
+        };
+        var options = new DialogOptions { NoHeader = true, MaxWidth = MaxWidth.ExtraSmall, CloseOnEscapeKey = true, BackdropClick = true };
+        var dialog = await Dialogs.ShowAsync<CalendarDialog>("", parameters, options);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: TimeSpan picked } && picked != Time)
+        {
+            Time = picked;
+            await TimeChanged.InvokeAsync(picked);
+        }
+    }
+
+    private async Task ClearAsync()
+    {
+        if (Time is null) return;
+        Time = null;
+        await TimeChanged.InvokeAsync(null);
+    }
+}

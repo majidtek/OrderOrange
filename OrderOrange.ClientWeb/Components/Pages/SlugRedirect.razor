@@ -1,0 +1,56 @@
+@page "/{Slug:nonfile}"
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject LanguageService L
+
+@* orderorange.com/mazagh — the shop's own short address, printed on QR sheets and easy to
+   read out loud. This route is a catch-all for a single path segment, so it MUST resolve
+   the handle through the API and step aside politely when it is not a shop: Blazor routes
+   by exact template first, which keeps every real page (/checkout, /orders, /profile…)
+   ahead of this one — only genuinely unmatched one-segment paths land here. *@
+
+@if (_notFound)
+{
+    <div class="d-flex flex-column align-center justify-center pa-12" style="gap: 12px; min-height: 50vh;">
+        <div style="font-size: 64px;">🔎</div>
+        <MudText Typo="Typo.h6">@L["slug.notFound"]</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/">@L["slug.goHome"]</MudButton>
+    </div>
+}
+else
+{
+    <div class="d-flex align-center justify-center pa-12" style="min-height: 50vh;">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    </div>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private bool _notFound;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _notFound = false;
+
+        // A bare number is the store id itself: orderorange.com/5000217 opens the shop
+        // just like orderorange.com/mazagh does. The id is printed on every QR sheet, so
+        // it must be typeable straight into the address bar.
+        if (int.TryParse(Slug, out var storeId) && storeId > 0)
+        {
+            Nav.NavigateTo(StorePath.For(storeId), replace: true);
+            return;
+        }
+
+        var hit = await Api.ResolveSlugAsync(Slug);
+        if (hit is not null)
+        {
+            // replace: the /mazagh hop should not sit in history, or Back bounces through it.
+            Nav.NavigateTo(StorePath.For(hit.Id), replace: true);
+        }
+        else
+        {
+            _notFound = true;
+        }
+    }
+}

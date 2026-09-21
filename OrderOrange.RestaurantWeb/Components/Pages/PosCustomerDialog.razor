@@ -1,0 +1,59 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* Who is this sale for? Someone from the store's book — searchable — or just the
+   anonymous walk-up. Picking here never creates accounts; it only tags the bill. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">👤 @L["cust.title"]</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField T="string" Value="_search" ValueChanged="OnSearch" Placeholder="@L["cust.search"]"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Clearable="true"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mb-2" />
+
+        <div class="oo-picker-list" style="max-height: 48vh;">
+            <button type="button" class="oo-picker-tile" @onclick="@(() => Dialog.Close(DialogResult.Ok((object)WalkIn)))">
+                <span class="em">🚶</span>
+                <span class="nm">@L["pos.walkin"]</span>
+            </button>
+            @foreach (var c in _customers ?? [])
+            {
+                var customer = c;
+                <button type="button" class="oo-picker-tile" @onclick="@(() => Dialog.Close(DialogResult.Ok((object)customer)))">
+                    <span class="em">👤</span>
+                    <span class="nm">@customer.Name <small class="mf-ltr" style="color:#888;">@customer.Phone</small></span>
+                </button>
+            }
+            @if (_customers is { Count: 0 })
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="my-2">
+                    @L["cust.emptyTitle"]
+                </MudText>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    /// <summary>Sentinel the dialog returns for "no book customer — anonymous walk-up".</summary>
+    public static readonly object WalkIn = new();
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private List<StoreCustomerDto>? _customers;
+    private string _search = "";
+
+    protected override async Task OnInitializedAsync() =>
+        _customers = await Api.GetStoreCustomersAsync() ?? [];
+
+    private async Task OnSearch(string value)
+    {
+        _search = value ?? "";
+        _customers = await Api.GetStoreCustomersAsync(_search) ?? [];
+    }
+}

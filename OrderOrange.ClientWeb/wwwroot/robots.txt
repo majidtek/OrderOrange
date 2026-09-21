@@ -1,0 +1,32 @@
+# OrderOrange — what a search engine may look at.
+#
+# Only two kinds of page are worth indexing: the home page and a shop's own page.
+# Everything else is either private to one customer (their basket, orders, addresses,
+# a delivery they are tracking) or a sign-in step, and none of it means anything to a
+# stranger arriving from a search result.
+
+User-agent: *
+
+Disallow: /checkout
+Disallow: /orders
+Disallow: /profile
+Disallow: /addresses
+Disallow: /signin/
+Disallow: /track/
+Disallow: /bill/
+Disallow: /reserve/
+Disallow: /reserve-table/
+Disallow: /tab-invoice/
+Disallow: /contract/
+Disallow: /my-reservations
+Disallow: /reservations
+Disallow: /survey/
+Disallow: /chat
+
+# Blazor's own plumbing — no content, and crawling it wastes the budget.
+Disallow: /_blazor
+Disallow: /_framework/
+
+Allow: /
+
+Sitemap: https://www.orderorange.com/sitemap.xml

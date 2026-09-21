@@ -1,0 +1,73 @@
+﻿@inject ApiClient Api
+@inject LanguageService L
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField Margin="Margin.Dense" @bind-Value="_code" Label="@L["admin.code"]" Variant="Variant.Outlined" Class="mb-3"
+                      Placeholder="@L["admin.couponPh"]" />
+        <div class="d-flex" style="gap: 12px;">
+            <MudNumericField Margin="Margin.Dense" @bind-Value="_percent" Label="@L["admin.discountPct"]" Variant="Variant.Outlined"
+                             Min="1m" Max="100m" Class="mb-3" />
+            <MudNumericField Margin="Margin.Dense" @bind-Value="_minOrder" Label="@L["admin.minOrderOmr"]" Variant="Variant.Outlined"
+                             Format="0.000" Min="0m" Step="0.500m" Class="mb-3" />
+        </div>
+        <div class="d-flex" style="gap: 12px;">
+            <MfDatePicker Margin="Margin.Dense" @bind-Date="_expiresAt" Label="@L["admin.expiresOpt"]" Variant="Variant.Outlined"
+                           Clearable="true" Class="mb-3" />
+            <MudNumericField Margin="Margin.Dense" @bind-Value="_maxUses" Label="@L["admin.maxUses"]" Variant="Variant.Outlined" Min="1" Class="mb-3" />
+        </div>
+        <MudSwitch T="bool" @bind-Value="_isActive" Label="@L["admin.active"]" Color="Color.Success" />
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy">@L["admin.saveCoupon"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public CouponDto? Existing { get; set; }
+
+    private string _code = "";
+    private decimal _percent = 10m;
+    private decimal _minOrder = 1.000m;
+    private DateTime? _expiresAt;
+    private int _maxUses = 100;
+    private bool _isActive = true;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null) return;
+        _code = Existing.Code;
+        _percent = Existing.Percent;
+        _minOrder = Existing.MinOrder;
+        _expiresAt = Existing.ExpiresAt;
+        _maxUses = Existing.MaxUses;
+        _isActive = Existing.IsActive;
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var request = new SaveCouponRequest(_code, _percent, _minOrder, _expiresAt, _isActive, _maxUses);
+            var (ok, error) = Existing is null
+                ? await Api.CreateCouponAsync(request)
+                : await Api.UpdateCouponAsync(Existing.Id, request);
+            if (!ok) { _error = error; return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

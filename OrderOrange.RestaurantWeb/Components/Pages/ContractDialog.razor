@@ -1,0 +1,193 @@
+﻿@using Microsoft.JSInterop
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+@* Writing (or rewriting) one agreement: who it is for, what goods each delivery
+   carries, how often, for how long, and the agreed monthly price. Opened with
+   AsCopy, an existing contract becomes the DRAFT for a new one. *@
+
+<MudDialog Class="ct-dlg">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">
+            @(Existing is null || AsCopy ? L["ct.new"] : L["ct.edit"])
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="@L["ct.customer"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      MaxLength="80" Class="mb-3" />
+        <div class="d-flex gap-3 mb-3">
+            <MudTextField @bind-Value="_email" Label="@L["common.email"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          InputMode="InputMode.email" MaxLength="300" Class="mf-ltr" HelperText="@L["ct.emailsHint"]" />
+            <MudTextField @bind-Value="_phone" Label="@L["common.phone"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          InputMode="InputMode.tel" MaxLength="20" Class="mf-ltr" />
+        </div>
+
+        @* The goods. Free-typed, or picked off the store's own menu with one tap. *@
+        <MudText Typo="Typo.subtitle2" Style="font-weight: 800;" Class="mb-1">@L["ct.products"]</MudText>
+        @for (var i = 0; i < _lines.Count; i++)
+        {
+            var idx = i;
+            <div class="d-flex align-center gap-2 mb-2">
+                <MudAutocomplete T="string" @bind-Value="_lines[idx].Name" Label="@L["partner.productName"]"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" MaxItems="8" Clearable="true"
+                                 CoerceValue="true" SearchFunc="SearchMenu" Style="flex: 1;" />
+                <MudNumericField T="int" @bind-Value="_lines[idx].Quantity" Label="@L["inv.qty"]" Min="1" Max="10000"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Style="width: 90px;" />
+                <MudNumericField T="decimal" @bind-Value="_lines[idx].UnitPrice" Label="@L["partner.price"]" Min="0" Format="0.000"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Style="width: 110px;" />
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                               Disabled="@(_lines.Count == 1)" OnClick="@(() => _lines.RemoveAt(idx))" />
+            </div>
+        }
+        <MudButton StartIcon="@Icons.Material.Filled.Add" Size="Size.Small" Class="mb-3"
+                   OnClick="@(() => _lines.Add(new LineEdit()))">@L["ct.addLine"]</MudButton>
+
+        <div class="d-flex gap-3 mb-3">
+            <MudNumericField T="int" @bind-Value="_timesPerMonth" Label="@L["ct.perMonth"]" Min="1" Max="31"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <MudNumericField T="int" @bind-Value="_months" Label="@L["ct.months"]" Min="0" Max="60"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@L["ct.monthsHint"]" />
+            <MudNumericField T="decimal" @bind-Value="_monthlyPrice" Label="@L["ct.monthly"]" Min="0" Format="0.000"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </div>
+        <MfDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_start" Label="@L["ct.starts"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       Class="mb-3" />
+        <MudTextField @bind-Value="_note" Label="@L["rsv.note"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Lines="2" MaxLength="400" />
+
+        @* Ready-made wording, one tap to use. The + saves whatever is typed above as a
+           suggestion of the owner's own (kept in this browser), the × forgets it. *@
+        <div class="ct-sugs">
+            @foreach (var suggestion in BuiltIn.Concat(_customSugs))
+            {
+                var s = suggestion;
+                <button type="button" class="sug @(_customSugs.Contains(s) ? "own" : "")" @onclick="@(() => _note = s)">
+                    @s
+                    @if (_customSugs.Contains(s))
+                    {
+                        <span class="x" @onclick:stopPropagation @onclick="@(() => ForgetSug(s))">×</span>
+                    }
+                </button>
+            }
+            @if (!string.IsNullOrWhiteSpace(_note) && !BuiltIn.Contains(_note!.Trim()) && !_customSugs.Contains(_note!.Trim()))
+            {
+                <button type="button" class="sug add" title="@L["ct.sugSave"]" @onclick="SaveSug">＋ @L["ct.sugSave"]</button>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="Save">
+            @if (_busy) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" /> }
+            @L["common.save"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public ContractDto? Existing { get; set; }
+
+    /// <summary>The existing contract is only a DRAFT: saving creates a new one.</summary>
+    [Parameter] public bool AsCopy { get; set; }
+
+    private sealed class LineEdit
+    {
+        public string Name = "";
+        public int Quantity = 1;
+        public decimal UnitPrice;
+    }
+
+    private string _name = "";
+    private string _email = "";
+    private string _phone = "";
+    private List<LineEdit> _lines = [new()];
+    private int _timesPerMonth = 10;
+    private int _months = 1;
+    private decimal _monthlyPrice;
+    private DateTime? _start = DateTime.Today;
+    private string? _note;
+    private bool _busy;
+
+    private List<string> _menu = [];
+    private List<string> _customSugs = [];
+    private List<string> BuiltIn => [L["ct.sug1"], L["ct.sug2"], L["ct.sug3"]];
+
+    private const string SugKey = "oo-ct-sugs";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Existing is { } c)
+        {
+            _name = c.CustomerName; _email = c.CustomerEmail; _phone = c.CustomerPhone;
+            _lines = c.Lines.Select(l => new LineEdit { Name = l.Name, Quantity = l.Quantity, UnitPrice = l.UnitPrice }).ToList();
+            if (_lines.Count == 0) _lines = [new()];
+            _timesPerMonth = c.TimesPerMonth; _months = c.Months; _monthlyPrice = c.MonthlyPrice;
+            _start = AsCopy ? DateTime.Today : c.StartDate;
+            _note = c.Note;
+            // A draft copies the TERMS; the person they are for is typed fresh.
+            if (AsCopy) { _name = ""; _email = ""; _phone = ""; }
+        }
+        // The store's own menu feeds the product picker; typing anything else is fine too.
+        _menu = (await Api.GetMyMenuBasicAsync())?.SelectMany(cat => cat.Items).Select(i => i.Name).Distinct().ToList() ?? [];
+        try
+        {
+            var raw = await JS.InvokeAsync<string?>("localStorage.getItem", SugKey);
+            if (raw is { Length: > 0 })
+                _customSugs = System.Text.Json.JsonSerializer.Deserialize<List<string>>(raw) ?? [];
+        }
+        catch (JSException) { }
+    }
+
+    private async Task SaveSug()
+    {
+        var text = (_note ?? "").Trim();
+        if (text.Length is 0 or > 400 || _customSugs.Contains(text)) return;
+        _customSugs.Add(text);
+        if (_customSugs.Count > 12) _customSugs.RemoveAt(0);
+        await PersistSugs();
+    }
+
+    private async Task ForgetSug(string text)
+    {
+        _customSugs.Remove(text);
+        await PersistSugs();
+    }
+
+    private async Task PersistSugs()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", SugKey,
+                System.Text.Json.JsonSerializer.Serialize(_customSugs));
+        }
+        catch (JSException) { }
+    }
+
+    private Task<IEnumerable<string>> SearchMenu(string? value, CancellationToken _) =>
+        Task.FromResult(string.IsNullOrWhiteSpace(value)
+            ? _menu.Take(8)
+            : _menu.Where(m => m.Contains(value, StringComparison.OrdinalIgnoreCase)).Take(8));
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            var req = new SaveContractRequest(
+                _name.Trim(), _email.Trim(), _phone.Trim(),
+                _lines.Where(l => !string.IsNullOrWhiteSpace(l.Name))
+                      .Select(l => new ContractLineDto(l.Name.Trim(), l.Quantity, l.UnitPrice)).ToList(),
+                _timesPerMonth, _months, _monthlyPrice,
+                _start ?? DateTime.Today, _note);
+            var (saved, error) = Existing is null || AsCopy
+                ? await Api.CreateContractAsync(req)
+                : await Api.UpdateContractAsync(Existing.Id, req);
+            if (saved is null) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+            Dialog.Close(DialogResult.Ok(saved));
+        }
+        finally { _busy = false; }
+    }
+}

@@ -1,0 +1,269 @@
+@page "/track/{Id:int}"
+@inject ApiClient Api
+@inject IDialogService Dialogs
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject IConfiguration Config
+@implements IDisposable
+
+<PageTitle>OrderOrange — Track order</PageTitle>
+
+@if (_order is null && !_loadFailed)
+{
+    <Loader FullPage="true" Label="@L["common.loadingOrder"]" />
+}
+else if (_order is null)
+{
+    @* The order doesn't exist, isn't this customer's, or the id in the URL is wrong —
+       say so instead of spinning forever. *@
+    <div class="tk-missing">
+        <div class="tk-missing-emoji">🧾</div>
+        <MudText Typo="Typo.h5" Class="mb-1">@L["track.notFoundTitle"]</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-5">@L["track.notFoundSub"]</MudText>
+        <div class="tk-missing-actions">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" DisableElevation="true"
+                       StartIcon="@Icons.Material.Filled.ReceiptLong" Href="/orders">@L["nav.orders"]</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Home" Href="/">@L["nav.home"]</MudButton>
+        </div>
+    </div>
+}
+else
+{
+    <AutoRefresh OnRefresh="Reload" Seconds="5" />
+
+    <div class="mf-track-hero mb-5">
+        <div class="d-flex align-center flex-wrap" style="gap: 14px;">
+            <div style="font-size: 46px;">@HeroEmoji</div>
+            <div class="flex-grow-1">
+                <MudText Typo="Typo.h5">@HeroTitle</MudText>
+                <MudText Typo="Typo.body2" Style="opacity: .9;">@HeroSubtitle</MudText>
+            </div>
+            @if (_order.Status is not (OrderStatus.Delivered or OrderStatus.Cancelled or OrderStatus.Rejected))
+            {
+                <MudChip T="string" Color="Color.Dark" Variant="Variant.Filled" Size="Size.Large">
+                    ~@_order.EstimatedMinutes min
+                </MudChip>
+            }
+        </div>
+
+        @if (_order.Status is not (OrderStatus.Cancelled or OrderStatus.Rejected))
+        {
+            <MudProgressLinear Value="@Progress" Color="Color.Dark" Rounded="true" Size="Size.Large" Class="mt-4" />
+            <div class="d-flex justify-space-between mt-2" style="opacity: .85;">
+                <MudText Typo="Typo.caption">@L["track.progressPlaced"]</MudText>
+                <MudText Typo="Typo.caption">@L["track.progressKitchen"]</MudText>
+                <MudText Typo="Typo.caption">@L["track.progressOnTheWay"]</MudText>
+                <MudText Typo="Typo.caption">@L["track.progressDelivered"]</MudText>
+            </div>
+        }
+    </div>
+
+    @* ---------- Live rider map ---------- *@
+    @if (ShowLiveMap)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-4">
+            <div class="d-flex align-center flex-wrap mb-2" style="gap: 10px;">
+                @* Courier identity: real photo + name + vehicle plate. *@
+                @if (Avatars.Url(_order.DriverAvatar) is string driverPhoto)
+                {
+                    <img src="@driverPhoto" alt="@_order.DriverName" class="mf-courier-photo" />
+                }
+                else
+                {
+                    <div class="mf-courier-photo mf-courier-fallback">🛵</div>
+                }
+                <div style="min-width: 0;">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight: 800; line-height: 1.15;">
+                        @(_order.DriverName ?? _order.CourierName ?? L["track.courier"])
+                    </MudText>
+                    @if (!string.IsNullOrWhiteSpace(_order.DriverPlate))
+                    {
+                        <span class="mf-plate">@(_order.DriverVehicle == VehicleType.Car ? "🚗" : "🏍️") @_order.DriverPlate</span>
+                    }
+                </div>
+                <MudSpacer />
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled"
+                         Icon="@Icons.Material.Filled.Schedule">
+                    ~@Eta.ToString("HH:mm")
+                </MudChip>
+                @if (_driverLocation is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
+                        📍 @Fmt.TimeAgo(_driverLocation.At, L)
+                    </MudChip>
+                }
+            </div>
+            <div id="@LiveMapId" style="height: 280px; border-radius: 14px; overflow: hidden; background: var(--mud-palette-gray-light);"></div>
+            @if (_driverLocation is null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">
+                    @L["track.waitingGps"]
+                </MudText>
+            }
+        </MudPaper>
+    }
+
+    <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl">
+        <OrderView Order="_order" ShowCustomer="false" />
+
+        <div class="d-flex flex-wrap mt-2" style="gap: 8px;">
+            @if (_order.Status == OrderStatus.Pending)
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Cancel"
+                           OnClick="CancelOrder">@L["track.cancelOrder"]</MudButton>
+            }
+            @if (_order.Status == OrderStatus.Delivered && !_order.HasReview)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Star"
+                           OnClick="Review">@L["track.rate"]</MudButton>
+            }
+            <MudButton Variant="Variant.Text" Href="/orders" StartIcon="@Icons.Material.Filled.ReceiptLong">@L["track.allOrders"]</MudButton>
+        </div>
+    </MudPaper>
+
+    @* Chat floats where the thumb lives — always reachable while tracking. *@
+    @if (_order.Status is not (OrderStatus.Cancelled or OrderStatus.Rejected))
+    {
+        <button type="button" class="mf-chat-fab" @onclick="OpenChat" title="@L["driver.chat"]">
+            <MudIcon Icon="@Icons.Material.Filled.ChatBubble" />
+        </button>
+    }
+}
+
+@code {
+    private const string LiveMapId = "mf-live-map";
+
+    [Parameter] public int Id { get; set; }
+
+    private OrderDto? _order;
+    private DriverLocationDto? _driverLocation;
+    private bool _mapReady;
+
+    /// <summary>Map appears once a rider is on the order and it's still moving.</summary>
+    private bool ShowLiveMap =>
+        (_order is { DriverId: not null } || _order?.CourierName is { Length: > 0 }) &&
+        _order.Status is OrderStatus.Accepted or OrderStatus.Preparing or OrderStatus.Ready
+            or OrderStatus.PickedUp or OrderStatus.OnTheWay;
+
+    /// <summary>Rough arrival clock time based on the original estimate.</summary>
+    private DateTime Eta => _order is null ? DateTime.Now : _order.PlacedAt.AddMinutes(_order.EstimatedMinutes);
+
+    protected override Task OnParametersSetAsync() => Reload();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Boot the map the first time it renders; then keep the rider marker fresh.
+        if (ShowLiveMap && !_mapReady)
+        {
+            try
+            {
+                _mapReady = await JS.InvokeAsync<bool>("mfMap.live", LiveMapId,
+                    Config["GoogleMaps:ApiKey"] ?? "", _order!.DeliveryLat, _order.DeliveryLng);
+            }
+            catch { /* map is a bonus — tracking still works without it */ }
+        }
+        if (_mapReady && _driverLocation is not null)
+        {
+            try { await JS.InvokeVoidAsync("mfMap.updateDriver", LiveMapId, _driverLocation.Lat, _driverLocation.Lng); }
+            catch { }
+        }
+    }
+
+    /// <summary>True once a load attempt came back empty — the order isn't reachable.</summary>
+    private bool _loadFailed;
+
+    private async Task Reload()
+    {
+        var latest = await Api.GetOrderAsync(Id);
+        if (latest is not null) _order = latest;
+        // Only the FIRST failure flips the page to "not found" — once an order has
+        // rendered, a dropped refresh must not replace live tracking with an error.
+        else _loadFailed = _order is null;
+        _driverLocation = ShowLiveMap ? await Api.GetDriverLocationAsync(Id) : null;
+    }
+
+    public void Dispose()
+    {
+        _ = JS.InvokeVoidAsync("mfMap.dispose", LiveMapId);
+    }
+
+    private double Progress => _order?.Status switch
+    {
+        OrderStatus.Pending => 10,
+        OrderStatus.Accepted => 30,
+        OrderStatus.Preparing => 45,
+        OrderStatus.Ready => 60,
+        OrderStatus.PickedUp => 75,
+        OrderStatus.OnTheWay => 88,
+        OrderStatus.Delivered => 100,
+        _ => 0
+    };
+
+    private string HeroEmoji => _order?.Status switch
+    {
+        OrderStatus.Pending => "⏳",
+        OrderStatus.Accepted => "👨‍🍳",
+        OrderStatus.Preparing => "🍳",
+        OrderStatus.Ready => "🛍️",
+        OrderStatus.PickedUp or OrderStatus.OnTheWay => "🛵",
+        OrderStatus.Delivered => "🎉",
+        _ => "😔"
+    };
+
+    private string HeroTitle => _order?.Status switch
+    {
+        OrderStatus.Pending => L["track.hPending"],
+        OrderStatus.Accepted => string.Format(L["track.hAccepted"], _order.RestaurantName),
+        OrderStatus.Preparing => L["track.hPreparing"],
+        OrderStatus.Ready => L["track.hReady"],
+        OrderStatus.PickedUp => string.Format(L["track.hPickedUp"], _order.DriverName),
+        OrderStatus.OnTheWay => string.Format(L["track.hOnTheWay"], _order.DriverName),
+        OrderStatus.Delivered => L["track.hDelivered"],
+        OrderStatus.Cancelled => L["track.hCancelled"],
+        OrderStatus.Rejected => L["track.hRejected"],
+        _ => ""
+    };
+
+    private string HeroSubtitle => _order?.Status switch
+    {
+        OrderStatus.Pending => L["track.sPending"],
+        OrderStatus.Accepted or OrderStatus.Preparing => L["track.sAccepted"],
+        OrderStatus.Ready => L["track.sReady"],
+        OrderStatus.PickedUp or OrderStatus.OnTheWay => _order.DeliveryAddress,
+        OrderStatus.Delivered => L["track.sDelivered"],
+        // Cancelled or rejected. Nobody need say why; "Cancelled by customer" is the
+        // old API default still stored on early orders, so it counts as no reason.
+        _ => _order?.CancelReason is null or "" or "Cancelled by customer"
+            ? L[_order?.Status == OrderStatus.Cancelled ? "order.cancelledByCustomer" : "order.noReason"]
+            : _order!.CancelReason!
+    };
+
+    private Task OpenChat() =>
+        Dialogs.ShowAsync<ChatDialog>("", new DialogParameters<ChatDialog> { { d => d.OrderId, Id }, { d => d.Title, $"Chat — {_order?.Number}" } },
+            new DialogOptions { FullScreen = true, NoHeader = true });
+
+    private async Task CancelOrder()
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["track.cancelOrder"],
+            L["track.cancelAsk"], yesText: L["track.cancelYes"], cancelText: L["track.cancelNo"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.CancelOrderAsync(Id);
+        if (!ok) Snackbar.Add(error ?? L["common.cancelFail"], Severity.Error);
+        await Reload();
+    }
+
+    private async Task Review()
+    {
+        if (_order is null) return;
+        var parameters = new DialogParameters<ReviewDialog> { { d => d.Order, _order } };
+        var dialog = await Dialogs.ShowAsync<ReviewDialog>(L["track.rateOrder"], parameters, new DialogOptions { NoHeader = true, MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        var result = await dialog.Result;
+        if (result?.Canceled == false)
+        {
+            Snackbar.Add(L["common.thanksFeedback"], Severity.Success);
+            await Reload();
+        }
+    }
+}

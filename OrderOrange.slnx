@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="OrderOrange.Shared\OrderOrange.Shared.csproj" />
+  <Project Path="OrderOrange.ApiServer\OrderOrange.ApiServer.csproj" />
+  <Project Path="OrderOrange.ClientCore\OrderOrange.ClientCore.csproj" />
+  <Project Path="OrderOrange.ClientWeb\OrderOrange.ClientWeb.csproj" />
+  <Project Path="OrderOrange.RestaurantWeb\OrderOrange.RestaurantWeb.csproj" />
+  <Project Path="OrderOrange.DeliveryWeb\OrderOrange.DeliveryWeb.csproj" />
+  <Project Path="OrderOrange.AdminWeb\OrderOrange.AdminWeb.csproj" />
+  <Project Path="OrderOrange.Tests\OrderOrange.Tests.csproj" />
+</Solution>

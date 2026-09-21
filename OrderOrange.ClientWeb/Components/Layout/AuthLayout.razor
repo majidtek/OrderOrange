@@ -1,0 +1,31 @@
+@inherits LayoutComponentBase
+@inject LanguageService Lang
+@implements IDisposable
+
+@* Nothing but the providers MudBlazor needs. No app bar, no navigation, no container.
+   A sign-in screen paints its own full-viewport background, and any wrapper with a
+   max-width turns that into an orange stripe down the middle of the page. It also must
+   stay reachable when signed out, so there is deliberately no session gate here. *@
+
+<MudThemeProvider Theme="Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    @* These three render OUTSIDE the page tree — dialogs, menus, toasts. They must sit
+       inside the RTL provider or none of what they draw ever flips for Arabic/Persian/
+       Urdu, which is exactly the bug this fixed. *@
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    @* First visit: the customer picks a language before anything else happens. *@
+    <LanguageGate />
+    @Body
+</MudRTLProvider>
+
+@code {
+    private static readonly MudTheme Theme = FoodTheme.Build();
+
+    // Without this, choosing Arabic or Persian here would not flip the page until a
+    // reload — the RTL provider only re-evaluates when this layout re-renders.
+    protected override void OnInitialized() => Lang.Changed += OnLangChanged;
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.Changed -= OnLangChanged;
+}

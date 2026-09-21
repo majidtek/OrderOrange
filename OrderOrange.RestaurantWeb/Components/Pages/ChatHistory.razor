@@ -1,0 +1,370 @@
+@page "/chat-history"
+@inject ApiClient Api
+@inject LanguageService L
+
+@* The chats that already ended: when an invoice closes, the table's conversation
+   leaves the live inbox and lands here, filed under the invoice number.
+
+   A shop accumulates these forever, so the page is built around finding one rather
+   than around scrolling: type to search, or open the filter sheet to narrow by date,
+   table and length. Filtering happens in the browser — the whole archive is already
+   in hand, so every keystroke is instant and nothing waits on the server. *@
+
+<PageTitle>Partner — Chat history</PageTitle>
+
+<MudText Typo="Typo.h5" Class="fw-bold mb-1">@L["ch.title"]</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">@L["ch.sub"]</MudText>
+
+@if (_sessions is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+}
+else if (_open is not null)
+{
+    <div class="ch-view">
+        <div class="ch-viewtop">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => { _open = null; _messages = null; })" />
+            <span class="ava">@Initials(_open.TableName)</span>
+            <div class="who">
+                <b>@_open.TableName</b>
+                <small>
+                    @(_open.InvoiceNumber is null
+                        ? L["ch.noInvoice"]
+                        : string.Format(L["ch.invoice"], _open.InvoiceNumber))
+                    · @_open.ClosedAt.ToString("dd/MM/yyyy HH:mm")
+                </small>
+            </div>
+        </div>
+        <div class="wa-msgs ch-msgs">
+            @if (_messages is null)
+            {
+                <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+            }
+            else
+            {
+                DateTime? lastDay = null;
+                @foreach (var m in _messages)
+                {
+                    var msg = m;
+                    var own = msg.From == "store";
+                    @if (lastDay != msg.At.Date)
+                    {
+                        lastDay = msg.At.Date;
+                        <div class="wa-date"><span>@msg.At.ToString("dd/MM/yyyy")</span></div>
+                    }
+                    <div class="qc-bubble @(own ? "me" : "them") @(msg.Deleted ? "gone" : "")">
+                        @if (msg.Deleted)
+                        {
+                            <span class="delstub">🚫 @L["qc.deleted"]</span>
+                        }
+                        else
+                        {
+                            @if (msg.ReplyPreview is not null)
+                            {
+                                <span class="qc-quote">@msg.ReplyPreview</span>
+                            }
+                            @if (msg.Image is not null)
+                            {
+                                <img class="qc-img" src="@msg.Image" alt="" loading="lazy" />
+                            }
+                            @if (msg.Audio is not null)
+                            {
+                                <audio controls preload="metadata" src="@msg.Audio"></audio>
+                            }
+                            @if (msg.File is not null)
+                            {
+                                <a class="qc-file" href="@msg.File" download="@msg.FileName" target="_blank">📄 <span>@msg.FileName</span></a>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(msg.Text))
+                            {
+                                <span>@msg.Text</span>
+                            }
+                        }
+                        <small>@msg.At.ToString("HH:mm")</small>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+else if (_sessions.Count == 0)
+{
+    <div class="wa-empty" style="padding: 48px 16px;">
+        <div style="font-size: 46px;">🗂️</div>
+        <b>@L["ch.empty"]</b>
+        <span>@L["ch.emptyHint"]</span>
+    </div>
+}
+else
+{
+    var shown = Shown;
+
+    @* ---------- Find bar ---------- *@
+    <div class="chb">
+        <div class="chb-find">
+            <MudIcon Icon="@Icons.Material.Filled.Search" />
+            <input @bind="_q" @bind:event="oninput" placeholder="@L["ch.search"]"
+                   autocomplete="off" spellcheck="false" />
+            @if (_q.Length > 0)
+            {
+                <button type="button" class="x" @onclick="@(() => _q = "")" aria-label="@L["common.clear"]">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" />
+                </button>
+            }
+        </div>
+
+        <button type="button" class="chb-filter @(ActiveCount > 0 ? "on" : "")" @onclick="@(() => _sheet = true)">
+            <MudIcon Icon="@Icons.Material.Filled.Tune" />
+            <span>@L["ch.filter"]</span>
+            @if (ActiveCount > 0)
+            {
+                <i>@ActiveCount</i>
+            }
+        </button>
+
+        <span class="chb-count">@string.Format(L["ch.showing"], shown.Count, _sessions.Count)</span>
+    </div>
+
+    @* ---------- What is currently narrowing the list, each one removable ---------- *@
+    @if (ActiveCount > 0)
+    {
+        <div class="chb-chips">
+            @if (_days > 0)
+            {
+                <button type="button" @onclick="@(() => _days = 0)">
+                    <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" /> @DaysLabel <span>✕</span>
+                </button>
+            }
+            @foreach (var t in _tables.OrderBy(x => x).ToList())
+            {
+                var table = t;
+                <button type="button" @onclick="@(() => _tables.Remove(table))">
+                    <MudIcon Icon="@Icons.Material.Filled.TableRestaurant" /> @table <span>✕</span>
+                </button>
+            }
+            @if (_len > 0)
+            {
+                <button type="button" @onclick="@(() => _len = 0)">
+                    <MudIcon Icon="@Icons.Material.Filled.Straighten" /> @LenLabel <span>✕</span>
+                </button>
+            }
+            <button type="button" class="clear" @onclick="Reset">@L["ch.clearAll"]</button>
+        </div>
+    }
+
+    @* ---------- Results ---------- *@
+    @if (shown.Count == 0)
+    {
+        <div class="wa-empty" style="padding: 40px 16px;">
+            <div style="font-size: 42px;">🔍</div>
+            <b>@L["ch.noMatch"]</b>
+            <span>@L["ch.noMatchSub"]</span>
+            <button type="button" class="chf-reset mt-3" @onclick="Reset">@L["ch.clearAll"]</button>
+        </div>
+    }
+    else
+    {
+        <div class="ch-list">
+            @foreach (var s in shown)
+            {
+                var session = s;
+                <button type="button" class="ch-row" @onclick="@(() => Open(session))">
+                    <span class="ava">@Initials(session.TableName)</span>
+                    <span class="mid">
+                        <b>@session.TableName</b>
+                        <small>
+                            @(session.InvoiceNumber is null
+                                ? L["ch.noInvoice"]
+                                : string.Format(L["ch.invoice"], session.InvoiceNumber))
+                            · @string.Format(L["ch.msgs"], session.Count)
+                        </small>
+                    </span>
+                    <small class="when">@session.ClosedAt.ToString("dd/MM/yyyy HH:mm")</small>
+                </button>
+            }
+        </div>
+    }
+}
+
+@* ---------- The filter sheet ---------- *@
+@* Choices apply the moment they are made, so the count in the footer is live and the
+   button closes rather than commits. Nothing here can be "lost" by dismissing it. *@
+@if (_sheet && _sessions is not null)
+{
+    <div class="oo-modal" @onclick="@(() => _sheet = false)">
+        <div class="chf" @onclick:stopPropagation="true" role="dialog" aria-modal="true">
+            <header>
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Tune" /></span>
+                <div>
+                    <b>@L["ch.filter"]</b>
+                    <small>@L["ch.filterSub"]</small>
+                </div>
+                <button type="button" class="x" @onclick="@(() => _sheet = false)" aria-label="@L["common.close"]">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" />
+                </button>
+            </header>
+
+            <div class="chf-body">
+                <section>
+                    <h6>@L["ch.when"]</h6>
+                    <div class="chf-seg">
+                        @foreach (var (days, label) in Ranges)
+                        {
+                            var d = days;
+                            <button type="button" class="@(_days == d ? "on" : "")" @onclick="@(() => _days = d)">@label</button>
+                        }
+                    </div>
+                </section>
+
+                <section>
+                    <h6>@L["ch.table"] <i>@(_tables.Count == 0 ? L["ch.allTables"] : string.Format(L["ch.nSelected"], _tables.Count))</i></h6>
+                    <div class="chf-tags">
+                        @foreach (var t in TableOptions)
+                        {
+                            var table = t;
+                            var on = _tables.Contains(table.Name);
+                            <button type="button" class="@(on ? "on" : "")" @onclick="@(() => Toggle(table.Name))">
+                                @table.Name <span>@table.Count</span>
+                            </button>
+                        }
+                    </div>
+                </section>
+
+                <section>
+                    <h6>@L["ch.length"]</h6>
+                    <div class="chf-seg">
+                        <button type="button" class="@(_len == 0 ? "on" : "")" @onclick="@(() => _len = 0)">@L["ch.anyLength"]</button>
+                        <button type="button" class="@(_len == 1 ? "on" : "")" @onclick="@(() => _len = 1)">@L["ch.shortChat"]</button>
+                        <button type="button" class="@(_len == 2 ? "on" : "")" @onclick="@(() => _len = 2)">@L["ch.longChat"]</button>
+                    </div>
+                </section>
+
+                <section>
+                    <h6>@L["ch.sort"]</h6>
+                    <div class="chf-seg">
+                        <button type="button" class="@(_sort == 0 ? "on" : "")" @onclick="@(() => _sort = 0)">@L["ch.newest"]</button>
+                        <button type="button" class="@(_sort == 1 ? "on" : "")" @onclick="@(() => _sort = 1)">@L["ch.oldest"]</button>
+                        <button type="button" class="@(_sort == 2 ? "on" : "")" @onclick="@(() => _sort = 2)">@L["ch.mostMsgs"]</button>
+                    </div>
+                </section>
+            </div>
+
+            <footer>
+                <button type="button" class="chf-reset" @onclick="Reset">@L["ch.reset"]</button>
+                <button type="button" class="chf-done" @onclick="@(() => _sheet = false)">
+                    @string.Format(L["ch.showN"], Shown.Count)
+                </button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ChatArchiveSessionDto>? _sessions;
+    private ChatArchiveSessionDto? _open;
+    private List<TableChatMessageDto>? _messages;
+
+    private bool _sheet;
+    private string _q = "";
+
+    /// <summary>Days back, or 0 for the whole archive.</summary>
+    private int _days;
+
+    /// <summary>Empty means every table — a filter nobody set must not exclude anything.</summary>
+    private readonly HashSet<string> _tables = [];
+
+    /// <summary>0 any · 1 short (under five messages) · 2 long.</summary>
+    private int _len;
+
+    /// <summary>0 newest · 1 oldest · 2 most messages.</summary>
+    private int _sort;
+
+    /// <summary>Five messages is where a conversation stops being "table asked, store
+    /// answered" and starts being something worth reading back.</summary>
+    private const int LongChat = 5;
+
+    private (int Days, string Label)[] Ranges =>
+    [
+        (0, L["ch.allTime"]), (1, L["vis.today"]), (7, L["vis.days7"]), (30, L["vis.days30"]), (90, L["cons.days90"]),
+    ];
+
+    private int ActiveCount => (_days > 0 ? 1 : 0) + _tables.Count + (_len > 0 ? 1 : 0);
+
+    private string DaysLabel => Ranges.FirstOrDefault(r => r.Days == _days).Label ?? "";
+
+    private string LenLabel => _len == 1 ? L["ch.shortChat"] : L["ch.longChat"];
+
+    /// <summary>Every table that actually appears in the archive, with how many closed
+    /// conversations it has. Offering a table with nothing behind it wastes a tap.</summary>
+    private List<(string Name, int Count)> TableOptions =>
+        (_sessions ?? [])
+            .GroupBy(s => s.TableName)
+            .Select(g => (Name: g.Key, Count: g.Count()))
+            .OrderByDescending(t => t.Count)
+            .ThenBy(t => t.Name)
+            .ToList();
+
+    private List<ChatArchiveSessionDto> Shown
+    {
+        get
+        {
+            var query = (_sessions ?? []).AsEnumerable();
+
+            var needle = _q.Trim();
+            if (needle.Length > 0)
+                query = query.Where(s =>
+                    s.TableName.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+                    (s.InvoiceNumber ?? "").Contains(needle, StringComparison.OrdinalIgnoreCase));
+
+            if (_days > 0)
+            {
+                var since = DateTime.Now.Date.AddDays(-(_days - 1));
+                query = query.Where(s => s.ClosedAt.ToLocalTime() >= since);
+            }
+
+            if (_tables.Count > 0)
+                query = query.Where(s => _tables.Contains(s.TableName));
+
+            query = _len switch
+            {
+                1 => query.Where(s => s.Count < LongChat),
+                2 => query.Where(s => s.Count >= LongChat),
+                _ => query,
+            };
+
+            return _sort switch
+            {
+                1 => query.OrderBy(s => s.ClosedAt).ToList(),
+                2 => query.OrderByDescending(s => s.Count).ThenByDescending(s => s.ClosedAt).ToList(),
+                _ => query.OrderByDescending(s => s.ClosedAt).ToList(),
+            };
+        }
+    }
+
+    private void Toggle(string table)
+    {
+        if (!_tables.Remove(table)) _tables.Add(table);
+    }
+
+    private void Reset()
+    {
+        _q = "";
+        _days = 0;
+        _tables.Clear();
+        _len = 0;
+        _sort = 0;
+    }
+
+    private static string Initials(string s) =>
+        string.IsNullOrEmpty(s) ? "•" : s.Length <= 2 ? s : s[..2];
+
+    protected override async Task OnInitializedAsync() =>
+        _sessions = await Api.GetChatHistoryAsync() ?? [];
+
+    private async Task Open(ChatArchiveSessionDto session)
+    {
+        _open = session;
+        _messages = null;
+        _messages = await Api.GetChatHistoryMessagesAsync(session.Id) ?? [];
+    }
+}

@@ -1,0 +1,24 @@
+@inject LanguageService L
+
+@* The red card for "this door is not yours": unmistakable at a glance, and it
+   names the problem — access — not a vague "something went wrong". *@
+
+<MudDialog Class="pd-box">
+    <DialogContent>
+        <div class="pd-wrap">
+            <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Block" /></span>
+            <b>@L["perm.noAccess"]</b>
+            <p>@Message</p>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" OnClick="@(() => Dialog.Close())">
+            @L["common.close"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public string Message { get; set; } = "";
+}

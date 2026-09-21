@@ -1,0 +1,134 @@
+@page "/delivery"
+@page "/delivery/{Section}"
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Partner — Delivery</PageTitle>
+
+<PageHeader Title="@L["dlv2.title"]" Subtitle="@L["dlv2.sub"]" />
+
+@if (_orders is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    var list = Visible;
+    @if (list.Count == 0)
+    {
+        <EmptyState Emoji="@(Done ? "📦" : "🛵")"
+                    Title="@(Done ? L["dlv2.noDelivered"] : L["dlv2.noActive"])"
+                    Subtitle="@(Done ? L["dlv2.noDeliveredSub"] : L["dlv2.noActiveSub"])" />
+    }
+    @foreach (var order in list)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="dh-card">
+            <div class="dh-head">
+                <div class="dh-no">
+                    <span class="n">@order.Number</span>
+                    <span class="t">@order.PlacedAt.ToString("d MMM · HH:mm")</span>
+                </div>
+                <span class="dh-status s-@order.Status.ToString().ToLowerInvariant()">@StatusLabel(order.Status)</span>
+            </div>
+            <div class="dh-body">
+                <div class="dh-block">
+                    <div class="k">@L["w.customer"]</div>
+                    <div class="v">@order.CustomerName</div>
+                    <div class="s mf-ltr">@order.CustomerPhone</div>
+                    <div class="s">@order.DeliveryAddress</div>
+                </div>
+                <div class="dh-block">
+                    <div class="k">@L["w.courier"]</div>
+                    @if (order.DriverName is null)
+                    {
+                        <div class="v wait">@L["dlv2.waiting"]</div>
+                    }
+                    else
+                    {
+                        <div class="v">🛵 @order.DriverName</div>
+                        <div class="s mf-ltr">@order.DriverPhone</div>
+                        @if (order.DriverPlate is not null)
+                        {
+                            <span class="dh-plate">@order.DriverPlate</span>
+                        }
+                    }
+                </div>
+                <div class="dh-block">
+                    <div class="k">@L["dlv2.order"]</div>
+                    <div class="v">@string.Format(L["dlv2.itemsTotal"], order.Items.Sum(i => i.Quantity)) · @Fmt.Rial(order.Total)</div>
+                    <div class="s">@(order.IsPaid ? (MarkupString)L["dlv2.paidOnline"] : (MarkupString)string.Format(L["dlv2.collect"], Fmt.Rial(order.Total)))</div>
+                </div>
+            </div>
+            <div class="dh-actions">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Print"
+                           OnClick="@(() => Nav.NavigateTo($"/invoice/{order.Id}"))">
+                    @L["dlv2.printInvoice"]
+                </MudButton>
+                @if (order.Status == OrderStatus.Preparing)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="@(() => Ready(order))">
+                        @L["dlv2.markReady"]
+                    </MudButton>
+                }
+            </div>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter] public string? Section { get; set; }
+
+    private List<OrderDto>? _orders;
+    private System.Threading.Timer? _timer;
+
+    private bool Done => string.Equals(Section, "done", StringComparison.OrdinalIgnoreCase);
+
+    private List<OrderDto> Visible => Done
+        ? (_orders ?? []).Where(o => o.Status == OrderStatus.Delivered).OrderByDescending(o => o.PlacedAt).ToList()
+        : (_orders ?? []).Where(o => o.Status is OrderStatus.Preparing or OrderStatus.Ready or OrderStatus.PickedUp or OrderStatus.OnTheWay)
+            .OrderBy(o => o.Status).ThenBy(o => o.PlacedAt).ToList();
+
+    private string StatusLabel(OrderStatus status) => status switch
+    {
+        OrderStatus.Preparing => L["status.Preparing"],
+        OrderStatus.Ready => L["status.Ready"],
+        OrderStatus.PickedUp => L["status.PickedUp"],
+        OrderStatus.OnTheWay => L["status.OnTheWay"],
+        OrderStatus.Delivered => L["status.Delivered"],
+        _ => status.ToString()
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Reload();
+        _timer = new System.Threading.Timer(_ => _ = InvokeAsync(async () =>
+        {
+            await Reload();
+            StateHasChanged();
+        }), null, 10_000, 10_000);
+    }
+
+    private async Task Reload()
+    {
+        var board = await Api.GetRestaurantBoardAsync() ?? [];
+        var history = await Api.GetRestaurantHistoryAsync(0, 25) ?? [];
+
+        // This page is about couriers. A collection has none and never will, so listing
+        // it here would only invite someone to wait for a rider who is not coming.
+        _orders = board.Concat(history.Where(h => board.All(b => b.Id != h.Id)))
+            .Where(o => o.OrderType == OrderType.Delivery)
+            .ToList();
+    }
+
+    private async Task Ready(OrderDto order)
+    {
+        await Api.MarkReadyAsync(order.Id);
+        await Reload();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

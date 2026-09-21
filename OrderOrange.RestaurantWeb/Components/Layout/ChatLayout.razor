@@ -1,0 +1,45 @@
+﻿@inherits LayoutComponentBase
+@inject LanguageService Lang
+@implements IDisposable
+
+@* The chat's own layout: theme, RTL, session — and NOTHING else. No app bar, no
+   drawer, no container. The conversation is the entire screen; its back arrow is
+   the only way out, which is exactly the point. *@
+
+<MudThemeProvider Theme="MainLayout.Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    <SessionGate>
+        <SignedOut>
+            <LoginView AppName="OrderOrange Partner" GuideUrl="guide.html"
+                       Tagline="@Lang["login.ptrTagline"]"
+                       LogoUrl="_content/OrderOrange.ClientCore/logo.svg?v=4"
+                       PartnerRegister="true"
+                   RegisterHref="/register"
+                       PasswordOnly="true"
+                       GooglePartner="true"
+                       AllowedRoles="new[] { UserRole.RestaurantOwner }"
+                       WrongRoleMessage="@Lang["login.ptrWrong"]" />
+        </SignedOut>
+        <SignedIn>
+            <div class="chatonly">
+                @Body
+            </div>
+        </SignedIn>
+    </SessionGate>
+</MudRTLProvider>
+
+@code {
+    // The chat pages honor the saved language too — without this, arriving here
+    // directly (or reloading) rendered them in the default locale.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Lang.EnsureLoadedAsync();
+    }
+
+    protected override void OnInitialized() => Lang.Changed += OnLangChanged;
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.Changed -= OnLangChanged;
+}

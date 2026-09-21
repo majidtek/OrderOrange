@@ -1,0 +1,158 @@
+@page "/calendar"
+@using Heron.MudCalendar
+@inject ApiClient Api
+@inject LanguageService L
+@inject AppState State
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+@* The store's shared calendar — the MajidTekLaw office calendar, in OrderOrange clothes:
+   a month/week/day grid on the left, what is coming up on the right, and a reminder
+   per event that rings every team member's bell when its moment comes. *@
+
+<PageTitle>Partner — @L["cal.title"]</PageTitle>
+
+<PageHeader Title="@L["cal.title"]" Subtitle="@L["cal.sub"]">
+    <Actions>
+        @if (CanWrite)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => Open(null, null))">@L["cal.add"]</MudButton>
+        }
+    </Actions>
+</PageHeader>
+
+<div class="cal-body">
+    <div class="cal-card">
+        @if (_events is null)
+        {
+            <Loader />
+        }
+        else
+        {
+            <MudCalendar T="CalItem" Items="_items" @bind-View="_view" @bind-CurrentDay="_day"
+                         ShowWorkWeek="false" MonthCellMinHeight="96" CellClicked="OnCell">
+                <CellTemplate Context="item">
+                    <div class="cal-chip" style="--c:@item.Color" title="@item.Text"
+                         @onclick="@(() => Open(item.Source, null))" @onclick:stopPropagation="true">
+                        @if (!item.AllDay)
+                        {
+                            <span class="t" dir="ltr">@item.Start.ToString("HH:mm")</span>
+                        }
+                        @if (item.Source.RemindMinutes is not null)
+                        {
+                            <span class="bell">🔔</span>
+                        }
+                        <span class="x">@item.Text</span>
+                    </div>
+                </CellTemplate>
+            </MudCalendar>
+        }
+    </div>
+
+    <aside class="cal-side">
+        <div class="hd"><MudIcon Icon="@Icons.Material.Filled.Bolt" /> @L["cal.upcoming"]</div>
+        @if (_events is { Count: 0 } || Upcoming.Count == 0)
+        {
+            <div class="empty"><span>📅</span>@L["cal.none"]</div>
+        }
+        else
+        {
+            @foreach (var e in Upcoming)
+            {
+                var ev = e;
+                <div class="cal-evt" style="--c:@ev.Color">
+                    <div class="bar"></div>
+                    <div class="main" @onclick="@(() => Open(ev, null))">
+                        <b>@ev.Title</b>
+                        <small><MudIcon Icon="@Icons.Material.Filled.Schedule" /> @When(ev)@(ev.RemindMinutes is int rm ? $" · 🔔 {RemindLabel(rm)}" : "")</small>
+                    </div>
+                    @if (CanWrite)
+                    {
+                        <button type="button" class="del" title="@L["common.delete"]" @onclick="@(() => Delete(ev))">✕</button>
+                    }
+                </div>
+            }
+        }
+    </aside>
+</div>
+
+@code {
+    private List<CalendarEventDto>? _events;
+    private List<CalItem> _items = [];
+    private CalendarView _view = CalendarView.Month;
+    private DateTime _day = DateTime.Today;
+
+    private bool CanWrite => Perm.Allows(State.StoreRole, State.Perms, Perm.Calendar);
+
+    /// <summary>Heron's item, carrying the colour and the event it came from.</summary>
+    public class CalItem : CalendarItem
+    {
+        public string Color { get; set; } = "#ff7a1a";
+        public CalendarEventDto Source { get; set; } = default!;
+    }
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        _events = await Api.GetCalendarAsync() ?? [];
+        _items = _events.Select(e => new CalItem
+        {
+            Start = e.StartAt,
+            End = e.EndAt ?? (e.AllDay ? e.StartAt.Date.AddDays(1).AddMinutes(-1) : e.StartAt.AddHours(1)),
+            AllDay = e.AllDay,
+            Text = e.Title,
+            Color = e.Color,
+            Source = e,
+        }).ToList();
+    }
+
+    private List<CalendarEventDto> Upcoming =>
+        (_events ?? []).Where(e => (e.EndAt ?? e.StartAt) >= DateTime.Now.AddHours(-1)).OrderBy(e => e.StartAt).Take(40).ToList();
+
+    private string When(CalendarEventDto e)
+    {
+        if (e.AllDay) return e.StartAt.ToString("ddd d MMM");
+        var day = e.StartAt.Date == DateTime.Today ? L["att.today"] : e.StartAt.ToString("ddd d MMM");
+        return $"{day} · {e.StartAt:HH:mm}{(e.EndAt is DateTime end ? $"–{end:HH:mm}" : "")}";
+    }
+
+    private string RemindLabel(int minutes) => minutes switch
+    {
+        0 => L["cal.r.atTime"],
+        < 60 => string.Format(L["cal.r.minutes"], minutes),
+        < 1440 => string.Format(L["cal.r.hours"], minutes / 60),
+        _ => string.Format(L["cal.r.days"], minutes / 1440),
+    };
+
+    private async Task OnCell(DateTime date)
+    {
+        if (!CanWrite) return;
+        await Open(null, date);
+    }
+
+    private async Task Open(CalendarEventDto? existing, DateTime? at)
+    {
+        if (existing is not null && !CanWrite)
+        {
+            await Dialogs.ShowMessageBox(existing.Title, $"{When(existing)}\n\n{existing.Details}", yesText: L["common.close"]);
+            return;
+        }
+        var parameters = new DialogParameters<CalendarEventDialog> { { d => d.Existing, existing }, { d => d.InitialDate, at } };
+        var dialog = await Dialogs.ShowAsync<CalendarEventDialog>(existing is null ? L["cal.add"] : L["cal.edit"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) await Load();
+    }
+
+    private async Task Delete(CalendarEventDto e)
+    {
+        var ok = await Dialogs.ShowMessageBox(L["common.delete"], string.Format(L["cal.delConfirm"], e.Title),
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (ok != true) return;
+        var (done, error) = await Api.DeleteCalendarEventAsync(e.Id);
+        if (!done) { Snackbar.Add(L.ServerError(error) ?? L["common.deleteFail"], Severity.Error); return; }
+        await Load();
+    }
+}

@@ -1,0 +1,17 @@
+<CascadingValue Name="Crawler" Value="Crawler" IsFixed="true">
+<CascadingValue Name="SeoLang" Value="SeoLang" IsFixed="true">
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>
+</CascadingValue>
+</CascadingValue>
+
+@code {
+    /// <summary>True when the request comes from a search engine or a link previewer.</summary>
+    [Parameter] public bool Crawler { get; set; }
+    /// <summary>The language the URL asked for (?lang=xx), for the crawler's prerender.</summary>
+    [Parameter] public string? SeoLang { get; set; }
+}

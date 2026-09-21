@@ -1,0 +1,99 @@
+@namespace OrderOrange.ClientCore.Components
+@using OrderOrange.ClientCore.Services
+@inject LanguageService L
+@inject IJSRuntime JS
+
+@* A reusable spotlight walkthrough. The page supplies the steps; the JS side
+   (mf-tour.js) owns the glow and the click shield. Start it via @ref.StartAsync(). *@
+
+@if (_step >= 0 && _step < Steps.Count)
+{
+    var step = Steps[_step];
+    <div class="tour-card" @key="_step">
+        <div class="tour-head">
+            <span class="tour-badge">@(_step + 1)</span>
+            <span class="tour-emoji">@step.Emoji</span>
+            <button type="button" class="tour-x" @onclick="End">✕</button>
+        </div>
+        <div class="tour-title">@L[step.TitleKey]</div>
+        <div class="tour-text">@L[step.TextKey]</div>
+        <div class="tour-foot">
+            <div class="tour-dots">
+                @for (var i = 0; i < Steps.Count; i++)
+                {
+                    <span class="@(i == _step ? "on" : i < _step ? "done" : "")"></span>
+                }
+            </div>
+            <span style="flex:1"></span>
+            @if (_step > 0)
+            {
+                <button type="button" class="tour-btn ghost" @onclick="@(() => Move(-1))">@L["pos.tourBack"]</button>
+            }
+            <button type="button" class="tour-btn main" @onclick="@(() => Move(1))">
+                @(_step == Steps.Count - 1 ? L["pos.tourDone"] : L["pos.tourNext"])
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// One stop of the walkthrough: what to light up and what to say. An Interactive
+    /// step leaves the spotlighted control genuinely tappable (try it for real).
+    /// </summary>
+    public sealed record Step(string Selector, string Emoji, string TitleKey, string TextKey, bool Interactive = false);
+
+    [Parameter, EditorRequired] public IReadOnlyList<Step> Steps { get; set; } = [];
+
+    /// <summary>Fires when a step becomes active — lets the page stage real UI (open a picker, etc.).</summary>
+    [Parameter] public EventCallback<int> OnStep { get; set; }
+
+    /// <summary>Fires when the tour closes, so the page can undo any staging.</summary>
+    [Parameter] public EventCallback OnEnded { get; set; }
+
+    private int _step = -1;
+
+    public async Task StartAsync()
+    {
+        _step = 0;
+        await ShowAsync();
+    }
+
+    /// <summary>Advance from the page's side — e.g. the learner just DID the step.</summary>
+    public Task NextAsync() => _step >= 0 ? Move(1) : Task.CompletedTask;
+
+    /// <summary>Resume mid-tour — used after a navigation rebuilt the page.</summary>
+    public Task StartAtAsync(int step)
+    {
+        _step = Math.Clamp(step, 0, Steps.Count - 1);
+        return ShowAsync();
+    }
+
+    /// <summary>The active step index, or -1 when no tour is running.</summary>
+    public int CurrentStep => _step;
+
+    private async Task Move(int direction)
+    {
+        _step += direction;
+        if (_step >= Steps.Count) { await End(); return; }
+        if (_step < 0) _step = 0;
+        await ShowAsync();
+    }
+
+    private async Task End()
+    {
+        _step = -1;
+        _ = JS.InvokeVoidAsync("mfTour.hide");
+        _ = JS.InvokeVoidAsync("mfTour.markSeen");
+        await OnEnded.InvokeAsync();
+        StateHasChanged();
+    }
+
+    private async Task ShowAsync()
+    {
+        await OnStep.InvokeAsync(_step);
+        try { await JS.InvokeVoidAsync("mfTour.show", Steps[_step].Selector, Steps[_step].Interactive); }
+        catch { }
+        StateHasChanged();
+    }
+}

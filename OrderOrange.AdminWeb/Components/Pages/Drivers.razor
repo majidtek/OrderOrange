@@ -1,0 +1,200 @@
+@page "/drivers"
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject LanguageService L
+
+<PageTitle>Admin — Driver verification</PageTitle>
+
+<div class="d-flex align-center mb-1" style="gap: 10px;">
+    <MudText Typo="Typo.h4">🪪 @L["admin.drivers"]</MudText>
+</div>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@L["admin.driversSub"]</MudText>
+
+<MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="mb-4"
+         ActivePanelIndexChanged="OnTabChanged">
+    <MudTabPanel Icon="@Icons.Material.Filled.HourglassTop" BadgeColor="Color.Warning"
+                 BadgeData="@(_counts[0] > 0 ? (object)_counts[0] : null)" Text="@L["drv.stPending"]" />
+    <MudTabPanel Icon="@Icons.Material.Filled.Verified" Text="@L["drv.stApproved"]" />
+    <MudTabPanel Icon="@Icons.Material.Filled.Cancel" Text="@L["drv.stRejected"]" />
+</MudTabs>
+
+@if (_rows is null)
+{
+    <Loader />
+}
+else if (_rows.Count == 0)
+{
+    <EmptyState Emoji="@(_tab == 0 ? "🎉" : "🗂️")" Title="@L["admin.noSubmissions"]" Subtitle="" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        @foreach (var row in _rows)
+        {
+            var d = row;
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="2" Class="pa-4 rounded-xl" Style="height: 100%;">
+                    <div class="d-flex align-center mb-3" style="gap: 12px;">
+                        <MudAvatar Color="Color.Primary" Size="Size.Large">@(d.FullName.Length > 0 ? d.FullName[..1].ToUpper() : "?")</MudAvatar>
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <MudText Typo="Typo.subtitle1"><b>@d.FullName</b></MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mf-ltr" Style="display:block; overflow:hidden; text-overflow:ellipsis;">
+                                @d.Email · @d.Phone
+                            </MudText>
+                        </div>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@VehicleEmoji(d.Vehicle) @Fmt.VehicleLabel(d.Vehicle, L)</MudChip>
+                    </div>
+
+                    @if (d.SubmittedAt is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                            📅 @d.SubmittedAt.Value.ToString("yyyy-MM-dd HH:mm") · @Fmt.TimeAgo(d.SubmittedAt.Value, L)
+                        </MudText>
+                    }
+                    @if (d.Status == DriverVerificationStatus.Rejected && !string.IsNullOrWhiteSpace(d.Reason))
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2 rounded-lg">@L["drv.reason"]: @d.Reason</MudAlert>
+                    }
+
+                    <div class="d-flex" style="gap: 8px;">
+                        @foreach (var (url, labelKey) in Docs(d))
+                        {
+                            var u = url;
+                            var lk = labelKey;
+                            <div style="flex: 1; min-width: 0;" class="text-center">
+                                @if (u is not null)
+                                {
+                                    <img src="@u" alt="@L[lk]" @onclick="@(() => ShowPhoto(u, L[lk]))"
+                                         style="width: 100%; height: 74px; object-fit: cover; border-radius: 10px; cursor: zoom-in; border: 1px solid var(--mud-palette-lines-default);" />
+                                }
+                                else
+                                {
+                                    <div style="height: 74px; border: 1px dashed var(--mud-palette-lines-default); border-radius: 10px; display:flex; align-items:center; justify-content:center; opacity:.5;">—</div>
+                                }
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="font-size: 10px;">@L[lk]</MudText>
+                            </div>
+                        }
+                    </div>
+
+                    @if (d.Status != DriverVerificationStatus.Approved)
+                    {
+                        <div class="d-flex mt-3" style="gap: 8px;">
+                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.CheckCircle" OnClick="@(() => Approve(d))">
+                                @L["admin.approve"]
+                            </MudButton>
+                            @if (d.Status != DriverVerificationStatus.Rejected)
+                            {
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small" FullWidth="true"
+                                           StartIcon="@Icons.Material.Filled.Cancel" OnClick="@(() => Reject(d))">
+                                    @L["admin.rejectBtn"]
+                                </MudButton>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex mt-3" style="gap: 8px;">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small" FullWidth="true"
+                                       StartIcon="@Icons.Material.Filled.Cancel" OnClick="@(() => Reject(d))">
+                                @L["admin.revoke"]
+                            </MudButton>
+                        </div>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+
+    @if (_rows.Count < _counts[_tab])
+    {
+        <div class="text-center mt-4">
+            <MudButton Variant="Variant.Outlined" OnClick="LoadMore" Disabled="_busy">@L["common.loadMore"]</MudButton>
+        </div>
+    }
+}
+
+@code {
+    private List<AdminDriverDocsDto>? _rows;
+    private readonly int[] _counts = new int[3];
+    private int _tab;
+    private bool _busy;
+    private const int PageSize = 30;
+
+    private static readonly DriverVerificationStatus[] TabStatus =
+        [DriverVerificationStatus.Pending, DriverVerificationStatus.Approved, DriverVerificationStatus.Rejected];
+
+    private static string VehicleEmoji(VehicleType v) => v switch
+    {
+        VehicleType.Car => "🚗",
+        VehicleType.Bicycle => "🚲",
+        _ => "🏍️"
+    };
+
+    private static (string?, string)[] Docs(AdminDriverDocsDto d) =>
+    [
+        (d.IdCardFront, "drv.idFront"),
+        (d.IdCardBack, "drv.idBack"),
+        (d.LicenseFront, "drv.licFront"),
+        (d.LicenseBack, "drv.licBack")
+    ];
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task OnTabChanged(int index)
+    {
+        _tab = index;
+        _rows = null;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        for (var i = 0; i < 3; i++)
+            _counts[i] = await Api.GetAdminDriverVerificationsCountAsync(TabStatus[i]);
+        _rows = await Api.GetAdminDriverVerificationsAsync(TabStatus[_tab], 0, PageSize) ?? [];
+    }
+
+    private async Task LoadMore()
+    {
+        if (_rows is null) return;
+        _busy = true;
+        try
+        {
+            var more = await Api.GetAdminDriverVerificationsAsync(TabStatus[_tab], _rows.Count, PageSize) ?? [];
+            _rows.AddRange(more);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ShowPhoto(string dataUrl, string title)
+    {
+        var options = new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true };
+        var parameters = new DialogParameters<PhotoDialog> { { x => x.DataUrl, dataUrl }, { x => x.Title, title } };
+        await Dialogs.ShowAsync<PhotoDialog>(title, parameters, options);
+    }
+
+    private async Task Approve(AdminDriverDocsDto d)
+    {
+        var (ok, error) = await Api.AdminApproveDriverDocsAsync(d.UserId);
+        if (ok) Snackbar.Add($"✅ {d.FullName} — {L["drv.stApproved"]}", Severity.Success);
+        else Snackbar.Add(error ?? L["common.wentWrong"], Severity.Error);
+        await Reload();
+    }
+
+    private async Task Reject(AdminDriverDocsDto d)
+    {
+        var parameters = new DialogParameters<RejectDialog> { { x => x.DriverName, d.FullName } };
+        var dialog = await Dialogs.ShowAsync<RejectDialog>(L["admin.rejectBtn"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: string reason } && !string.IsNullOrWhiteSpace(reason))
+        {
+            var (ok, error) = await Api.AdminRejectDriverDocsAsync(d.UserId, reason);
+            if (ok) Snackbar.Add($"🚫 {d.FullName} — {L["drv.stRejected"]}", Severity.Warning);
+            else Snackbar.Add(error ?? L["common.wentWrong"], Severity.Error);
+            await Reload();
+        }
+    }
+}

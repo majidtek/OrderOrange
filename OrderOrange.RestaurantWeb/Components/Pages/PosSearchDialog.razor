@@ -1,0 +1,70 @@
+﻿@inject LanguageService L
+
+@* Product search for the till: type, tap quantities, "add" drops it all on the ticket. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">🔍 @L["cust.searchProduct"]</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_search" Placeholder="@L["cust.searchProduct"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Immediate="true" Clearable="true" AutoFocus="true" Class="mb-2"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+
+        <div class="co-items" style="max-height: 48vh;">
+            @foreach (var item in Matches)
+            {
+                var dish = item;
+                var qty = _picked.GetValueOrDefault(dish.Id);
+                <div class="co-row @(qty > 0 ? "on" : "")">
+                    <div class="co-name">
+                        <div class="n">@dish.NameFor(L.Locale)</div>
+                        <div class="p mf-ltr">@Fmt.Rial(dish.FinalPrice)</div>
+                    </div>
+                    <div class="co-step">
+                        <MudIconButton Icon="@Icons.Material.Filled.RemoveCircleOutline" Size="Size.Small"
+                                       Disabled="@(qty == 0)" OnClick="@(() => Bump(dish, -1))" />
+                        <span class="q">@qty</span>
+                        <MudIconButton Icon="@Icons.Material.Filled.AddCircle" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="@(() => Bump(dish, 1))" />
+                    </div>
+                </div>
+            }
+            @if (!Matches.Any())
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="my-4">
+                    @L["cust.noProducts"]
+                </MudText>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_picked.Count == 0)"
+                   StartIcon="@Icons.Material.Filled.PlaylistAdd"
+                   OnClick="@(() => Dialog.Close(DialogResult.Ok(_picked)))">
+            @L["tab.add"] (@_picked.Values.Sum())
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public List<MenuCategoryDto> Menu { get; set; } = [];
+
+    private readonly Dictionary<int, int> _picked = [];
+    private string _search = "";
+
+    private IEnumerable<MenuItemDto> Matches =>
+        string.IsNullOrWhiteSpace(_search)
+            ? Menu.SelectMany(c => c.Items)
+            : Menu.SelectMany(c => c.Items)
+                  .Where(i => i.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private void Bump(MenuItemDto item, int delta)
+    {
+        var next = _picked.GetValueOrDefault(item.Id) + delta;
+        if (next <= 0) _picked.Remove(item.Id);
+        else _picked[item.Id] = next;
+    }
+}

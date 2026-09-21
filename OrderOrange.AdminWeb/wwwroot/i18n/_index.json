@@ -1,0 +1,128 @@
+[
+ {
+  "code": "ar",
+  "name": "العربية",
+  "flag": "🇴🇲",
+  "rtl": true,
+  "order": 1,
+  "keys": 4275,
+  "kb": 243
+ },
+ {
+  "code": "de",
+  "name": "Deutsch",
+  "flag": "🇩🇪",
+  "rtl": false,
+  "order": 80,
+  "keys": 3182,
+  "kb": 148
+ },
+ {
+  "code": "en",
+  "name": "English",
+  "flag": "🇬🇧",
+  "rtl": false,
+  "order": 10,
+  "keys": 3182,
+  "kb": 139
+ },
+ {
+  "code": "es",
+  "name": "Español",
+  "flag": "🇪🇸",
+  "rtl": false,
+  "order": 70,
+  "keys": 3182,
+  "kb": 146
+ },
+ {
+  "code": "fa",
+  "name": "فارسی",
+  "flag": "🇮🇷",
+  "rtl": true,
+  "order": 20,
+  "keys": 4275,
+  "kb": 251
+ },
+ {
+  "code": "fr",
+  "name": "Français",
+  "flag": "🇫🇷",
+  "rtl": false,
+  "order": 60,
+  "keys": 3182,
+  "kb": 152
+ },
+ {
+  "code": "hi",
+  "name": "हिन्दी",
+  "flag": "🇮🇳",
+  "rtl": false,
+  "order": 40,
+  "keys": 3182,
+  "kb": 222
+ },
+ {
+  "code": "it",
+  "name": "Italiano",
+  "flag": "🇮🇹",
+  "rtl": false,
+  "order": 100,
+  "keys": 3182,
+  "kb": 145
+ },
+ {
+  "code": "ja",
+  "name": "日本語",
+  "flag": "🇯🇵",
+  "rtl": false,
+  "order": 130,
+  "keys": 3182,
+  "kb": 162
+ },
+ {
+  "code": "pt",
+  "name": "Português",
+  "flag": "🇵🇹",
+  "rtl": false,
+  "order": 110,
+  "keys": 3182,
+  "kb": 145
+ },
+ {
+  "code": "ru",
+  "name": "Русский",
+  "flag": "🇷🇺",
+  "rtl": false,
+  "order": 90,
+  "keys": 3182,
+  "kb": 190
+ },
+ {
+  "code": "tr",
+  "name": "Türkçe",
+  "flag": "🇹🇷",
+  "rtl": false,
+  "order": 50,
+  "keys": 3182,
+  "kb": 144
+ },
+ {
+  "code": "ur",
+  "name": "اردو",
+  "flag": "🇵🇰",
+  "rtl": true,
+  "order": 30,
+  "keys": 4275,
+  "kb": 247
+ },
+ {
+  "code": "zh",
+  "name": "中文",
+  "flag": "🇨🇳",
+  "rtl": false,
+  "order": 120,
+  "keys": 3182,
+  "kb": 136
+ }
+]

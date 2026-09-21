@@ -1,0 +1,54 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField Margin="Margin.Dense" @bind-Value="_name" Label="@L["common.name"]" Variant="Variant.Outlined" Class="mb-3"
+                      Placeholder="@L["admin.cuisinePh"]" />
+        <MudTextField Margin="Margin.Dense" @bind-Value="_emoji" Label="@L["admin.emoji"]" Variant="Variant.Outlined" Placeholder="🍕" />
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy">@L["common.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public CuisineDto? Existing { get; set; }
+
+    private string _name = "";
+    private string _emoji = "";
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null) return;
+        _name = Existing.Name;
+        _emoji = Existing.Emoji;
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var request = new SaveCuisineRequest(_name, _emoji);
+            var (ok, error) = Existing is null
+                ? await Api.CreateCuisineAsync(request)
+                : await Api.UpdateCuisineAsync(Existing.Id, request);
+            if (!ok) { _error = error; return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

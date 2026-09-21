@@ -1,0 +1,140 @@
+@namespace OrderOrange.ClientCore.Components
+@using OrderOrange.ClientCore.Services
+@inject IJSRuntime JS
+@inject LanguageService L
+@inject ISnackbar Snackbar
+
+@* The reply box of a support ticket: text plus up to five attachments (photos are
+   compressed in the browser, any other file up to 2 MB), pulled over the SignalR
+   bridge in 50 KB hops. Used by the ticket thread AND the new-ticket sheet. *@
+
+<div class="tk-composer @(Compact ? "compact" : "")">
+    <MudTextField T="string" @bind-Value="_text" Lines="@Lines" Variant="Variant.Outlined" Margin="Margin.Dense"
+                  Placeholder="@Placeholder" MaxLength="4000" Immediate="true" Class="tk-text" />
+    @if (_pending.Count > 0)
+    {
+        <div class="tk-pending">
+            @foreach (var a in _pending)
+            {
+                var att = a;
+                <span class="tk-chip @(att.IsImage ? "img" : "")">
+                    @if (att.IsImage)
+                    {
+                        <img src="@att.Data" alt="" />
+                    }
+                    else
+                    {
+                        <span class="ic">📎</span>
+                    }
+                    <b>@att.Name</b>
+                    <small>@SupportUi.HumanSize(att.Size)</small>
+                    <button type="button" @onclick="@(() => _pending.Remove(att))" aria-label="remove">✕</button>
+                </span>
+            }
+        </div>
+    }
+    @if (_uploadPct >= 0)
+    {
+        <MudProgressLinear Value="@_uploadPct" Color="Color.Primary" Rounded="true" Class="my-1" />
+    }
+    <div class="tk-tools">
+        <button type="button" class="tk-tool" @onclick="@(() => PickImage())" disabled="@(_busy || _pending.Count >= 5)" title="@L["tk.f.photo"]">📷 <span>@L["tk.f.photo"]</span></button>
+        <button type="button" class="tk-tool" @onclick="@(() => PickFile())" disabled="@(_busy || _pending.Count >= 5)" title="@L["tk.f.file"]">📎 <span>@L["tk.f.file"]</span></button>
+        <span class="tk-spacer"></span>
+        @if (Extra is not null)
+        {
+            @Extra
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Disabled="@(_busy || !CanSend)"
+                   StartIcon="@Icons.Material.Filled.Send" OnClick="Send" Class="tk-send">@(SendText ?? L["tk.f.send"])</MudButton>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? SendText { get; set; }
+    [Parameter] public int Lines { get; set; } = 3;
+    [Parameter] public bool Compact { get; set; }
+    /// <summary>When false the text may be empty as long as a file is attached.</summary>
+    [Parameter] public bool RequireText { get; set; }
+    [Parameter] public RenderFragment? Extra { get; set; }
+    [Parameter] public EventCallback<TicketReplyRequest> OnSend { get; set; }
+
+    private sealed class Pending
+    {
+        public string Name = ""; public string Data = ""; public bool IsImage; public int Size;
+    }
+
+    private string _text = "";
+    private readonly List<Pending> _pending = [];
+    private int _uploadPct = -1;
+    private bool _busy;
+
+    private bool CanSend => _text.Trim().Length > 0 || (!RequireText && _pending.Count > 0);
+
+    public string Text => _text;
+
+    public void Clear() { _text = ""; _pending.Clear(); }
+
+    private async Task Send()
+    {
+        if (!CanSend || _busy) return;
+        _busy = true;
+        try
+        {
+            var req = new TicketReplyRequest(_text.Trim(), _pending.Select(p => new NewAttachmentRequest(p.Name, p.Data)).ToList());
+            await OnSend.InvokeAsync(req);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task PickImage()
+    {
+        var meta = await JS.InvokeAsync<string?>("mfImage.pick", false);
+        if (string.IsNullOrEmpty(meta)) return;
+        if (meta is "too-big" or "huge") { Snackbar.Add(L["tk.e.attach"], Severity.Warning); return; }
+        await Pull(meta, "photo.jpg", isImage: true);
+        try { await JS.InvokeVoidAsync("mfImage.clearPending"); } catch { }
+    }
+
+    private async Task PickFile()
+    {
+        var raw = await JS.InvokeAsync<string?>("mfFile.pick");
+        if (string.IsNullOrEmpty(raw)) return;
+        if (raw == "too-big") { Snackbar.Add(L["tk.e.attach"], Severity.Warning); return; }
+        await Pull(raw, null, isImage: false);
+    }
+
+    private async Task Pull(string meta, string? fallbackName, bool isImage)
+    {
+        _uploadPct = 0; _busy = true;
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(meta);
+            var id = doc.RootElement.GetProperty("id").GetString()!;
+            var size = doc.RootElement.GetProperty("size").GetInt32();
+            var name = doc.RootElement.TryGetProperty("name", out var n) ? n.GetString() : null;
+            var sb = new System.Text.StringBuilder(size);
+            for (var offset = 0; offset < size; offset += 50000)
+            {
+                sb.Append(await JS.InvokeAsync<string>("mfBlob.chunk", id, offset, 50000));
+                _uploadPct = (int)Math.Min(99, (offset + 50000) * 100L / size);
+                StateHasChanged();
+            }
+            await JS.InvokeVoidAsync("mfBlob.end", id);
+            if (sb.Length != size) return;
+            var data = sb.ToString();
+            var comma = data.IndexOf(',');
+            var mime = comma > 5 ? data[5..comma].Split(';')[0] : "";
+            _pending.Add(new Pending
+            {
+                Name = string.IsNullOrWhiteSpace(name) ? (fallbackName ?? "file") : name!,
+                Data = data,
+                IsImage = isImage || mime.StartsWith("image/"),
+                Size = (int)((data.Length - comma - 1) * 3L / 4),
+            });
+        }
+        catch { Snackbar.Add(L["tk.e.attach"], Severity.Warning); }
+        finally { _uploadPct = -1; _busy = false; }
+    }
+}

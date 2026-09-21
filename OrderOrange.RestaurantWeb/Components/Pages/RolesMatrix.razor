@@ -1,0 +1,457 @@
+@page "/team-roles"
+@inject LanguageService L
+@inject AppState State
+@inject NavigationManager Nav
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+
+@* Roles and permissions, in the open: pick a role to see its key alone, or read the
+   whole matrix at once. The same catalog the API enforces with — this page is a
+   window onto the lock, never a second opinion about it. *@
+
+<PageTitle>Partner — Roles & permissions</PageTitle>
+
+<div class="rl">
+    @* ---------- The band ---------- *@
+    <div class="rl-hero">
+        <div class="tx">
+            <span class="kicker">🔐 @L["roles.kicker"]</span>
+            <b>@L["roles.title"]</b>
+            <small>@L["roles.sub"]</small>
+        </div>
+        <div class="acts">
+            <MudButton Variant="Variant.Text" Class="rl-hero-link" StartIcon="@Icons.Material.Filled.AddCircle"
+                       OnClick="@(() => BeginRole(null))">@L["roles.newRole"]</MudButton>
+            <MudButton Variant="Variant.Text" Class="rl-hero-link" StartIcon="@Icons.Material.Filled.AdminPanelSettings"
+                       Href="/team-users">@L["nav.teamUsers"]</MudButton>
+        </div>
+    </div>
+
+    @* ---------- Role cards. Tapping one focuses the matrix on that key. ---------- *@
+    <div class="rl-cards">
+        <button type="button" class="rl-card owner @(_focus is null ? "" : "dim")" @onclick="@(() => _focus = null)">
+            <span class="ring" style="--pct: 100">
+                <span class="ic">👑</span>
+            </span>
+            <b>@L["trole.owner"]</b>
+            <small>@L["roles.ownerWhat"]</small>
+            <i class="cnt full">@L["roles.everything"]</i>
+        </button>
+        @foreach (var role in Roles)
+        {
+            var r = role;
+            var have = EffectiveOf(r).Count;
+            var pct = (int)Math.Round(have * 100.0 / Perm.All.Length);
+            var edited = _presets.ContainsKey(r);
+            @* A div, not a button: the pencil below is a button of its own, and a
+               button inside a button is not HTML. *@
+            <div role="button" tabindex="0" class="rl-card @Slug(r) @(_focus == r ? "on" : _focus is null ? "" : "dim")"
+                 @onclick="@(() => _focus = _focus == r ? null : r)">
+                <span class="ring" style="--pct: @pct">
+                    <span class="ic">@RoleEmoji(r)</span>
+                </span>
+                <b>@L[$"trole.{Slug(r)}"]</b>
+                <small>@L[$"roles.what.{Slug(r)}"]</small>
+                <i class="cnt">@string.Format(L["roles.nOf"], have, Perm.All.Length)@(edited ? " ✎" : "")</i>
+                <div class="ops">
+                    <button type="button" @onclick="@(() => BeginPreset(r))" @onclick:stopPropagation="true"
+                            title="@L["roles.editPreset"]">
+                        <MudIcon Icon="@Icons.Material.Filled.Edit" />
+                    </button>
+                    @if (edited)
+                    {
+                        <button type="button" class="danger" @onclick="@(() => ResetPreset(r))" @onclick:stopPropagation="true"
+                                title="@L["roles.resetDefault"]">
+                            <MudIcon Icon="@Icons.Material.Filled.Restore" />
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @* ---------- Roles this shop wrote for itself ---------- *@
+    <div class="rl-sec">
+        <MudIcon Icon="@Icons.Material.Filled.Key" Style="width:17px;height:17px;" />
+        @L["roles.custom"]
+        @if (_custom is { Count: > 0 })
+        {
+            <span class="n">@_custom.Count</span>
+        }
+    </div>
+    @if (_custom is { Count: 0 })
+    {
+        @* An invitation, not a blank space: the first custom role is the hard one. *@
+        <button type="button" class="rl-empty" @onclick="@(() => BeginRole(null))">
+            <span class="ic">🔑</span>
+            <b>@L["roles.emptyTitle"]</b>
+            <small>@L["roles.emptySub"]</small>
+            <span class="cta"><MudIcon Icon="@Icons.Material.Filled.Add" /> @L["roles.newRole"]</span>
+        </button>
+    }
+    else if (_custom is { Count: > 0 })
+    {
+        <div class="rl-cards custom">
+            @foreach (var c in _custom)
+            {
+                var role = c;
+                var pct = (int)Math.Round(role.Perms.Count * 100.0 / Perm.All.Length);
+                <div class="rl-card own">
+                    <span class="ring" style="--pct: @pct"><span class="ic">@role.Icon</span></span>
+                    <b>@role.Name</b>
+                    <small>@string.Format(L["roles.heldBy"], role.Members)</small>
+                    <i class="cnt">@string.Format(L["roles.nOf"], role.Perms.Count, Perm.All.Length)</i>
+                    <div class="ops">
+                        <button type="button" @onclick="@(() => BeginRole(role))" title="@L["common.edit"]">
+                            <MudIcon Icon="@Icons.Material.Filled.Edit" />
+                        </button>
+                        <button type="button" class="danger" @onclick="@(() => DeleteRole(role))" title="@L["common.delete"]">
+                            <MudIcon Icon="@Icons.Material.Filled.DeleteOutline" />
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_focus is { } focused)
+    {
+        <div class="rl-focus">
+            <MudIcon Icon="@Icons.Material.Filled.FilterAlt" Style="width:16px;height:16px;" />
+            <span>@string.Format(L["roles.showing"], L[$"trole.{Slug(focused)}"])</span>
+            <button type="button" @onclick="@(() => _focus = null)">@L["roles.showAll"] ✕</button>
+        </div>
+    }
+
+    @* ---------- The matrix ---------- *@
+    <div class="rl-wrap">
+        <table class="rl-table">
+            <thead>
+                <tr>
+                    <th class="what">@L["roles.canDo"]</th>
+                    <th class="owner">
+                        <span class="hd"><i>👑</i>@L["trole.owner"]</span>
+                    </th>
+                    @foreach (var role in Shown)
+                    {
+                        <th class="@(_focus == role ? "hot" : "")">
+                            <span class="hd"><i>@RoleEmoji(role)</i>@L[$"trole.{Slug(role)}"]</span>
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var group in Groups)
+                {
+                    <tr class="grp">
+                        <td colspan="@(Shown.Count + 2)">
+                            <span class="gi">@GroupEmoji(group.Key)</span> @L[$"roles.g.{group.Key}"]
+                        </td>
+                    </tr>
+                    @foreach (var perm in group.Value)
+                    {
+                        <tr>
+                            <td class="what">
+                                <b>@L[$"perm.{perm}"]</b>
+                                <small>@L[$"permh.{perm}"]</small>
+                            </td>
+                            <td class="owner"><span class="yes">✓</span></td>
+                            @foreach (var role in Shown)
+                            {
+                                var allowed = EffectiveOf(role).Contains(perm);
+                                <td class="@(_focus == role ? "hot" : "")">
+                                    <span class="@(allowed ? "yes" : "no")">@(allowed ? "✓" : "–")</span>
+                                </td>
+                            }
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="rl-note">
+        <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Style="width:18px;height:18px;" />
+        <span>@L["roles.enforced"]</span>
+    </div>
+</div>
+
+@* ---------- Writing a role: a name, a face, and the doors it opens ---------- *@
+@if (_editorOpen)
+{
+    <div class="oo-modal" @onclick="@(() => _editorOpen = false)">
+        <div class="rl-sheet" @onclick:stopPropagation="true">
+            <div class="head">
+                <span class="ic">@(_editPreset is { } pr ? RoleEmoji(pr) : _icon)</span>
+                <b>@(_editPreset is { } ph ? L[$"trole.{Slug(ph)}"] : _editRole is null ? L["roles.newRole"] : _editRole.Name)</b>
+            </div>
+
+            @* A preset keeps its name and face — only its doors are up for rewriting. *@
+            @if (_editPreset is null)
+            {
+                <div class="two">
+                    <MudTextField @bind-Value="_name" Label="@L["roles.roleName"]" Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" MaxLength="60" Immediate="true" />
+                    <div class="icons">
+                        @foreach (var e in Icons2)
+                        {
+                            var em = e;
+                            <button type="button" class="@(_icon == em ? "on" : "")" @onclick="@(() => _icon = em)">@em</button>
+                        }
+                    </div>
+                </div>
+            }
+
+            @* Start from a preset rather than from nothing — most roles are a known
+               shape with one or two doors added or taken away. *@
+            <div class="tpl">
+                <span class="lb">@L["roles.startFrom"]</span>
+                @foreach (var role in Roles)
+                {
+                    var r = role;
+                    <button type="button" @onclick="@(() => ApplyTemplate(r))">
+                        @RoleEmoji(r) @L[$"trole.{Slug(r)}"]
+                    </button>
+                }
+            </div>
+
+            <div class="pk-head">
+                <b>@L["roles.canDo"]</b>
+                <span class="n">@_picked.Count / @Perm.All.Length</span>
+                <div class="find">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" Style="width:15px;height:15px;" />
+                    <input @bind="_permSearch" @bind:event="oninput" placeholder="@L["roles.findPerm"]" />
+                </div>
+                <button type="button" @onclick="PickAll">@L["roles.all"]</button>
+                <button type="button" @onclick="@(() => _picked.Clear())">@L["roles.none"]</button>
+            </div>
+
+            <div class="pk">
+                @foreach (var group in Groups)
+                {
+                    var shown = group.Value.Where(Matches).ToList();
+                    if (shown.Count == 0) { continue; }
+                    var g = group;
+                    var allOn = shown.All(_picked.Contains);
+                    <div class="pk-grp">
+                        <div class="t">
+                            <span>@GroupEmoji(g.Key) @L[$"roles.g.{g.Key}"]</span>
+                            <span class="cnt">@g.Value.Count(_picked.Contains)/@g.Value.Length</span>
+                            @* One tick for the whole group — building a role should not
+                               mean fourteen separate taps. *@
+                            <button type="button" class="grp-all @(allOn ? "on" : "")"
+                                    @onclick="@(() => ToggleGroup(shown, !allOn))"
+                                    title="@L[allOn ? "roles.none" : "roles.all"]">@(allOn ? "✓" : "＋")</button>
+                        </div>
+                        @foreach (var p in shown)
+                        {
+                            var perm = p;
+                            var on = _picked.Contains(perm);
+                            <button type="button" class="pk-item @(on ? "on" : "")" @onclick="@(() => Toggle(perm))">
+                                <span class="box">@(on ? "✓" : "")</span>
+                                <span class="tx">
+                                    <b>@L[$"perm.{perm}"]</b>
+                                    <small>@L[$"permh.{perm}"]</small>
+                                </span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="acts">
+                <span class="sum">@string.Format(L["roles.willOpen"], _picked.Count)</span>
+                @if (_editPreset is { } rp && _presets.ContainsKey(rp))
+                {
+                    <MudButton OnClick="@(() => ResetPreset(rp))" StartIcon="@Icons.Material.Filled.Restore">
+                        @L["roles.resetDefault"]
+                    </MudButton>
+                }
+                <MudButton OnClick="@(() => _editorOpen = false)">@L["common.cancel"]</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveRole" Disabled="_busy"
+                           StartIcon="@Icons.Material.Filled.Save">@L["common.save"]</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly StoreRole[] Roles =
+        [StoreRole.Manager, StoreRole.Cashier, StoreRole.Kitchen, StoreRole.Waiter];
+
+    /// <summary>Null = the whole board; a role = that column alone, magnified.</summary>
+    private StoreRole? _focus;
+
+    private List<StoreRole> Shown =>
+        _focus is { } f ? [f] : Roles.ToList();
+
+    /// <summary>The rows, grouped the way an owner thinks about their shop.</summary>
+    private static readonly Dictionary<string, string[]> Groups = new()
+    {
+        ["floor"] = [Perm.Pos, Perm.Orders, Perm.OrdersCancel, Perm.InvoiceCancel, Perm.InvoiceEdit,
+                     Perm.Tables, Perm.TablesView, Perm.GuestChat, Perm.Reservations, Perm.Deliveries],
+        ["goods"] = [Perm.Menu, Perm.MenuView, Perm.Inventory, Perm.InventoryView, Perm.Suppliers, Perm.SuppliersView],
+        ["money"] = [Perm.Contracts, Perm.Reports, Perm.Bills, Perm.Payments, Perm.Payroll, Perm.Discounts],
+        ["house"] = [Perm.Customers, Perm.CustomersView, Perm.Staff, Perm.Settings, Perm.Team, Perm.TeamChat, Perm.Surveys, Perm.Calendar],
+    };
+
+    private static string Slug(StoreRole role) => role.ToString().ToLowerInvariant();
+
+    private static string RoleEmoji(StoreRole role) => role switch
+    {
+        StoreRole.Manager => "🧭",
+        StoreRole.Cashier => "💳",
+        StoreRole.Kitchen => "🍳",
+        StoreRole.Waiter => "🍽️",
+        _ => "👤",
+    };
+
+    private static string GroupEmoji(string group) => group switch
+    {
+        "floor" => "🛎️",
+        "goods" => "📦",
+        "money" => "💰",
+        _ => "🏠",
+    };
+
+    // ---------- Roles this shop wrote for itself ----------
+
+    private List<StoreRoleDefDto>? _custom;
+    private bool _editorOpen;
+    private bool _busy;
+    private StoreRoleDefDto? _editRole;
+    private string _name = "";
+    private string _icon = "🔑";
+    private readonly HashSet<string> _picked = [];
+
+    private static readonly string[] Icons2 =
+        ["🔑", "🧭", "💳", "🍳", "🍽️", "📊", "🚚", "🧾", "🧹", "⭐"];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustom();
+        await LoadPresets();
+    }
+
+    private async Task LoadCustom() => _custom = await Api.GetCustomRolesAsync() ?? [];
+
+    // ---------- The presets, as THIS shop has rewritten them ----------
+
+    /// <summary>Only rewritten presets appear here; an absent role opens its built-in doors.</summary>
+    private Dictionary<StoreRole, HashSet<string>> _presets = [];
+
+    /// <summary>Which preset the sheet is rewriting; null = the sheet edits a custom role.</summary>
+    private StoreRole? _editPreset;
+
+    private async Task LoadPresets() =>
+        _presets = (await Api.GetPresetRolesAsync() ?? [])
+            .ToDictionary(p => p.Role, p => p.Perms.ToHashSet());
+
+    /// <summary>What the role really opens here: the shop's rewrite, else the built-in key.</summary>
+    private IReadOnlyCollection<string> EffectiveOf(StoreRole role) =>
+        _presets.TryGetValue(role, out var set) ? set : Perm.Of(role);
+
+    private void BeginPreset(StoreRole role)
+    {
+        _editPreset = role;
+        _editRole = null;
+        _picked.Clear();
+        foreach (var p in EffectiveOf(role)) _picked.Add(p);
+        _permSearch = "";
+        _editorOpen = true;
+    }
+
+    private async Task ResetPreset(StoreRole role)
+    {
+        var (ok, error) = await Api.ResetPresetRoleAsync(role);
+        if (!ok) { Snackbar.Add(L.ServerError(error) ?? L["common.wentWrong"], Severity.Error); return; }
+        _editorOpen = false;
+        await LoadPresets();
+        Snackbar.Add(L["common.saved"], Severity.Success);
+    }
+
+    private void BeginRole(StoreRoleDefDto? role)
+    {
+        _editPreset = null;
+        _editRole = role;
+        _name = role?.Name ?? "";
+        _icon = role?.Icon ?? "🔑";
+        _picked.Clear();
+        if (role is not null) foreach (var p in role.Perms) _picked.Add(p);
+        _permSearch = "";
+        _editorOpen = true;
+    }
+
+    private void Toggle(string perm)
+    {
+        if (!_picked.Add(perm)) _picked.Remove(perm);
+    }
+
+    private void PickAll()
+    {
+        foreach (var p in Perm.All) _picked.Add(p);
+    }
+
+    private string _permSearch = "";
+
+    /// <summary>Search reads the permission's NAME and its description, in this language.</summary>
+    private bool Matches(string perm)
+    {
+        if (string.IsNullOrWhiteSpace(_permSearch)) return true;
+        var q = _permSearch.Trim();
+        return L[$"perm.{perm}"].Contains(q, StringComparison.OrdinalIgnoreCase)
+            || L[$"permh.{perm}"].Contains(q, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ToggleGroup(IEnumerable<string> perms, bool on)
+    {
+        foreach (var p in perms)
+        {
+            if (on) _picked.Add(p); else _picked.Remove(p);
+        }
+    }
+
+    /// <summary>Copy a preset's permissions as a starting point, then edit freely.</summary>
+    private void ApplyTemplate(StoreRole role)
+    {
+        _picked.Clear();
+        foreach (var p in Perm.Of(role)) _picked.Add(p);
+    }
+
+    private async Task SaveRole()
+    {
+        // Rewriting a preset: no name, no face — just the doors.
+        if (_editPreset is { } preset)
+        {
+            if (_picked.Count == 0) { Snackbar.Add(L["roles.pickOne"], Severity.Warning); return; }
+            _busy = true;
+            var (savedPreset, presetError) = await Api.SavePresetRoleAsync(preset, _picked.ToList());
+            _busy = false;
+            if (savedPreset is null) { Snackbar.Add(L.ServerError(presetError) ?? L["common.wentWrong"], Severity.Error); return; }
+            _editorOpen = false;
+            await LoadPresets();
+            Snackbar.Add(L["common.saved"], Severity.Success);
+            return;
+        }
+
+        if (_name.Trim().Length < 2) { Snackbar.Add(L["roles.needName"], Severity.Warning); return; }
+        _busy = true;
+        var req = new SaveStoreRoleDefRequest(_name.Trim(), _icon, _picked.ToList());
+        var (saved, error) = _editRole is null
+            ? await Api.CreateCustomRoleAsync(req)
+            : await Api.UpdateCustomRoleAsync(_editRole.Id, req);
+        _busy = false;
+        if (saved is null) { Snackbar.Add(L.ServerError(error) ?? L["common.wentWrong"], Severity.Error); return; }
+        _editorOpen = false;
+        await LoadCustom();
+        Snackbar.Add(L["common.saved"], Severity.Success);
+    }
+
+    private async Task DeleteRole(StoreRoleDefDto role)
+    {
+        var (ok, error) = await Api.DeleteCustomRoleAsync(role.Id);
+        if (!ok) { Snackbar.Add(L.ServerError(error) ?? L["common.wentWrong"], Severity.Error); return; }
+        await LoadCustom();
+        Snackbar.Add(L["common.deleted"], Severity.Success);
+    }
+}

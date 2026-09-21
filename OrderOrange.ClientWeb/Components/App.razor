@@ -1,0 +1,662 @@
+﻿@using Microsoft.Extensions.Caching.Memory
+@using OrderOrange.ClientCore.Services
+@using OrderOrange.ClientWeb.Seo
+@using OrderOrange.ClientWeb.Components.Pages
+@inject NavigationManager Nav
+@inject OrderOrange.ClientCore.Services.ApiClient Api
+@inject IMemoryCache Cache
+@inject IHttpContextAccessor Http
+@inject IConfiguration Config
+<!DOCTYPE html>
+<html lang="@Lang" dir="@(IsRtl ? "rtl" : "ltr")">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>@Title</title>
+    <base href="/" />
+
+    @* What a search engine and a shared link show, in the language the URL asks for
+       (?lang=xx; English when it does not ask). A page may replace the title and the
+       description through <HeadContent>; whatever it does not set falls back to these. *@
+    <meta name="description" content="@Description" />
+    <meta name="robots" content="@(IsPrivate ? "noindex, nofollow" : "index, follow, max-image-preview:large")" />
+    <link rel="canonical" href="@CanonicalUrl" />
+    @if (Config["Seo:GoogleSiteVerification"] is { Length: > 0 } gsv)
+    {
+        <meta name="google-site-verification" content="@gsv" />
+    }
+    @if (!IsPrivate)
+    {
+        @* The same page in every language, so each language's searchers get their own
+           snippet; x-default is the English page, which is also where ?lang= is absent. *@
+        foreach (var lc in Codes)
+        {
+            <link rel="alternate" hreflang="@lc" href="@WithLang(lc)" />
+        }
+        <link rel="alternate" hreflang="x-default" href="@WithLang("en")" />
+    }
+
+    <meta property="og:site_name" content="OrderOrange" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="@Title" />
+    <meta property="og:description" content="@Description" />
+    <meta property="og:url" content="@CanonicalUrl" />
+    <meta property="og:image" content="@OgImage" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content="@OgLocale(Lang)" />
+    @foreach (var lc in Codes.Where(c => c != Lang))
+    {
+        <meta property="og:locale:alternate" content="@OgLocale(lc)" />
+    }
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="@Title" />
+    <meta name="twitter:description" content="@Description" />
+    <meta name="twitter:image" content="@OgImage" />
+
+    @* Structured data, server-rendered so every crawler receives it: the platform
+       on every page, the SHOP (with its menu) on a shop's page. *@
+    <script type="application/ld+json">@((MarkupString)OrgJsonLd)</script>
+    @if (IsHome)
+    {
+        <script type="application/ld+json">@((MarkupString)WebSiteJsonLd)</script>
+    }
+    @if (StoreJsonLd is { } storeLd)
+    {
+        <script type="application/ld+json">@((MarkupString)storeLd)</script>
+        <script type="application/ld+json">@((MarkupString)BreadcrumbJsonLd)</script>
+    }
+    @if (LandingJsonLd is { } landingLd)
+    {
+        <script type="application/ld+json">@((MarkupString)landingLd)</script>
+    }
+    @if (PosJsonLd is { } posLd)
+    {
+        <script type="application/ld+json">@((MarkupString)posLd)</script>
+    }
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=Vazirmatn:wght@400;600;800&family=Noto+Sans+Devanagari:wght@400;600;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
+    <link rel="stylesheet" href="_content/OrderOrange.ClientCore/food.css?v=775" />
+    <link rel="icon" type="image/svg+xml" href="logo.svg?v=4" />
+    @* Must share the pages' render mode. Left static, it never receives the <PageTitle>
+       and <HeadContent> an interactive page sets, so every shop page was served to
+       crawlers with the site-wide title instead of its own. *@
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <div class="mf-ambient" aria-hidden="true">
+        <span class="glow g1"></span>
+        <span class="glow g2"></span>
+        <span class="glow g3"></span>
+        <span class="glow g4"></span>
+        <span class="stars"></span>
+    </div>
+
+    <Routes Crawler="@IsCrawler" SeoLang="@Lang" @rendermode="InteractiveServer" />
+    @if (_crawlerFooter.Length > 0)
+    {
+        @((MarkupString)_crawlerFooter)
+    }
+
+    <div id="components-reconnect-modal">
+        <div class="mf-reconnect-card" role="alertdialog" aria-live="polite">
+            @* The logo lives INSIDE the page: the card is shown when the network is gone, so it must not fetch anything. *@
+            <div class="mf-reconnect-halo"><span></span><span></span><svg class="mf-reconnect-logo" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="oo-rc-paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8A3D"/><stop offset="0.55" stop-color="#FF5A00"/><stop offset="1" stop-color="#E64500"/></linearGradient><linearGradient id="oo-rc-leaf" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2E9E4F"/><stop offset="1" stop-color="#57C97A"/></linearGradient></defs><path fill="url(#oo-rc-paper)" d="M20 15h24a5 5 0 0 1 5 5v38l-5.8-4.2L37.4 58l-5.8-4.2L25.8 58 20 53.8 14.2 58V20a5 5 0 0 1 5-5z" transform="translate(0.4 0)"/><path fill="#1F7A3C" d="M32 16.6c-.7 0-1.2-.6-1.2-1.2V11c0-.7.5-1.2 1.2-1.2s1.2.5 1.2 1.2v4.4c0 .6-.5 1.2-1.2 1.2z"/><path fill="url(#oo-rc-leaf)" d="M33.4 12.2c2.9-4.3 8-5.9 12-5.3.8.1 1.3 1 1 1.7-1.4 3.8-4.8 7.9-10 8.2-1.4.1-2.6-.4-3.4-1.2-.9-.9-.8-2.3.4-3.4z"/><rect x="20.5" y="27" width="23" height="4" rx="2" fill="#FFFFFF" opacity=".95"/><rect x="20.5" y="35" width="16" height="4" rx="2" fill="#FFFFFF" opacity=".95"/><rect x="20.5" y="43" width="23" height="5" rx="2.5" fill="#FFD8BF"/></svg></div>
+            <div class="mf-reconnect-title">Connection lost</div>
+            <div class="mf-reconnect-text">Reconnecting…</div>
+            <div class="mf-reconnect-status"></div>
+            <span class="mf-reconnect-meta"><span id="components-reconnect-max-retries"></span><span id="components-reconnect-current-attempt"></span><span id="components-seconds-to-next-attempt"></span></span>
+            <div class="mf-reconnect-dots"><i></i><i></i><i></i></div>
+            <div class="mf-reconnect-actions">
+                <button type="button" class="mf-reconnect-btn primary" data-act="retry" onclick="try{sessionStorage.setItem('oo-lp','1')}catch(e){};location.reload()">Reconnect now</button>
+                <button type="button" class="mf-reconnect-btn ghost" data-act="reload" onclick="location.reload()">Reload page</button>
+            </div>
+            <div class="mf-reconnect-brand">OrderOrange</div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" data-nosnippet>
+        <span class="msg">Something went wrong.</span>
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-infinite.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-lang.js?v=6"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-export.js?v=10"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-palette.js?v=3"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-chat.js?v=8"></script>
+    <script src="js/mf-maps.js"></script>
+    <script src="js/motion.min.js"></script>
+    <script src="js/mf-motion.js?v=2"></script>
+    <script src="js/mf-scroll.js?v=4"></script>
+    <script src="js/mf-slider.js?v=2"></script>
+    <script src="js/mf-input.js"></script>
+    <script src="js/mf-bot.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-google.js?v=2"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-voice.js?v=42"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-qty.js?v=11"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-reconnect.js?v=8"></script>
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-transport.js?v=1"></script>
+</body>
+
+</html>
+
+@code {
+    /// <summary>
+    /// This page's one true address. Built from the public host rather than from the
+    /// request, because behind IIS the request carries an internal one — and a canonical
+    /// tag pointing at localhost tells Google the page does not exist. Tracking parameters
+    /// are dropped; ?lang= is the ONE query parameter that is part of the address, because
+    /// it is what makes the Arabic page a different page from the English one.
+    /// </summary>
+    private const string Site = "https://www.orderorange.com";
+
+    /// <summary>The languages the app ships, in the order the picker shows them.</summary>
+    private static readonly string[] Codes = ["en", "ar", "fa", "ur", "hi", "de", "es", "fr", "it", "ja", "pt", "ru", "tr", "zh"];
+    private static readonly HashSet<string> RtlCodes = new(StringComparer.OrdinalIgnoreCase) { "ar", "fa", "ur" };
+    private static readonly Dictionary<string, string> OgLocales = new()
+    {
+        ["en"] = "en_US", ["ar"] = "ar_OM", ["fa"] = "fa_IR", ["ur"] = "ur_PK", ["hi"] = "hi_IN", ["de"] = "de_DE", ["es"] = "es_ES",
+        ["fr"] = "fr_FR", ["it"] = "it_IT", ["ja"] = "ja_JP", ["pt"] = "pt_PT", ["ru"] = "ru_RU", ["tr"] = "tr_TR", ["zh"] = "zh_CN",
+    };
+    private static string OgLocale(string code) => OgLocales.TryGetValue(code, out var v) ? v : "en_US";
+
+    private string Lang = "en";
+
+    /// <summary>
+    /// Search engines and link previewers announce themselves; they get the app's content
+    /// prerendered (see SessionGate) instead of a loading splash. Nobody else pays for
+    /// that extra render.
+    /// </summary>
+    private bool IsCrawler
+    {
+        get
+        {
+            var ua = Http.HttpContext?.Request.Headers.UserAgent.ToString() ?? "";
+            return ua.Length > 0 && System.Text.RegularExpressions.Regex.IsMatch(ua,
+                @"bot|crawl|spider|slurp|googl|bingpreview|yandex|duckduck|baidu|facebookexternalhit|facebot|whatsapp|telegram|twitterbot|linkedinbot|pinterest|embedly|quora|applebot|petalbot|semrush|ahrefs|lighthouse|pagespeed|headlesschrome",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+    }
+    private bool IsRtl => RtlCodes.Contains(Lang);
+    private string T(string key) => LanguageService.Translate(Lang, key);
+
+    private string Title = "OrderOrange";
+    private string Description = "";
+    private string OgImage = Site + "/og-default.jpg";
+    private string _path = "/";
+    private bool IsHome => _path == "/" && _seoStore is null && _landingKind.Length == 0;
+
+    /// <summary>True on /pos-system-oman — the page that sells the till.</summary>
+    private bool _isPos;
+
+    /// <summary>
+    /// Pages that belong to one person — a basket, an order, a bill, a sign-in step — are
+    /// never search results, whatever robots.txt says about crawling them.
+    /// </summary>
+    private static readonly HashSet<string> PrivateRoutes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "checkout", "orders", "profile", "addresses", "signin", "track", "bill", "reserve", "reserve-table",
+        "tab-invoice", "contract", "chat", "my-reservations", "reservations", "survey", "cart", "error",
+    };
+    private bool IsPrivate
+    {
+        get
+        {
+            var first = _path.Trim('/').Split('/', 2)[0];
+            return first.Length > 0 && PrivateRoutes.Contains(first);
+        }
+    }
+
+    /// <summary>
+    /// A shop's page gets the shop's own title and description, written HERE rather than
+    /// in the page component. &lt;PageTitle&gt; and &lt;HeadContent&gt; are set inside the
+    /// interactive Routes tree, which is a different render root from HeadOutlet, so
+    /// nothing they set ever reaches the HTML a crawler is served. This document is
+    /// rendered server-side for every request, which is exactly where the tags need to be.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        await InitHeadAsync();
+        if (IsCrawler && !IsPrivate)
+        {
+            try { _crawlerFooter = await CrawlerFooterAsync(); } catch { }
+        }
+    }
+
+    private async Task InitHeadAsync()
+    {
+        var uri = new Uri(Nav.Uri);
+        _path = uri.AbsolutePath.TrimEnd('/');
+        if (_path.Length == 0) _path = "/";
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var wantedLang = (query["lang"] ?? "").Trim().ToLowerInvariant();
+        if (Codes.Contains(wantedLang)) Lang = wantedLang;
+
+        Title = T("seo.siteTitle");
+        Description = T("seo.siteBlurb");
+
+        // The till page. It is the one address on this site aimed at the business rather
+        // than the diner, so it carries its own title, its own description and the
+        // SoftwareApplication record that says what OrderOrange is besides a menu.
+        if (_path == SeoSlugs.Pos)
+        {
+            _isPos = true;
+            Title = T("seo.posTitle");
+            Description = T("seo.posDesc");
+            return;
+        }
+
+        // The search landing pages: /food-delivery-oman, /cuisines/{slug}, /areas/{slug}.
+        // Their title, description and ItemList are built from the same store list the
+        // sitemap uses, so what Google is told and what the page lists always agree.
+        if (_path == SeoSlugs.Hub || _path.StartsWith("/cuisines/") || _path.StartsWith("/areas/"))
+        {
+            await BuildLandingAsync(_path);
+            return;
+        }
+
+        var path = uri.AbsolutePath;
+        int id;
+
+        // Any of the shapes a store URL takes: /restaurant/{id}, /store/{id}, /p/{id} —
+        // and the ?id= form printed on QR sheets, which is the one people actually paste
+        // into WhatsApp. The share crawler renders no JS, so the redirect the app does for
+        // ?id= never happens for it: the store's tags must be written into THIS response.
+        var match = System.Text.RegularExpressions.Regex.Match(path, @"^/(?:restaurant|store|p)/(\d+)/?$");
+        if (match.Success)
+        {
+            id = int.Parse(match.Groups[1].Value);
+        }
+        // The prettiest store URL of all — orderorange.com/<slug> — must not be the one
+        // that ships with the site-wide title. A single lowercase segment that is not a
+        // known app route can only be a slug; resolve it like one.
+        else if (System.Text.RegularExpressions.Regex.Match(path, @"^/([a-z0-9][a-z0-9-]{1,40})/?$") is { Success: true } slugMatch
+                 && !AppRoutes.Contains(slugMatch.Groups[1].Value))
+        {
+            try
+            {
+                var hit = await Api.ResolveSlugAsync(slugMatch.Groups[1].Value);
+                if (hit is null) return;
+                id = hit.Id;
+            }
+            catch { return; }
+        }
+        else
+        {
+            var wanted = query["id"];
+            if (string.IsNullOrWhiteSpace(wanted)) return;
+            if (!int.TryParse(wanted, out id))
+            {
+                try
+                {
+                    var hit = await Api.ResolveSlugAsync(wanted.Trim().ToLowerInvariant());
+                    if (hit is null) return;
+                    id = hit.Id;
+                }
+                catch { return; }
+            }
+        }
+        var key = $"seo:card:{id}";
+        if (!Cache.TryGetValue(key, out RestaurantCardDto? store) || store is null)
+        {
+            try { store = (await Api.GetRestaurantsByIdsAsync([id]))?.FirstOrDefault(); }
+            catch { /* the page still renders; it just keeps the site-wide wording */ }
+            if (store is null) return;
+            Cache.Set(key, store, TimeSpan.FromMinutes(30));
+        }
+
+        // The menu goes into the page's structured data (schema.org Menu), so a dish
+        // search can land on the shop that sells it. Cached like the card.
+        var menuKey = $"seo:menu:{id}";
+        if (!Cache.TryGetValue(menuKey, out List<MenuCategoryDto>? menu) || menu is null)
+        {
+            try { menu = (await Api.GetRestaurantAsync(id))?.Categories; } catch { }
+            menu ??= [];
+            Cache.Set(menuKey, menu, TimeSpan.FromMinutes(30));
+        }
+        _seoMenu = menu;
+
+        // The shop's name, kitchen and area in the page's language — the owner's own
+        // translations where they wrote them, the catalog's otherwise.
+        var name = StoreText.Name(store.Name, store.Names, Lang);
+        var kinds = store.Cuisines is { Count: > 0 }
+            ? string.Join(" · ", store.Cuisines.Select(c => CuisineText(c)))
+            : CuisineText(store.Cuisine);
+        var area = StoreText.Area(store.Area, Lang);
+        var hasArea = !string.IsNullOrWhiteSpace(area);
+        var where = hasArea ? $"{kinds} · {area}" : kinds;
+
+        _seoStore = store;
+        _seoName = name;
+        _seoCuisines = store.Cuisines is { Count: > 0 } ? store.Cuisines.Select(c => CuisineText(c)).ToList() : [CuisineText(store.Cuisine)];
+        Title = string.Format(T("seo.storeTitle"), name, where);
+        Description = string.Format(T("seo.storeDesc"), name, where);
+        // The store's own picture in the preview card — served raster, since the share
+        // crawlers render neither JS nor SVG.
+        OgImage = $"{Site}/og/{id}.jpg";
+        // ONE address per shop: the slug when it has one, else /restaurant/{id}. Every
+        // other shape of the URL points its canonical here, so Google never splits the
+        // shop into duplicate pages.
+        _storeCanonical = store.Slug.Length > 0 ? $"{Site}/{store.Slug}" : $"{Site}/restaurant/{store.Id}";
+    }
+
+    private string CuisineText(string? cuisine)
+    {
+        if (string.IsNullOrWhiteSpace(cuisine)) return "";
+        var translated = LanguageService.Translate(Lang, $"cuisine.{cuisine.Trim()}");
+        return translated == $"cuisine.{cuisine.Trim()}" ? cuisine : translated;
+    }
+
+    private RestaurantCardDto? _seoStore;
+    private List<MenuCategoryDto> _seoMenu = [];
+
+    // ---------- landing pages ----------
+    private List<RestaurantCardDto> _landingStores = [];
+    private string _landingKind = "";
+    private string _landingName = "";
+
+    /// <summary>The real, listed shops with every cuisine they carry — the list the landing pages show.</summary>
+    private async Task<List<RestaurantCardDto>> ListedStoresAsync()
+    {
+        const string key = "seo:cards";
+        if (Cache.TryGetValue(key, out List<RestaurantCardDto>? list) && list is not null) return list;
+        try { list = (await Api.BrowsePageAsync(null, take: 60) ?? []).Where(x => x.Id >= 5_000_200).ToList(); } catch { list = []; }
+        Cache.Set(key, list, TimeSpan.FromMinutes(30));
+        return list;
+    }
+    private static IEnumerable<string> CuisinesOf(RestaurantCardDto x) =>
+        (x.Cuisines is { Count: > 0 } ? x.Cuisines : [x.Cuisine]).Where(c => !string.IsNullOrWhiteSpace(c));
+
+    private async Task BuildLandingAsync(string path)
+    {
+        var all = await ListedStoresAsync();
+        if (path == SeoSlugs.Hub)
+        {
+            _landingKind = "hub"; _landingStores = all;
+            Title = T("seo.hubTitle"); Description = T("seo.hubDesc");
+        }
+        else if (path.StartsWith("/cuisines/"))
+        {
+            var slug = path["/cuisines/".Length..];
+            _landingKind = "cuisine";
+            _landingStores = all.Where(x => CuisinesOf(x).Any(c => SeoSlugs.Slug(c) == slug)).ToList();
+            var cuisineName = _landingStores.SelectMany(CuisinesOf).FirstOrDefault(c => SeoSlugs.Slug(c) == slug);
+            _landingName = CuisineText(cuisineName ?? System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(slug.Replace('-', ' ')));
+            Title = string.Format(T("seo.cuisineTitle"), _landingName);
+            Description = string.Format(T("seo.cuisineDesc"), _landingName, _landingStores.Count);
+        }
+        else
+        {
+            var slug = path["/areas/".Length..];
+            _landingKind = "area";
+            _landingStores = all.Where(x => SeoSlugs.Slug(x.Area) == slug).ToList();
+            _landingName = StoreText.Area(_landingStores.FirstOrDefault()?.Area ?? slug.Replace('-', ' '), Lang);
+            Title = string.Format(T("seo.areaTitle"), _landingName);
+            Description = string.Format(T("seo.areaDesc"), _landingName, _landingStores.Count);
+        }
+    }
+
+    /// <summary>
+    /// What OrderOrange is when it is not a menu: a point-of-sale system. Rides the home
+    /// page as well as the till page, because the home page is the address people land on
+    /// and it should say both halves of the product out loud.
+    /// </summary>
+    private string? PosJsonLd
+    {
+        get
+        {
+            if (!_isPos && !IsHome) return null;
+
+            var software = new Dictionary<string, object>
+            {
+                ["@type"] = "SoftwareApplication",
+                ["@id"] = Site + SeoSlugs.Pos + "#software",
+                ["name"] = "OrderOrange",
+                ["applicationCategory"] = "BusinessApplication",
+                ["applicationSubCategory"] = "POS for restaurants, cafés and shops",
+                ["alternateName"] = new[] { "Free POS system", "Free restaurant POS", "OrderOrange POS" },
+                ["isAccessibleForFree"] = true,
+                ["keywords"] = "free POS system, free restaurant POS, free POS software, point of sale for cafés and shops, kitchen display, QR menu, tablet POS, online ordering no commission, any currency, worldwide",
+                ["operatingSystem"] = "Web, Windows, Android, iOS",
+                ["description"] = T("seo.posDesc"),
+                ["url"] = Site + SeoSlugs.Pos,
+                ["inLanguage"] = Codes,
+                ["publisher"] = new Dictionary<string, object> { ["@id"] = Site + "/#org" },
+                // Built for anywhere: a shop sets its own currency, tax and language,
+                // so the record claims no country.
+                ["areaServed"] = new Dictionary<string, object> { ["@type"] = "Place", ["name"] = "Worldwide" },
+                ["offers"] = new Dictionary<string, object>
+                {
+                    ["@type"] = "Offer", ["name"] = "Free plan", ["price"] = "0", ["priceCurrency"] = "USD",
+                    ["availability"] = "https://schema.org/InStock",
+                    ["description"] = T("pos.priceBody"),
+                },
+                ["featureList"] = PosSoftware.Blocks.Select(b => T($"pos.{b}T")).ToArray(),
+            };
+
+            if (!_isPos)
+                return System.Text.Json.JsonSerializer.Serialize(
+                    new Dictionary<string, object> { ["@context"] = "https://schema.org", ["@graph"] = new object[] { software } },
+                    JsonOpts);
+
+            var faq = new Dictionary<string, object>
+            {
+                ["@type"] = "FAQPage",
+                ["@id"] = CanonicalUrl + "#faq",
+                ["mainEntity"] = Enumerable.Range(1, PosSoftware.FaqCount).Select(i => (object)new Dictionary<string, object>
+                {
+                    ["@type"] = "Question", ["name"] = T($"pos.q{i}"),
+                    ["acceptedAnswer"] = new Dictionary<string, object> { ["@type"] = "Answer", ["text"] = T($"pos.a{i}") },
+                }).ToList(),
+            };
+            var page = new Dictionary<string, object>
+            {
+                ["@type"] = "WebPage", ["@id"] = CanonicalUrl, ["url"] = CanonicalUrl,
+                ["name"] = Title, ["description"] = Description, ["inLanguage"] = Lang,
+                ["isPartOf"] = new Dictionary<string, object> { ["@id"] = Site + "/#site" },
+                ["about"] = new Dictionary<string, object> { ["@id"] = Site + SeoSlugs.Pos + "#software" },
+            };
+            var crumbs = new Dictionary<string, object>
+            {
+                ["@type"] = "BreadcrumbList",
+                ["itemListElement"] = new object[]
+                {
+                    new Dictionary<string, object> { ["@type"] = "ListItem", ["position"] = 1, ["name"] = "OrderOrange", ["item"] = Site + "/" },
+                    new Dictionary<string, object> { ["@type"] = "ListItem", ["position"] = 2, ["name"] = T("pos.h1"), ["item"] = CanonicalUrl },
+                },
+            };
+            return System.Text.Json.JsonSerializer.Serialize(
+                new Dictionary<string, object> { ["@context"] = "https://schema.org", ["@graph"] = new object[] { software, page, faq, crumbs } },
+                JsonOpts);
+        }
+    }
+
+    /// <summary>The landing page as an ItemList of the shops it shows.</summary>
+    private string? LandingJsonLd
+    {
+        get
+        {
+            if (_landingKind.Length == 0) return null;
+            var items = _landingStores.Take(50).Select((x, i) => (object)new Dictionary<string, object>
+            {
+                ["@type"] = "ListItem", ["position"] = i + 1, ["name"] = StoreText.Name(x.Name, x.Names, Lang),
+                ["url"] = x.Slug.Length > 0 ? $"{Site}/{x.Slug}" : $"{Site}/restaurant/{x.Id}",
+            }).ToList();
+            var ld = new Dictionary<string, object>
+            {
+                ["@context"] = "https://schema.org", ["@type"] = "CollectionPage", ["@id"] = CanonicalUrl, ["url"] = CanonicalUrl,
+                ["name"] = Title, ["description"] = Description, ["inLanguage"] = Lang,
+                ["isPartOf"] = new Dictionary<string, object> { ["@id"] = Site + "/#site" },
+                ["mainEntity"] = new Dictionary<string, object> { ["@type"] = "ItemList", ["numberOfItems"] = _landingStores.Count, ["itemListElement"] = items },
+            };
+            if (_landingKind == "hub")
+                ld["mainEntity"] = new object[] { ld["mainEntity"], new Dictionary<string, object> { ["@type"] = "FAQPage", ["mainEntity"] = Enumerable.Range(1, 4).Select(i => (object)new Dictionary<string, object>
+                    { ["@type"] = "Question", ["name"] = T($"browse.q{i}"), ["acceptedAnswer"] = new Dictionary<string, object> { ["@type"] = "Answer", ["text"] = T($"browse.a{i}") } }).ToList() } };
+            return System.Text.Json.JsonSerializer.Serialize(ld, JsonOpts);
+        }
+    }
+
+    /// <summary>
+    /// Crawlable links to every landing page, for search engines only: the app itself
+    /// navigates through its own UI, but a crawler needs plain anchors to discover
+    /// /cuisines/* and /areas/*.
+    /// </summary>
+    private async Task<string> CrawlerFooterAsync()
+    {
+        var all = await ListedStoresAsync();
+        var cuisines = all.SelectMany(CuisinesOf).Distinct().OrderBy(c => c).ToList();
+        var areas = SeoSlugs.Areas(all.Select(x => x.Area)).ToList();
+        string q = Lang == "en" ? "" : $"?lang={Lang}";
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"<footer class=\"mf-seo-footer\"><nav aria-label=\"Browse\"><a href=\"{SeoSlugs.Hub}{q}\">{System.Net.WebUtility.HtmlEncode(T("browse.hubH1"))}</a>");
+        foreach (var c in cuisines) sb.Append($"<a href=\"{SeoSlugs.CuisinePath(c)}{q}\">{System.Net.WebUtility.HtmlEncode(string.Format(T("browse.cuisineH1"), CuisineText(c)))}</a>");
+        foreach (var a in areas) sb.Append($"<a href=\"{SeoSlugs.AreaPath(a)}{q}\">{System.Net.WebUtility.HtmlEncode(string.Format(T("browse.areaH1"), StoreText.Area(a, Lang)))}</a>");
+        foreach (var x in all) sb.Append($"<a href=\"{(x.Slug.Length > 0 ? "/" + x.Slug : "/restaurant/" + x.Id)}{q}\">{System.Net.WebUtility.HtmlEncode(StoreText.Name(x.Name, x.Names, Lang))}</a>");
+        sb.Append($"<a href=\"{SeoSlugs.Pos}{q}\">{System.Net.WebUtility.HtmlEncode(T("pos.h1"))}</a>");
+        sb.Append("<a href=\"https://partner.orderorange.com/guide.html\">Partner guide</a><a href=\"https://partner.orderorange.com/api.html\">API</a></nav></footer>");
+        return sb.ToString();
+    }
+    private string _crawlerFooter = "";
+    private string _seoName = "";
+    private List<string> _seoCuisines = [];
+    private string? _storeCanonical;
+
+    /// <summary>Every first path segment the app itself owns — never a shop's slug.</summary>
+    private static readonly HashSet<string> AppRoutes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "restaurant", "store", "p", "checkout", "orders", "profile", "addresses", "signin",
+        "track", "bill", "reserve", "reserve-table", "tab-invoice", "contract", "chat",
+        "my-reservations", "reservations", "survey", "search", "cart", "error", "sitemap.xml", "robots.txt", "favicon.ico",
+        "cuisines", "areas", "food-delivery-oman", "pos-system-oman", "food-delivery", "pos-system", "pos", "guide",
+    };
+
+    /// <summary>The clean address of this page (no language, no tracking).</summary>
+    private string CleanUrl
+    {
+        get
+        {
+            if (_storeCanonical is not null) return _storeCanonical;
+            return _path == "/" ? Site + "/" : Site + _path;
+        }
+    }
+
+    /// <summary>The same page in a given language: English is the bare address.</summary>
+    private string WithLang(string code) => code == "en" ? CleanUrl : $"{CleanUrl}?lang={code}";
+
+    private string CanonicalUrl => WithLang(Lang);
+
+    private static readonly System.Text.Json.JsonSerializerOptions JsonOpts = new()
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    };
+
+    /// <summary>The platform itself, for every page.</summary>
+    private static readonly string OrgJsonLd = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "Organization",
+        ["@id"] = Site + "/#org",
+        ["name"] = "OrderOrange",
+        ["url"] = Site,
+        ["logo"] = Site + "/og-default.jpg",
+        ["areaServed"] = new Dictionary<string, object> { ["@type"] = "Place", ["name"] = "Worldwide" },
+        ["contactPoint"] = new Dictionary<string, object> { ["@type"] = "ContactPoint", ["telephone"] = "+968 7132 2207", ["contactType"] = "customer service", ["availableLanguage"] = new[] { "en", "ar", "fa" } },
+        ["sameAs"] = new[] { "https://www.instagram.com/order_orange", "https://partner.orderorange.com/guide.html" },
+    }, JsonOpts);
+
+    /// <summary>The site, once, on the home page — with the languages it speaks.</summary>
+    private string WebSiteJsonLd => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "WebSite",
+        ["@id"] = Site + "/#site",
+        ["name"] = "OrderOrange",
+        ["url"] = Site + "/",
+        ["description"] = Description,
+        ["inLanguage"] = Codes,
+        ["publisher"] = new Dictionary<string, object> { ["@id"] = Site + "/#org" },
+    }, JsonOpts);
+
+    private string BreadcrumbJsonLd => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "BreadcrumbList",
+        ["itemListElement"] = new object[]
+        {
+            new Dictionary<string, object> { ["@type"] = "ListItem", ["position"] = 1, ["name"] = "OrderOrange", ["item"] = WithLang(Lang) == CanonicalUrl && Lang != "en" ? $"{Site}/?lang={Lang}" : Site + "/" },
+            new Dictionary<string, object> { ["@type"] = "ListItem", ["position"] = 2, ["name"] = _seoName, ["item"] = CanonicalUrl },
+        },
+    }, JsonOpts);
+
+    /// <summary>The SHOP as schema.org sees one — name, place, phone, kitchen, and its menu.</summary>
+    private string? StoreJsonLd
+    {
+        get
+        {
+            if (_seoStore is not { } s) return null;
+            var data = new Dictionary<string, object>
+            {
+                ["@context"] = "https://schema.org",
+                ["@type"] = s.StoreType == StoreType.Restaurant ? "Restaurant" : "Store",
+                ["@id"] = CleanUrl + "#store",
+                ["name"] = _seoName,
+                ["url"] = CanonicalUrl,
+                ["image"] = OgImage,
+                ["inLanguage"] = Lang,
+                ["address"] = new Dictionary<string, object>
+                {
+                    ["@type"] = "PostalAddress",
+                    ["addressLocality"] = string.IsNullOrWhiteSpace(s.Area) ? "" : StoreText.Area(s.Area, Lang),
+                },
+                ["servesCuisine"] = _seoCuisines,
+                ["paymentAccepted"] = "Cash, Card",
+                ["parentOrganization"] = new Dictionary<string, object> { ["@id"] = Site + "/#org" },
+            };
+            if (!string.IsNullOrWhiteSpace(s.Description))
+                data["description"] = StoreText.Description(s.Description, Lang);
+            var phone = (s.Phone ?? "").Split(';', ',').Select(p => p.Trim()).FirstOrDefault(p => p.Length > 3);
+            if (phone is not null) data["telephone"] = phone.StartsWith('+') ? phone : "+968 " + phone;
+            if (s.MapLat is { } la && s.MapLng is { } ln)
+                data["geo"] = new Dictionary<string, object> { ["@type"] = "GeoCoordinates", ["latitude"] = la, ["longitude"] = ln };
+            if (s.RatingCount > 0 && s.Rating > 0)
+                data["aggregateRating"] = new Dictionary<string, object> { ["@type"] = "AggregateRating", ["ratingValue"] = Math.Round(s.Rating, 1), ["ratingCount"] = s.RatingCount, ["bestRating"] = 5, ["worstRating"] = 1 };
+            if (s.AllowsPickup)
+                data["hasOfferCatalog"] = new Dictionary<string, object> { ["@type"] = "OfferCatalog", ["name"] = "Pickup and delivery" };
+
+            // The menu, section by section, with prices in rials — the part a dish search reads.
+            var sections = new List<object>();
+            foreach (var c in _seoMenu.OrderBy(c => c.SortOrder))
+            {
+                var items = c.Items
+                    .Where(i => i.IsAvailable && !i.InStoreOnly && i.Price > 0)
+                    .OrderBy(i => i.SortOrder).Take(40)
+                    .Select(i =>
+                    {
+                        var item = new Dictionary<string, object>
+                        {
+                            ["@type"] = "MenuItem",
+                            ["name"] = i.NameFor(Lang),
+                            ["offers"] = new Dictionary<string, object> { ["@type"] = "Offer", ["price"] = i.Price.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture), ["priceCurrency"] = "OMR" },
+                        };
+                        var d = i.DescriptionFor(Lang);
+                        if (!string.IsNullOrWhiteSpace(d)) item["description"] = d;
+                        if (i.Photo is { Length: > 0 } photo && photo.StartsWith("http", StringComparison.OrdinalIgnoreCase)) item["image"] = photo;
+                        return (object)item;
+                    }).ToList();
+                if (items.Count == 0) continue;
+                sections.Add(new Dictionary<string, object> { ["@type"] = "MenuSection", ["name"] = c.NameFor(Lang), ["hasMenuItem"] = items });
+            }
+            if (sections.Count > 0)
+                data["hasMenu"] = new Dictionary<string, object> { ["@type"] = "Menu", ["name"] = _seoName, ["inLanguage"] = Lang, ["hasMenuSection"] = sections };
+            return System.Text.Json.JsonSerializer.Serialize(data, JsonOpts);
+        }
+    }
+}

@@ -1,0 +1,166 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The address form. The map is the SAME full picker the partners use: full
+   screen on a phone, place search, Google-link paste, GPS start — one tap on
+   the card below opens it; the mini-map shows what was chosen. *@
+
+<MudDialog Class="addr-dlg addr-modern">
+    <DialogContent>
+        @* ---- Step one, and the only required one: put a pin on the map. ---- *@
+        <section class="addr-map">
+            @if (_lat is null || _lng is null)
+            {
+                <button type="button" class="addr-map-empty" @onclick="OpenMap">
+                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Map" /></span>
+                    <span class="tx">
+                        <b>@L["loc.pick"]</b>
+                        <small>@L["addr.needPin"]</small>
+                    </span>
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="go oo-dir" />
+                </button>
+            }
+            else
+            {
+                <div class="loc-wrap">
+                    <div class="loc-prev" id="@PreviewId" @onclick="OpenMap" title="@L["loc.pick"]"></div>
+                    <button type="button" class="loc-change" @onclick="OpenMap">
+                        <MudIcon Icon="@Icons.Material.Filled.EditLocationAlt" Style="width:15px;height:15px;" />
+                        @L["loc.pick"]
+                    </button>
+                </div>
+            }
+        </section>
+
+        @* ---- Everything below is optional detail for the rider. ---- *@
+        <section class="addr-fields">
+            <MudTextField @bind-Value="_label" Label="@L["addr.label"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Bookmark" />
+            <MudTextField @bind-Value="_area" Label="@L["addr.area"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            <div class="pair">
+                <MudTextField @bind-Value="_street" Label="@L["addr.street"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudTextField @bind-Value="_building" Label="@L["addr.building"]" Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </div>
+            <MudTextField @bind-Value="_notes" Label="@L["addr.notes"]" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+        </section>
+
+        @if (_error is not null)
+        {
+            <div class="addr-err">
+                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline" /> @_error
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())" Class="addr-cancel">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy"
+                   Class="addr-save" StartIcon="@Icons.Material.Filled.Check">@(SaveLabel ?? L["addr.save"])</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    /// <summary>Null = create; set = edit.</summary>
+    [Parameter] public AddressDto? Existing { get; set; }
+
+    /// <summary>
+    /// Overrides the save button's text. Checkout sets "Place order" here when this
+    /// dialog IS the last step — saving the address finishes the purchase.
+    /// </summary>
+    [Parameter] public string? SaveLabel { get; set; }
+
+    private readonly string PreviewId = $"addrprev-{Guid.NewGuid():N}";
+    private string _label = "";
+    private string _area = "";
+    private string _street = "";
+    private string _building = "";
+    private string _notes = "";
+    private double? _lat;
+    private double? _lng;
+    private double? _shownLat;
+    private double? _shownLng;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        // A fresh address is called "Home" until the customer says otherwise — most
+        // first addresses ARE home, and a filled field beats an empty one to skip.
+        if (Existing is null) { _label = L["addr.home"]; return; }
+        _label = Existing.Label;
+        _area = Existing.Area;
+        _street = Existing.Street;
+        _building = Existing.Building;
+        _notes = Existing.Notes ?? "";
+        _lat = Existing.Lat;
+        _lng = Existing.Lng;
+    }
+
+    /// <summary>The mini-map redraws only when the pin actually moved.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_lat is null || _lng is null || (_lat == _shownLat && _lng == _shownLng)) return;
+        _shownLat = _lat;
+        _shownLng = _lng;
+        try { await JS.InvokeVoidAsync("mfMap.preview", PreviewId, _lat, _lng); } catch { }
+    }
+
+    private async Task OpenMap()
+    {
+        var picked = await JS.InvokeAsync<string?>("mfMap.open",
+            _lat, _lng, L["loc.confirm"], L["loc.searchPh"], L["loc.link"]);
+        if (string.IsNullOrEmpty(picked)) return;
+        var parts = picked.Split(',');
+        if (parts.Length == 2 &&
+            double.TryParse(parts[0], System.Globalization.CultureInfo.InvariantCulture, out var lat) &&
+            double.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, out var lng))
+        {
+            _lat = lat;
+            _lng = lng;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Save()
+    {
+        // The pin IS the address — everything typed is optional extra.
+        if (_lat is null || _lng is null) { _error = L["addr.needPin"]; return; }
+        // Names stay unique: two "Home"s would make every address list a guessing
+        // game. Checked here for a translated message; the server enforces it too.
+        var label = _label.Trim();
+        if (label.Length > 0)
+        {
+            var mine = await Api.GetAddressesAsync() ?? [];
+            if (mine.Any(a => a.Id != (Existing?.Id ?? 0) &&
+                              string.Equals(a.Label.Trim(), label, StringComparison.OrdinalIgnoreCase)))
+            {
+                _error = L["addr.dupName"];
+                return;
+            }
+        }
+        _error = null;
+        _busy = true;
+        try
+        {
+            var request = new SaveAddressRequest(_label, _area, _street, _building,
+                string.IsNullOrWhiteSpace(_notes) ? null : _notes, _lat, _lng);
+            var (ok, error) = Existing is null
+                ? await Api.CreateAddressAsync(request)
+                : await Api.UpdateAddressAsync(Existing.Id, request);
+            if (!ok) { _error = error; return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _ = JS.InvokeVoidAsync("mfMap.dispose", PreviewId);
+    }
+}

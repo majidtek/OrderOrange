@@ -1,0 +1,926 @@
+﻿using OrderOrange.ApiServer.Data;
+using OrderOrange.ApiServer.Models;
+using OrderOrange.ApiServer.Services;
+using OrderOrange.Shared;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
+namespace OrderOrange.ApiServer.Controllers;
+
+/// <summary>
+/// The order pipeline. Customer places and can cancel while Pending; the restaurant
+/// drives Pending → Accepted → Preparing → Ready (or Rejected); any online driver may
+/// claim an unassigned active order and drives Ready → PickedUp → OnTheWay → Delivered.
+/// </summary>
+public class OrdersController(AppDbContext db, CatalogStore catalog, Services.PushSender push, LoyaltyStore loyalty) : ApiControllerBase
+{
+    // ---------- Customer ----------
+
+    [HttpPost]
+    [Authorize(Roles = "Customer,RestaurantOwner,Driver")]
+    public async Task<ActionResult<OrderDto>> Place(PlaceOrderRequest req,
+        [FromServices] PromotionStore promoStore, [FromServices] PromotionEngine promos)
+    {
+        // These refusals carry a CODE next to the English text: the customer app looks
+        // the code up in its own translations, so the dialog speaks the UI language.
+        if (req.Items is not { Count: > 0 })
+            return BadRequest(new { message = "The cart is empty.", code = "srv.cartEmpty" });
+
+        var restaurant = await db.Restaurants.Include(r => r.Cuisine)
+            .FirstOrDefaultAsync(r => r.Id == req.RestaurantId && r.IsApproved);
+        if (restaurant is null) return BadRequest(new { message = "Restaurant not found.", code = "srv.storeNotFound" });
+        var workingHours = await db.RestaurantHours.Where(h => h.RestaurantId == restaurant.Id).ToListAsync();
+        if (!restaurant.IsOpen || !HoursHelper.IsWithinHours(workingHours, DateTime.Now))
+            return BadRequest(new { message = $"{restaurant.Name} is closed right now.", code = "srv.closed", args = new[] { restaurant.Name } });
+
+        // Collecting it yourself: no address to deliver to, and no rider involved.
+        var isPickup = req.OrderType == OrderType.Pickup;
+        if (isPickup && !restaurant.AllowsPickup)
+            return BadRequest(new { message = $"{restaurant.Name} does not offer collection.", code = "srv.noPickup", args = new[] { restaurant.Name } });
+
+        Address? address = null;
+        if (!isPickup)
+        {
+            address = await db.Addresses.FirstOrDefaultAsync(a => a.Id == req.AddressId && a.UserId == CurrentUserId);
+            if (address is null) return BadRequest(new { message = "Please choose a delivery address.", code = "checkout.needAddress" });
+        }
+
+        // Advance-notice items push the WHOLE order to a promised day — the two-day cake
+        // decides, not the same-day samosas sharing its basket.
+        var (items, itemProblem, maxLeadDays) = await BuildItemsAsync(restaurant, req.Items, enforceWindows: true);
+        if (itemProblem is not null) return BadRequest(new { message = itemProblem });
+
+        var subtotal = items!.Sum(i => i.UnitPrice * i.Quantity);
+        if (subtotal < restaurant.MinOrder)
+            return BadRequest(new { message = $"Minimum order for {restaurant.Name} is {restaurant.MinOrder:0.000} OMR.", code = "srv.minOrder", args = new[] { restaurant.Name, restaurant.MinOrder.ToString("0.000") } });
+
+        // TEST payment: paying online requires one of the customer's saved cards. Nothing
+        // is really charged — the "gateway" just stamps a reference on the order.
+        SavedCard? card = null;
+        if (req.PaymentMethod == PaymentMethod.CardOnline)
+        {
+            card = await db.SavedCards.FirstOrDefaultAsync(c => c.Id == req.CardId && c.UserId == CurrentUserId);
+            if (card is null)
+                return BadRequest(new { message = "Choose a saved card to pay online (test mode).", code = "checkout.chooseCard" });
+        }
+
+        // Codes are optional; an invalid code blocks the order rather than silently charging
+        // full price. The STORE's own promotions are tried first (they know this customer's
+        // history here), then the platform-wide coupons.
+        var discount = 0m;
+        string? appliedCode = null;
+        if (!string.IsNullOrWhiteSpace(req.CouponCode))
+        {
+            var code = req.CouponCode.Trim().ToUpper();
+            var promo = await promoStore.FindAsync(restaurant.Id, code);
+            if (promo is not null)
+            {
+                var verdict = await promos.EvaluateAsync(promo, CurrentUserId, subtotal, items!.Sum(i => i.Quantity), req.OrderType, DateTime.Now);
+                if (!verdict.Ok) return BadRequest(new { message = verdict.Message, code = $"dc.e.{verdict.Code}", args = verdict.Args });
+                discount = verdict.Discount;
+                appliedCode = promo.Code;
+            }
+            else
+            {
+                var coupon = await db.Coupons.FirstOrDefaultAsync(c => c.Code == code);
+                var problem = CouponProblem(coupon, subtotal);
+                if (problem is not null) return BadRequest(new { message = problem });
+                discount = Math.Round(subtotal * coupon!.Percent / 100m, 3);
+                coupon.Uses++;
+                appliedCode = coupon.Code;
+            }
+        }
+
+        // Nobody drives anywhere for a collection, so nobody is charged for it.
+        var deliveryFee = isPickup ? 0m : restaurant.DeliveryFee;
+
+        // VAT on the goods (Oman standard rate unless the store set otherwise). On the
+        // SUBTOTAL after product discounts, before fees — fees are the platform's.
+        var tax = Math.Round((subtotal - discount) * restaurant.TaxPercent / 100m, 3);
+
+        var order = new Order
+        {
+            CustomerId = CurrentUserId,
+            RestaurantId = restaurant.Id,
+            Status = OrderStatus.Pending,
+            OrderType = req.OrderType,
+            PaymentMethod = req.PaymentMethod,
+            // For a collection this holds the SHOP's address — it is what the customer
+            // needs to see on the order, and what the receipt should print.
+            DeliveryAddress = isPickup
+                ? $"{restaurant.Name} — {restaurant.Street}, {restaurant.Area}".Replace(" — , ", " — ")
+                : address!.ToOneLine(),
+            DeliveryLat = isPickup ? restaurant.Lat : address!.Lat,
+            DeliveryLng = isPickup ? restaurant.Lng : address!.Lng,
+            Subtotal = subtotal,
+            DeliveryFee = deliveryFee,
+            ServiceFee = Pricing.ServiceFee,
+            Discount = discount,
+            TaxPercent = restaurant.TaxPercent,
+            TaxAmount = tax,
+            Total = subtotal + deliveryFee + Pricing.ServiceFee - discount + tax,
+            CouponCode = appliedCode,
+            Notes = req.Notes?.Trim(),
+            EstimatedMinutes = Pricing.EstimateMinutes(restaurant.AvgPrepMinutes),
+            ScheduledFor = maxLeadDays > 0 ? DateTime.Today.AddDays(maxLeadDays) : null,
+            IsPaid = card is not null,
+            PaymentRef = card is null ? null : $"TEST-{card.Brand.ToUpper()}-{card.Last4}-{Random.Shared.Next(100000, 999999)}",
+            PlacedAt = DateTime.Now,
+            Items = items,
+            Events = { new OrderEvent { Status = OrderStatus.Pending, At = DateTime.Now, By = CurrentUserName } }
+        };
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
+
+        // The human-facing number needs the identity value, hence the second save.
+        order.Number = $"MF-{1000 + order.Id}";
+        await loyalty.TryAwardAsync(db, order, CurrentUserName);
+        await db.SaveChangesAsync();
+
+        // Ring the shop's devices — with the portal open or CLOSED.
+        push.SendToStore(restaurant.Id, $"🛎 {order.Number}",
+            $"{CurrentUserName} � {order.Total:0.###} OMR", "/orders");
+
+        return await Get(order.Id);
+    }
+
+    /// <summary>
+    /// A dine-in order straight from a table QR — no account, no sign-in. The guest is at
+    /// the table with the card in hand; asking them to register between "hungry" and
+    /// "ordered" is how the scan gets abandoned. The order books to the shop's walk-in
+    /// customer, carries the table name, and lands in the same Pending queue the shop
+    /// already watches. Priced by BuildItemsAsync like every other order, so a crafted
+    /// request cannot invent its own prices.
+    /// </summary>
+    [HttpPost("table")]
+    [AllowAnonymous]
+    public async Task<IActionResult> PlaceTableOrder(PlaceTableOrderRequest req)
+    {
+        if (req.Table is < 1 or > 99)
+            return BadRequest(new { message = "Unknown table." });
+        if (req.Items is not { Count: > 0 } || req.Items.Count > 40)
+            return BadRequest(new { message = "The order needs between 1 and 40 lines." });
+
+        var restaurant = await db.Restaurants.Include(r => r.Cuisine)
+            .FirstOrDefaultAsync(r => r.Id == req.RestaurantId && r.IsApproved);
+        if (restaurant is null) return NotFound();
+        if (!restaurant.IsOpen)
+            return BadRequest(new { code = "srv.closed", message = "The kitchen is closed right now." });
+
+        var (items, problem, _) = await BuildItemsAsync(restaurant, req.Items, enforceWindows: true);
+        if (items is null) return BadRequest(new { message = problem });
+
+        var guest = string.IsNullOrWhiteSpace(req.GuestName)
+            ? $"Table {req.Table}"
+            : $"{req.GuestName.Trim()[..Math.Min(req.GuestName.Trim().Length, 40)]} — Table {req.Table}";
+        var customer = await WalkInBook.GetOrCreateAsync(db, restaurant.Id, guest);
+
+        var subtotal = items.Sum(i => i.UnitPrice * i.Quantity);
+        var tax = Math.Round(subtotal * restaurant.TaxPercent / 100m, 3);
+        var tableName = $"Table {req.Table}";
+        var order = new Order
+        {
+            CustomerId = customer.UserId,
+            RestaurantId = restaurant.Id,
+            Status = OrderStatus.Pending,
+            PaymentMethod = PaymentMethod.CashOnDelivery,   // paid at the table, like any dine-in
+            DeliveryAddress = $"Dine-in — {tableName}",
+            Subtotal = subtotal,
+            DeliveryFee = 0m,
+            ServiceFee = 0m,                        // nothing is driven anywhere
+            Discount = 0m,
+            TaxPercent = restaurant.TaxPercent,
+            TaxAmount = tax,
+            Total = subtotal + tax,
+            EstimatedMinutes = Pricing.EstimateMinutes(restaurant.AvgPrepMinutes),
+            TableName = tableName,
+            IsPaid = false,
+            PlacedAt = DateTime.Now,
+            Items = items,
+            Events = { new OrderEvent { Status = OrderStatus.Pending, At = DateTime.Now, By = guest } },
+        };
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
+        order.Number = $"MF-{1000 + order.Id}";
+        await loyalty.TryAwardAsync(db, order, CurrentUserName);
+        await db.SaveChangesAsync();
+
+        // A table guest's order rings the shop's devices too — portal open or closed.
+        push.SendToStore(restaurant.Id, $"🛎 {order.Number}",
+            $"{order.TableName} � {order.Total:0.###} OMR", "/orders");
+
+        return Ok(new { id = order.Id, number = order.Number, total = order.Total });
+    }
+
+    /// <summary>
+    /// Turns requested lines into priced order items, or returns the reason it cannot.
+    /// Shared by the customer's own checkout and the counter order a partner types in, so
+    /// that a phone order is priced by exactly the same rules — including the partner's
+    /// own discounts — rather than by a second copy that quietly drifts.
+    /// </summary>
+    private async Task<(List<OrderItem>? Items, string? Problem, int MaxLeadDays)> BuildItemsAsync(
+        Restaurant restaurant, List<PlaceOrderItem> lines, bool enforceWindows)
+    {
+        // Priced from the CATALOG — the same MongoDB store the customer's menu renders
+        // from. Pricing from SQL made every product a partner added after launch
+        // unorderable: visible on the menu, "no longer exists" at checkout.
+        var menuIds = lines.Where(i => i.MenuItemId > 0).Select(i => i.MenuItemId).ToList();
+        var menu = (await catalog.ItemsForOrderAsync(restaurant.Id, menuIds)).ToDictionary(m => m.Id);
+
+        var items = new List<OrderItem>();
+        var maxLeadDays = 0;
+        foreach (var line in lines)
+        {
+            if (line.Quantity <= 0) return (null, "Quantities must be at least 1.", 0);
+
+            // Negative ids are virtual template-menu items (bulk stores without stored menus).
+            if (line.MenuItemId < 0)
+            {
+                var (rid, slot) = MenuTemplates.Decode(line.MenuItemId);
+                var template = rid == restaurant.Id
+                    ? MenuTemplates.ItemAt(restaurant.StoreType, restaurant.Cuisine.Name, slot)
+                    : null;
+                if (template is null) return (null, "An item in the cart no longer exists.", 0);
+                items.Add(new OrderItem
+                {
+                    MenuItemId = line.MenuItemId, Name = template.Name,
+                    UnitPrice = MenuTemplates.PriceFor(restaurant.Id, slot, template.Price),
+                    Quantity = line.Quantity, Notes = line.Notes?.Trim()
+                });
+                continue;
+            }
+
+            if (!menu.TryGetValue(line.MenuItemId, out var dish))
+                return (null, "An item in the cart no longer exists.", 0);
+            if (!dish.IsAvailable)
+                return (null, $"'{dish.Name}' is currently unavailable.", 0);
+
+            // The partner's serving window, enforced with the SAME logic the apps use to
+            // draw the sign — a stale page or crafted request can't order breakfast at
+            // midnight. Lead-time items pass: they are ordered now, made later. Counter
+            // orders skip this — the shop typing in a phone order is the authority.
+            if (enforceWindows && dish.LeadTimeDays == 0 &&
+                !ItemAvailability.IsWithinWindow(dish.AvailableFromMinutes, dish.AvailableToMinutes, dish.AvailableDays, DateTime.Now))
+            {
+                var when = ItemAvailability.TimeLabel(dish.AvailableFromMinutes, dish.AvailableToMinutes);
+                return (null, when.Length > 0
+                    ? $"'{dish.Name}' can be ordered {when}."
+                    : $"'{dish.Name}' is not available today.", 0);
+            }
+
+            maxLeadDays = Math.Max(maxLeadDays, dish.LeadTimeDays);
+
+            // The bill charges the partner's discounted price, snapshotted at order time.
+            var unit = dish.DiscountPercent > 0
+                ? Math.Round(dish.Price * (1 - dish.DiscountPercent / 100m), 3)
+                : dish.Price;
+            items.Add(new OrderItem
+            {
+                MenuItemId = dish.Id, Name = dish.Name, UnitPrice = unit,
+                Quantity = line.Quantity, Notes = line.Notes?.Trim()
+            });
+        }
+
+        return (items, null, maxLeadDays);
+    }
+
+    /// <summary>
+    /// An order the store takes at the counter or over the phone, on behalf of someone
+    /// from its own customer book. No account, no password, no app — the shop simply
+    /// records what was ordered and for whom, and it flows through dispatch, chat and
+    /// receipts exactly like any other order.
+    /// </summary>
+    [HttpPost("counter")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<ActionResult<OrderDto>> PlaceCounterOrder(PlaceCounterOrderRequest req)
+    {
+        if (CurrentRestaurantId == 0) return Forbid();
+        if (req.Items is not { Count: > 0 })
+            return BadRequest(new { message = "Add at least one item." });
+
+        var restaurant = await db.Restaurants.Include(r => r.Cuisine)
+            .FirstOrDefaultAsync(r => r.Id == CurrentRestaurantId);
+        if (restaurant is null) return BadRequest(new { message = "Store not found." });
+
+        // Deliberately NOT checking IsOpen or the opening hours: a shop typing in an
+        // order it just took by phone is the authority on whether it is open.
+        // Id 0 = a nameless walk-up at the till — the store's Walk-in entry takes it.
+        var customer = req.StoreCustomerId == 0
+            ? await WalkInBook.GetOrCreateAsync(db, CurrentRestaurantId, null)
+            : await db.StoreCustomers.FirstOrDefaultAsync(
+                c => c.Id == req.StoreCustomerId && c.RestaurantId == CurrentRestaurantId && c.IsActive);
+        if (customer is null) return BadRequest(new { message = "Choose a customer." });
+
+        // Dine-in: the order is tagged with the table so the kitchen and the bill both
+        // know where the food goes. The table must be on THIS store's floor.
+        StoreTable? table = null;
+        if (req.TableId is { } tableId)
+        {
+            table = await db.StoreTables.FirstOrDefaultAsync(
+                t => t.Id == tableId && t.RestaurantId == CurrentRestaurantId);
+            if (table is null) return BadRequest(new { message = "That table is not on your floor." });
+        }
+
+        // No window enforcement at the counter — the shop taking the order by phone is
+        // the authority — but a lead-time item still schedules the promised day.
+        var (items, itemProblem, maxLeadDays) = await BuildItemsAsync(restaurant, req.Items, enforceWindows: false);
+        if (itemProblem is not null) return BadRequest(new { message = itemProblem });
+
+        // No minimum-order check either — the minimum exists to make delivery worth the
+        // trip, and the shop has already decided to accept this one.
+        var subtotal = items!.Sum(i => i.UnitPrice * i.Quantity);
+        // A counter sale (or a dine-in at a table) never rides a scooter: no delivery
+        // fee, and the "address" is just where the bag changed hands.
+        var noDelivery = req.CounterSale || table is not null;
+        var deliveryFee = noDelivery ? 0m : restaurant.DeliveryFee;
+        var tax = Math.Round(subtotal * restaurant.TaxPercent / 100m, 3);
+        var address = noDelivery
+            ? (table is not null ? $"Dine-in — {table.Name}" : "Counter")
+            : string.IsNullOrWhiteSpace(req.AddressOverride) ? customer.Address : req.AddressOverride.Trim();
+
+        // A back-dated entry keeps its real day so the daily report and the week chart
+        // tell the truth; anything older than a month or in the future falls back to now.
+        var placedAt = req.PlacedAt is DateTime p && p <= DateTime.Now && p >= DateTime.Today.AddDays(-31)
+            ? p : DateTime.Now;
+
+        var order = new Order
+        {
+            CustomerId = customer.UserId,
+            RestaurantId = restaurant.Id,
+            Status = OrderStatus.Pending,
+            PaymentMethod = req.PaymentMethod,
+            OrderType = noDelivery ? OrderType.Pickup : OrderType.Delivery,
+            DeliveryAddress = address,
+            DeliveryLat = noDelivery ? null : customer.Lat,
+            DeliveryLng = noDelivery ? null : customer.Lng,
+            Subtotal = subtotal,
+            DeliveryFee = deliveryFee,
+            ServiceFee = Pricing.ServiceFee,
+            Discount = 0m,
+            TaxPercent = restaurant.TaxPercent,
+            TaxAmount = tax,
+            Total = subtotal + deliveryFee + Pricing.ServiceFee + tax,
+            Notes = req.Notes?.Trim(),
+            EstimatedMinutes = Pricing.EstimateMinutes(restaurant.AvgPrepMinutes),
+            ScheduledFor = maxLeadDays > 0 ? DateTime.Today.AddDays(maxLeadDays) : null,
+            TableName = table?.Name,
+            // Cash taken over the counter is already in the till; delivery is paid later.
+            IsPaid = req.MarkPaid,
+            PaymentRef = req.MarkPaid ? $"COUNTER-{placedAt:yyyyMMddHHmmss}" : null,
+            PlacedAt = placedAt,
+            Items = items,
+            Events = { new OrderEvent { Status = OrderStatus.Pending, At = placedAt, By = CurrentUserName } }
+        };
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
+
+        order.Number = $"MF-{1000 + order.Id}";
+        await loyalty.TryAwardAsync(db, order, CurrentUserName);
+        customer.OrderCount++;
+        customer.LastOrderAt = DateTime.Now;
+
+        // Ordering AT a table seats the party there — the floor view stays true without
+        // a second trip to the tables screen.
+        if (table is not null)
+        {
+            table.StoreCustomerId = customer.Id;
+            table.GuestName = null;
+            table.OccupiedAt ??= DateTime.Now;
+        }
+        await db.SaveChangesAsync();
+
+        return await Get(order.Id);
+    }
+
+    [HttpGet("mine")]
+    [Authorize(Roles = "Customer,RestaurantOwner,Driver")]
+    public async Task<List<OrderDto>> Mine(int skip = 0, int take = 20) =>
+        (await FullOrders().Where(o => o.CustomerId == CurrentUserId)
+            .OrderByDescending(o => o.PlacedAt).Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 50)).ToListAsync())
+        .Select(o => o.ToDto()).ToList();
+
+    [HttpGet("{id:int}")]
+    public async Task<ActionResult<OrderDto>> Get(int id)
+    {
+        var order = await FullOrders().FirstOrDefaultAsync(o => o.Id == id);
+        if (order is null) return NotFound();
+
+        var mayView = IsAdmin
+            || order.CustomerId == CurrentUserId
+            || order.DriverUserId == CurrentUserId
+            || (CurrentRestaurantId != 0 && order.RestaurantId == CurrentRestaurantId);
+        if (!mayView) return Forbid();
+
+        return order.ToDto();
+    }
+
+    /// <summary>
+    /// The bill behind a receipt's verification QR. Public on purpose — whoever holds the
+    /// printed paper can check it — so the code is signed (unguessable) and the payload is
+    /// trimmed to amounts and items: no phone, address, customer or courier identity.
+    /// </summary>
+    [HttpGet("verify/{code}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<PublicBillDto>> VerifyBill(string code)
+    {
+        if (!BillCode.TryRead(code, out var orderId)) return NotFound();
+
+        var order = await db.Orders
+            .Include(o => o.Customer)
+            .Include(o => o.Restaurant)
+            .Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == orderId);
+        if (order is null) return NotFound();
+
+        // The screen is not a thermal head: the scanned page can afford the store's
+        // real logo even when the paper prints none. Designer upload first, then the
+        // store logo.
+        var logo = await db.ReceiptDesigns
+            .Where(r => r.RestaurantId == order.RestaurantId)
+            .Select(r => r.LogoData)
+            .FirstOrDefaultAsync() ?? order.Restaurant.LogoData;
+
+        return new PublicBillDto(
+            BillCode.For(order.Id),
+            order.Number,
+            order.PlacedAt,
+            order.Status,
+            order.Restaurant!.Name,
+            order.Restaurant.LogoEmoji,
+            order.Restaurant.Area,
+            logo,
+            Initials(order.Customer?.FullName),
+            order.Items.Select(i => new PublicBillItemDto(i.Name, i.UnitPrice, i.Quantity)).ToList(),
+            order.Subtotal, order.DeliveryFee, order.ServiceFee, order.Discount, order.Total,
+            order.PaymentMethod, order.IsPaid,
+            order.Restaurant.CrNumber,
+            order.Restaurant.VatNumber,
+            order.TaxPercent, order.TaxAmount, order.OrderType, order.TableName,
+            // The address is personal — the DINE-IN marker is not.
+            order.DeliveryAddress != null && (order.DeliveryAddress.StartsWith("Dine-in") || order.DeliveryAddress == "Counter")
+                ? order.DeliveryAddress : null,
+            order.Restaurant.Phone, order.Restaurant.Street, order.RestaurantId);
+    }
+
+    /// <summary>"Ahmed Al Lawati" → "A. A." — enough for the holder to recognise their own bill.</summary>
+    private static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "—";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(" ", parts.Take(2).Select(p => $"{char.ToUpperInvariant(p[0])}."));
+    }
+
+    /// <summary>Live rider position for an active order — shown on the customer's map.</summary>
+    [HttpGet("{id:int}/driver-location")]
+    public async Task<ActionResult<DriverLocationDto?>> DriverLocation(int id)
+    {
+        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id);
+        if (order is null) return NotFound();
+
+        var mayView = IsAdmin
+            || order.CustomerId == CurrentUserId
+            || order.DriverUserId == CurrentUserId
+            || (CurrentRestaurantId != 0 && order.RestaurantId == CurrentRestaurantId);
+        if (!mayView) return Forbid();
+
+        if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled or OrderStatus.Rejected)
+            return NoContent();
+
+        // A shop delivering for itself pushes its courier's position onto the order,
+        // and the customer's tracking map reads it from exactly the same endpoint.
+        if (order.CourierLat is not null && order.CourierLng is not null && order.CourierAt is not null)
+        {
+            return (DateTime.Now - order.CourierAt.Value).TotalMinutes > 5
+                ? NoContent()
+                : new DriverLocationDto(order.CourierLat.Value, order.CourierLng.Value, order.CourierAt.Value);
+        }
+
+        if (order.DriverUserId is null) return NoContent();
+
+        var profile = await db.DriverProfiles.FirstOrDefaultAsync(d => d.UserId == order.DriverUserId);
+        if (profile?.CurrentLat is null || profile.LocationAt is null ||
+            (DateTime.Now - profile.LocationAt.Value).TotalMinutes > 5)
+            return NoContent(); // stale fixes aren't shown as "live"
+
+        return new DriverLocationDto(profile.CurrentLat.Value, profile.CurrentLng!.Value, profile.LocationAt.Value);
+    }
+
+    [HttpPost("{id:int}/cancel")]
+    [Authorize(Roles = "Customer,RestaurantOwner,Driver")]
+    public async Task<IActionResult> Cancel(int id, CancelOrderRequest req)
+    {
+        var result = await Transition(id, OrderStatus.Cancelled,
+            o => o.CustomerId == CurrentUserId && o.Status == OrderStatus.Pending,
+            "The order can only be cancelled while it is still pending.",
+            // No fabricated English here: an empty reason stays empty, and every app
+            // renders "cancelled by the customer" in the reader's own language.
+            o => o.CancelReason = string.IsNullOrWhiteSpace(req.Reason) ? null : req.Reason.Trim());
+
+        // A cancellation is as urgent as the order was — the kitchen must STOP.
+        if (result is OkObjectResult or OkResult or NoContentResult or ObjectResult { StatusCode: null or 200 })
+        {
+            var order = await db.Orders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == id);
+            if (order is { Status: OrderStatus.Cancelled })
+                push.SendToStore(order.RestaurantId, $"❌ {order.Number} cancelled",
+                    order.CancelReason is { Length: > 0 } why
+                        ? $"{why} · {order.Total:0.###} OMR"
+                        : $"{order.Total:0.###} OMR", "/orders");
+        }
+        return result;
+    }
+
+    // ---------- Restaurant ----------
+
+    [HttpGet("restaurant/board")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<List<OrderDto>> RestaurantBoard() =>
+        (await FullOrders()
+            .Where(o => o.RestaurantId == CurrentRestaurantId && o.Status != OrderStatus.Delivered
+                        && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Rejected)
+            .OrderBy(o => o.PlacedAt).ToListAsync())
+        .Select(o => o.ToDto()).ToList();
+
+    [HttpGet("restaurant/history")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<List<OrderDto>> RestaurantHistory(int skip = 0, int take = 25) =>
+        (await FullOrders()
+            .Where(o => o.RestaurantId == CurrentRestaurantId && (o.Status == OrderStatus.Delivered
+                        || o.Status == OrderStatus.Cancelled || o.Status == OrderStatus.Rejected))
+            .OrderByDescending(o => o.PlacedAt).Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 100)).ToListAsync())
+        .Select(o => o.ToDto()).ToList();
+
+    /// <summary>
+    /// Seven day-totals for the dashboard trend, oldest to newest, days with no
+    /// sales included as zero. Summed in the database — no order bodies cross the
+    /// wire just to draw a bar chart.
+    /// </summary>
+    [HttpGet("restaurant/week-revenue")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<List<DayRevenueDto>> WeekRevenue()
+    {
+        var start = DateTime.Today.AddDays(-6);
+        var byDay = await db.Orders
+            .Where(o => o.RestaurantId == CurrentRestaurantId && o.PlacedAt >= start
+                        && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Rejected)
+            .GroupBy(o => o.PlacedAt.Date)
+            .Select(g => new { Day = g.Key, Total = g.Sum(o => o.Total) })
+            .ToListAsync();
+        var map = byDay.ToDictionary(x => x.Day, x => x.Total);
+        return Enumerable.Range(0, 7)
+            .Select(i => start.AddDays(i))
+            .Select(d => new DayRevenueDto(d, map.TryGetValue(d, out var t) ? t : 0m))
+            .ToList();
+    }
+
+    [HttpPost("{id:int}/accept")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public Task<IActionResult> Accept(int id) =>
+        Transition(id, OrderStatus.Accepted,
+            o => o.RestaurantId == CurrentRestaurantId && o.Status == OrderStatus.Pending,
+            "Only a pending order can be accepted.");
+
+    [HttpPost("{id:int}/reject")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public Task<IActionResult> Reject(int id, RejectOrderRequest req) =>
+        Transition(id, OrderStatus.Rejected,
+            o => o.RestaurantId == CurrentRestaurantId && o.Status == OrderStatus.Pending,
+            "Only a pending order can be rejected.",
+            // No reason is allowed — a kitchen mid-rush should be able to clear the board.
+            // Left NULL rather than stamped with an English sentence, so the customer's
+            // own app can say "no reason given" in the customer's own language.
+            o => o.CancelReason = string.IsNullOrWhiteSpace(req.Reason) ? null : req.Reason.Trim());
+
+    [HttpPost("{id:int}/preparing")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public Task<IActionResult> Preparing(int id) =>
+        Transition(id, OrderStatus.Preparing,
+            o => o.RestaurantId == CurrentRestaurantId && o.Status == OrderStatus.Accepted,
+            "The order must be accepted first.");
+
+    [HttpPost("{id:int}/ready")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public Task<IActionResult> Ready(int id) =>
+        Transition(id, OrderStatus.Ready,
+            o => o.RestaurantId == CurrentRestaurantId && o.Status == OrderStatus.Preparing,
+            "The order must be in preparation first.");
+
+    /// <summary>
+    /// The money is in: cash handed over, or a card taken on the shop's own terminal.
+    /// The till (and the Local Handler) call this when the bill is settled; the order's
+    /// own status is a separate thing and is not touched here.
+    /// </summary>
+    [HttpPost("{id:int}/paid")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<IActionResult> MarkPaid(int id)
+    {
+        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id && o.RestaurantId == CurrentRestaurantId);
+        if (order is null) return NotFound();
+        if (order.IsPaid) return NoContent();     // saying it twice changes nothing
+
+        order.IsPaid = true;
+        order.PaymentRef ??= $"TILL-{DateTime.Now:yyyyMMddHHmmss}";
+        await db.SaveChangesAsync();
+        await loyalty.TryAwardAsync(db, order, CurrentUserName);
+        return NoContent();
+    }
+
+    // ---------- Web POS → till (LocalHandler) charge hand-off ----------
+
+    /// <summary>
+    /// One pending card-terminal charge per store. In-memory on purpose: a charge
+    /// request is a 30-second live signal between two tills, not bookkeeping.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<int, TillChargeDto> TillCharges = new();
+
+    /// <summary>The web POS asks the shop's till to charge this amount on the card terminal.</summary>
+    [HttpPost("till-charge")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public IActionResult TillChargeSend(SendTillChargeRequest req)
+    {
+        if (req.Amount <= 0) return BadRequest(new { message = "Amount must be positive." });
+        TillCharges[CurrentRestaurantId] = new TillChargeDto(req.Amount, req.Reference, DateTime.UtcNow);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// The till polls this; consuming removes the request so it fires exactly once.
+    /// Requests older than two minutes are stale — the cashier moment has passed.
+    /// </summary>
+    [HttpGet("till-charge")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public ActionResult<TillChargeDto> TillChargeTake()
+    {
+        if (!TillCharges.TryRemove(CurrentRestaurantId, out var charge)) return NoContent();
+        if (DateTime.UtcNow - charge.At > TimeSpan.FromMinutes(2)) return NoContent();
+        return charge;
+    }
+
+    // ---------- Restaurant delivering for itself ----------
+
+    /// <summary>
+    /// The shop's own delivery run: everything accepted and still on its way, so the
+    /// partner can hand each order to a person and follow it out the door.
+    /// </summary>
+    [HttpGet("restaurant/deliveries")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<List<OrderDto>> MyDeliveries() =>
+        (await FullOrders()
+            .Where(o => o.RestaurantId == CurrentRestaurantId
+                        && o.OrderType == OrderType.Delivery
+                        && o.Status != OrderStatus.Delivered && o.Status != OrderStatus.Cancelled
+                        && o.Status != OrderStatus.Rejected && o.Status != OrderStatus.Pending)
+            .OrderBy(o => o.PlacedAt)
+            .Take(80)
+            .ToListAsync())
+        .Select(o => o.ToDto()).ToList();
+
+    /// <summary>Hands the order to one of the shop's own people and sends it out.</summary>
+    [HttpPost("{id:int}/courier")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<IActionResult> AssignCourier(int id, AssignCourierRequest req)
+    {
+        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id && o.RestaurantId == CurrentRestaurantId);
+        if (order is null) return NotFound();
+        if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled or OrderStatus.Rejected)
+            return BadRequest(new { message = "This order is finished." });
+        if (string.IsNullOrWhiteSpace(req.Name))
+            return BadRequest(new { message = "Name the person taking it." });
+
+        order.CourierName = req.Name.Trim()[..Math.Min(req.Name.Trim().Length, 80)];
+        order.CourierPhone = string.IsNullOrWhiteSpace(req.Phone) ? null : req.Phone.Trim();
+
+        // Handing it over IS the departure: the customer sees "on the way".
+        if (order.Status is OrderStatus.Accepted or OrderStatus.Preparing or OrderStatus.Ready)
+        {
+            order.Status = OrderStatus.OnTheWay;
+            db.OrderEvents.Add(new OrderEvent
+            {
+                OrderId = order.Id,
+                Status = OrderStatus.OnTheWay,
+                At = DateTime.Now,
+                By = order.CourierName
+            });
+        }
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>
+    /// A live fix from the courier's phone. Kept on the order itself, and served to
+    /// the customer through the same tracking endpoint a platform rider uses.
+    /// </summary>
+    [HttpPost("{id:int}/courier-location")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<IActionResult> CourierLocation(int id, CourierLocationRequest req)
+    {
+        var order = await db.Orders.FirstOrDefaultAsync(o => o.Id == id && o.RestaurantId == CurrentRestaurantId);
+        if (order is null) return NotFound();
+        if (order.Status is OrderStatus.Delivered or OrderStatus.Cancelled or OrderStatus.Rejected)
+            return NoContent();
+
+        order.CourierLat = req.Lat;
+        order.CourierLng = req.Lng;
+        order.CourierAt = DateTime.Now;
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>The shop's own courier arrived — close the order.</summary>
+    [HttpPost("{id:int}/self-delivered")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public Task<IActionResult> SelfDelivered(int id) =>
+        Transition(id, OrderStatus.Delivered,
+            o => o.RestaurantId == CurrentRestaurantId && o.DriverUserId == null &&
+                 o.Status != OrderStatus.Delivered && o.Status != OrderStatus.Cancelled &&
+                 o.Status != OrderStatus.Rejected,
+            "This order is not one of yours to deliver.",
+            o => o.IsPaid = o.IsPaid || o.PaymentMethod != PaymentMethod.CardOnline);
+
+    // ---------- Driver ----------
+
+    [HttpGet("driver/available")]
+    [Authorize(Roles = "Driver")]
+    public async Task<List<OrderDto>> Available()
+    {
+        // Orders show up as soon as the restaurant accepts, so a driver can head
+        // over while the kitchen is still working.
+        var profile = await db.DriverProfiles.FirstOrDefaultAsync(d => d.UserId == CurrentUserId);
+        if (profile is null || !profile.IsOnline) return [];
+        var orders = await FullOrders()
+            // Collections never reach a rider: the customer is coming to the counter, so
+            // offering the job would mean two people turning up for one bag of food.
+            // A shop that delivers with its own people keeps its orders: sending a
+            // platform rider as well would put two couriers on one bag of food.
+            .Where(o => o.DriverUserId == null && o.OrderType == OrderType.Delivery &&
+                        !o.Restaurant.SelfDelivery &&
+                        (o.Status == OrderStatus.Accepted || o.Status == OrderStatus.Preparing || o.Status == OrderStatus.Ready))
+            .OrderBy(o => o.PlacedAt)
+            .Take(60)
+            .ToListAsync();
+
+        // Nearest pickup first: the driver's live GPS position ranks the jobs, so
+        // the driver closest to a restaurant sees its order at the top of the list.
+        var dtos = orders.Select(o => o.ToDto() with
+        {
+            PickupKm = profile.CurrentLat is not null && profile.CurrentLng is not null &&
+                       o.Restaurant.Lat is not null && o.Restaurant.Lng is not null
+                ? HaversineKm(profile.CurrentLat.Value, profile.CurrentLng.Value, o.Restaurant.Lat.Value, o.Restaurant.Lng.Value)
+                : null
+        }).ToList();
+        return dtos.OrderBy(d => d.PickupKm ?? double.MaxValue).ThenBy(d => d.PlacedAt).ToList();
+    }
+
+    private static double HaversineKm(double lat1, double lng1, double lat2, double lng2)
+    {
+        const double R = 6371.0;
+        var dLat = (lat2 - lat1) * Math.PI / 180;
+        var dLng = (lng2 - lng1) * Math.PI / 180;
+        var a = Math.Sin(dLat / 2) * Math.Sin(dLat / 2) +
+                Math.Cos(lat1 * Math.PI / 180) * Math.Cos(lat2 * Math.PI / 180) *
+                Math.Sin(dLng / 2) * Math.Sin(dLng / 2);
+        return Math.Round(R * 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a)), 1);
+    }
+
+    [HttpGet("driver/active")]
+    [Authorize(Roles = "Driver")]
+    public async Task<ActionResult<OrderDto?>> DriverActive()
+    {
+        var order = await FullOrders().FirstOrDefaultAsync(o =>
+            o.DriverUserId == CurrentUserId && o.Status != OrderStatus.Delivered
+            && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Rejected);
+        return order?.ToDto();
+    }
+
+    [HttpGet("driver/history")]
+    [Authorize(Roles = "Driver")]
+    public async Task<List<OrderDto>> DriverHistory(int skip = 0, int take = 25, DateTime? from = null, DateTime? to = null)
+    {
+        var query = FullOrders()
+            .Where(o => o.DriverUserId == CurrentUserId && o.Status == OrderStatus.Delivered);
+        if (from is not null) query = query.Where(o => o.PlacedAt >= from);
+        if (to is not null) query = query.Where(o => o.PlacedAt < to.Value.Date.AddDays(1));
+        return (await query
+            .OrderByDescending(o => o.PlacedAt).Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 100)).ToListAsync())
+            .Select(o => o.ToDto()).ToList();
+    }
+
+    [HttpPost("{id:int}/claim")]
+    [Authorize(Roles = "Driver")]
+    public async Task<IActionResult> Claim(int id)
+    {
+        var profile = await db.DriverProfiles.FirstOrDefaultAsync(d => d.UserId == CurrentUserId);
+        if (profile is null || !profile.IsOnline)
+            return BadRequest(new { message = "Go online before claiming a delivery." });
+
+        var hasActive = await db.Orders.AnyAsync(o =>
+            o.DriverUserId == CurrentUserId && o.Status != OrderStatus.Delivered
+            && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Rejected);
+        if (hasActive)
+            return BadRequest(new { message = "Finish your current delivery first." });
+
+        var order = await db.Orders.Include(o => o.Events).FirstOrDefaultAsync(o => o.Id == id);
+        if (order is null) return NotFound();
+        // Belt and braces: collections are filtered out of the available list, but a
+        // stale list or a hand-crafted request must not be able to claim one either.
+        if (order.OrderType == OrderType.Pickup)
+            return BadRequest(new { message = "This is a collection — the customer picks it up themselves." });
+        if (order.DriverUserId is not null)
+            return BadRequest(new { message = "Another driver already took this delivery." });
+        if (order.Status is not (OrderStatus.Accepted or OrderStatus.Preparing or OrderStatus.Ready))
+            return BadRequest(new { message = "This order is not available anymore." });
+
+        order.DriverUserId = CurrentUserId;
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    [HttpPost("{id:int}/pickup")]
+    [Authorize(Roles = "Driver")]
+    public Task<IActionResult> Pickup(int id) =>
+        Transition(id, OrderStatus.PickedUp,
+            o => o.DriverUserId == CurrentUserId && o.Status == OrderStatus.Ready,
+            "The kitchen hasn't marked this order ready yet.");
+
+    [HttpPost("{id:int}/on-the-way")]
+    [Authorize(Roles = "Driver")]
+    public Task<IActionResult> OnTheWay(int id) =>
+        Transition(id, OrderStatus.OnTheWay,
+            o => o.DriverUserId == CurrentUserId && o.Status == OrderStatus.PickedUp,
+            "Pick the order up first.");
+
+    [HttpPost("{id:int}/delivered")]
+    [Authorize(Roles = "Driver")]
+    public Task<IActionResult> Delivered(int id) =>
+        Transition(id, OrderStatus.Delivered,
+            o => o.DriverUserId == CurrentUserId && o.Status == OrderStatus.OnTheWay,
+            "The order must be on the way before it can be delivered.",
+            o => o.DeliveredAt = DateTime.Now);
+
+    // ---------- Shared ----------
+
+    // Read-only and split: six Includes in one SQL statement multiply every order's rows by
+    // items × events (a 5-line order with 6 events = 30 rows), which is what made the live
+    // board take ~700 ms for a handful of orders. Split queries fetch each collection once.
+    private IQueryable<Order> FullOrders() => db.Orders
+        .AsNoTracking()
+        .AsSplitQuery()
+        .Include(o => o.Customer)
+        .Include(o => o.Restaurant)
+        .Include(o => o.Driver!).ThenInclude(d => d.DriverProfile)
+        .Include(o => o.Items)
+        .Include(o => o.Events)
+        .Include(o => o.Review);
+
+    /// <summary>One guarded status move: check, mutate, stamp the timeline, save.</summary>
+    private async Task<IActionResult> Transition(
+        int id, OrderStatus to, Func<Order, bool> allowed, string refusal, Action<Order>? also = null)
+    {
+        var order = await db.Orders.Include(o => o.Events).Include(o => o.Items)
+            .FirstOrDefaultAsync(o => o.Id == id);
+        if (order is null) return NotFound();
+        if (!allowed(order)) return BadRequest(new { message = refusal });
+
+        order.Status = to;
+        also?.Invoke(order);
+        order.Events.Add(new OrderEvent { Status = to, At = DateTime.Now, By = CurrentUserName });
+
+        // The food is with the customer — its ingredients leave the shelf now.
+        if (to == OrderStatus.Delivered) await StockConsumer.ApplyAsync(db, order);
+
+        await db.SaveChangesAsync();
+        // ...and its guest earns their points, once, whichever road got it here.
+        if (to == OrderStatus.Delivered) await loyalty.TryAwardAsync(db, order, CurrentUserName);
+
+        // Every move by the SHOP or the RIDER rings the customer's phone. The
+        // customer's own cancel doesn't — nobody needs news of their own hand.
+        if (CurrentUserId != order.CustomerId)
+        {
+            var (icon, word) = to switch
+            {
+                OrderStatus.Accepted => ("✅", "accepted"),
+                OrderStatus.Preparing => ("👨‍🍳", "being prepared"),
+                OrderStatus.Ready => ("🛍️", "ready"),
+                OrderStatus.PickedUp => ("📦", "picked up"),
+                OrderStatus.OnTheWay => ("🛵", "on the way"),
+                OrderStatus.Delivered => ("🎉", "delivered — enjoy!"),
+                OrderStatus.Rejected => ("❌", "rejected"),
+                OrderStatus.Cancelled => ("❌", "cancelled"),
+                _ => ("ℹ️", to.ToString().ToLowerInvariant()),
+            };
+            push.SendToUser(order.CustomerId, $"{icon} {order.Number}",
+                $"Your order is {word}", $"/track/{order.Id}");
+        }
+        return NoContent();
+    }
+
+    internal static string? CouponProblem(Coupon? coupon, decimal subtotal)
+    {
+        if (coupon is null) return "Unknown coupon code.";
+        if (!coupon.IsActive) return "This coupon is no longer active.";
+        if (coupon.ExpiresAt is not null && coupon.ExpiresAt < DateTime.Now) return "This coupon has expired.";
+        if (coupon.Uses >= coupon.MaxUses) return "This coupon has been fully redeemed.";
+        if (subtotal < coupon.MinOrder) return $"This coupon needs a minimum order of {coupon.MinOrder:0.000} OMR.";
+        return null;
+    }
+}

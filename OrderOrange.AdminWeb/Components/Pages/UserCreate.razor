@@ -1,0 +1,175 @@
+﻿@page "/users/new"
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IJSRuntime DraftJs
+
+@* Creating an account gets a whole page, not a dialog. The partner form is seven
+fields deep — inside a dialog on a phone that meant scrolling a sheet within a
+scrolling page, with the buttons falling off the bottom. *@
+
+<PageTitle>Admin — New user</PageTitle>
+
+<PageHeader Title="@Title" Subtitle="@L["admin.newUserSub"]" />
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl" Style="max-width: 560px;">
+    @if (FixedRole is null)
+    {
+        <MudSelect Margin="Margin.Dense" T="UserRole" @bind-Value="_role" Label="@L["admin.role"]" Variant="Variant.Outlined" Class="mb-3">
+            <MudSelectItem T="UserRole" Value="UserRole.Customer">@L["role.Customer"]</MudSelectItem>
+            <MudSelectItem T="UserRole" Value="UserRole.RestaurantOwner">@L["role.RestaurantOwner"]</MudSelectItem>
+            <MudSelectItem T="UserRole" Value="UserRole.Driver">@L["role.Driver"]</MudSelectItem>
+            <MudSelectItem T="UserRole" Value="UserRole.Administrator">@L["role.Administrator"]</MudSelectItem>
+        </MudSelect>
+    }
+
+    @* Every keystroke lands in browser session storage. If the circuit dies while the
+    phone is away and the page reloads, the draft comes straight back — except the
+    password, which is never written anywhere. *@
+    <MudTextField Margin="Margin.Dense" T="string" Value="_name" ValueChanged="@(v => SaveField(() => _name = v))" Immediate="true"
+        Label="@L["staff.fullName"]" Variant="Variant.Outlined" Class="mb-3" />
+    <MudTextField Margin="Margin.Dense" T="string" Value="_email" ValueChanged="@(v => SaveField(() => _email = v))" Immediate="true"
+        Label="@L["common.email"]" Variant="Variant.Outlined" InputType="InputType.Email" Class="mb-3" />
+    <MudTextField Margin="Margin.Dense" T="string" Value="_phone" ValueChanged="@(v => SaveField(() => _phone = v))" Immediate="true"
+        Label="@L["common.phone"]" Variant="Variant.Outlined" Class="mb-3" />
+    <MudTextField Margin="Margin.Dense" @bind-Value="_password" Label="@L["admin.initialPw"]" Variant="Variant.Outlined"
+        InputType="InputType.Password" Class="mb-3" />
+
+    @if (Role == UserRole.RestaurantOwner)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">@L["admin.partnerCreateHint"]</MudAlert>
+        <MudTextField Margin="Margin.Dense" T="string" Value="_restaurantName" ValueChanged="@(v => SaveField(() => _restaurantName = v))" Immediate="true"
+            Label="@L["admin.restaurantName"]" Variant="Variant.Outlined" Class="mb-3" />
+        <MudSelect Margin="Margin.Dense" T="StoreType" @bind-Value="_storeType" Label="@L["partner.storeType"]" Variant="Variant.Outlined" Class="mb-3">
+            <MudSelectItem T="StoreType" Value="StoreType.Restaurant">🍔 @L["st.restaurant"]</MudSelectItem>
+            <MudSelectItem T="StoreType" Value="StoreType.Grocery">🛒 @L["st.grocery"]</MudSelectItem>
+            <MudSelectItem T="StoreType" Value="StoreType.Pharmacy">💊 @L["st.pharmacy"]</MudSelectItem>
+            <MudSelectItem T="StoreType" Value="StoreType.Flowers">💐 @L["st.flowers"]</MudSelectItem>
+            <MudSelectItem T="StoreType" Value="StoreType.Shop">🛍️ @L["st.shop"]</MudSelectItem>
+        </MudSelect>
+        <CuisinePicker @bind-Value="_cuisineId" Label="@L["admin.cuisine"]" Class="mb-3" />
+    }
+    else if (Role == UserRole.Driver)
+    {
+        <MudSelect Margin="Margin.Dense" T="VehicleType" @bind-Value="_vehicle" Label="@L["admin.vehicle"]" Variant="Variant.Outlined" Class="mb-3">
+            <MudSelectItem T="VehicleType" Value="VehicleType.Motorbike">🏍️ @L["vehicle.Motorbike"]</MudSelectItem>
+            <MudSelectItem T="VehicleType" Value="VehicleType.Car">🚗 @L["vehicle.Car"]</MudSelectItem>
+            <MudSelectItem T="VehicleType" Value="VehicleType.Bicycle">🚲 @L["vehicle.Bicycle"]</MudSelectItem>
+        </MudSelect>
+    }
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Dense="true" Class="mb-3">@_error</MudAlert>
+    }
+
+    <div class="d-flex justify-end" style="gap: 10px;">
+        <MudButton OnClick="@(() => Nav.NavigateTo("/users"))">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy">
+            @L["admin.createUser"]
+        </MudButton>
+    </div>
+</MudPaper>
+
+@code {
+    /// <summary>Set by the tab the link was clicked from; absent (the All tab) shows the picker.</summary>
+    [SupplyParameterFromQuery(Name = "role")] public int? RoleQuery { get; set; }
+
+    private UserRole? FixedRole =>
+    RoleQuery is >= 0 and <= 3 ? (UserRole)RoleQuery.Value : null;
+
+    private UserRole Role => FixedRole ?? _role;
+
+    private string Title => FixedRole switch
+    {
+        UserRole.Customer => L["admin.newCustomer"],
+        UserRole.RestaurantOwner => L["admin.newPartner"],
+        UserRole.Driver => L["admin.newRider"],
+        UserRole.Administrator => L["admin.newAdmin"],
+        _ => L["admin.newUser"],
+    };
+
+    private UserRole _role = UserRole.Customer;
+    private string _name = "";
+    private string _email = "";
+    private string _phone = "";
+    private string _password = "";
+    private string _restaurantName = "";
+    private StoreType _storeType = StoreType.Restaurant;
+    private int _cuisineId;
+    private VehicleType _vehicle = VehicleType.Motorbike;
+    private List<CuisineDto>? _cuisines;
+        private string? _error;
+        private bool _busy;
+
+        /// <summary>Everything worth restoring after an unwanted reload. Never the password.</summary>
+        private sealed record DraftData(string Name, string Email, string Phone, string RestaurantName);
+
+        private const string DraftKey = "admin.newUserDraft";
+        private bool _draftLoaded;
+
+        protected override async Task OnInitializedAsync()
+        {
+            _cuisines = await Api.GetCuisinesAsync();
+            _cuisineId = _cuisines?.FirstOrDefault()?.Id ?? 0;
+        }
+
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            // Browser storage only exists after the first render. If a draft survived a
+            // reconnect-reload, put the typed fields back exactly as they were.
+            if (!firstRender || _draftLoaded) return;
+            _draftLoaded = true;
+            try
+            {
+                var raw = await DraftJs.InvokeAsync<string?>("sessionStorage.getItem", DraftKey);
+                var stored = (Success: !string.IsNullOrEmpty(raw), Value: string.IsNullOrEmpty(raw) ? null
+                    : System.Text.Json.JsonSerializer.Deserialize<DraftData>(raw!, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+                    if (stored.Success && stored.Value is { } d &&
+                    (d.Name.Length > 0 || d.Email.Length > 0 || d.Phone.Length > 0 || d.RestaurantName.Length > 0))
+                    {
+                        _name = d.Name;
+                        _email = d.Email;
+                        _phone = d.Phone;
+                        _restaurantName = d.RestaurantName;
+                        StateHasChanged();
+                    }
+                }
+                catch { /* a lost draft must never break the page */ }
+            }
+
+            /// <summary>Applies the keystroke, then persists the draft — cheap, and always current.</summary>
+            private async Task SaveField(Action apply)
+            {
+                apply();
+                try { await DraftJs.InvokeVoidAsync("sessionStorage.setItem", DraftKey, System.Text.Json.JsonSerializer.Serialize(new DraftData(_name, _email, _phone, _restaurantName), new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))); }
+                catch { /* best-effort — typing must never fail on a storage hiccup */ }
+            }
+
+            private async Task Save()
+            {
+                _error = null;
+                _busy = true;
+                try
+                {
+                    var (ok, error) = await Api.CreateUserAsync(new CreateUserRequest(
+                    _name, _email, _phone, _password, Role,
+                    Role == UserRole.Driver ? _vehicle : null,
+                    Role == UserRole.RestaurantOwner ? _restaurantName : null,
+                    Role == UserRole.RestaurantOwner ? _cuisineId : null,
+                    _storeType));
+                    if (!ok) { _error = error; return; }
+
+                    // The draft has served its purpose — don't resurrect it on the next visit.
+                    try { await DraftJs.InvokeVoidAsync("sessionStorage.removeItem", DraftKey); } catch { }
+
+                    Snackbar.Add(L["admin.userCreated"], Severity.Success);
+                    Nav.NavigateTo("/users");
+                }
+                finally
+                {
+                    _busy = false;
+                }
+            }
+        }

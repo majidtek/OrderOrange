@@ -1,0 +1,327 @@
+@page "/insights"
+@inject ApiClient Api
+@inject LanguageService L
+
+@* What customers actually DO: who arrived, which pages they opened, and every
+   word they typed into search — including the words that came back empty, which
+   are the platform's clearest list of unmet demand. *@
+
+<PageTitle>Admin — Insights</PageTitle>
+
+@if (_data is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <AutoRefresh OnRefresh="Reload" Seconds="20" />
+
+    @* ---------- Hero: the numbers that frame everything below ---------- *@
+    <div class="in-hero">
+        <div class="in-hero-glow"></div>
+        <div class="in-hero-top">
+            <div>
+                <span class="in-live"><i></i>@L["vis.live"]</span>
+                <h1>@L["ins.title"]</h1>
+                <p>@L["ins.sub"]</p>
+            </div>
+            <div class="in-picks">
+                @* Which audience: shoppers, partners, riders or staff. *@
+                <div class="in-range apps">
+                    @foreach (var option in Apps)
+                    {
+                        var app = option;
+                        <button type="button" class="@(_app == app.Key ? "on" : "")" @onclick="@(() => SetApp(app.Key))">
+                            @app.Emoji @L[app.LabelKey]
+                        </button>
+                    }
+                </div>
+                <div class="in-range">
+                    @foreach (var option in new[] { 1, 7, 30 })
+                    {
+                        var days = option;
+                        <button type="button" class="@(_days == days ? "on" : "")" @onclick="@(() => SetDays(days))">
+                            @(days == 1 ? L["ins.today"] : string.Format(L["ins.days"], days))
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="in-kpis">
+            <div class="in-kpi">
+                <span class="ic" style="background: rgba(255,255,255,.14);"><MudIcon Icon="@Icons.Material.Filled.Search" /></span>
+                <div><b>@_data.Searches</b><small>@L["ins.searches"]</small></div>
+            </div>
+            <div class="in-kpi">
+                <span class="ic" style="background: rgba(255,255,255,.14);"><MudIcon Icon="@Icons.Material.Filled.Group" /></span>
+                <div><b>@_data.Searchers</b><small>@L["ins.searchers"]</small></div>
+            </div>
+            <div class="in-kpi @(ZeroRate >= 25 ? "warn" : "")">
+                <span class="ic" style="background: rgba(255,255,255,.14);"><MudIcon Icon="@Icons.Material.Filled.SearchOff" /></span>
+                <div><b>@ZeroRate%</b><small>@L["ins.zeroRate"]</small></div>
+            </div>
+            <div class="in-kpi">
+                <span class="ic" style="background: rgba(255,255,255,.14);"><MudIcon Icon="@Icons.Material.Filled.Visibility" /></span>
+                <div><b>@_data.Visits</b><small>@L["ins.visits"]</small></div>
+            </div>
+            <div class="in-kpi">
+                <span class="ic" style="background: rgba(255,255,255,.14);"><MudIcon Icon="@Icons.Material.Filled.Person" /></span>
+                <div><b>@_data.Visitors</b><small>@L["ins.visitors"]</small></div>
+            </div>
+        </div>
+
+        @* when people search, hour by hour *@
+        <div class="in-hours">
+            @for (var h = 0; h < 24; h++)
+            {
+                var count = _data.ByHour[h];
+                <div class="bar" title="@($"{h:00}:00 — {count}")">
+                    <span style="height: @BarHeight(count)%"></span>
+                    <i>@(h % 6 == 0 ? h.ToString("00") : "")</i>
+                </div>
+            }
+        </div>
+    </div>
+
+    <MudGrid Spacing="3" Class="mt-1">
+        @* Search only exists in the customer app — for the staff portals the board
+           is about pages, addresses and times instead. *@
+        @if (ShowsSearch)
+        {
+        @* ---------- What they searched ---------- *@
+        <MudItem xs="12" md="6">
+            <div class="in-card">
+                <div class="hd">
+                    <span class="ic orange"><MudIcon Icon="@Icons.Material.Filled.TrendingUp" /></span>
+                    <div><b>@L["ins.topTerms"]</b><small>@L["ins.topTermsSub"]</small></div>
+                </div>
+                @if (_data.TopTerms.Count == 0)
+                {
+                    <div class="in-empty">@L["ins.noSearches"]</div>
+                }
+                else
+                {
+                    @foreach (var term in _data.TopTerms)
+                    {
+                        <div class="in-term">
+                            <div class="tx">
+                                <b>@term.Term</b>
+                                <span class="meter"><i style="width: @TermWidth(term.Count)%"></i></span>
+                            </div>
+                            <div class="nums">
+                                <span class="cnt">@term.Count</span>
+                                @if (term.ZeroResults > 0)
+                                {
+                                    <span class="zero" title="@L["ins.zeroHint"]">@term.ZeroResults @L["ins.empty"]</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </MudItem>
+
+        @* ---------- What we could not answer ---------- *@
+        <MudItem xs="12" md="6">
+            <div class="in-card">
+                <div class="hd">
+                    <span class="ic red"><MudIcon Icon="@Icons.Material.Filled.SearchOff" /></span>
+                    <div><b>@L["ins.emptyTerms"]</b><small>@L["ins.emptyTermsSub"]</small></div>
+                </div>
+                @if (_data.EmptyTerms.Count == 0)
+                {
+                    <div class="in-empty in-good">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" /> @L["ins.noEmpty"]
+                    </div>
+                }
+                else
+                {
+                    <div class="in-chips">
+                        @foreach (var term in _data.EmptyTerms)
+                        {
+                            <span class="in-chip-zero">@term.Term <b>@term.Count</b></span>
+                        }
+                    </div>
+                }
+            </div>
+        </MudItem>
+
+        @* ---------- Live search feed with who / when / where ---------- *@
+        <MudItem xs="12" md="6">
+            <div class="in-card">
+                <div class="hd">
+                    <span class="ic blue"><MudIcon Icon="@Icons.Material.Filled.ManageSearch" /></span>
+                    <div><b>@L["ins.recentSearches"]</b><small>@L["ins.recentSearchesSub"]</small></div>
+                </div>
+                <div class="in-rows">
+                    @foreach (var hit in _data.RecentSearches)
+                    {
+                        <div class="in-row">
+                            <span class="who @(hit.UserId == 0 ? "guest" : "")">
+                                @(hit.UserId == 0 ? "?" : hit.UserName[..1].ToUpperInvariant())
+                            </span>
+                            <div class="mid">
+                                <b>“@hit.Term”</b>
+                                <small>
+                                    @(hit.UserId == 0 ? L["ins.guest"] : hit.UserName)
+                                    @if (!string.IsNullOrEmpty(hit.Ip)) { <span class="ip">@hit.Ip</span> }
+                                    @if (!string.IsNullOrEmpty(hit.Locale)) { <span class="loc">@hit.Locale</span> }
+                                </small>
+                            </div>
+                            <div class="end">
+                                <span class="@(hit.Results == 0 ? "res none" : "res")">@hit.Results</span>
+                                <time title="@hit.At.ToString("yyyy-MM-dd HH:mm:ss")">@hit.At.ToString("HH:mm")</time>
+                            </div>
+                        </div>
+                    }
+                    @if (_data.RecentSearches.Count == 0)
+                    {
+                        <div class="in-empty">@L["ins.noSearches"]</div>
+                    }
+                </div>
+            </div>
+        </MudItem>
+        }
+
+        @* ---------- Which pages they open ---------- *@
+        <MudItem xs="12" md="@(ShowsSearch ? 6 : 5)">
+            <div class="in-card">
+                <div class="hd">
+                    <span class="ic green"><MudIcon Icon="@Icons.Material.Filled.AutoGraph" /></span>
+                    <div><b>@L["ins.topPages"]</b><small>@L["ins.topPagesSub"]</small></div>
+                </div>
+                @foreach (var hit in _data.TopPages)
+                {
+                    <div class="in-term">
+                        <div class="tx">
+                            <b class="mf-ltr">@hit.Page</b>
+                            <span class="meter"><i class="g" style="width: @PageWidth(hit.Views)%"></i></span>
+                        </div>
+                        <div class="nums">
+                            <span class="cnt">@hit.Views</span>
+                            <span class="sub">@hit.Visitors @L["ins.people"]</span>
+                        </div>
+                    </div>
+                }
+                @if (_data.TopPages.Count == 0)
+                {
+                    <div class="in-empty">@L["ins.noVisits"]</div>
+                }
+            </div>
+        </MudItem>
+
+        @* ---------- Who visited, page by page, with the exact time ---------- *@
+        <MudItem xs="12" md="@(ShowsSearch ? 12 : 7)">
+            <div class="in-card">
+                <div class="hd">
+                    <span class="ic purple"><MudIcon Icon="@Icons.Material.Filled.History" /></span>
+                    <div><b>@L["ins.recentVisits"]</b><small>@L["ins.recentVisitsSub"]</small></div>
+                </div>
+                <div class="in-table-wrap">
+                    <table class="in-table">
+                        <thead>
+                            <tr>
+                                <th>@L["admin.user"]</th>
+                                <th>@L["admin.role"]</th>
+                                <th>@L["ins.page"]</th>
+                                <th>@L["ins.ip"]</th>
+                                <th>@L["ins.time"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var visit in _data.RecentVisits)
+                            {
+                                <tr>
+                                    <td>
+                                        <span class="cell-user">
+                                            <span class="dot" style="@RoleBg(visit.Role)"></span>
+                                            @(string.IsNullOrWhiteSpace(visit.UserName) ? L["ins.guest"] : visit.UserName)
+                                        </span>
+                                    </td>
+                                    <td><span class="cell-role">@L[$"role.{visit.Role}"]</span></td>
+                                    <td class="mf-ltr">@visit.Page</td>
+                                    <td class="mf-ltr cell-ip">@(string.IsNullOrEmpty(visit.Ip) ? "—" : visit.Ip)</td>
+                                    <td class="cell-time" title="@visit.At.ToString("yyyy-MM-dd HH:mm:ss")">
+                                        @visit.At.ToString("dd MMM · HH:mm:ss")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (_data.RecentVisits.Count == 0)
+                    {
+                        <div class="in-empty">@L["ins.noVisits"]</div>
+                    }
+                </div>
+            </div>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private InsightsDto? _data;
+    private int _days = 7;
+    private string _app = "Customer";
+
+    private sealed record AppTab(string Key, string Emoji, string LabelKey);
+
+    private static readonly AppTab[] Apps =
+    [
+        new("Customer", "🍔", "ins.appCustomer"),
+        new("Partner", "🍳", "ins.appPartner"),
+        new("Delivery", "🛵", "ins.appDelivery"),
+        new("Admin", "🛠️", "ins.appAdmin")
+    ];
+
+    /// <summary>Only shoppers search; the staff portals are judged on pages alone.</summary>
+    private bool ShowsSearch => _app == "Customer" || (_data?.Searches ?? 0) > 0;
+
+    private async Task SetApp(string app)
+    {
+        _app = app;
+        _data = null;
+        await Reload();
+    }
+
+    private int ZeroRate => _data is { Searches: > 0 }
+        ? (int)Math.Round(100.0 * _data.ZeroResultSearches / _data.Searches)
+        : 0;
+
+    private int BarHeight(int count)
+    {
+        var max = Math.Max(1, _data!.ByHour.Max());
+        return count == 0 ? 3 : Math.Clamp((int)Math.Round(100.0 * count / max), 8, 100);
+    }
+
+    private int TermWidth(int count)
+    {
+        var max = Math.Max(1, _data!.TopTerms.Max(t => t.Count));
+        return Math.Clamp((int)Math.Round(100.0 * count / max), 6, 100);
+    }
+
+    private int PageWidth(int views)
+    {
+        var max = Math.Max(1, _data!.TopPages.Max(p => p.Views));
+        return Math.Clamp((int)Math.Round(100.0 * views / max), 6, 100);
+    }
+
+    private static string RoleBg(UserRole role) => role switch
+    {
+        UserRole.Administrator => "background: #E53935;",
+        UserRole.RestaurantOwner => "background: #FB8C00;",
+        UserRole.Driver => "background: #1E88E5;",
+        _ => "background: #FF5A00;"
+    };
+
+    private async Task SetDays(int days)
+    {
+        _days = days;
+        _data = null;
+        await Reload();
+    }
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload() => _data = await Api.GetInsightsAsync(_days, _app) ?? _data;
+}

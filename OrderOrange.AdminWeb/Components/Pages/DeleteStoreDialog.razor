@@ -1,0 +1,95 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* The hard-delete warning, with the FULL bill of what dies: every count fetched
+   live before the red button becomes pressable. No surprises afterwards. *@
+
+<MudDialog Class="mf-lang-dialog">
+    <TitleContent>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <div class="mf-lang-badge" style="background: #ffe3e0;"><MudIcon Icon="@Icons.Material.Filled.DeleteForever" Color="Color.Error" /></div>
+            <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["admin.deleteStore"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div class="d-flex align-center mb-3" style="gap: 10px;">
+            <div style="font-size: 30px;">@Store.LogoEmoji</div>
+            <div>
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;">@Store.Name</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@Store.OwnerName · <span class="mf-ltr">@Store.OwnerEmail</span></MudText>
+            </div>
+        </div>
+
+        @if (_fp is null)
+        {
+            <div class="d-flex justify-center pa-4"><MudProgressCircular Indeterminate="true" Size="Size.Small" /></div>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mb-2">@L["admin.deleteWillErase"]</MudText>
+            <div class="d-flex flex-wrap mb-3" style="gap: 6px;">
+                @foreach (var (label, count, icon) in Rows.Where(r => r.Count > 0))
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Icon="@icon">
+                        @count × @L[label]
+                    </MudChip>
+                }
+                @if (Rows.All(r => r.Count == 0))
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@L["admin.deleteEmptyStore"]</MudText>
+                }
+            </div>
+            <MudAlert Severity="Severity.Error" Dense="true">@L["admin.deleteNoUndo"]</MudAlert>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["admin.deleteOwnerKept"]</MudText>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@(_fp is null || _busy)"
+                   StartIcon="@Icons.Material.Filled.DeleteForever" OnClick="Confirm">
+            @L["common.deleteForever"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public AdminRestaurantDto Store { get; set; } = default!;
+
+    private AdminStoreFootprintDto? _fp;
+    private bool _busy;
+
+    private (string Label, int Count, string Icon)[] Rows => _fp is null ? [] :
+    [
+        ("del.orders", _fp.Orders, Icons.Material.Filled.ReceiptLong),
+        ("del.products", _fp.MenuItems, Icons.Material.Filled.Fastfood),
+        ("del.categories", _fp.MenuCategories, Icons.Material.Filled.Category),
+        ("del.tables", _fp.Tables, Icons.Material.Filled.TableRestaurant),
+        ("del.salons", _fp.Salons, Icons.Material.Filled.MeetingRoom),
+        ("del.tabs", _fp.OpenTabs, Icons.Material.Filled.PointOfSale),
+        ("del.reservations", _fp.Reservations, Icons.Material.Filled.EventSeat),
+        ("del.customers", _fp.StoreCustomers, Icons.Material.Filled.Group),
+        ("del.staff", _fp.Staff, Icons.Material.Filled.Badge),
+        ("del.bills", _fp.Bills, Icons.Material.Filled.RequestQuote),
+        ("del.reviews", _fp.Reviews, Icons.Material.Filled.Star),
+        ("del.chats", _fp.TableChats, Icons.Material.Filled.Chat)
+    ];
+
+    protected override async Task OnInitializedAsync() =>
+        _fp = await Api.GetStoreFootprintAsync(Store.Id);
+
+    private async Task Confirm()
+    {
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.DeleteRestaurantAsAdminAsync(Store.Id);
+            if (!ok) { _busy = false; Dialog.Close(DialogResult.Ok(error ?? "failed")); return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

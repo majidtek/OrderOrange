@@ -1,0 +1,203 @@
+@page "/bills"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Partner — Bills</PageTitle>
+
+<PageHeader Title="@L["bill.title"]" Subtitle="@L["bill.sub"]">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => Edit(null))">@L["bill.new"]</MudButton>
+    </Actions>
+</PageHeader>
+
+<div class="rp">
+    @* ---------- Money at a glance ---------- *@
+    <MudGrid Spacing="3" Class="mb-1">
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.bills"]" Value="@(_page?.Total.ToString("N0") ?? "…")" Icon="@Icons.Material.Filled.ReceiptLong" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["common.total"]" Value="@(_page is null ? "…" : Fmt.RialShort(_page.TotalAmount).Value)" Icon="@Icons.Material.Filled.Summarize" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.unpaid"]" Value="@(_page is null ? "…" : Fmt.RialShort(_page.UnpaidAmount).Value)" Icon="@Icons.Material.Filled.HourglassBottom" Color="Color.Warning" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.overdue"]" Value="@(_page is null ? "…" : Fmt.RialShort(_page.OverdueAmount).Value)" Icon="@Icons.Material.Filled.WarningAmber" Color="Color.Error" />
+        </MudItem>
+    </MudGrid>
+
+    @* ---------- Filters ---------- *@
+    <div class="bl-toolbar my-4">
+        <div class="dlv-filter">
+            <span class="dlv-fchip @(_status == "all" ? "on" : "")" @onclick="@(() => SetStatus("all"))">@L["w.all"]</span>
+            <span class="dlv-fchip @(_status == "unpaid" ? "on" : "")" @onclick="@(() => SetStatus("unpaid"))">@L["w.unpaid"]</span>
+            <span class="dlv-fchip @(_status == "overdue" ? "on" : "")" @onclick="@(() => SetStatus("overdue"))">@L["w.overdue"]</span>
+            <span class="dlv-fchip @(_status == "paid" ? "on" : "")" @onclick="@(() => SetStatus("paid"))">@L["w.paid"]</span>
+        </div>
+        <MudSelect T="string" Value="_category" ValueChanged="SetCategory" Label="@L["w.category"]" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Class="bl-select" ToStringFunc="@CategoryLabel">
+            <MudSelectItem T="string" Value="@("all")">@L["bill.allCats"]</MudSelectItem>
+            @foreach (var (key, emoji, label) in BillCategories.All)
+            {
+                <MudSelectItem T="string" Value="@key">@emoji @label</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField T="string" Value="_search" ValueChanged="SetSearch" Placeholder="@L["bill.searchPh"]"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" DebounceInterval="400"
+                      Clearable="true" Class="rp-search" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" />
+    </div>
+
+    <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+        @if (_page is null)
+        {
+            <Loader />
+        }
+        else if (_page.Rows.Count == 0)
+        {
+            <div class="pv-empty">
+                <span class="em">🧾</span>
+                <MudText Typo="Typo.body1" Style="font-weight: 700;">@L["bill.empty"]</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@L["bill.emptySub"]</MudText>
+            </div>
+        }
+        else
+        {
+            <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                <thead>
+                    <tr>
+                        <th style="width: 40px;"></th>
+                        <th>@L["bill.billCol"]</th>
+                        <th>@L["w.due"]</th>
+                        <th class="num">@L["w.amount"] (@((MarkupString)Fmt.RialSvg))</th>
+                        <th style="width: 150px;">@L["common.status"]</th>
+                        <th style="width: 96px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var bill in _page.Rows)
+                    {
+                        var b = bill;
+                        <tr class="@(b.IsOverdue ? "bl-over" : "")">
+                            <td><span class="bl-ico">@BillCategories.Emoji(b.Category)</span></td>
+                            <td>
+                                <div class="strong">@b.Title @if (b.Recurring) { <span class="bl-rep" title="@L["bill.repeats"]">⟳</span> }</div>
+                                <div class="bl-sub">
+                                    @L["bcat." + b.Category]
+                                    @if (!string.IsNullOrWhiteSpace(b.Vendor)) { <span>· @b.Vendor</span> }
+                                    @if (!string.IsNullOrWhiteSpace(b.Reference)) { <span>· #@b.Reference</span> }
+                                </div>
+                            </td>
+                            <td>
+                                <div>@b.DueDate.ToString("d MMM yyyy")</div>
+                                @if (!b.IsPaid)
+                                {
+                                    <div class="bl-sub @(b.IsOverdue ? "late" : "")">
+                                        @(b.IsOverdue ? string.Format(L["bill.daysLate"], -b.DaysLeft) : b.DaysLeft == 0 ? L["bill.dueToday"] : string.Format(L["bill.dueIn"], b.DaysLeft))
+                                    </div>
+                                }
+                            </td>
+                            <td class="num strong">@Fmt.RialShort(b.Amount)</td>
+                            <td>
+                                <span class="bl-status @(b.IsPaid ? "paid" : b.IsOverdue ? "over" : "due")"
+                                      @onclick="@(() => TogglePaid(b))" title="@L["bill.tapChange"]">
+                                    @(b.IsPaid ? "✔ " + L["w.paid"] : b.IsOverdue ? "⚠ " + L["w.overdue"] : "◷ " + L["w.unpaid"])
+                                </span>
+                            </td>
+                            <td>
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => Edit(b))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => Delete(b))" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <div class="rp-pager">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@_page.Total @L["w.bills"]</MudText>
+                <MudPagination Count="@Pages" Selected="@(_pageIndex + 1)" SelectedChanged="GoToPage"
+                               Size="Size.Small" Color="Color.Primary" />
+            </div>
+        }
+    </MudPaper>
+</div>
+
+@code {
+    private const int PageSize = 20;
+
+    private StoreBillPageDto? _page;
+    private string _status = "all";
+    private string _category = "all";
+    private string _search = "";
+    private int _pageIndex;
+
+    private int Pages => Math.Max(1, (int)Math.Ceiling((_page?.Total ?? 0) / (double)PageSize));
+
+    private string CategoryLabel(string key) =>
+        key == "all" ? L["bill.allCats"] : $"{BillCategories.Emoji(key)} {L["bcat." + key]}";
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        _page = null;
+        _page = await Api.GetBillsAsync(_status, _category, _search, _pageIndex * PageSize, PageSize);
+    }
+
+    private async Task SetStatus(string status)
+    {
+        _status = status;
+        _pageIndex = 0;
+        await Reload();
+    }
+
+    private async Task SetCategory(string category)
+    {
+        _category = category;
+        _pageIndex = 0;
+        await Reload();
+    }
+
+    private async Task SetSearch(string value)
+    {
+        _search = value ?? "";
+        _pageIndex = 0;
+        await Reload();
+    }
+
+    private async Task GoToPage(int page)
+    {
+        _pageIndex = page - 1;
+        await Reload();
+    }
+
+    private async Task Edit(StoreBillDto? bill)
+    {
+        var parameters = new DialogParameters<BillDialog> { { d => d.Existing, bill } };
+        var dialog = await Dialogs.ShowAsync<BillDialog>(bill is null ? L["bill.new"] : L["common.edit"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled == false) await Reload();
+    }
+
+    private async Task TogglePaid(StoreBillDto bill)
+    {
+        var (ok, error) = await Api.ToggleBillPaidAsync(bill.Id);
+        if (!ok) { Snackbar.Add(error ?? L["common.updateFail"], Severity.Error); return; }
+        if (!bill.IsPaid && bill.Recurring) Snackbar.Add(L["bill.nextCreated"], Severity.Success);
+        await Reload();
+    }
+
+    private async Task Delete(StoreBillDto bill)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["bill.deleteTitle"],
+            string.Format(L["bill.delMsg"], bill.Title),
+            yesText: L["common.delete"], cancelText: L["common.keep"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.DeleteBillAsync(bill.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error);
+        await Reload();
+    }
+}

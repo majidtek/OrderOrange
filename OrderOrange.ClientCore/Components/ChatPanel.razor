@@ -1,0 +1,397 @@
+@namespace OrderOrange.ClientCore.Components
+@inject ApiClient Api
+@inject AppState State
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject LanguageService L
+@inject Microsoft.Extensions.Configuration.IConfiguration Config
+@implements IDisposable
+
+@* Order chat: modern animated bubbles — text, photos/files, voice notes and live
+   location with an embedded mini-map. Polling keeps it simple and robust. *@
+
+<div class="d-flex flex-column" style="@(FullScreen ? "height: calc(100dvh - 60px);" : "height: 62vh; max-height: 540px;")">
+    <div @ref="_scroll" class="mf-chat-scroll flex-grow-1 pa-3" style="overflow-y: auto;">
+        @if (_messages.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="pa-6">
+                💬 @L["chat.sayHello"]
+            </MudText>
+        }
+        @foreach (var message in _messages)
+        {
+            var mine = message.SenderUserId == State.UserId;
+            <div class="mf-chat-row @(mine ? "mine" : "")">
+                @if (!mine)
+                {
+                    <div class="mf-chat-avatar" style="@AvatarStyle(message.SenderRole)">
+                        @message.SenderName[..1]
+                    </div>
+                }
+                <div class="mf-chat-bubble">
+                    @if (!mine)
+                    {
+                        <MudText Typo="Typo.caption" Style="font-weight: 700; color: #E04E00;">@message.SenderName</MudText>
+                    }
+                    @if (message.AttachmentType == "image")
+                    {
+                        var imageData = message.AttachmentData;
+                        <img src="@imageData" class="mf-chat-img"
+                             style="max-width: 100%; border-radius: 12px; display: block; cursor: zoom-in;"
+                             alt="@L["chat.photo"]" @onclick="@(() => _lightbox = imageData)" />
+                    }
+                    else if (message.AttachmentType == "voice")
+                    {
+                        <audio controls src="@message.AttachmentData" style="max-width: 225px; height: 40px;"></audio>
+                    }
+                    else if (message.AttachmentType == "file")
+                    {
+                        <a href="@message.AttachmentData" download="@(message.FileName ?? "file")">📎 @(message.FileName ?? L["common.attachment"])</a>
+                    }
+                    else if (message.AttachmentType == "location" && message.Text is not null)
+                    {
+                        @* Mini-map right in the bubble, plus a jump-out link. *@
+                        <iframe src="@($"https://maps.google.com/maps?q={message.Text}&z=15&output=embed")"
+                                style="width: 236px; height: 150px; border: 0; border-radius: 12px; display: block;"
+                                loading="lazy"></iframe>
+                        <a href="@($"https://www.google.com/maps/search/?api=1&query={message.Text}")" target="_blank"
+                           rel="noopener" style="font-size: 12.5px;">📍 @L["track.openMaps"]</a>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(message.Text) && message.AttachmentType != "location")
+                    {
+                        <MudText Typo="Typo.body2">@message.Text</MudText>
+                    }
+                    <div class="mf-chat-time">@message.At.ToString("HH:mm")</div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="mf-chat-composer">
+        @* Plain input: JS compresses images to ~300 KB before they ever reach the circuit. *@
+        <input type="file" id="@_fileInputId" accept="image/png,image/jpeg,image/webp,application/pdf" hidden />
+
+        @if (_recording)
+        {
+            <button type="button" class="mf-chat-icon recording" title="@L["common.stopRec"]" @onclick="ToggleVoice">
+                <MudIcon Icon="@Icons.Material.Filled.Stop" Size="Size.Small" />
+            </button>
+            <div class="d-flex align-center flex-grow-1 justify-center" style="gap: 10px; min-width: 0;">
+                <canvas id="@_waveId" class="mf-chat-wave" width="240" height="34"></canvas>
+                <MudText Typo="Typo.caption" Color="Color.Error" Style="white-space: nowrap;"><b>@L["chat.recording"]</b></MudText>
+            </div>
+        }
+        else
+        {
+            @* All secondary actions live in one "+" menu so the composer never overflows. *@
+            <MudMenu AnchorOrigin="Origin.TopLeft" TransformOrigin="Origin.BottomLeft" Dense="true">
+                <ActivatorContent>
+                    <button type="button" class="mf-chat-icon plus" title="@L["common.more"]">
+                        <MudIcon Icon="@Icons.Material.Filled.Add" Size="Size.Small" />
+                    </button>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem Icon="@Icons.Material.Filled.AttachFile" OnClick="OpenFilePicker">
+                        @L["chat.photoFile"]
+                    </MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Mic" OnClick="ToggleVoice">
+                        @L["chat.voiceNote"]
+                    </MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.MyLocation" OnClick="SendLocation">
+                        @L["chat.myLocation"]
+                    </MudMenuItem>
+                    @if (HasMapKey)
+                    {
+                        <MudMenuItem Icon="@Icons.Material.Filled.Map" OnClick="@(() => _mapOpen = true)">
+                            @L["chat.chooseMap"]
+                        </MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+            @if (_uploading)
+            {
+                <div class="d-flex align-center flex-grow-1" style="gap: 10px; min-width: 0;">
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Color="Color.Primary" />
+                    <div class="mf-upload-bar flex-grow-1"><i></i></div>
+                </div>
+            }
+            else
+            {
+                @* Uncontrolled: Blazor never writes the value back, so fast mobile
+                   typing and IME composition are never disturbed. *@
+                <input id="@_textInputId" class="mf-chat-input" placeholder="@L["chat.placeholder"]"
+                       @oninput="e => _text = e.Value?.ToString() ?? string.Empty"
+                       @onkeydown="@(e => e.Key == "Enter" ? SendText() : Task.CompletedTask)" />
+            }
+        }
+
+        <button type="button" class="mf-chat-send" @onclick="SendText" disabled="@(_busy || _recording)" title="@L["common.send"]">
+            <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" />
+        </button>
+    </div>
+</div>
+
+@* Pick-any-location map (needs the Google Maps key of the hosting app). *@
+<MudDialog @bind-Visible="_mapOpen" Options="_mapOptions" Class="mf-lang-dialog">
+    <TitleContent>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <div class="mf-lang-badge"><MudIcon Icon="@Icons.Material.Filled.Map" /></div>
+            <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["chat.chooseLocation"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <div id="@_mapId" style="height: 320px; border-radius: 14px; overflow: hidden;"></div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">
+            @(_pickedAddress ?? L["chat.tapMap"])
+        </MudText>
+        <button class="dlv-cta mt-3" disabled="@(_pickedLat is null || _busy)" @onclick="SendPickedLocation">
+            <MudIcon Icon="@Icons.Material.Filled.Send" />
+            @L["chat.sendLocation"]
+        </button>
+    </DialogContent>
+</MudDialog>
+
+@* Fullscreen image viewer — tap a chat photo to open, tap anywhere to close. *@
+@if (_lightbox is not null)
+{
+    <div class="mf-lightbox" @onclick="@(() => _lightbox = null)">
+        <img src="@_lightbox" alt="@L["chat.photo"]" />
+        <button type="button" class="mf-lightbox-close" title="@L["common.close"]">✕</button>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public int OrderId { get; set; }
+
+    /// <summary>Fill the whole viewport (fullscreen chat) instead of the compact dialog height.</summary>
+    [Parameter] public bool FullScreen { get; set; }
+
+    private readonly string _fileInputId = $"mf-chat-file-{Guid.NewGuid():N}";
+    private ElementReference _scroll;
+    private List<ChatMessageDto> _messages = [];
+    private string _text = "";
+    private bool _busy;
+    private bool _recording;
+    private Timer? _poll;
+
+    private static string AvatarStyle(UserRole role) => role switch
+    {
+        UserRole.RestaurantOwner => "background: linear-gradient(135deg, #E08A0B, #F2B950);",
+        UserRole.Driver => "background: linear-gradient(135deg, #3B6FE0, #7AA0F0);",
+        UserRole.Administrator => "background: linear-gradient(135deg, #D92D20, #F0455E);",
+        _ => "background: linear-gradient(135deg, #FF5A00, #FF9A5C);"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        _poll = new Timer(_ => _ = InvokeAsync(async () =>
+        {
+            try { await Load(); } catch { }
+        }), null, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(4));
+    }
+
+    private async Task Load()
+    {
+        var after = _messages.Count > 0 ? _messages[^1].Id : 0;
+        var fresh = await Api.GetChatAsync(OrderId, after) ?? [];
+        if (fresh.Count > 0)
+        {
+            _messages.AddRange(fresh);
+            StateHasChanged();
+            try { await JS.InvokeVoidAsync("mfChat.scrollToBottom", _scroll); } catch { }
+        }
+    }
+
+    private async Task SendText()
+    {
+        if (string.IsNullOrWhiteSpace(_text) || _busy) return;
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.SendChatAsync(OrderId, new SendChatRequest(_text, null, null, null));
+            if (!ok) { Snackbar.Add(error ?? L["chat.sendFail"], Severity.Error); return; }
+            _text = "";
+            try { await JS.InvokeVoidAsync("mfChat.clearInput", _textInputId); } catch { }
+            await Load();
+        }
+        finally { _busy = false; }
+    }
+
+    private sealed class ChatPick
+    {
+        public string? DataUrl { get; set; }
+        public string? Name { get; set; }
+        public bool Image { get; set; }
+        public string? Error { get; set; }
+    }
+
+    /// <summary>Opens the file picker; JS resizes/compresses images to ~300 KB
+    /// (JPEG, stepped quality) so uploads are fast and never hit size caps.</summary>
+    private async Task OpenFilePicker()
+    {
+        ChatPick? pick = null;
+        _uploading = true;
+        StateHasChanged();
+        try
+        {
+            try { pick = await JS.InvokeAsync<ChatPick?>("mfChat.pickCompressed", _fileInputId, 300); }
+            catch { /* picker is a nicety */ }
+            if (pick is null) return;
+            if (pick.Error == "TOO_BIG") { Snackbar.Add(L["chat.fileLimit"], Severity.Warning); return; }
+            if (string.IsNullOrEmpty(pick.DataUrl)) return;
+
+            _busy = true;
+            try
+            {
+                var (ok, error) = await Api.SendChatAsync(OrderId, new SendChatRequest(
+                    null, pick.DataUrl, pick.Image ? "image" : "file", pick.Name ?? "file"));
+                if (!ok) Snackbar.Add(error ?? L["chat.sendFail"], Severity.Error);
+                await Load();
+            }
+            finally { _busy = false; }
+        }
+        finally
+        {
+            _uploading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ---------- live waveform + map picker ----------
+    private string? _lightbox;
+    private bool _uploading;
+    private readonly string _textInputId = $"mf-chat-text-{Guid.NewGuid():N}";
+    private readonly string _waveId = $"mf-chat-wave-{Guid.NewGuid():N}";
+    private readonly string _mapId = $"mf-chat-map-{Guid.NewGuid():N}";
+    private bool _vizPending;
+    private bool _mapOpen;
+    private bool _mapInit;
+    private double? _pickedLat;
+    private double? _pickedLng;
+    private string? _pickedAddress;
+    private DotNetObjectReference<ChatPanel>? _selfRef;
+
+    private static readonly DialogOptions _mapOptions = new()
+    {
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true,
+        CloseButton = true,
+        BackdropClick = true,
+        Position = DialogPosition.Center
+    };
+
+    private bool HasMapKey => !string.IsNullOrWhiteSpace(Config["GoogleMaps:ApiKey"]);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_recording && _vizPending)
+        {
+            _vizPending = false;
+            try { await JS.InvokeVoidAsync("mfChat.startViz", _waveId); } catch { /* bars stay empty */ }
+        }
+
+        if (_mapOpen && !_mapInit)
+        {
+            _mapInit = true;
+            _selfRef ??= DotNetObjectReference.Create(this);
+            var ok = false;
+            try
+            {
+                ok = await JS.InvokeAsync<bool>("mfMap.init", _mapId,
+                    Config["GoogleMaps:ApiKey"] ?? "", _pickedLat ?? 0, _pickedLng ?? 0, _selfRef);
+            }
+            catch { /* maps script not present in this app */ }
+            if (!ok)
+            {
+                _mapOpen = false;
+                _mapInit = false;
+                Snackbar.Add(L["chat.mapNa"], Severity.Warning);
+                StateHasChanged();
+            }
+        }
+        else if (!_mapOpen && _mapInit)
+        {
+            _mapInit = false; // reopening re-initializes the map div
+        }
+    }
+
+    [JSInvokable]
+    public void OnMapPick(double lat, double lng, string? formatted, string? area)
+    {
+        _pickedLat = lat;
+        _pickedLng = lng;
+        _pickedAddress = formatted ?? area;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SendPickedLocation()
+    {
+        if (_pickedLat is null || _pickedLng is null) return;
+        _mapOpen = false;
+        var (ok, error) = await Api.SendChatAsync(OrderId, new SendChatRequest(
+            $"{_pickedLat:0.######},{_pickedLng:0.######}", null, "location", null));
+        if (!ok) Snackbar.Add(error ?? L["chat.sendFail"], Severity.Error);
+        await Load();
+    }
+
+    private async Task ToggleVoice()
+    {
+        if (!_recording)
+        {
+            var started = false;
+            try { started = await JS.InvokeAsync<bool>("mfChat.startVoice"); } catch { }
+            if (!started)
+            {
+                // Say WHICH wall was hit: a blocked permission is fixed in the
+                // browser, a missing microphone is not.
+                var reason = "failed";
+                try { reason = await JS.InvokeAsync<string>("mfChat.voiceError"); } catch { }
+                Snackbar.Add(reason switch
+                {
+                    "denied" => L["chat.micDenied"],
+                    "nomic" => L["chat.micNone"],
+                    "unsupported" => L["chat.micUnsupported"],
+                    _ => L["chat.micNa"]
+                }, Severity.Warning);
+                return;
+            }
+            _recording = true;
+            _vizPending = true;   // the canvas mounts on the next render
+            return;
+        }
+
+        _recording = false;
+        string? dataUrl = null;
+        try { dataUrl = await JS.InvokeAsync<string?>("mfChat.stopVoice"); } catch { }
+        if (dataUrl == "TOO_BIG") { Snackbar.Add(L["chat.tooLong"], Severity.Warning); return; }
+        if (string.IsNullOrEmpty(dataUrl)) { Snackbar.Add(L["chat.micEmpty"], Severity.Warning); return; }
+        // The name follows the format the browser actually produced.
+        var extension = dataUrl.StartsWith("data:audio/mp4") ? "m4a"
+            : dataUrl.StartsWith("data:audio/ogg") ? "ogg" : "webm";
+        var (ok, error) = await Api.SendChatAsync(OrderId, new SendChatRequest(null, dataUrl, "voice", $"voice-note.{extension}"));
+        if (!ok) Snackbar.Add(error ?? L["chat.sendFail"], Severity.Error);
+        await Load();
+    }
+
+    private async Task SendLocation()
+    {
+        double[]? coords = null;
+        try { coords = await JS.InvokeAsync<double[]?>("mfChat.getLocation"); } catch { }
+        if (coords is not { Length: 2 })
+        {
+            Snackbar.Add(L["chat.gpsNa"], Severity.Warning);
+            return;
+        }
+        var (ok, error) = await Api.SendChatAsync(OrderId, new SendChatRequest(
+            $"{coords[0]:0.######},{coords[1]:0.######}", null, "location", null));
+        if (!ok) Snackbar.Add(error ?? L["chat.sendFail"], Severity.Error);
+        await Load();
+    }
+
+    public void Dispose()
+    {
+        _poll?.Dispose();
+        _selfRef?.Dispose();
+    }
+}

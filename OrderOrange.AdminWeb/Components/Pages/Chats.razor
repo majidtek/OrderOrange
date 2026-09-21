@@ -1,0 +1,240 @@
+@page "/chats"
+@inject ApiClient Api
+@inject IJSRuntime JS
+@inject LanguageService L
+
+<PageTitle>Admin — Chats</PageTitle>
+
+@if (_chats is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <AutoRefresh OnRefresh="Reload" Seconds="10" />
+
+    @* ---------- Hero ---------- *@
+    <div class="mf-act-hero mb-4">
+        <div class="mf-act-hero-glow"></div>
+        <div class="d-flex align-center" style="gap: 12px; position: relative;">
+            <span class="mf-live-badge"><span class="mf-live-dot"></span> @L["vis.live"]</span>
+            <div>
+                <MudText Typo="Typo.h5" Style="color:#fff; font-weight:800;">💬 @L["nav.chats"]</MudText>
+                <MudText Typo="Typo.body2" Style="color:rgba(255,255,255,.75);">@L["admin.chatsSub"]</MudText>
+            </div>
+        </div>
+        <div class="mf-act-stats">
+            <div class="mf-act-stat">
+                <div class="mf-act-stat-icon" style="background: rgba(255,90,0,.25); color:#FFB27D;">
+                    <MudIcon Icon="@Icons.Material.Filled.Forum" />
+                </div>
+                <div>
+                    <div class="mf-act-stat-num">@_chats.Count</div>
+                    <div class="mf-act-stat-label">@L["nav.chats"]</div>
+                </div>
+            </div>
+            <div class="mf-act-stat">
+                <div class="mf-act-stat-icon" style="background: rgba(66,165,245,.22); color:#8EC9FF;">
+                    <MudIcon Icon="@Icons.Material.Filled.ChatBubble" />
+                </div>
+                <div>
+                    <div class="mf-act-stat-num">@_chats.Sum(c => c.MessageCount)</div>
+                    <div class="mf-act-stat-label">@L["admin.feed"]</div>
+                </div>
+            </div>
+            <div class="mf-act-stat">
+                <div class="mf-act-stat-icon" style="background: rgba(76,175,80,.22); color:#7CFC9B;">
+                    <MudIcon Icon="@Icons.Material.Filled.Bolt" />
+                </div>
+                <div>
+                    <div class="mf-act-stat-num">@HotChats</div>
+                    <div class="mf-act-stat-label">@L["admin.onlineNow"]</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <MudGrid Spacing="3">
+        @* ---------- Conversation list ---------- *@
+        <MudItem xs="12" md="5" lg="4">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-xl">
+                <MudTextField T="string" @bind-Value="_search" Placeholder="@($"{L["common.search"]}…")"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="mb-3"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                              Immediate="true" DebounceInterval="450" OnDebounceIntervalElapsed="Reload" />
+                @if (_chats.Count == 0)
+                {
+                    <EmptyState Emoji="💬" Title="—" />
+                }
+                @foreach (var chat in _chats)
+                {
+                    var isHot = (DateTime.Now - chat.LastAt).TotalMinutes < 10;
+                    <div class="mf-chatmon-item @(chat.OrderId == _selectedId ? "selected" : "") @(isHot ? "hot" : "")"
+                         @onclick="@(() => Select(chat.OrderId))">
+                        <div class="mf-chatmon-parties">
+                            <span class="mf-party c">@Initial(chat.CustomerName)</span>
+                            <span class="mf-party r">@Initial(chat.RestaurantName)</span>
+                            @if (chat.DriverName is not null)
+                            {
+                                <span class="mf-party d">@Initial(chat.DriverName)</span>
+                            }
+                        </div>
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <div class="d-flex align-center" style="gap: 6px;">
+                                <MudText Typo="Typo.body2" Style="font-weight: 800;">@chat.OrderNumber</MudText>
+                                <StatusChip Status="@chat.OrderStatus" />
+                                <MudSpacer />
+                                <span class="mf-timeline-time">@Fmt.TimeAgo(chat.LastAt, L)</span>
+                            </div>
+                            <MudText Typo="Typo.caption"
+                                     Style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                <b>@chat.LastSender:</b> @Preview(chat)
+                            </MudText>
+                        </div>
+                        <div class="mf-chatmon-count @(isHot ? "hot" : "")">@chat.MessageCount</div>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+
+        @* ---------- Read-only conversation viewer ---------- *@
+        <MudItem xs="12" md="7" lg="8">
+            <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow: hidden;">
+                @if (Selected is null)
+                {
+                    <div class="pa-8">
+                        <EmptyState Emoji="🗨️" Title="@L["nav.chats"]" Subtitle="@L["admin.chatsSub"]" />
+                    </div>
+                }
+                else
+                {
+                    <div class="mf-chat-topbar" style="height: 58px;">
+                        <MudIcon Icon="@Icons.Material.Filled.Visibility" Style="color:#fff; margin-inline-start: 12px;" />
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <MudText Typo="Typo.subtitle1" Style="color:#fff; font-weight: 800; line-height: 1.1;">
+                                💬 @Selected.OrderNumber · @L[$"status.{Selected.OrderStatus}"]
+                            </MudText>
+                            <MudText Typo="Typo.caption" Style="color: rgba(255,255,255,.85); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                🍔 @Selected.CustomerName · 🍳 @Selected.RestaurantName@(Selected.DriverName is null ? "" : $" · 🛵 {Selected.DriverName}")
+                            </MudText>
+                        </div>
+                        <span class="mf-live-badge-sm" style="margin-inline-end: 12px;"><span class="mf-live-dot"></span> @L["vis.live"]</span>
+                    </div>
+                    <div @ref="_scroll" class="mf-chat-scroll pa-4" style="height: 62vh; overflow-y: auto;">
+                        @if (_messages is null)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@L["admin.loading"]</MudText>
+                        }
+                        else
+                        {
+                            var lastDay = DateTime.MinValue;
+                            @foreach (var message in _messages)
+                            {
+                                @if (message.At.Date != lastDay)
+                                {
+                                    lastDay = message.At.Date;
+                                    <div class="mf-chat-day"><span>@message.At.ToString("dd MMM yyyy")</span></div>
+                                }
+                                <div class="mf-chat-row @(message.SenderRole == UserRole.Customer ? "" : "mine")">
+                                    <div class="mf-chat-avatar" style="@MonAvatar(message.SenderRole)">@message.SenderName[..1]</div>
+                                    <div class="mf-chat-bubble">
+                                        <MudText Typo="Typo.caption" Style="font-weight: 700; color: #E04E00;">
+                                            @RoleEmoji(message.SenderRole) @message.SenderName
+                                        </MudText>
+                                        @if (message.AttachmentType == "image" && message.AttachmentData is not null)
+                                        {
+                                            <img src="@message.AttachmentData" alt="" style="max-width: 240px; border-radius: 12px; display: block; margin-top: 4px;" />
+                                        }
+                                        else if (message.AttachmentType == "voice")
+                                        {
+                                            <audio controls src="@message.AttachmentData" style="max-width: 240px; margin-top: 4px;"></audio>
+                                        }
+                                        else if (message.AttachmentType == "location" && message.Text is not null)
+                                        {
+                                            <MudText Typo="Typo.body2">📍 @message.Text</MudText>
+                                        }
+                                        else if (message.AttachmentType == "file")
+                                        {
+                                            <MudText Typo="Typo.body2">📎 @(message.FileName ?? "file")</MudText>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(message.Text) && message.AttachmentType != "location")
+                                        {
+                                            <MudText Typo="Typo.body2">@message.Text</MudText>
+                                        }
+                                        <div class="mf-chat-time">@message.At.ToString("HH:mm")</div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private List<AdminChatSummaryDto>? _chats;
+    private List<ChatMessageDto>? _messages;
+    private int? _selectedId;
+    private string _search = "";
+    private ElementReference _scroll;
+    private bool _scrollPending;
+
+    private AdminChatSummaryDto? Selected => _chats?.FirstOrDefault(c => c.OrderId == _selectedId);
+    private int HotChats => (_chats ?? []).Count(c => (DateTime.Now - c.LastAt).TotalMinutes < 15);
+
+    private static string Initial(string name) => string.IsNullOrEmpty(name) ? "?" : name[..1];
+
+    private static string RoleEmoji(UserRole role) => role switch
+    {
+        UserRole.Administrator => "🛠️",
+        UserRole.RestaurantOwner => "🍳",
+        UserRole.Driver => "🛵",
+        _ => "🍔"
+    };
+
+    private static string MonAvatar(UserRole role) => role switch
+    {
+        UserRole.Administrator => "background: linear-gradient(135deg, #E53935, #FF7043); color:#fff;",
+        UserRole.RestaurantOwner => "background: linear-gradient(135deg, #FB8C00, #FFC107); color:#fff;",
+        UserRole.Driver => "background: linear-gradient(135deg, #1E88E5, #4FC3F7); color:#fff;",
+        _ => "background: linear-gradient(135deg, #FF5A00, #FF9A5C); color:#fff;"
+    };
+
+    private string Preview(AdminChatSummaryDto chat) => chat.LastType switch
+    {
+        "image" => "🖼️", "voice" => "🎙️", "file" => "📎", "location" => "📍",
+        _ => chat.LastText ?? "…"
+    };
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollPending)
+        {
+            _scrollPending = false;
+            try { await JS.InvokeVoidAsync("mfChat.scrollToBottom", _scroll); } catch { }
+        }
+    }
+
+    private async Task Reload()
+    {
+        _chats = await Api.GetAdminChatsAsync(0, 30, string.IsNullOrWhiteSpace(_search) ? null : _search) ?? [];
+        if (_selectedId is not null)
+        {
+            var before = _messages?.Count ?? 0;
+            _messages = await Api.GetAdminChatMessagesAsync(_selectedId.Value);
+            if ((_messages?.Count ?? 0) != before) _scrollPending = true;
+        }
+    }
+
+    private async Task Select(int orderId)
+    {
+        _selectedId = orderId;
+        _messages = null;
+        _messages = await Api.GetAdminChatMessagesAsync(orderId);
+        _scrollPending = true;
+    }
+}

@@ -1,0 +1,292 @@
+﻿@page "/reports/products"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Partner — Product report</PageTitle>
+
+@* What the kitchen actually sells. The sales report answers "how much"; this one
+   answers "of what", which is the question that changes a menu. *@
+
+<PageHeader Title="@L["prep.title"]" Subtitle="@L["prep.sub"]" />
+
+<div class="rp">
+    <div class="d-flex align-center flex-wrap mb-4" style="gap: 10px;">
+        <div class="dlv-filter">
+            <span class="dlv-fchip @(_range is null && _period == "day" ? "on" : "")" @onclick="@(() => SetPeriod("day"))">@L["vis.today"]</span>
+            <span class="dlv-fchip @(_range is null && _period == "week" ? "on" : "")" @onclick="@(() => SetPeriod("week"))">@L["vis.days7"]</span>
+            <span class="dlv-fchip @(_range is null && _period == "month" ? "on" : "")" @onclick="@(() => SetPeriod("month"))">@L["vis.days30"]</span>
+            <span class="dlv-fchip @(_range is null && _period == "year" ? "on" : "")" @onclick="@(() => SetPeriod("year"))">@L["vis.year"]</span>
+        </div>
+        <MfDateRangePicker DateFormat="yyyy-MM-dd" DateRange="_range" DateRangeChanged="OnRangeChanged"
+                            Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                            Class="rp-range" PlaceholderStart="@L["w.date"]" PlaceholderEnd="@L["w.date"]"
+                            MaxDate="DateTime.Today" />
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">@RangeLabel</MudChip>
+        <span style="flex: 1;"></span>
+        <ReportExport Title="@L["prep.title"]" Subtitle="@L["prep.sub"]" RangeLabel="@RangeLabel"
+                      Columns="@ExportColumns" Fetch="ExportRows" FetchTotals="ExportTotals" />
+    </div>
+
+    @* ---------- What the range adds up to ---------- *@
+    <MudGrid Spacing="3" Class="mb-1">
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["prep.dishesSold"]" Value="@(_all is null ? "…" : _all.Sum(p => p.Qty).ToString("N0"))"
+                      Icon="@Icons.Material.Filled.Restaurant" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.revenue"]" Value="@(_all is null ? "…" : Fmt.RialShort(_all.Sum(p => p.Revenue)).Value)"
+                      Icon="@Icons.Material.Filled.Payments" Color="Color.Success" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["prep.distinct"]" Value="@(_all is null ? "…" : _all.Count.ToString("N0"))"
+                      Icon="@Icons.Material.Filled.Category" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["prep.avgPrice"]"
+                      Value="@(_all is null || _all.Sum(p => p.Qty) == 0 ? "…" : Fmt.RialShort(_all.Sum(p => p.Revenue) / _all.Sum(p => p.Qty)).Value)"
+                      Icon="@Icons.Material.Filled.Sell" Color="Color.Warning" />
+        </MudItem>
+    </MudGrid>
+
+    <div class="my-4"></div>
+
+    @if (_all is null)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card"><Loader /></MudPaper>
+    }
+    else if (_all.Count == 0)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+            <EmptyState Emoji="🍽️" Title="@L["rep.nothingSold"]" Subtitle="@L["prep.emptySub"]" />
+        </MudPaper>
+    }
+    else
+    {
+        var top = _all.Take(5).ToList();
+        var peak = top.Count == 0 ? 1m : Math.Max(1m, top.Max(p => p.Revenue));
+        var grand = _all.Sum(p => p.Revenue);
+
+        @* ---------- The five that carry the menu ---------- *@
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card mb-4">
+            <div class="d-flex align-center mb-3" style="gap: 8px;">
+                <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Style="color:#f4511e;" />
+                <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["prep.podium"]</MudText>
+            </div>
+            <div class="pr-podium">
+                @foreach (var (item, index) in top.Select((p, i) => (p, i)))
+                {
+                    <div class="pr-bar">
+                        <span class="rk r@(Math.Min(index + 1, 4))">@(index + 1)</span>
+                        <div class="mid">
+                            <div class="nm">@item.Name</div>
+                            <div class="track"><i style="width:@((int)Math.Round(item.Revenue / peak * 100))%"></i></div>
+                        </div>
+                        <div class="fig">
+                            <b>@Fmt.RialShort(item.Revenue)</b>
+                            <small>@string.Format(L["prep.sold"], item.Qty)</small>
+                        </div>
+                    </div>
+                }
+            </div>
+        </MudPaper>
+
+        @* ---------- Every dish, with its share of the till ---------- *@
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+            <div class="rp-toolbar mb-3">
+                <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["prep.allDishes"]</MudText>
+                <MudTextField T="string" Value="_search" ValueChanged="OnSearch"
+                              Placeholder="@L["rep.filterProduct"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Immediate="true" DebounceInterval="350" Clearable="true" Class="rp-search"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+            </div>
+
+            @if (Shown.Count == 0)
+            {
+                <div class="pv-empty">
+                    <span class="em">🔍</span>
+                    <MudText Typo="Typo.body1" Style="font-weight: 700;">@L["rep.noMatchProduct"]</MudText>
+                </div>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 44px;">#</th>
+                            <th>@L["w.product"]</th>
+                            <th class="num">@L["w.qtySold"]</th>
+                            <th class="num">@L["prep.avgPrice"]</th>
+                            <th class="num">@L["w.revenue"] (@((MarkupString)Fmt.RialSvg))</th>
+                            <th style="width: 120px;">@L["prep.share"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var (item, index) in Page.Select((p, i) => (p, i)))
+                        {
+                            var rank = _all.IndexOf(item) + 1;
+                            var share = grand == 0 ? 0 : (double)(item.Revenue / grand * 100);
+                            <tr>
+                                <td><span class="rk r@(Math.Min(rank, 4))">@rank</span></td>
+                                <td class="strong">@item.Name</td>
+                                <td class="num">@item.Qty</td>
+                                <td class="num">@Fmt.RialShort(item.Qty == 0 ? 0 : item.Revenue / item.Qty)</td>
+                                <td class="num strong">@Fmt.RialShort(item.Revenue)</td>
+                                <td>
+                                    <div class="pr-share">
+                                        <i style="width:@Math.Round(share, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)%"></i>
+                                        <b>@share.ToString("0.0")%</b>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="total">
+                            <td></td>
+                            <td>@L["common.total"]</td>
+                            <td class="num">@_all.Sum(p => p.Qty)</td>
+                            <td></td>
+                            <td class="num strong">@Fmt.RialShort(grand)</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </MudSimpleTable>
+
+                @if (Shown.Count > PageSize)
+                {
+                    <div class="rp-pager">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@string.Format(L["rep.productsCount"], Shown.Count)</MudText>
+                        <MudPagination Count="@PageCount" Selected="@(_page + 1)" SelectedChanged="@(p => _page = p - 1)"
+                                       Size="Size.Small" Color="Color.Primary" />
+                    </div>
+                }
+            }
+        </MudPaper>
+    }
+</div>
+
+@code {
+    private const int PageSize = 15;
+
+    /// <summary>One read pulls the whole range. Product lists are small — a few hundred
+    /// dishes at most — and holding them means search, ranking, share-of-till and export
+    /// are all instant instead of a server round trip each.</summary>
+    private const int FetchAll = 2000;
+
+    private string _period = "week";
+    private DateRange? _range;
+    private bool _initialized;
+
+    private List<ProductSalesDto>? _all;
+    private string _search = "";
+    private int _page;
+
+    private DateTime? RangeFrom => _range?.Start;
+    private DateTime? RangeTo => _range?.End;
+
+    private List<ProductSalesDto> Shown => (_all ?? [])
+        .Where(p => _search.Length == 0 || p.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private List<ProductSalesDto> Page => Shown.Skip(_page * PageSize).Take(PageSize).ToList();
+
+    private int PageCount => Math.Max(1, (int)Math.Ceiling(Shown.Count / (double)PageSize));
+
+    private string RangeLabel => _range is { Start: not null, End: not null }
+        ? $"{_range.Start:d MMM} – {_range.End:d MMM yyyy}"
+        : _period switch
+        {
+            "day" => L["vis.todayHour"],
+            "month" => L["vis.last30"],
+            "year" => L["vis.last12m"],
+            _ => L["vis.last7"]
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_initialized) return;
+        _initialized = true;
+        await Load();
+    }
+
+    private async Task SetPeriod(string period)
+    {
+        _period = period;
+        _range = null;
+        await Load();
+    }
+
+    private async Task OnRangeChanged(DateRange? range)
+    {
+        if (range?.Start is null || range.End is null)
+        {
+            _range = null;
+            await Load();
+            return;
+        }
+        var start = range.Start.Value.Date;
+        var end = range.End.Value.Date;
+        if ((end - start).TotalDays > 30) end = start.AddDays(30);
+        _range = new DateRange(start, end);
+        await Load();
+    }
+
+    private void OnSearch(string value)
+    {
+        _search = value ?? "";
+        _page = 0;
+    }
+
+    private async Task Load()
+    {
+        _all = null;
+        _search = "";
+        _page = 0;
+        var page = await Api.GetMyProductReportAsync(_period, null, 0, FetchAll, RangeFrom, RangeTo);
+        _all = page?.Rows ?? [];
+    }
+
+    // ---------- Export ----------
+
+    private List<ExportColumnDto> ExportColumns =>
+    [
+        new("#", Numeric: true, Width: 6),
+        new(L["w.product"], Width: 34),
+        new(L["w.qtySold"], Numeric: true),
+        new($"{L["prep.avgPrice"]} ({Fmt.Symbol})", Numeric: true),
+        new($"{L["w.revenue"]} ({Fmt.Symbol})", Numeric: true),
+        new(L["prep.share"], Numeric: true),
+    ];
+
+    /// <summary>The whole range, not the page on screen, and ignoring the search box —
+    /// an export named "product report" that silently dropped filtered-out dishes would
+    /// be a lie that only shows up in a meeting.</summary>
+    private Task<List<List<string>>> ExportRows()
+    {
+        var rows = _all ?? [];
+        var grand = rows.Sum(p => p.Revenue);
+        return Task.FromResult(rows.Select((p, i) => new List<string>
+        {
+            (i + 1).ToString(),
+            p.Name,
+            p.Qty.ToString(),
+            (p.Qty == 0 ? 0 : p.Revenue / p.Qty).ToString("0.000"),
+            p.Revenue.ToString("0.000"),
+            (grand == 0 ? 0 : p.Revenue / grand * 100).ToString("0.0"),
+        }).ToList());
+    }
+
+    private Task<List<string>?> ExportTotals()
+    {
+        var rows = _all ?? [];
+        return Task.FromResult<List<string>?>(
+        [
+            "",
+            L["common.total"],
+            rows.Sum(p => p.Qty).ToString(),
+            "",
+            rows.Sum(p => p.Revenue).ToString("0.000"),
+            "100.0",
+        ]);
+    }
+}

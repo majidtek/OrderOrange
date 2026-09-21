@@ -1,0 +1,185 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snack
+
+@* The paper trail, out of the way: summary pills and every past invoice, with
+   mark-paid and delete. The receiving screen itself stays clean. *@
+
+<MudDialog>
+    <DialogContent>
+        @if (_page is null)
+        {
+            <MudProgressLinear Indeterminate="true" />
+        }
+        else
+        {
+            <div class="pu-top">
+                <div class="pu-sum">
+                    <span class="ic">🧾</span>
+                    <div><b class="mf-ltr">@Fmt.Rial(_page.MonthTotal)</b><small>@L["pur.monthSpend"] · @_page.MonthCount</small></div>
+                </div>
+                <div class="pu-sum @(_page.UnpaidTotal > 0 ? "warn" : "")">
+                    <span class="ic">💳</span>
+                    <div><b class="mf-ltr">@Fmt.Rial(_page.UnpaidTotal)</b><small>@L["pur.unpaid"]</small></div>
+                </div>
+                @if (_page.OverdueTotal > 0)
+                {
+                    <div class="pu-sum late">
+                        <span class="ic">⏰</span>
+                        <div><b class="mf-ltr">@Fmt.Rial(_page.OverdueTotal)</b><small>@L["pay.overdue"]</small></div>
+                    </div>
+                }
+                @if (_page.TopSupplier is { } topSupplier)
+                {
+                    <div class="pu-sum">
+                        <span class="ic">🚚</span>
+                        <div><b>@topSupplier</b><small>@L["pur.topSupplier"]</small></div>
+                    </div>
+                }
+            </div>
+
+            @if (_page.Items.Count == 0)
+            {
+                <EmptyState Emoji="🚚" Title="@L["pur.none"]" Subtitle="@L["pur.noneSub"]" />
+            }
+            else
+            {
+                <div class="pu-list">
+                    @foreach (var invoice in _page.Items)
+                    {
+                        var open = _openId == invoice.Id;
+                        <article class="pu-card @(invoice.IsPaid ? "" : invoice.HasOverdue ? "late" : "unpaid")">
+                            <button type="button" class="row" @onclick="@(() => _openId = open ? 0 : invoice.Id)">
+                                <span class="ic">@(invoice.IsPaid ? "✅" : invoice.HasOverdue ? "⏰" : "🕓")</span>
+                                <div class="mid">
+                                    <b>@invoice.Supplier</b>
+                                    <small class="mf-ltr">@invoice.Number · @invoice.InvoiceDate.ToString("dd MMM yyyy")</small>
+                                </div>
+                                <span class="lines">@string.Format(L["pur.lineCount"], invoice.Lines.Count)</span>
+                                <span class="amt mf-ltr">@Fmt.Rial(invoice.Total)</span>
+                                <MudIcon Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" />
+                            </button>
+                            @if (open)
+                            {
+                                <div class="det">
+                                    @foreach (var line in invoice.Lines)
+                                    {
+                                        <div class="ln">
+                                            <span>@(line.IsProduct ? "🍽️" : "📦")</span>
+                                            <span class="nm">@line.MaterialName</span>
+                                            <span class="qt mf-ltr">@line.Quantity.ToString("0.##") @L[$"mat.unit.{line.Unit}"]</span>
+                                            <span class="uc mf-ltr">× @Fmt.Rial(line.UnitCost)</span>
+                                            <span class="tt mf-ltr">@Fmt.Rial(line.Total)</span>
+                                        </div>
+                                    }
+                                    @* ── The payment plan: each step with its state and a pay button ── *@
+                                    <div class="pay-sched">
+                                        @foreach (var step in invoice.Payments)
+                                        {
+                                            <div class="ps @(step.IsPaid ? "paid" : step.IsOverdue ? "late" : "")">
+                                                <span class="mi">@MethodIcon(step.Method)</span>
+                                                <span class="amt mf-ltr">@Fmt.Rial(step.Amount)</span>
+                                                <span class="due mf-ltr">@step.DueDate.ToString("dd MMM yyyy")</span>
+                                                @if (step.IsPaid)
+                                                {
+                                                    <span class="st ok">✓ @L["pay.paidOn"] @step.PaidAt!.Value.ToString("dd MMM")</span>
+                                                }
+                                                else if (step.IsOverdue)
+                                                {
+                                                    <span class="st bad">⏰ @L["pay.overdue"]</span>
+                                                    <button type="button" class="pay1" @onclick="@(() => PayStepAsync(invoice, step))">@L["pay.payNow"]</button>
+                                                }
+                                                else
+                                                {
+                                                    <span class="st">🕓 @L["pay.upcoming"]</span>
+                                                    <button type="button" class="pay1" @onclick="@(() => PayStepAsync(invoice, step))">@L["pay.payNow"]</button>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @if (invoice.Notes is { Length: > 0 } notes)
+                                    {
+                                        <div class="nt">📝 @notes</div>
+                                    }
+                                    <div class="acts">
+                                        <button type="button" class="pay" @onclick="@(() => TogglePaidAsync(invoice))">
+                                            @(invoice.IsPaid ? L["pur.markUnpaid"] : L["pur.markPaid"])
+                                        </button>
+                                        <button type="button" class="del" @onclick="@(() => DeleteAsync(invoice))">
+                                            @L["common.delete"]
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </article>
+                    }
+                </div>
+            }
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Filled" Color="Color.Dark" OnClick="@(() => Dialog.Close(DialogResult.Ok(_changed)))">
+            @L["common.close"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    private MaterialPurchasePageDto? _page;
+    private int _openId;
+    private bool _changed;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _page = await Api.GetPurchasesAsync();
+
+    private static string MethodIcon(string method) => method switch
+    {
+        "card" => "💳", "transfer" => "🏦", "cheque" => "📝", "tbd" => "❔", _ => "💵",
+    };
+
+    /// <summary>Settle one step: the method is asked NOW, when the money moves.</summary>
+    private async Task PayStepAsync(MaterialPurchaseDto invoice, PurchasePaymentDto step)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Amount"] = step.Amount,
+            ["Who"] = $"{invoice.Supplier} · {invoice.Number}",
+        };
+        var method = await Dialogs.ShowAsync<PayMethodDialog>(L["payp.how"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await method.Result) is not { Canceled: false, Data: string chosen }) return;
+
+        var (ok, error) = await Api.PayInstallmentAsync(invoice.Id, step.Id, chosen);
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(L["pay.stepPaid"], Severity.Success);
+        _changed = true;
+        await LoadAsync();
+    }
+
+    private async Task TogglePaidAsync(MaterialPurchaseDto invoice)
+    {
+        var (ok, error) = await Api.TogglePurchasePaidAsync(invoice.Id);
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        _changed = true;
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(MaterialPurchaseDto invoice)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(
+            L["common.areYouSure"], L["pur.deleteAsk"],
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (confirmed != true) return;
+
+        var (ok, error) = await Api.DeletePurchaseAsync(invoice.Id);
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(L["pur.deleted"], Severity.Success);
+        _changed = true;
+        await LoadAsync();
+    }
+}

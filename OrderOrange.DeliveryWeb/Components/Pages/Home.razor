@@ -1,0 +1,373 @@
+@page "/"
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@inject IDialogService Dialogs
+@inject LanguageService L
+
+<PageTitle>Delivery — Deliveries</PageTitle>
+
+@if (_state is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <AutoRefresh OnRefresh="Reload" Seconds="5" />
+
+    @* ---------- Verification gate ---------- *@
+    @if (_state.Verification != DriverVerificationStatus.Approved)
+    {
+        <MudPaper Elevation="0" Class="pa-4 rounded-xl mb-5" Style="@BannerStyle">
+            <div class="d-flex align-center flex-wrap" style="gap: 12px;">
+                <div style="font-size: 38px;">🪪</div>
+                <div class="flex-grow-1" style="min-width: 200px;">
+                    <MudText Typo="Typo.subtitle1"><b>@BannerTitle</b></MudText>
+                    <MudText Typo="Typo.body2" Style="opacity:.85;">@BannerText</MudText>
+                </div>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/verification"
+                           StartIcon="@Icons.Material.Filled.UploadFile" Style="border-radius: 12px;">
+                    @L["drv.verify"]
+                </MudButton>
+            </div>
+        </MudPaper>
+    }
+
+    @* ---------- Command-center hero ---------- *@
+    <div class="dlv-hero @(_state.IsOnline ? "online" : "")">
+        <div class="dlv-hero-top">
+            <div class="dlv-hero-avatar">@VehicleEmoji</div>
+            <div class="flex-grow-1" style="min-width: 160px;">
+                <span class="dlv-status">
+                    <span class="dot"></span>
+                    @(_state.IsOnline ? L["driver.online"] : L["driver.offline"])
+                </span>
+                <MudText Typo="Typo.h5" Class="mt-1" Style="font-weight: 800; letter-spacing: -.3px;">
+                    @Fmt.VehicleLabel(_state.VehicleType, L)
+                </MudText>
+            </div>
+        </div>
+
+        <div class="dlv-hero-stats">
+            <div class="dlv-hstat">
+                <div class="k">@L["driver.today"]</div>
+                <div class="v">@Fmt.Rial(_earnings?.TodayEarnings ?? 0)</div>
+            </div>
+            <div class="dlv-hstat">
+                <div class="k">@L["driver.deliveries"]</div>
+                <div class="v">@(_earnings?.TodayDeliveries ?? 0)</div>
+            </div>
+            <div class="dlv-hstat">
+                <div class="k">@L["driver.alltime"]</div>
+                <div class="v">@CompactMoney(_earnings?.TotalEarnings ?? 0)</div>
+            </div>
+        </div>
+
+        <button class="dlv-toggle @(_state.IsOnline ? "stop" : "")"
+                disabled="@(!_state.IsOnline && _state.Verification != DriverVerificationStatus.Approved)"
+                @onclick="ToggleOnline">
+            <MudIcon Icon="@(_state.IsOnline ? Icons.Material.Filled.PowerSettingsNew : Icons.Material.Filled.Bolt)" />
+            @(_state.IsOnline ? L["driver.goOffline"] : L["driver.goOnline"])
+        </button>
+    </div>
+
+    @if (_state.ActiveOrder is { } active)
+    {
+        @* ---------- Active delivery ---------- *@
+        <div class="dlv-sec-title">
+            <h2>@L["driver.current"]</h2>
+            <StatusChip Status="@active.Status" />
+        </div>
+        <div class="dlv-card active-job">
+            <div class="dlv-steps">
+                @foreach (var step in Steps)
+                {
+                    var n = step.Index;
+                    var cls = n < FlowStep(active.Status) ? "done" : n == FlowStep(active.Status) ? "now" : "";
+                    <div class="dlv-step @cls">
+                        <div class="ic"><MudIcon Icon="@step.Icon" Style="font-size: 17px;" /></div>
+                        <div class="lb">@step.Label</div>
+                    </div>
+                }
+            </div>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">@FlowHint(active.Status)</MudText>
+
+            <div class="dlv-route">
+                <div class="dlv-route-leg">
+                    <div class="dlv-pin">@(string.IsNullOrEmpty(active.RestaurantLogoEmoji) ? "🍳" : active.RestaurantLogoEmoji)</div>
+                    <div class="t">
+                        <div class="n">@active.RestaurantName</div>
+                        <div class="s">@active.RestaurantArea</div>
+                    </div>
+                </div>
+                <div class="dlv-route-link"></div>
+                <div class="dlv-route-leg">
+                    <div class="dlv-pin dest">📍</div>
+                    <div class="t">
+                        <div class="n">@active.DeliveryAddress.Split('(')[0]</div>
+                        <div class="s">@active.Number</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dlv-pills">
+                <a class="dlv-pill" target="_blank" href="@NavigateUrl(active)">
+                    <MudIcon Icon="@Icons.Material.Filled.Navigation" />@L["driver.navigate"]
+                </a>
+                <span class="dlv-tag paid" style="align-self: center; margin-inline-start: auto;">
+                    💰 @L["driver.youEarn"] @Fmt.Rial(active.DeliveryFee)
+                </span>
+            </div>
+
+            @* Chat floats bottom-corner — always one thumb-tap away mid-delivery. *@
+            <button type="button" class="mf-chat-fab" @onclick="@(() => OpenChat(active))" title="@L["driver.chat"]">
+                <MudIcon Icon="@Icons.Material.Filled.ChatBubble" />
+            </button>
+
+            <MudExpansionPanels Elevation="0" Outlined="true" Class="rounded-lg mb-3">
+                <MudExpansionPanel Text="@L["common.details"]" Dense="true">
+                    <OrderView Order="active" ShowDriver="false" ShowTimeline="false" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+
+            @switch (active.Status)
+            {
+                case OrderStatus.Accepted:
+                case OrderStatus.Preparing:
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="rounded-lg">
+                        <b>@active.RestaurantName</b> — @L["driver.kitchenWorking"]
+                    </MudAlert>
+                    break;
+                case OrderStatus.Ready:
+                    <button class="dlv-cta" @onclick="@(() => Pickup(active))">
+                        <MudIcon Icon="@Icons.Material.Filled.TakeoutDining" />
+                        @L["driver.pickup"]
+                    </button>
+                    break;
+                case OrderStatus.PickedUp:
+                    <button class="dlv-cta" @onclick="@(() => StartDelivery(active))">
+                        <MudIcon Icon="@Icons.Material.Filled.Moped" />
+                        @L["driver.startDelivery"]
+                    </button>
+                    break;
+                case OrderStatus.OnTheWay:
+                    <button class="dlv-cta success" @onclick="@(() => Delivered(active))">
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+                        <span>
+                            @L["driver.delivered"] ✓
+                            <small>
+                                @(active.IsPaid
+                                    ? L["driver.paidOnline"]
+                                    : string.Format(L["driver.collect"], $"{Fmt.Money(active.Total)} · {L[active.PaymentMethod == PaymentMethod.CashOnDelivery ? "pay.CashOnDelivery" : "pay.CardOnDelivery"]}"))
+                            </small>
+                        </span>
+                    </button>
+                    break;
+            }
+        </div>
+    }
+    else if (_state.IsOnline)
+    {
+        <div class="dlv-sec-title">
+            <h2>@L["driver.available"]</h2>
+            @if (_available is { Count: > 0 })
+            {
+                <span class="dlv-count">@_available.Count</span>
+            }
+        </div>
+        @if (_available is null)
+        {
+            <div class="dlv-skel"></div>
+            <div class="dlv-skel" style="animation-delay:.15s;"></div>
+            <div class="dlv-skel" style="animation-delay:.3s;"></div>
+        }
+        else if (_available.Count == 0)
+        {
+            <EmptyState Emoji="🕐" Title="@L["driver.none"]"
+                        Subtitle="@L["driver.refreshHint"]" />
+        }
+        else
+        {
+            @foreach (var order in _available)
+            {
+                var o = order;
+                <div class="dlv-job">
+                    <div class="dlv-job-grid">
+                        <div class="dlv-job-main">
+                            <div class="dlv-route">
+                                <div class="dlv-route-leg">
+                                    <div class="dlv-pin">@(string.IsNullOrEmpty(o.RestaurantLogoEmoji) ? "🍳" : o.RestaurantLogoEmoji)</div>
+                                    <div class="t">
+                                        <div class="n">@o.RestaurantName</div>
+                                        <div class="s">@o.RestaurantArea</div>
+                                    </div>
+                                </div>
+                                <div class="dlv-route-link" style="animation: none;"></div>
+                                <div class="dlv-route-leg">
+                                    <div class="dlv-pin dest">📍</div>
+                                    <div class="t">
+                                        <div class="n" style="font-weight: 600;">@o.DeliveryAddress.Split('(')[0]</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="dlv-meta">
+                                @if (o.PickupKm is not null)
+                                {
+                                    <span class="dlv-tag hot">🧭 @o.PickupKm km</span>
+                                }
+                                <span class="dlv-tag">🛍️ @o.Items.Sum(i => i.Quantity)</span>
+                                <span class="dlv-tag">⏱️ @Fmt.TimeAgo(o.PlacedAt, L)</span>
+                                @if (o.IsPaid)
+                                {
+                                    <span class="dlv-tag paid">💳 Paid</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="dlv-job-side">
+                            <div class="dlv-earn">
+                                <div class="k">@L["driver.youEarn"]</div>
+                                <div class="v">@Fmt.Rial(o.DeliveryFee)</div>
+                            </div>
+                            <button class="dlv-claim" @onclick="@(() => Claim(o))">@L["driver.claim"]</button>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    }
+    else
+    {
+        <EmptyState Emoji="😴" Title="@L["driver.offline"]" Subtitle="@L["driver.offlineHint"]" />
+    }
+}
+
+@code {
+    private DriverStateDto? _state;
+    private List<OrderDto>? _available;
+    private EarningsDto? _earnings;
+
+    private sealed record StepDef(int Index, string Icon, string Label);
+
+    private StepDef[] Steps =>
+    [
+        new(1, Icons.Material.Filled.CheckCircleOutline, L["status.Accepted"]),
+        new(2, Icons.Material.Filled.OutdoorGrill, L["status.Preparing"]),
+        new(3, Icons.Material.Filled.TakeoutDining, L["status.Ready"]),
+        new(4, Icons.Material.Filled.Moped, L["status.OnTheWay"]),
+        new(5, Icons.Material.Filled.Flag, L["status.Delivered"])
+    ];
+
+    private string BannerStyle => _state?.Verification switch
+    {
+        DriverVerificationStatus.Pending => "background: #FFF6E5; border: 1px solid #F2C14E;",
+        DriverVerificationStatus.Rejected => "background: #FDECEC; border: 1px solid #E5484D;",
+        _ => "background: #EDF4FF; border: 1px solid #7AA7E8;"
+    };
+
+    private string BannerTitle => _state?.Verification switch
+    {
+        DriverVerificationStatus.Pending => L["drv.stPending"],
+        DriverVerificationStatus.Rejected => L["drv.stRejected"],
+        _ => L["drv.needVerify"]
+    };
+
+    private string BannerText => _state?.Verification switch
+    {
+        DriverVerificationStatus.Pending => L["drv.pendingMsg"],
+        DriverVerificationStatus.Rejected => string.IsNullOrWhiteSpace(_state?.VerificationReason)
+            ? L["drv.rejectedMsg"]
+            : $"{L["drv.rejectedMsg"]} — {_state!.VerificationReason}",
+        _ => L["drv.verifySub"]
+    };
+
+    /// <summary>Hero tiles are narrow — big lifetime figures shorten to "18.8K OMR".</summary>
+    private static string CompactMoney(decimal value) =>
+        value >= 10_000 ? $"{value / 1000m:0.#}K OMR" : Fmt.Money(value);
+
+    private string VehicleEmoji => _state?.VehicleType switch
+    {
+        VehicleType.Car => "🚗",
+        VehicleType.Bicycle => "🚲",
+        _ => "🏍️"
+    };
+
+    private static int FlowStep(OrderStatus status) => status switch
+    {
+        OrderStatus.Accepted => 2,
+        OrderStatus.Preparing => 2,
+        OrderStatus.Ready => 3,
+        OrderStatus.PickedUp => 4,
+        OrderStatus.OnTheWay => 4,
+        OrderStatus.Delivered => 6,
+        _ => 1
+    };
+
+    private string FlowHint(OrderStatus status) => status switch
+    {
+        OrderStatus.Accepted or OrderStatus.Preparing => L["driver.kitchenWorking"],
+        OrderStatus.Ready => L["driver.pickup"],
+        OrderStatus.PickedUp => L["driver.startDelivery"],
+        OrderStatus.OnTheWay => L["track.progressOnTheWay"],
+        _ => ""
+    };
+
+    private static string NavigateUrl(OrderDto order) => order.DeliveryLat is not null
+        ? $"https://www.google.com/maps/dir/?api=1&destination={order.DeliveryLat:0.######},{order.DeliveryLng:0.######}"
+        : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString(order.DeliveryAddress)}";
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        _state = await Api.GetDriverStateAsync();
+        _available = _state?.IsOnline == true && _state.ActiveOrder is null
+            ? await Api.GetAvailableDeliveriesAsync() ?? []
+            : [];
+        _earnings = await Api.GetEarningsAsync();
+        await PushLocation();
+    }
+
+    /// <summary>While online, ship the current GPS fix so customers see the courier live.</summary>
+    private async Task PushLocation()
+    {
+        if (_state?.IsOnline != true) return;
+        try
+        {
+            var coords = await JS.InvokeAsync<double[]?>("mfGeo.get");
+            if (coords is { Length: 2 })
+                await Api.UpdateDriverLocationAsync(coords[0], coords[1]);
+        }
+        catch { /* no GPS permission — tracking simply stays off */ }
+    }
+
+    private Task OpenChat(OrderDto order) =>
+        Dialogs.ShowAsync<ChatDialog>("", new DialogParameters<ChatDialog> { { x => x.OrderId, order.Id }, { x => x.Title, $"Chat — {order.Number}" } },
+            new DialogOptions { FullScreen = true, NoHeader = true });
+
+    private async Task ToggleOnline()
+    {
+        var (ok, error) = await Api.ToggleOnlineAsync();
+        if (!ok) Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+        await Reload();
+    }
+
+    private async Task Claim(OrderDto order)
+    {
+        var (ok, error) = await Api.ClaimDeliveryAsync(order.Id);
+        if (ok) Snackbar.Add(string.Format(L["driver.claimed"], order.Number, order.RestaurantName), Severity.Success);
+        else Snackbar.Add(error ?? L["common.claimFail"], Severity.Error);
+        await Reload();
+    }
+
+    private async Task Pickup(OrderDto order) => await Do(Api.PickupOrderAsync(order.Id), L["driver.pickedMsg"] + " 🛵");
+    private async Task StartDelivery(OrderDto order) => await Do(Api.OnTheWayAsync(order.Id), L["driver.onwayMsg"]);
+    private async Task Delivered(OrderDto order) => await Do(Api.DeliveredAsync(order.Id), string.Format(L["driver.deliveredMsg"], Fmt.Money(order.DeliveryFee)) + " 💰");
+
+    private async Task Do(Task<(bool ok, string? error)> action, string success)
+    {
+        var (ok, error) = await action;
+        if (ok) Snackbar.Add(success, Severity.Success);
+        else Snackbar.Add(error ?? L["common.wentWrong"], Severity.Error);
+        await Reload();
+    }
+}

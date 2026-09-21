@@ -1,0 +1,112 @@
+﻿@page "/print-routing"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+
+<PageTitle>Partner — Product printers</PageTitle>
+
+<PageHeader Title="@L["pr.title"]" Subtitle="@L["pr.sub"]" />
+
+@if (_menu is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_menu.Count == 0)
+{
+    <EmptyState Emoji="🍽️" Title="@L["menu.emptyTitle"]" />
+}
+else
+{
+    <div class="pr-legend">
+        <span class="pr-chip demo k">👨‍🍳 @L["pr.kitchen"]</span>
+        <span class="pr-chip demo b">🍹 @L["pr.bar"]</span>
+        <span class="pr-chip demo n">— @L["pr.none"]</span>
+        <span class="pr-legend-note">@L["pr.note"]</span>
+    </div>
+
+    @foreach (var category in _menu)
+    {
+        var cat = category;
+        <div class="pr-cat">
+            <div class="pr-cat-head">
+                <span class="pr-cat-name">@cat.NameFor(L.Locale)</span>
+                <span class="pr-cat-count">@cat.Items.Count</span>
+                <span style="flex:1"></span>
+                <span class="pr-allto">@L["pr.allTo"]</span>
+                <button type="button" class="pr-chip k sm" @onclick="@(() => SetCategory(cat, "kitchen"))">👨‍🍳</button>
+                <button type="button" class="pr-chip b sm" @onclick="@(() => SetCategory(cat, "bar"))">🍹</button>
+                <button type="button" class="pr-chip n sm" @onclick="@(() => SetCategory(cat, null))">—</button>
+            </div>
+            <div class="pr-items">
+                @foreach (var item in cat.Items)
+                {
+                    var it = item;
+                    var station = _routes.GetValueOrDefault(it.Id);
+                    <div class="pr-row">
+                        <span class="pr-emoji">@it.ImageEmoji</span>
+                        <span class="pr-name">@it.NameFor(L.Locale)</span>
+                        <div class="pr-pick">
+                            <button type="button" class="pr-chip k @(station == "kitchen" ? "on" : "")"
+                                    @onclick="@(() => SetItem(it.Id, "kitchen"))">👨‍🍳 <span class="t">@L["pr.kitchen"]</span></button>
+                            <button type="button" class="pr-chip b @(station == "bar" ? "on" : "")"
+                                    @onclick="@(() => SetItem(it.Id, "bar"))">🍹 <span class="t">@L["pr.bar"]</span></button>
+                            <button type="button" class="pr-chip n @(station is null ? "on" : "")"
+                                    @onclick="@(() => SetItem(it.Id, null))">—</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* The save bar floats along — routing changes are batched, one press stores all. *@
+    <div class="pr-savebar @(_dirty ? "show" : "")">
+        <span class="pr-save-hint">@L["pr.unsaved"]</span>
+        <button type="button" class="pr-save" disabled="@_busy" @onclick="Save">
+            @(_busy ? "…" : L["common.save"])
+        </button>
+    </div>
+}
+
+@code {
+    private List<MenuCategoryDto>? _menu;
+    private readonly Dictionary<int, string> _routes = [];
+    private bool _dirty;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _menu = await Api.GetMyMenuBasicAsync() ?? [];
+        foreach (var route in await Api.GetPrintRoutesAsync() ?? [])
+            _routes[route.MenuItemId] = route.Station;
+    }
+
+    private void SetItem(int itemId, string? station)
+    {
+        if (station is null) _routes.Remove(itemId);
+        else _routes[itemId] = station;
+        _dirty = true;
+    }
+
+    private void SetCategory(MenuCategoryDto category, string? station)
+    {
+        foreach (var item in category.Items) SetItem(item.Id, station);
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            var routes = _routes.Select(r => new PrintRouteDto(r.Key, r.Value)).ToList();
+            var (ok, error) = await Api.SavePrintRoutesAsync(routes);
+            if (!ok) { Snackbar.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+            _dirty = false;
+            Snackbar.Add(L["pr.saved"], Severity.Success);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

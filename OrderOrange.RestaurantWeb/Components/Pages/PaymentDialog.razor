@@ -1,0 +1,168 @@
+@inject LanguageService L
+
+@* How will this invoice be paid? Three big self-explaining choices, then the
+   method. Nothing is bought here — the answer goes back to the ticket. *@
+
+<MudDialog>
+    <DialogContent>
+        <div class="pay-total">
+            <small>@L["pay.total"]</small>
+            <b class="mf-ltr">@Fmt.Rial(Total)</b>
+        </div>
+
+        @* ── 1 · When? Three cards, each explaining itself ── *@
+        <div class="pay-opts">
+            @foreach (var (key, icon, title, desc) in new[]
+            {
+                ("now", "✅", L["pay.now"], L["pay.nowDesc"]),
+                ("later", "🕓", L["pay.later"], L["pay.laterDesc"]),
+                ("plan", "📆", L["pay.plan"], L["pay.planDesc"]),
+            })
+            {
+                <button type="button" class="opt @(_timing == key ? "on" : "")" @onclick="@(() => _timing = key)">
+                    <span class="ic">@icon</span>
+                    <span class="tx">
+                        <b>@title</b>
+                        <small>@desc</small>
+                    </span>
+                    <span class="tick">@(_timing == key ? "●" : "○")</span>
+                </button>
+            }
+        </div>
+
+        @* ── 2 · The details of the chosen way ── *@
+        @if (_timing == "later")
+        {
+            <div class="pay-detail">
+                <label>@L["pay.dueOn"]</label>
+                <input class="due mf-ltr" type="date" @bind="_dueDate" />
+            </div>
+        }
+        @if (_timing == "plan")
+        {
+            <div class="pay-detail">
+                <label>@L["pay.steps"]</label>
+                <div class="chips">
+                    @foreach (var n in new[] { 2, 3, 4, 6 })
+                    {
+                        <button type="button" class="@(_steps == n ? "on" : "")" @onclick="@(() => _steps = n)">@n</button>
+                    }
+                </div>
+                <label>@L["pay.every"]</label>
+                <div class="chips">
+                    <button type="button" class="@(_intervalDays == 7 ? "on" : "")" @onclick="@(() => _intervalDays = 7)">@L["pay.weekly"]</button>
+                    <button type="button" class="@(_intervalDays == 30 ? "on" : "")" @onclick="@(() => _intervalDays = 30)">@L["pay.monthly"]</button>
+                </div>
+            </div>
+
+            <div class="pay-table">
+                @{ var index = 1; }
+                @foreach (var step in Plan)
+                {
+                    <div class="tr">
+                        <span class="n">@L["pay.step"] @index</span>
+                        <span class="d mf-ltr">@step.DueDate.ToString("dd MMM yyyy")</span>
+                        <span class="a mf-ltr">@Fmt.Rial(step.Amount)</span>
+                    </div>
+                    index++;
+                }
+            </div>
+        }
+
+        @* ── 3 · How does the money move? For future money "decide on the day" is
+           the honest default — but a deal already struck (all by cheque) can be
+           written down now. ── *@
+        <div class="pay-detail">
+            <label>@L["pay.method"]</label>
+            <div class="chips">
+                @if (_timing != "now")
+                {
+                    <button type="button" class="@(_method == "tbd" ? "on" : "")"
+                            @onclick="@(() => _method = "tbd")">❔ @L["pay.m.tbd"]</button>
+                }
+                @foreach (var (key, icon) in new[] { ("cash", "💵"), ("card", "💳"), ("transfer", "🏦"), ("cheque", "📝") })
+                {
+                    <button type="button" class="@(_method == key ? "on" : "")"
+                            @onclick="@(() => _method = key)">@icon @L[$"pay.m.{key}"]</button>
+                }
+            </div>
+        </div>
+        @if (_timing != "now" && _method == "tbd")
+        {
+            <div class="pay-note">💡 @L["pay.methodLater"]</div>
+        }
+
+        @* ── The plan, said back in one sentence ── *@
+        <div class="pay-say">
+            @Summary
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Success" Variant="Variant.Filled" OnClick="Confirm">
+            ✓ @L["common.save"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public decimal Total { get; set; }
+
+    private string _timingField = "now";
+    private string _method = "cash";
+
+    /// <summary>Switching to future money defaults the method to "decide on the day";
+    /// switching back to NOW must never leave "tbd" — money moving now has a method.</summary>
+    private string _timing
+    {
+        get => _timingField;
+        set
+        {
+            if (_timingField == value) return;
+            _timingField = value;
+            _method = value == "now"
+                ? (_method == "tbd" ? "cash" : _method)
+                : "tbd";
+        }
+    }
+    private DateTime _dueDate = DateTime.Today.AddDays(30);
+    private int _steps = 3;
+    private int _intervalDays = 30;
+
+    public sealed record Choice(string Timing, string Method, DateTime? DueDate, List<PlanInstallmentRequest>? Plan);
+
+    private List<PlanInstallmentRequest> Plan
+    {
+        get
+        {
+            var list = new List<PlanInstallmentRequest>();
+            if (Total <= 0) return list;
+            var each = Math.Round(Total / _steps, 3);
+            for (var i = 0; i < _steps; i++)
+            {
+                var amount = i == _steps - 1 ? Total - each * (_steps - 1) : each;
+                list.Add(new PlanInstallmentRequest(amount, DateTime.Today.AddDays((i + 1) * _intervalDays)));
+            }
+            return list;
+        }
+    }
+
+    private string Summary => (_timing, _method) switch
+    {
+        ("later", "tbd") => string.Format(L["pay.sumLater2"], Fmt.Money(Total), _dueDate.ToString("dd MMM yyyy")),
+        ("later", _) => string.Format(L["pay.sumLater"], Fmt.Money(Total), L[$"pay.m.{_method}"], _dueDate.ToString("dd MMM yyyy")),
+        ("plan", "tbd") => string.Format(L["pay.sumPlan2"], Fmt.Money(Total), _steps,
+            _intervalDays == 7 ? L["pay.weekly"] : L["pay.monthly"]),
+        ("plan", _) => string.Format(L["pay.sumPlan"], Fmt.Money(Total), _steps,
+            _intervalDays == 7 ? L["pay.weekly"] : L["pay.monthly"], L[$"pay.m.{_method}"]),
+        _ => string.Format(L["pay.sumNow"], Fmt.Money(Total), L[$"pay.m.{_method}"]),
+    };
+
+    private void Confirm() =>
+        Dialog.Close(DialogResult.Ok(new Choice(
+            _timing, _method,
+            _timing == "later" ? _dueDate : null,
+            _timing == "plan" ? Plan : null)));
+}

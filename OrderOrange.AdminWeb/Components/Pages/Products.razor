@@ -1,0 +1,162 @@
+@page "/products"
+@inject ApiClient Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject LanguageService L
+
+<PageTitle>Admin — Products</PageTitle>
+
+<PageHeader Title="@L["nav.products"]" Subtitle="@L["admin.productsSub"]">
+    <Actions>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CreateNewFolder"
+                   Disabled="_restaurantId == 0" OnClick="@(() => EditCategory(null))">@L["partner.newCategory"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   Disabled="@(_restaurantId == 0 || _menu is null || _menu.Count == 0)"
+                   OnClick="@(() => EditItem(null))">@L["partner.newDish"]</MudButton>
+    </Actions>
+</PageHeader>
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-4">
+    @* Millions of stores — type to search instead of loading a dropdown. *@
+    <MudAutocomplete Margin="Margin.Dense" T="AdminRestaurantDto" Value="_selected" ValueChanged="OnRestaurantChanged"
+                     SearchFunc="SearchRestaurants" Label="@L["admin.chooseRestaurant"]"
+                     ToStringFunc="@(r => r is null ? "" : $"{r.LogoEmoji} {r.Name} ({r.Cuisine})")"
+                     Variant="Variant.Outlined" Dense="true" Clearable="true" MinCharacters="0"
+                     DebounceInterval="350" ResetValueOnEmptyText="true" />
+</MudPaper>
+
+@if (_restaurantId == 0)
+{
+    <EmptyState Emoji="🍽️" Title="@L["admin.chooseRestaurant"]" />
+}
+else if (_menu is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_menu.Count == 0)
+{
+    <EmptyState Emoji="📖" Title="@L["partner.menuEmpty"]" />
+}
+else
+{
+    <MudExpansionPanels MultiExpansion="true" Elevation="0" Outlined="true" Class="rounded-xl">
+        @foreach (var category in _menu)
+        {
+            var c = category;
+            <MudExpansionPanel Expanded="true">
+                <TitleContent>
+                    <div class="d-flex align-center" style="gap: 10px;">
+                        <MudText Typo="Typo.subtitle1" Class="flex-grow-1">@c.Name</MudText>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@c.Items.Count</MudChip>
+                        <span @onclick:stopPropagation="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                           OnClick="@(() => EditCategory(c))" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                           OnClick="@(() => DeleteCategory(c))" />
+                        </span>
+                    </div>
+                </TitleContent>
+                <ChildContent>
+                    <MudGrid Spacing="2">
+                        @foreach (var item in c.Items)
+                        {
+                            var dish = item;
+                            <MudItem xs="12" sm="6" md="4">
+                                <div class="mf-menu-item" style="@(dish.IsAvailable ? "" : "opacity: .55;")">
+                                    <div class="mf-menu-emoji">@dish.ImageEmoji</div>
+                                    <div class="flex-grow-1" style="min-width: 0;">
+                                        <MudText Typo="Typo.subtitle2">@dish.Name @(dish.IsPopular ? "★" : "")</MudText>
+                                        <MudText Typo="Typo.body2" Color="Color.Primary">@Fmt.Rial(dish.Price)</MudText>
+                                        <MudSwitch T="bool" Value="@dish.IsAvailable" ValueChanged="@(_ => ToggleAvailable(dish))"
+                                                   Color="Color.Success" Size="Size.Small"
+                                                   Label="@(dish.IsAvailable ? L["partner.available"] : L["partner.soldout"])" />
+                                    </div>
+                                    <div class="d-flex flex-column">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                                       OnClick="@(() => EditItem(dish))" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                                       OnClick="@(() => DeleteItem(dish))" />
+                                    </div>
+                                </div>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                </ChildContent>
+            </MudExpansionPanel>
+        }
+    </MudExpansionPanels>
+}
+
+@code {
+    private AdminRestaurantDto? _selected;
+    private List<MenuCategoryDto>? _menu;
+    private int _restaurantId;
+
+    private async Task<IEnumerable<AdminRestaurantDto>> SearchRestaurants(string value, CancellationToken _) =>
+        await Api.GetAdminRestaurantsAsync(string.IsNullOrWhiteSpace(value) ? null : value.Trim(), null, 0, 20) ?? [];
+
+    private async Task OnRestaurantChanged(AdminRestaurantDto? restaurant)
+    {
+        _selected = restaurant;
+        _restaurantId = restaurant?.Id ?? 0;
+        _menu = null;
+        await Reload();
+    }
+
+    private async Task Reload()
+    {
+        if (_restaurantId != 0)
+            _menu = await Api.GetAdminMenuAsync(_restaurantId);
+    }
+
+    private async Task EditCategory(MenuCategoryDto? category)
+    {
+        var parameters = new DialogParameters<AdminCategoryDialog>
+        {
+            { d => d.RestaurantId, _restaurantId },
+            { d => d.Existing, category }
+        };
+        var dialog = await Dialogs.ShowAsync<AdminCategoryDialog>(L["partner.newCategory"], parameters);
+        if ((await dialog.Result)?.Canceled == false) await Reload();
+    }
+
+    private async Task DeleteCategory(MenuCategoryDto category)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["common.delete"], $"{L["common.delete"]} “{category.Name}”?",
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.AdminDeleteCategoryAsync(category.Id);
+        if (!ok) Snackbar.Add(error ?? "Error", Severity.Error);
+        await Reload();
+    }
+
+    private async Task EditItem(MenuItemDto? item)
+    {
+        if (_menu is null || _menu.Count == 0) return;
+        var parameters = new DialogParameters<AdminMenuItemDialog>
+        {
+            { d => d.RestaurantId, _restaurantId },
+            { d => d.Existing, item },
+            { d => d.Categories, _menu }
+        };
+        var dialog = await Dialogs.ShowAsync<AdminMenuItemDialog>(L["partner.newDish"], parameters);
+        if ((await dialog.Result)?.Canceled == false) await Reload();
+    }
+
+    private async Task ToggleAvailable(MenuItemDto item)
+    {
+        var (ok, error) = await Api.AdminToggleMenuItemAsync(item.Id);
+        if (!ok) Snackbar.Add(error ?? "Error", Severity.Error);
+        await Reload();
+    }
+
+    private async Task DeleteItem(MenuItemDto item)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["common.delete"], $"{L["common.delete"]} “{item.Name}”?",
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.AdminDeleteMenuItemAsync(item.Id);
+        if (!ok) Snackbar.Add(error ?? "Error", Severity.Error);
+        await Reload();
+    }
+}

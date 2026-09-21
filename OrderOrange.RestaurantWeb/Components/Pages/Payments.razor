@@ -1,0 +1,168 @@
+@page "/materials/payments"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snack
+
+@* Every rial the store still owes its suppliers, in one place: pick a payment,
+   say how it moves today, done. Overdue first — debt that ages costs trust. *@
+
+<PageTitle>Partner — Payments</PageTitle>
+
+<PageHeader Title="@L["payp.title"]" Subtitle="@L["payp.sub"]" />
+
+@if (_page is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="pu-top">
+        <div class="pu-sum @(_page.UnpaidTotal > 0 ? "warn" : "")">
+            <span class="ic">💳</span>
+            <div><b class="mf-ltr">@Fmt.Rial(_page.UnpaidTotal)</b><small>@L["pur.unpaid"]</small></div>
+        </div>
+        @if (_page.OverdueTotal > 0)
+        {
+            <div class="pu-sum late">
+                <span class="ic">⏰</span>
+                <div><b class="mf-ltr">@Fmt.Rial(_page.OverdueTotal)</b><small>@L["pay.overdue"]</small></div>
+            </div>
+        }
+        <div class="pu-sum">
+            <span class="ic">✅</span>
+            <div><b class="mf-ltr">@Fmt.Rial(PaidThisMonth)</b><small>@L["payp.paidMonth"]</small></div>
+        </div>
+    </div>
+
+    <div class="cn-chips">
+        <button type="button" class="@(_filter == "open" ? "on" : "")" @onclick="@(() => _filter = "open")">@L["payp.open"]</button>
+        <button type="button" class="@(_filter == "overdue" ? "on" : "")" @onclick="@(() => _filter = "overdue")">⏰ @L["pay.overdue"]</button>
+        <button type="button" class="@(_filter == "week" ? "on" : "")" @onclick="@(() => _filter = "week")">📅 @L["payp.thisWeek"]</button>
+        <button type="button" class="@(_filter == "paid" ? "on" : "")" @onclick="@(() => _filter = "paid")">✅ @L["payp.done"]</button>
+    </div>
+
+    @if (Visible.Count == 0)
+    {
+        <EmptyState Emoji="🎉" Title="@L["payp.none"]" Subtitle="@L["payp.noneSub"]" />
+    }
+    else
+    {
+        <div class="pay-due-list">
+            @foreach (var row in Visible.Skip(ClampedPage * ListPageSize).Take(ListPageSize))
+            {
+                <div class="pd-row @(row.Step.IsPaid ? "paid" : row.Step.IsOverdue ? "late" : "")">
+                    <span class="ic">@(row.Step.IsPaid ? "✅" : row.Step.IsOverdue ? "⏰" : "🕓")</span>
+                    <div class="mid">
+                        <b>@row.Invoice.Supplier</b>
+                        <small class="mf-ltr">@row.Invoice.Number · @StepLabel(row)</small>
+                    </div>
+                    <div class="when">
+                        <b class="mf-ltr">@row.Step.DueDate.ToString("dd MMM yyyy")</b>
+                        <small>
+                            @if (row.Step.IsPaid)
+                            {
+                                @($"{MethodIcon(row.Step.Method)} {L["pay.paidOn"]} {row.Step.PaidAt!.Value:dd MMM}")
+                            }
+                            else if (row.Step.IsOverdue)
+                            {
+                                @string.Format(L["payp.daysLate"], (DateTime.Today - row.Step.DueDate.Date).Days)
+                            }
+                            else
+                            {
+                                @string.Format(L["payp.daysToGo"], (row.Step.DueDate.Date - DateTime.Today).Days)
+                            }
+                        </small>
+                    </div>
+                    <span class="amt mf-ltr">@Fmt.Rial(row.Step.Amount)</span>
+                    @if (!row.Step.IsPaid)
+                    {
+                        <button type="button" class="pay1" @onclick="@(() => PayAsync(row))">@L["pay.payNow"]</button>
+                    }
+                </div>
+            }
+        </div>
+        @if (Visible.Count > ListPageSize)
+        {
+            <Pager Page="ClampedPage" Pages="@(((Visible.Count - 1) / ListPageSize) + 1)" PageChanged="@(p => _listPage = p)" />
+        }
+    }
+}
+
+@code {
+    private MaterialPurchasePageDto? _page;
+    private string _filter = "open";
+
+    private const int ListPageSize = 24;
+    private int _listPage;
+    private int ClampedPage => Math.Clamp(_listPage, 0, Math.Max(0, (Visible.Count - 1) / ListPageSize));
+
+    private sealed record RowItem(MaterialPurchaseDto Invoice, PurchasePaymentDto Step);
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _page = await Api.GetPurchasesAsync(0, 100);
+
+    private List<RowItem> AllRows =>
+        (_page?.Items ?? [])
+            .SelectMany(invoice => invoice.Payments.Select(step => new RowItem(invoice, step)))
+            .ToList();
+
+    private List<RowItem> Visible
+    {
+        get
+        {
+            var rows = AllRows.Where(r => _filter switch
+            {
+                "overdue" => r.Step.IsOverdue,
+                "week" => !r.Step.IsPaid && r.Step.DueDate.Date <= DateTime.Today.AddDays(7),
+                "paid" => r.Step.IsPaid,
+                _ => !r.Step.IsPaid,
+            });
+            return (_filter == "paid"
+                    ? rows.OrderByDescending(r => r.Step.PaidAt)
+                    : rows.OrderBy(r => r.Step.DueDate))
+                .ToList();
+        }
+    }
+
+    private decimal PaidThisMonth
+    {
+        get
+        {
+            var monthStart = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            return AllRows.Where(r => r.Step.PaidAt >= monthStart).Sum(r => r.Step.Amount);
+        }
+    }
+
+    /// <summary>"قسط ۲ از ۳" for plans; the plain total — wearing the rial symbol — for single payments.</summary>
+    private MarkupString StepLabel(RowItem row)
+    {
+        if (row.Invoice.Payments.Count <= 1) return Fmt.Rial(row.Invoice.Total);
+        var index = row.Invoice.Payments.OrderBy(p => p.DueDate).ToList().IndexOf(row.Step) + 1;
+        return new(System.Net.WebUtility.HtmlEncode(string.Format(L["payp.stepOf"], index, row.Invoice.Payments.Count)));
+    }
+
+    private static string MethodIcon(string method) => method switch
+    {
+        "card" => "💳", "transfer" => "🏦", "cheque" => "📝", "tbd" => "❔", _ => "💵",
+    };
+
+    /// <summary>Pay = pick the method TODAY, then the money moves.</summary>
+    private async Task PayAsync(RowItem row)
+    {
+        var parameters = new DialogParameters
+        {
+            ["Amount"] = row.Step.Amount,
+            ["Who"] = $"{row.Invoice.Supplier} · {row.Invoice.Number}",
+        };
+        var dialog = await Dialogs.ShowAsync<PayMethodDialog>(L["payp.how"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is not { Canceled: false, Data: string method }) return;
+
+        var (ok, error) = await Api.PayInstallmentAsync(row.Invoice.Id, row.Step.Id, method);
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(L["pay.stepPaid"], Severity.Success);
+        await LoadAsync();
+    }
+}

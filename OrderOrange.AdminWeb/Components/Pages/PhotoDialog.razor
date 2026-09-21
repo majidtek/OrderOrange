@@ -1,0 +1,11 @@
+<MudDialog>
+    <DialogContent>
+        <img src="@DataUrl" alt="@Title" style="width: 100%; border-radius: 12px;" />
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string DataUrl { get; set; } = "";
+    [Parameter] public string Title { get; set; } = "";
+}

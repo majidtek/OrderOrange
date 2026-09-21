@@ -1,0 +1,17 @@
+@page "/table-chats/{TableId:int}"
+@layout Layout.ChatLayout
+@inject LanguageService L
+
+@* The phone-sized route: one conversation filling the screen. Desktop users get
+   the split view on /table-chats instead. *@
+
+<PageTitle>Partner — Table chat</PageTitle>
+
+<div class="wa-screen">
+    <TableChatPane TableId="TableId" TableName="@TableName" ShowBack="true" />
+</div>
+
+@code {
+    [Parameter] public int TableId { get; set; }
+    [SupplyParameterFromQuery(Name = "name")] public string? TableName { get; set; }
+}

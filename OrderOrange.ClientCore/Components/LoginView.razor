@@ -1,0 +1,938 @@
+﻿@namespace OrderOrange.ClientCore.Components
+@inject ApiClient Api
+@inject AppState State
+@inject LanguageService Lang
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject IDialogService Dialogs
+@implements IDisposable
+
+@* The sign-in screen. The customer app shows this full-screen inside a dialog when a
+   guest reaches something that needs an account, so it must stand on its own. *@
+<div class="mf-login-bg">
+    @* Background is the slow Ken Burns photo pair on .mf-login-bg itself — no video:
+       it cost a megabyte on a phone connection and added nothing over the stills. *@
+    <div class="mf-login-shade"></div>
+    <MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="d-flex align-center mf-login-wrap">
+        <MudPaper Elevation="8" Class="pa-6 rounded-xl mf-login-card" Style="width: 100%; position: relative;">
+            <div style="position: absolute; top: 10px; inset-inline-end: 10px;">
+                <LanguageMenu Compact="true" />
+            </div>
+            @if (OnClose.HasDelegate)
+            {
+                @* Inside the card, opposite the language menu — a viewport-corner button
+                   would sit on top of the card on a phone. *@
+                <button type="button" class="mf-login-close" title="@Lang["common.close"]"
+                        @onclick="OnClose">✕</button>
+            }
+            <div class="d-flex flex-column align-center mb-4 mf-login-hero">
+                <div class="mf-login-logo mb-3">
+                    @if (LogoUrl is not null)
+                    {
+                        <img src="@LogoUrl" alt="@AppName" />
+                    }
+                    else
+                    {
+                        @LogoEmoji
+                    }
+                </div>
+                <MudText Typo="Typo.h5" Align="Align.Center">@AppName</MudText>
+                @* The code step explains itself — the tagline and the trust strip only
+                   crowd it. They belong to the front door, not the hallway. *@
+                @if (!_codeSent)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="mt-1">@Tagline</MudText>
+
+                    @* Real people — a small trust strip under the tagline. *@
+                    <div class="mf-facepile mt-3">
+                        <img src="_content/OrderOrange.ClientCore/avatars/a2.jpg" alt="" loading="lazy" />
+                        <img src="_content/OrderOrange.ClientCore/avatars/a5.jpg" alt="" loading="lazy" />
+                        <img src="_content/OrderOrange.ClientCore/avatars/a4.jpg" alt="" loading="lazy" />
+                        <img src="_content/OrderOrange.ClientCore/avatars/a7.jpg" alt="" loading="lazy" />
+                        <img src="_content/OrderOrange.ClientCore/avatars/a6.jpg" alt="" loading="lazy" />
+                        <span class="cap">★ 4.9 · 10K+</span>
+                    </div>
+                }
+            </div>
+
+            @if (HasRegister)
+            {
+                @* Segmented toggle — RTL-proof, unlike scrolling tabs. *@
+                <div class="mf-login-tabs mb-4">
+                    <button type="button" class="@(_tab == 0 ? "on" : "")"
+                            @onclick="@(() => { _tab = 0; _error = null; _success = null; })">
+                        @Lang["login.signin"]
+                    </button>
+                    <button type="button" class="@(_tab == 1 ? "on" : "")"
+                            @onclick="@(() => { if (RegisterHref is not null) { Nav.NavigateTo(RegisterHref); return; } _tab = 1; _error = null; _success = null; })">
+                        @(DriverRegister ? Lang["login.apply"] : PartnerRegister ? Lang["login.applyPartner"] : Lang["login.create"])
+                    </button>
+                </div>
+            }
+
+            @if (_tab == 1 && HasRegister)
+            {
+                <MudTextField @bind-Value="_name" Label="@(PartnerRegister ? Lang["login.ownerName"] : Lang["login.fullname"])"
+                              HelperText="@(PartnerRegister ? Lang["login.ownerNameHint"] : null)"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-3" Immediate="true" />
+                <MudTextField @bind-Value="_phone" Label="@Lang["common.phone"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-3 mf-ltr" Placeholder="+968 ..." Immediate="true" />
+                @if (PartnerRegister)
+                {
+                    <MudSelect T="StoreType" @bind-Value="_regStoreType" Label="@Lang["partner.storeType"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+                        <MudSelectItem T="StoreType" Value="StoreType.Restaurant">🍔 @Lang["st.restaurant"]</MudSelectItem>
+                        <MudSelectItem T="StoreType" Value="StoreType.Grocery">🛒 @Lang["st.grocery"]</MudSelectItem>
+                        <MudSelectItem T="StoreType" Value="StoreType.Pharmacy">💊 @Lang["st.pharmacy"]</MudSelectItem>
+                        <MudSelectItem T="StoreType" Value="StoreType.Flowers">💐 @Lang["st.flowers"]</MudSelectItem>
+                        <MudSelectItem T="StoreType" Value="StoreType.Shop">🛍️ @Lang["st.shop"]</MudSelectItem>
+                    </MudSelect>
+                    <div @onclick="OpenNamesDialog" style="cursor: pointer;">
+                        <MudTextField Value="@NamesSummary" T="string" ReadOnly="true"
+                                      Label="@string.Format(Lang["login.typedName"], Lang[$"st.{_regStoreType.ToString().ToLowerInvariant()}"])"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-3"
+                                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Translate" />
+                    </div>
+                    <div class="loc-pick mb-3">
+                        <div class="row">
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Map" FullWidth="true" OnClick="PickRegLocation">@Lang["loc.pick"]</MudButton>
+                        </div>
+                        @if (_regLat is not null && _regLng is not null)
+                        {
+                            <div class="loc-prev" id="regloc-prev" @onclick="PickRegLocation"></div>
+                        }
+                    </div>
+                }
+                @if (DriverRegister)
+                {
+                    <MudSelect T="VehicleType" @bind-Value="_vehicle" Label="@Lang["login.vehicle"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
+                        <MudSelectItem T="VehicleType" Value="VehicleType.Motorbike">🏍️ @Lang["vehicle.Motorbike"]</MudSelectItem>
+                        <MudSelectItem T="VehicleType" Value="VehicleType.Car">🚗 @Lang["vehicle.Car"]</MudSelectItem>
+                        <MudSelectItem T="VehicleType" Value="VehicleType.Bicycle">🚲 @Lang["vehicle.Bicycle"]</MudSelectItem>
+                    </MudSelect>
+                }
+            }
+
+            @* Google leads. One tap and done — no typing, no inbox round-trip — so it sits
+               first, and the email form is the alternative under the divider. *@
+            @if (_googleVisible)
+            {
+                <div class="mf-gsi" @ref="_googleHost"></div>
+                @* The divider draws whenever ANYTHING follows — a form here, or the
+                   email-code link below. Google alone gets no dangling rule. *@
+                @if (_tab == 1 || _emailCode || PasswordOnly)
+                {
+                    <div class="mf-or"><span>@Lang["login.or"]</span></div>
+                }
+            }
+
+            @* There is no password anywhere any more. Signing in is either Google, or a
+               code sent to the address — so the email field is the whole first step, and
+               the code field replaces it once the code is on its way.
+
+               Only the methods the server can actually deliver are drawn. Offering "send
+               me a code" with no mail server behind it is worse than not offering it: the
+               customer does everything right and the button still fails. *@
+            @if (PasswordOnly)
+            {
+                @* Staff portals: plain credentials, controlled by the shop. The register
+                   tab is the application form, where the password is CHOSEN. *@
+                @* Staff think of this as a USERNAME (it happens to be their email). The
+                   customer register tab says username too — an email works, but nothing
+                   demands one. Only the driver application keeps saying "email": there a
+                   real contact address is being collected. Both fields are hard LTR. *@
+                <MudTextField @bind-Value="_email" Label="@(_tab == 0 || PartnerRegister || ShowRegister ? Lang["login.username"] : Lang["common.email"])"
+                              UserAttributes="@NoAutofill"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-3 mf-ltr"
+                              InputType="InputType.Email" Immediate="true" />
+                <MudTextField @bind-Value="_password" Label="@Lang["common.password"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-1 mf-ltr"
+                              UserAttributes="@NoAutofillPassword"
+                              InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                              Immediate="true"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="() => _showPassword = !_showPassword"
+                              OnKeyDown="OnKeyDown" />
+            }
+            else if (!InlineEmailCode && _tab == 0)
+            {
+                @* Google only. No email field here — the Google button collects the
+                   address itself, and there is no password anywhere in this product. *@
+                @if (_googleSettled && !_googleVisible && !_emailCode)
+                {
+                    @* Nothing works at all. Say so plainly, and say WHY, rather than
+                       showing a card with no way off it. *@
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="my-3">
+                        @Lang["login.noMethods"]
+                        @if (_googleProblem is not null)
+                        {
+                            <div class="mf-diag mf-ltr">@_googleProblem</div>
+                        }
+                    </MudAlert>
+                }
+            }
+            else if (_codeSent)
+            {
+                @* The OTP step, built like a phone's own: an envelope, one box per digit,
+                   a resend line, and a keypad on the card itself. Six digits typed or
+                   tapped submit themselves — there is no button to hunt for. *@
+                <div class="otp-wrap">
+                    <div class="otp-env">📨</div>
+                    <div class="otp-sub">@Lang["login.codeSent1"]</div>
+                    <b class="otp-email">@_email</b>
+
+                    @* A REAL input hides over the boxes: tapping them raises the phone's
+                       keyboard, Ctrl+V pastes the whole code, and autocomplete=
+                       one-time-code lets the OS offer the code straight from the inbox. *@
+                    <div class="otp-boxes mf-ascii @(_error is not null ? "err" : "")" dir="ltr">
+                        <input class="otp-input" type="text" inputmode="numeric" maxlength="12"
+                               autocomplete="one-time-code" value="@_code" @oninput="OnOtpInput" />
+                        @for (var i = 0; i < 6; i++)
+                        {
+                            var slot = i;
+                            <span class="bx @(slot < _code.Length ? "on" : "") @(slot == _code.Length ? "cur" : "")">
+                                @(slot < _code.Length ? _code[slot].ToString() : "")
+                            </span>
+                        }
+                    </div>
+
+                    @if (_error is not null)
+                    {
+                        <div class="otp-err">@Lang.ServerError(_error)</div>
+                    }
+
+                    <div class="otp-resend">
+                        <span>@Lang["login.noCode"]</span>
+                        <button type="button" @onclick="RequestCode" disabled="@(_busy || _resendIn > 0)">
+                            @(_resendIn > 0 ? string.Format(Lang["login.resendIn"], _resendIn) : Lang["login.resend"])
+                        </button>
+                    </div>
+
+                    <div class="otp-pad" dir="ltr">
+                        @foreach (var key in new[] { "7", "8", "9", "4", "5", "6", "1", "2", "3" })
+                        {
+                            var digit = key;
+                            <button type="button" @onclick="@(() => TapDigit(digit))" disabled="@_busy">@digit</button>
+                        }
+                        <span></span>
+                        <button type="button" @onclick="@(() => TapDigit("0"))" disabled="@_busy">0</button>
+                        <button type="button" class="bs" @onclick="TapBack" disabled="@_busy">⌫</button>
+                    </div>
+
+                    <button type="button" class="otp-change" @onclick="BackToEmail" disabled="@_busy">
+                        @Lang["login.changeEmail"]
+                    </button>
+                </div>
+            }
+            else
+            {
+                <MudTextField @bind-Value="_email" Label="@Lang["common.email"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-3 mf-ltr"
+                              InputType="InputType.Email" Immediate="true" OnKeyDown="OnKeyDown" />
+            }
+
+            @if (_error is not null && !_codeSent)
+            {
+                @* ServerError unpacks a coded refusal ("§auth.bad") into the reader's own
+                   language; a plain message — an old server, an unexpected error — passes
+                   through untouched. Before this, every sign-in failure spoke English. *@
+                <MudAlert Severity="Severity.Error" Dense="true" Class="my-3">@Lang.ServerError(_error)</MudAlert>
+            }
+            @if (_success is not null)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Class="my-3">@_success</MudAlert>
+            }
+
+            @* Keep me signed in: the session outlives the browser window and the token lasts a month. *@
+            <MudCheckBox T="bool" @bind-Value="_remember" Color="Color.Primary" Dense="true" Class="mf-remember mt-1"
+                         Label="@Lang["login.remember"]" />
+
+            @* Nothing to submit when Google is the only way in — its own button does it. *@
+            @if ((PasswordOnly || _tab == 1 || InlineEmailCode) && !_codeSent)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                           Class="mt-3 mf-login-btn" OnClick="Submit" Disabled="_busy">
+                    @if (_busy)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    @ButtonLabel
+                </MudButton>
+            }
+
+            @if (!string.IsNullOrEmpty(GuideUrl))
+            {
+                <a class="mf-guide-link" href="@GuideUrl" target="_blank" rel="noopener">
+                    <MudIcon Icon="@Icons.Material.Filled.MenuBook" Style="width:16px;height:16px;" /> @Lang["login.guide"]
+                </a>
+            }
+
+            @* Email codes live on their own page here: the caller wants one clear choice
+               on this card, not two competing forms. The link carries them there. *@
+            @* The other ways in are BUTTONS, not whisper-links — a phone thumb needs a
+               target. Password before the emailed code: the code is the slowest road
+               (inbox round-trip), so it goes last. *@
+            @* Navigated in code, not by a bare anchor: an anchor inside the fullscreen
+               dialog was reported dead on iOS Safari, and a tap that shows nothing reads
+               as broken — so the tapped button wears a spinner until the page arrives. *@
+            @if (PasswordHref is not null && _passwordLogin && !PasswordOnly && _tab == 0)
+            {
+                <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.Key" Class="mf-alt-btn mt-2"
+                           Disabled="@(_altGoing is not null)" OnClick="@(() => GoAlt(PasswordHref!))">
+                    @if (_altGoing == PasswordHref)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    }
+                    else
+                    {
+                        @Lang["login.usePassword"]
+                    }
+                </MudButton>
+            }
+            @if (_emailCode && !InlineEmailCode && _tab == 0)
+            {
+                <MudButton FullWidth="true" Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.MailOutline" Class="mf-alt-btn mt-2"
+                           Disabled="@(_altGoing is not null)" OnClick="@(() => GoAlt(EmailCodeHref!))">
+                    @if (_altGoing == EmailCodeHref)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                    }
+                    else
+                    {
+                        @Lang["login.useEmailCode"]
+                    }
+                </MudButton>
+            }
+
+            @if (DemoHint is not null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center" Class="d-block mt-4">
+                    @DemoHint
+                </MudText>
+            }
+        </MudPaper>
+    </MudContainer>
+</div>
+
+@code {
+    [Parameter] public string AppName { get; set; } = "MajidFood";
+    [Parameter] public string Tagline { get; set; } = "";
+    [Parameter] public string LogoEmoji { get; set; } = "🍔";
+    [Parameter] public bool ShowRegister { get; set; }
+
+    /// <summary>The register tab becomes a rider application (vehicle select, admin approval).</summary>
+    [Parameter] public bool DriverRegister { get; set; }
+
+    /// <summary>The register tab becomes a partner application (store name + area).</summary>
+    [Parameter] public bool PartnerRegister { get; set; }
+
+    /// <summary>Optional SVG/PNG logo — replaces the emoji tile when set.</summary>
+    [Parameter] public string? LogoUrl { get; set; }
+
+    /// <summary>Raised after a successful sign-in or registration.</summary>
+    [Parameter] public EventCallback OnSignedIn { get; set; }
+
+    /// <summary>Set to show a close button — used when this is a dismissible sheet.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Which account types may enter this app. Empty = anyone.</summary>
+    [Parameter] public UserRole[] AllowedRoles { get; set; } = [];
+    [Parameter] public string WrongRoleMessage { get; set; } = "";
+    [Parameter] public string? DemoHint { get; set; }
+
+    /// <summary>Optional link under the form to a user guide (the partner app passes its hosted guide page).</summary>
+    [Parameter] public string? GuideUrl { get; set; }
+
+    private bool HasRegister => ShowRegister || DriverRegister || PartnerRegister;
+
+    private int _tab;
+    private string _name = "";
+    private string _phone = "";
+    private string _restName = "";
+    private string _area = "";
+    private Dictionary<string, string> _regNames = [];
+
+    private async Task OpenNamesDialog()
+    {
+        var parameters = new DialogParameters<StoreNameDialog> { { d => d.Value, _regNames } };
+        var dialog = await Dialogs.ShowAsync<StoreNameDialog>(null, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result?.Canceled == false && result.Data is Dictionary<string, string> names) OnNamesSaved(names);
+    }
+
+    private string NamesSummary =>
+        _regNames.Count == 0 ? "" : string.Join(" · ", new[] { "ar", "en" }
+            .Where(_regNames.ContainsKey).Select(c => _regNames[c])
+            .Concat(_regNames.Count > 2 ? [$"+{_regNames.Count - 2}"] : Array.Empty<string>()));
+
+    private void OnNamesSaved(Dictionary<string, string> names)
+    {
+        _regNames = names;
+        _restName = names.GetValueOrDefault("en") ?? names.GetValueOrDefault("ar") ?? "";
+    }
+    private StoreType _regStoreType = StoreType.Restaurant;
+    private double? _regLat;
+    private double? _regLng;
+
+    private double? _regShownLat;
+    private double? _regShownLng;
+
+    private async Task ShowRegPreview()
+    {
+        if (_regLat is null || _regLng is null || (_regLat == _regShownLat && _regLng == _regShownLng)) return;
+        _regShownLat = _regLat;
+        _regShownLng = _regLng;
+        try { await JS.InvokeVoidAsync("mfMap.preview", "regloc-prev", _regLat, _regLng); } catch { }
+    }
+
+    private async Task PickRegLocation()
+    {
+        var picked = await JS.InvokeAsync<string?>("mfMap.open", _regLat, _regLng, Lang["loc.confirm"], Lang["loc.searchPh"], Lang["loc.link"]);
+        if (string.IsNullOrEmpty(picked)) return;
+        var parts = picked.Split(',');
+        if (parts.Length == 2 &&
+            double.TryParse(parts[0], System.Globalization.CultureInfo.InvariantCulture, out var lat) &&
+            double.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, out var lng))
+        {
+            _regLat = lat;
+            _regLng = lng;
+            StateHasChanged();
+            await Task.Delay(60); // the preview div must exist before the map moves in
+            await ShowRegPreview();
+        }
+    }
+
+
+    // The browser must not resurrect old demo logins into these fields.
+    private static readonly Dictionary<string, object?> NoAutofill = new() { ["autocomplete"] = "off", ["name"] = "oo-user" };
+    private static readonly Dictionary<string, object?> NoAutofillPassword = new() { ["autocomplete"] = "new-password", ["name"] = "oo-pass" };
+
+    private string _email = "";
+    private VehicleType _vehicle = VehicleType.Motorbike;
+    private string? _error;
+    private string? _success;
+    private bool _busy;
+
+    // ---------- Sign in with Google ----------
+
+    /// <summary>The client id, once the API has told us there is one. Null hides the button.</summary>
+    private string? _googleClientId;
+
+    /// <summary>Drives the divider and host div — cleared again if Google's script won't load.</summary>
+    private bool _googleVisible;
+
+    /// <summary>
+    /// Set this and the email-code form is replaced by a link to the given page, leaving
+    /// this card with a single obvious action. Leave it null and the form appears inline —
+    /// which is what the destination page itself then uses.
+    /// </summary>
+    [Parameter] public string? EmailCodeHref { get; set; }
+
+    /// <summary>
+    /// Classic email + password, and NOTHING else — no Google button, no emailed codes.
+    /// The staff portals use this: a till or a rider's phone signs in with credentials
+    /// the shop controls, not the owner's Google account or inbox. The application form
+    /// then also asks the applicant to choose a password.
+    /// </summary>
+    [Parameter] public bool PasswordOnly { get; set; }
+
+    /// <summary>When set, the register tab is a DOOR: it navigates there instead of unfolding inline.</summary>
+    [Parameter] public string? RegisterHref { get; set; }
+
+    /// <summary>
+    /// Puts the Google button on a password-only portal and routes its credential to
+    /// the PARTNER endpoint: an existing owner resumes, a customer account is upgraded
+    /// to a partner, a brand-new email gets an account plus the wizard's first store.
+    /// </summary>
+    [Parameter] public bool GooglePartner { get; set; }
+
+    /// <summary>
+    /// Start straight at the code-entry step for this address. The customer app puts that
+    /// step on its OWN page with the email in the URL — a phone that leaves for the inbox
+    /// and reloads on return lands right back on the code field, nothing lost.
+    /// </summary>
+    [Parameter] public string? PresetEmail { get; set; }
+
+    /// <summary>Seconds already owed on the resend countdown when arriving preset.</summary>
+    [Parameter] public int PresetWait { get; set; }
+
+    /// <summary>
+    /// Raised instead of unfolding the code field inline: the code is on its way to
+    /// Email, and resend unlocks after Wait seconds. The caller navigates to the page
+    /// where the code is typed.
+    /// </summary>
+    [Parameter] public EventCallback<(string Email, int Wait)> OnCodeRequested { get; set; }
+
+    /// <summary>Raised by "change email" when that step lives on another page.</summary>
+    [Parameter] public EventCallback OnChangeEmail { get; set; }
+
+    /// <summary>Whether the server can actually send a code. False = don't offer it.</summary>
+    private bool _emailCode;
+
+    /// <summary>The alternative-way-in link being navigated to; the button wears a spinner meanwhile.</summary>
+    private string? _altGoing;
+
+    private async Task GoAlt(string href)
+    {
+        if (_altGoing is not null) return;   // one tap is enough
+        _altGoing = href;
+        StateHasChanged();
+        await Task.Delay(30);   // let the spinner reach the glass before leaving
+        Nav.NavigateTo(href);
+    }
+
+    /// <summary>Whether the server accepts password sign-ins at all.</summary>
+    private bool _passwordLogin;
+
+    /// <summary>A page with the classic username + password form — linked when set.</summary>
+    [Parameter] public string? PasswordHref { get; set; }
+
+    /// <summary>Show the email/code fields here, rather than sending them elsewhere.</summary>
+    private bool InlineEmailCode => _emailCode && EmailCodeHref is null && !PasswordOnly;
+
+    private string _password = "";
+    private bool _showPassword;
+
+    /// <summary>True once we know whether Google's button drew, so nothing flashes.</summary>
+    private bool _googleSettled;
+
+    /// <summary>
+    /// Why the Google button did not appear, straight from the browser. Shown on the card
+    /// because this screen has no other way in — if it is broken, somebody has to be able
+    /// to see what broke without opening developer tools.
+    /// </summary>
+    private string? _googleProblem;
+
+    private ElementReference _googleHost;
+    private DotNetObjectReference<LoginView>? _selfRef;
+    private bool _googleDrawn;
+
+    /// <summary>
+    /// Staff portals must never mint an account from a Google login. An app that admits
+    /// customers is open to new people by definition; one that does not is staff-only,
+    /// and its sign-in has to be limited to accounts an administrator already created.
+    /// </summary>
+    private bool StaffOnly => AllowedRoles.Length > 0 && !AllowedRoles.Contains(UserRole.Customer);
+
+    protected override void OnInitialized()
+    {
+        Lang.Changed += OnLangChanged;
+        // The customer dialog leads with CREATE ACCOUNT — most people arriving here are
+        // new. Sign-in is one tap away; the staff portals (driver, partner) keep leading
+        // with sign-in, where the regulars are.
+        if (ShowRegister) _tab = 1;
+        if (PresetEmail is { Length: > 0 })
+        {
+            _email = PresetEmail;
+            _codeSent = true;
+            _tab = 0;   // finishing an email-code sign-in, not registering
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Lang.EnsureLoadedAsync();
+
+            // A dedicated code page: the code is already in the inbox, so there is
+            // nothing to ask the server and no Google button to draw.
+            if (PresetEmail is { Length: > 0 })
+            {
+                _emailCode = true;
+                _googleSettled = true;
+                StartResendCountdown(PresetWait);
+                StateHasChanged();
+                return;
+            }
+
+            // Credentials-only screens don't ask the server about Google or codes —
+            // there is nothing to draw and no reason to load Google's script. The
+            // partner portal is the exception: its Google button signs owners in.
+            if (PasswordOnly && !GooglePartner)
+            {
+                _googleSettled = true;
+                StateHasChanged();
+                return;
+            }
+
+            // Asked of the API rather than baked into each app, so all four stay in step
+            // and switching a method off is one server setting, not four redeploys.
+            var methods = await Api.GetAuthMethodsAsync();
+            _emailCode = methods?.EmailCode ?? false;
+            _passwordLogin = methods?.Password ?? false;
+            // A password portal with a Google button is still a password portal —
+            // no emailed codes on the card.
+            if (PasswordOnly) _emailCode = false;
+            if (methods is null) _googleProblem = "the server did not answer /api/auth/methods";
+
+            if (methods?.GoogleClientId is { Length: > 0 } clientId)
+            {
+                _googleClientId = clientId;
+                _googleVisible = true;
+                StateHasChanged();          // the host div only exists after this render
+                return;
+            }
+
+            // No client id configured at all — nothing to draw, so settle it now.
+            _googleProblem ??= "no Google client id is configured on the server";
+            _googleSettled = true;
+            StateHasChanged();
+            return;
+        }
+
+        if (!_googleVisible || _googleDrawn || _googleClientId is null) return;
+
+        _googleDrawn = true;
+        _selfRef ??= DotNetObjectReference.Create(this);
+        var status = await JS.InvokeAsync<string>("mfGoogle.render", _googleHost, _googleClientId, _selfRef, Lang.Locale);
+
+        // Blocked or unreachable? Take the divider away rather than leave a gap, and keep
+        // the reason: this is the only way in, so a silent failure is a locked door.
+        _googleVisible = status == "ok";
+        if (!_googleVisible) _googleProblem = status;
+        _googleSettled = true;
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Called from Google's button with a credential it signed. We forward it untouched —
+    /// only the server can judge whether it is genuine, and it does.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnGoogleCredential(string credential)
+    {
+        await InvokeAsync(async () =>
+        {
+            _error = null;
+            _success = null;
+            _busy = true;
+            StateHasChanged();
+            try
+            {
+                // The partner portal's Google button goes to the partner endpoint,
+                // which resumes an owner, upgrades a customer, or opens a new store.
+                var (user, error) = GooglePartner
+                    ? await Api.GooglePartnerAsync(credential)
+                    : await Api.GoogleLoginAsync(credential, StaffOnly, _remember);
+                if (user is null)
+                {
+                    _error = error ?? Lang["common.signinFail"];
+                    return;
+                }
+                await AcceptAsync(user);
+            }
+            finally
+            {
+                _busy = false;
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Lang.Changed -= OnLangChanged;
+        _selfRef?.Dispose();
+        StopResendCountdown();
+    }
+
+    private Task OnKeyDown(KeyboardEventArgs e) => e.Key == "Enter" ? Submit() : Task.CompletedTask;
+
+    // ---------- The OTP keypad ----------
+    private async Task TapDigit(string digit)
+    {
+        if (_busy || _code.Length >= 6) return;
+        _error = null;
+        _code += digit;
+        await SyncOtpInputAsync();
+        if (_code.Length == 6) await Submit();   // six digits ARE the submit
+    }
+
+    private async Task TapBack()
+    {
+        if (_code.Length == 0) return;
+        _code = _code[..^1];
+        await SyncOtpInputAsync();
+    }
+
+    /// <summary>
+    /// The hidden input is the browser's own text box: when the CODE changes anywhere
+    /// else — keypad taps, backspace, a failed verify wiping it — the DOM box must be
+    /// told, or the next keystrokes append to stale text and nothing seems to work.
+    /// </summary>
+    private async Task SyncOtpInputAsync(bool focus = false)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                $"(function(i){{if(i){{i.value='{_code}';{(focus ? "i.focus();" : "")}}}}})(document.querySelector('.otp-input'))");
+        }
+        catch { /* cosmetic sync — never fatal */ }
+    }
+
+    /// <summary>The hidden input: typing, pasting, or the OS's own code suggestion.</summary>
+    private async Task OnOtpInput(ChangeEventArgs e)
+    {
+        // A Farsi or Arabic keyboard types ۱۲۳ — every digit normalises to ASCII, or
+        // the server compares apples to ١٢٣ and calls the right code wrong.
+        var digits = new string((e.Value?.ToString() ?? "")
+            .Where(char.IsDigit)
+            .Select(c => (char)('0' + (int)char.GetNumericValue(c)))
+            .Take(6).ToArray());
+        _code = digits;
+        if (digits.Length > 0) _error = null;
+        if (_code.Length == 6 && !_busy) await Submit();
+    }
+
+    // ---------- Signing in with a code sent by email ----------
+
+    private string _code = "";
+    private bool _codeSent;
+    private int _resendIn;
+    private Timer? _resendTimer;
+
+    private string ButtonLabel =>
+        _tab == 1 ? (DriverRegister || PartnerRegister ? Lang["login.submitapp"] : Lang["login.create"])
+        : PasswordOnly ? Lang["login.signin"]
+        : _codeSent ? Lang["login.verify"]
+        : Lang["login.sendCode"];
+
+    /// <summary>Asks the server to email a code, and starts the resend countdown.</summary>
+    private async Task RequestCode()
+    {
+        _error = null;
+        _success = null;
+        if (string.IsNullOrWhiteSpace(_email))
+        {
+            _error = Lang["login.enterEmail"];
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (result, error) = await Api.RequestLoginCodeAsync(_email.Trim(), StaffOnly);
+            if (result is null)
+            {
+                _error = error ?? Lang["common.signinFail"];
+                return;
+            }
+
+            // The customer app types the code on its own page, so a phone that hops to
+            // the inbox and reloads on return still lands on the code field.
+            if (OnCodeRequested.HasDelegate)
+            {
+                await OnCodeRequested.InvokeAsync((_email.Trim(), result.RetryAfterSeconds));
+                return;
+            }
+
+            _codeSent = true;
+            _code = "";
+            StartResendCountdown(result.RetryAfterSeconds);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task VerifyCode()
+    {
+        _error = null;
+        if (_code.Trim().Length < 4)
+        {
+            _error = Lang["login.enterCode"];
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (user, error) = await Api.VerifyLoginCodeAsync(_email.Trim(), _code.Trim(), StaffOnly, _remember);
+            if (user is null)
+            {
+                _error = error ?? Lang["login.badCode"];
+                // The wrong code STAYS on screen — the owner's call: wiping it made
+                // people think their typing vanished. They edit it with ⌫ instead.
+                return;
+            }
+            await AcceptAsync(user);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task BackToEmail()
+    {
+        // When the email step lives on another page, "change email" is a door back to it.
+        if (OnChangeEmail.HasDelegate)
+        {
+            await OnChangeEmail.InvokeAsync();
+            return;
+        }
+        _codeSent = false;
+        _code = "";
+        _error = null;
+        _success = null;
+        StopResendCountdown();
+    }
+
+    /// <summary>Plain credentials — the staff portals' way in.</summary>
+    private async Task PasswordSignIn()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_email) || string.IsNullOrWhiteSpace(_password))
+        {
+            _error = Lang["login.enterprompt"];
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var (user, error) = await Api.LoginAsync(_email.Trim(), _password, _remember);
+            if (user is null)
+            {
+                _error = error ?? Lang["common.signinFail"];
+                return;
+            }
+            await AcceptAsync(user);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void StartResendCountdown(int seconds)
+    {
+        StopResendCountdown();
+        _resendIn = Math.Max(seconds, 0);
+        if (_resendIn == 0) return;
+        _resendTimer = new Timer(_ =>
+        {
+            _resendIn--;
+            if (_resendIn <= 0) StopResendCountdown();
+            _ = InvokeAsync(StateHasChanged);
+        }, null, 1000, 1000);
+    }
+
+    private void StopResendCountdown()
+    {
+        _resendTimer?.Dispose();
+        _resendTimer = null;
+        _resendIn = 0;
+    }
+
+    /// <summary>The last step of every route in — role check, then hand over the session.</summary>
+    private bool _remember;
+
+    private async Task AcceptAsync(LoginResponse user)
+    {
+        // Decided BEFORE SignIn: the gate mirrors the session into storage on that event.
+        BrowserSessionPersistence.Remember = _remember;
+        if (AllowedRoles.Length > 0 && !AllowedRoles.Contains(user.Role))
+        {
+            _error = string.IsNullOrEmpty(WrongRoleMessage) ? Lang["common.wrongApp"] : WrongRoleMessage;
+            return;
+        }
+        State.SignIn(user);
+        if (OnSignedIn.HasDelegate) await OnSignedIn.InvokeAsync();
+    }
+
+    private async Task Submit()
+    {
+        // On the sign-in tab the button means "send me a code", then "check this code" —
+        // or plain credentials on a password-only screen.
+        if (_tab == 0)
+        {
+            if (PasswordOnly) await PasswordSignIn();
+            else await (_codeSent ? VerifyCode() : RequestCode());
+            return;
+        }
+
+        _error = null;
+        _success = null;
+        if (string.IsNullOrWhiteSpace(_email))
+        {
+            _error = Lang["login.enterEmail"];
+            return;
+        }
+        // A password-only portal's application must CHOOSE the password here — there is
+        // no other way the applicant will ever sign in.
+        if (PasswordOnly && _password.Length < 6)
+        {
+            _error = Lang["login.pwTooShort"];
+            return;
+        }
+        var chosenPassword = PasswordOnly ? _password : "";
+
+        _busy = true;
+        try
+        {
+            // Rider applications don't sign in — the account waits for admin approval.
+            if (DriverRegister)
+            {
+                var (ok, applyError) = await Api.RegisterDriverAsync(
+                    new RegisterDriverRequest(_name, _email, _phone, chosenPassword, _vehicle, FormToken.Create()));
+                if (!ok)
+                {
+                    _error = applyError ?? Lang["common.applyFail"];
+                    return;
+                }
+                _tab = 0;
+                _success = Lang["login.drvSent"];
+                return;
+            }
+
+            // Partner applications: the account exists at once, the store waits for
+            // approval — so sign the new owner STRAIGHT in and walk them to their
+            // profile, where the business photos are waiting to be added.
+            if (PartnerRegister)
+            {
+                if (!_regNames.ContainsKey("ar"))
+                {
+                    _error = Lang["nm.needAr"];
+                    return;
+                }
+                var (ok, applyError) = await Api.RegisterPartnerAsync(
+                    new RegisterPartnerRequest(_name, _email, _phone, chosenPassword, _restName, _area, _regStoreType, _regLat, _regLng, _regNames, FormToken.Create()));
+                if (!ok)
+                {
+                    _error = applyError ?? Lang["common.applyFail"];
+                    return;
+                }
+                var (fresh, loginError) = await Api.LoginAsync(_email.Trim(), chosenPassword);
+                if (fresh is null)
+                {
+                    // The account was made but the sign-in hiccuped — the old path still works.
+                    _tab = 0;
+                    _success = Lang["login.ptrSent"];
+                    _error = loginError;
+                    return;
+                }
+                await AcceptAsync(fresh);
+                Nav.NavigateTo("/settings?welcome=1");
+                return;
+            }
+
+            var (user, error) = await Api.RegisterAsync(new RegisterRequest(_name, _email, _phone, chosenPassword, FormToken.Create()));
+            if (user is null)
+            {
+                _error = error ?? Lang["common.signinFail"];
+                return;
+            }
+            await AcceptAsync(user);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

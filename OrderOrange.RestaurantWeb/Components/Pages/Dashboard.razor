@@ -1,0 +1,396 @@
+﻿@page "/"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+@inject AppState State
+
+<PageTitle>Partner — Dashboard</PageTitle>
+
+@* The page paints as soon as the STORE is known. The live board and the history
+   arrive after it and fill their own cards, so a busy floor never holds the whole
+   dashboard behind one loader. *@
+@if (_restaurant is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <AutoRefresh OnRefresh="Reload" Seconds="10" />
+
+    <div class="db">
+        @* ---------- The hero: the store greets its owner ---------- *@
+        <div class="db-hero">
+            <div class="who">
+                <span class="logo @(string.IsNullOrEmpty(_restaurant.LogoData) ? "" : "has-logo")">
+                    @if (_restaurant.LogoData is { Length: > 0 } heroLogo)
+                    {
+                        <img src="@heroLogo" alt="@_restaurant.Name" />
+                    }
+                    else
+                    {
+                        @_restaurant.LogoEmoji
+                    }
+                </span>
+                <div class="tx">
+                    <b>@string.Format(L["db.welcome"], _restaurant.Name)</b>
+                    <small>
+                        @DateTime.Now.ToString("dddd · dd MMM")
+                        <i class="pill @(_restaurant.IsOpen ? "on" : "off")">@(_restaurant.IsOpen ? L["partner.open"] : L["partner.closed"])</i>
+                        @if (_restaurant.RatingCount > 0)
+                        {
+                            <i class="pill star">★ @_restaurant.Rating.ToString("0.0")</i>
+                        }
+                    </small>
+                </div>
+            </div>
+            <div class="acts">
+                <a href="/pos" class="db-act main">
+                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.PointOfSale" /></span>
+                    <span class="tx">@L["nav.pos"]</span>
+                </a>
+                <a href="/orders" class="db-act glass">
+                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></span>
+                    <span class="tx">@L["nav.liveorders"]</span>
+                    @if (_board is { Count: > 0 })
+                    {
+                        <span class="bdg">@_board.Count</span>
+                    }
+                </a>
+            </div>
+        </div>
+
+        @* ---------- Four numbers that tell today's story ---------- *@
+        <div class="db-stats">
+            <a class="db-stat s1 @(_pending > 0 ? "alert" : "")" href="/orders">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.NotificationsActive" /></span>
+                <div>
+                    <div class="v"><span data-count="@_pending">@_pending</span></div>
+                    <div class="l">@L["partner.newOrders"]</div>
+                    <div class="h">@(_pending > 0 ? L["partner.actionNeeded"] : L["partner.allCaughtUp"])</div>
+                </div>
+            </a>
+            <a class="db-stat s2" href="/orders">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.SoupKitchen" /></span>
+                <div>
+                    <div class="v"><span data-count="@_inKitchen">@_inKitchen</span></div>
+                    <div class="l">@L["partner.beingPrepared"]</div>
+                </div>
+            </a>
+            <a class="db-stat s3" href="/orders">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /></span>
+                <div>
+                    <div class="v"><span data-count="@_todayCount">@_todayCount</span></div>
+                    <div class="l">@L["partner.ordersToday"]</div>
+                </div>
+            </a>
+            <a class="db-stat s4" href="/reports">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Payments" /></span>
+                <div>
+                    @* Nothing sold yet is a dash, not "OMR 0.000" — three zeros read
+                       like a broken figure rather than an empty day. *@
+                    @if (_todayRevenue == 0)
+                    {
+                        <div class="v">—</div>
+                    }
+                    else
+                    {
+                        <div class="v">@Fmt.Amount(_todayRevenue) <small class="cur">@((MarkupString)Fmt.RialSvg)</small></div>
+                    }
+                    <div class="l">@L["partner.revenueToday"]</div>
+                    @if (_todayRevenue > 0 && _week.Count >= 2 && _week[^2].Total > 0)
+                    {
+                        var delta = (double)((_todayRevenue - _week[^2].Total) / _week[^2].Total * 100);
+                        <div class="dlt @(delta >= 0 ? "up" : "dn")">
+                            @(delta >= 0 ? "▲" : "▼") @Math.Abs(Math.Round(delta))% @L["db.vsYesterday"]
+                        </div>
+                    }
+                </div>
+            </a>
+        </div>
+
+        @* ---------- What needs hands NOW + one-tap shortcuts ---------- *@
+        <div class="db-cols">
+            <div class="db-card db-att">
+                <div class="hd">
+                    <span class="live-dot"></span>
+                    @L["partner.attention"]
+                    @if (_board is { Count: > 0 })
+                    {
+                        <span class="db-att-count">@_board.Count</span>
+                    }
+                    <span style="flex:1"></span>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" Href="/orders">
+                        @L["partner.openBoard"]
+                    </MudButton>
+                </div>
+                @if (_board is null)
+                {
+                    <SkeletonRows Count="5" />
+                }
+                else if (_board.Count == 0)
+                {
+                    <EmptyState Emoji="😌" Title="@L["partner.noLiveOrders"]" Subtitle="@L["partner.noLiveSub"]" />
+                }
+                else
+                {
+                    @foreach (var order in _board.Take(25))
+                    {
+                        <a class="db-att-row @(order.Status == OrderStatus.Pending ? "urgent" : "")" href="/orders">
+                            <span class="ava">@Initials(order.CustomerName)</span>
+                            <div class="mid">
+                                <div class="top"><b>@order.Number</b><span class="cust">@order.CustomerName</span></div>
+                                <small>@order.Items.Sum(i => i.Quantity) × · @Fmt.Rial(order.Total) · @Fmt.TimeAgo(order.PlacedAt, L)</small>
+                            </div>
+                            <StatusChip Status="@order.Status" />
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="db-att-go" />
+                        </a>
+                    }
+                }
+            </div>
+            <div class="db-card">
+                <div class="hd">
+                    <MudIcon Icon="@Icons.Material.Filled.Bolt" Style="width:18px;height:18px;color:#f4511e;" />
+                    @L["db.quick"]
+                </div>
+                @* Only what this member may actually open — a tile that 403s is worse
+                   than no tile. The order runs floor-first, then money, then admin. *@
+                <div class="db-quick">
+                    @if (Can(Perm.Pos))
+                    {
+                        <a href="/pos-tablet"><MudIcon Icon="@Icons.Material.Filled.PointOfSale" /><span>@L["nav.pos"]</span></a>
+                    }
+                    @if (Can(Perm.Orders))
+                    {
+                        <a href="/orders"><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" /><span>@L["nav.orders"]</span></a>
+                    }
+                    @if (Can(Perm.Menu))
+                    {
+                        <a href="/menu"><MudIcon Icon="@Icons.Material.Filled.Inventory2" /><span>@L["nav.products"]</span></a>
+                    }
+                    @if (Can(Perm.Tables))
+                    {
+                        <a href="/tables"><MudIcon Icon="@Icons.Material.Filled.TableRestaurant" /><span>@L["nav.tables"]</span></a>
+                        <a href="/reservations"><MudIcon Icon="@Icons.Material.Filled.EventAvailable" /><span>@L["nav.reservations"]</span></a>
+                        <a href="/table-qr"><MudIcon Icon="@Icons.Material.Filled.QrCode" /><span>@L["nav.tableQr"]</span></a>
+                    }
+                    @if (Can(Perm.GuestChat))
+                    {
+                        <a href="/table-chats">
+                            <MudIcon Icon="@Icons.Material.Filled.ChatBubbleOutline" /><span>@L["nav.tableChats"]</span>
+                            @if (State.TableChatUnread > 0)
+                            {
+                                <i class="qbadge">@(State.TableChatUnread > 99 ? "99+" : State.TableChatUnread.ToString())</i>
+                            }
+                        </a>
+                    }
+                    @if (Can(Perm.Reports))
+                    {
+                        <a href="/reports"><MudIcon Icon="@Icons.Material.Filled.Assessment" /><span>@L["nav.sales"]</span></a>
+                        <a href="/reports/products"><MudIcon Icon="@Icons.Material.Filled.BarChart" /><span>@L["nav.products"]</span></a>
+                        <a href="/reports/customers"><MudIcon Icon="@Icons.Material.Filled.Groups" /><span>@L["nav.customersR"]</span></a>
+                    }
+                    @if (Can(Perm.Bills))
+                    {
+                        <a href="/bills"><MudIcon Icon="@Icons.Material.Filled.Receipt" /><span>@L["nav.bills"]</span></a>
+                    }
+                    @if (Can(Perm.Customers))
+                    {
+                        <a href="/customers"><MudIcon Icon="@Icons.Material.Filled.People" /><span>@L["nav.customers"]</span></a>
+                    }
+                    @if (Can(Perm.Inventory))
+                    {
+                        <a href="/materials"><MudIcon Icon="@Icons.Material.Filled.Kitchen" /><span>@L["mat.title"]</span></a>
+                        <a href="/materials/purchases"><MudIcon Icon="@Icons.Material.Filled.ShoppingCart" /><span>@L["pur.title"]</span></a>
+                    }
+                    @if (Can(Perm.Staff))
+                    {
+                        <a href="/staff"><MudIcon Icon="@Icons.Material.Filled.Badge" /><span>@L["nav.staff"]</span></a>
+                    }
+                    @if (Can(Perm.Orders))
+                    {
+                        <a href="/deliveries"><MudIcon Icon="@Icons.Material.Filled.DeliveryDining" /><span>@L["nav.deliveries"]</span></a>
+                        <a href="/reviews"><MudIcon Icon="@Icons.Material.Filled.StarRate" /><span>@L["nav.reviews"]</span></a>
+                    }
+                    @if (Can(Perm.TeamChat))
+                    {
+                        <a href="/chat">
+                            <MudIcon Icon="@Icons.Material.Filled.Forum" /><span>@L["tchat.title"]</span>
+                            @if (State.TeamChatUnread > 0)
+                            {
+                                <i class="qbadge">@(State.TeamChatUnread > 99 ? "99+" : State.TeamChatUnread.ToString())</i>
+                            }
+                        </a>
+                    }
+                    @if (Can(Perm.Team))
+                    {
+                        <a href="/team-users"><MudIcon Icon="@Icons.Material.Filled.ManageAccounts" /><span>@L["nav.teamUsers"]</span></a>
+                        <a href="/team-activity"><MudIcon Icon="@Icons.Material.Filled.Wifi" /><span>@L["ua.title"]</span></a>
+                    }
+                    @if (Can(Perm.Settings))
+                    {
+                        <a href="/settings"><MudIcon Icon="@Icons.Material.Filled.Settings" /><span>@L["nav.settings"]</span></a>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* ---------- Already served + today's favourites ---------- *@
+        <div class="db-cols">
+            <div class="db-card">
+                <div class="hd">
+                    <MudIcon Icon="@Icons.Material.Filled.TaskAlt" Style="width:18px;height:18px;color:#2e7d32;" />
+                    @L["partner.completed"]
+                </div>
+                @if (_history is null)
+                {
+                    <SkeletonRows Count="6" />
+                }
+                else if (_history.Count == 0)
+                {
+                    <EmptyState Emoji="📦" Title="@L["partner.noCompleted"]" />
+                }
+                else
+                {
+                    @foreach (var order in _history.Take(6))
+                    {
+                        <div class="db-row">
+                            <span class="ava done">✓</span>
+                            <div class="mid">
+                                <b>@order.Number</b>
+                                <small>@Fmt.TimeAgo(order.PlacedAt, L)</small>
+                            </div>
+                            <b class="amt">@Fmt.Rial(order.Total)</b>
+                        </div>
+                    }
+                }
+            </div>
+            <div class="db-card">
+                <div class="hd">
+                    <MudIcon Icon="@Icons.Material.Filled.LocalFireDepartment" Style="width:18px;height:18px;color:#e65100;" />
+                    @L["db.topToday"]
+                </div>
+                @if (_top.Count == 0)
+                {
+                    <EmptyState Emoji="🍽️" Title="@L["db.noSales"]" />
+                }
+                else
+                {
+                    var topMax = Math.Max(1, _top[0].Qty);
+                    var rank = 0;
+                    @foreach (var p in _top)
+                    {
+                        rank++;
+                        <div class="db-top">
+                            <span class="rk r@(rank)">@rank</span>
+                            <div class="mid">
+                                <b>@p.Name</b>
+                                <em><i style="width:@(p.Qty * 100 / topMax)%"></i></em>
+                            </div>
+                            <small>×@p.Qty</small>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* ---------- The week in one glance: seven days of revenue ---------- *@
+        @if (_week.Count > 0 && _week.Any(w => w.Total > 0))
+        {
+            var wkMax = _week.Max(w => w.Total);
+            var wkTotal = _week.Sum(w => w.Total);
+            var best = _week.OrderByDescending(w => w.Total).First();
+            <div class="db-card db-week">
+                <div class="hd">
+                    <MudIcon Icon="@Icons.Material.Filled.ShowChart" Style="width:18px;height:18px;color:#f4511e;" />
+                    @L["db.weekRevenue"]
+                    <span style="flex:1"></span>
+                    <span class="db-week-total">@Fmt.Rial(wkTotal)</span>
+                </div>
+                <div class="db-bars">
+                    @foreach (var (day, total) in _week)
+                    {
+                        var isToday = day.Date == DateTime.Today;
+                        var pct = wkMax > 0 ? (int)Math.Round((double)(total / wkMax) * 100) : 0;
+                        <div class="col @(isToday ? "today" : "") @(day == best.Day && total > 0 ? "best" : "")">
+                            <b>@(total > 0 ? Fmt.Amount(total) : "")</b>
+                            <i style="height:@(Math.Max(total > 0 ? 6 : 0, pct))%"></i>
+                            <span>@day.ToString("ddd")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @* The order assistant: "2 pizza table 2" typed on the home page becomes a real
+       line on that table's invoice. *@
+}
+
+@code {
+    /// <summary>Same catalogue the sidebar and the API guard read, so a shortcut can
+    /// never offer a page the server would refuse.</summary>
+    private bool Can(string permission) => Perm.Allows(State.StoreRole, State.Perms, permission);
+
+    private List<OrderDto>? _board;
+    private List<OrderDto>? _history;
+    private MyRestaurantDto? _restaurant;
+
+    private int _pending;
+    private int _inKitchen;
+    private int _todayCount;
+    private decimal _todayRevenue;
+    private List<(DateTime Day, decimal Total)> _week = [];
+    private List<(string Name, int Qty)> _top = [];
+    private bool _counted;
+
+    private static string Initials(string s) =>
+        string.IsNullOrWhiteSpace(s) ? "•" : s.Trim().Length <= 2 ? s.Trim() : s.Trim()[..2];
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    /// <summary>The numbers roll up from zero once, when the page first paints.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_counted || _restaurant is null) return;
+        _counted = true;
+        try { await JS.InvokeVoidAsync("mfCount.sweep"); } catch { }
+    }
+
+    /// <summary>
+    /// Three trips, painted as they land. A busy store's live board can carry a
+    /// hundred orders with all their lines; waiting for that AND the history before
+    /// showing anything left the owner staring at a spinner on every visit.
+    /// </summary>
+    private async Task Reload()
+    {
+        _restaurant = await Api.GetMyRestaurantAsync();
+        StateHasChanged();                       // the store is enough to draw the page
+
+        _board = await Api.GetRestaurantBoardAsync() ?? [];
+        _pending = _board.Count(o => o.Status == OrderStatus.Pending);
+        _inKitchen = _board.Count(o => o.Status is OrderStatus.Accepted or OrderStatus.Preparing);
+        StateHasChanged();                       // live counts and the attention list
+
+        _history = await Api.GetRestaurantHistoryAsync() ?? [];
+
+        _pending = _board.Count(o => o.Status == OrderStatus.Pending);
+        _inKitchen = _board.Count(o => o.Status is OrderStatus.Accepted or OrderStatus.Preparing);
+
+        var today = DateTime.Today;
+        var todayOrders = _board.Concat(_history)
+            .Where(o => o.PlacedAt >= today && o.Status is not (OrderStatus.Cancelled or OrderStatus.Rejected))
+            .ToList();
+        _todayCount = todayOrders.Count;
+        _todayRevenue = todayOrders.Sum(o => o.Total);
+
+        // The seven-day trend is summed in the database — the recent-history page
+        // only ever holds today, so charting from it drew a single lonely bar.
+        var week = await Api.GetWeekRevenueAsync() ?? [];
+        _week = week.Select(d => (d.Day, d.Total)).ToList();
+        StateHasChanged();
+
+        _top = todayOrders.SelectMany(o => o.Items).GroupBy(i => i.Name)
+            .Select(g => (g.Key, g.Sum(x => x.Quantity)))
+            .OrderByDescending(x => x.Item2).Take(5).ToList();
+    }
+}

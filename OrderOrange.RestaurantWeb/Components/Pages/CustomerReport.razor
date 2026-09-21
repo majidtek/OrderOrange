@@ -1,0 +1,343 @@
+﻿@page "/reports/customers"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Partner — Customer report</PageTitle>
+
+@* Who is worth keeping. The sales report counts orders; this one counts people, which
+   is what tells a shop whether it is growing or just churning. *@
+
+<PageHeader Title="@L["crep.title"]" Subtitle="@L["crep.sub"]" />
+
+<div class="rp">
+    <div class="d-flex align-center flex-wrap mb-4" style="gap: 10px;">
+        <div class="dlv-filter">
+            <span class="dlv-fchip @(_range is null && _period == "day" ? "on" : "")" @onclick="@(() => SetPeriod("day"))">@L["vis.today"]</span>
+            <span class="dlv-fchip @(_range is null && _period == "week" ? "on" : "")" @onclick="@(() => SetPeriod("week"))">@L["vis.days7"]</span>
+            <span class="dlv-fchip @(_range is null && _period == "month" ? "on" : "")" @onclick="@(() => SetPeriod("month"))">@L["vis.days30"]</span>
+            <span class="dlv-fchip @(_range is null && _period == "year" ? "on" : "")" @onclick="@(() => SetPeriod("year"))">@L["vis.year"]</span>
+        </div>
+        <MfDateRangePicker DateFormat="yyyy-MM-dd" DateRange="_range" DateRangeChanged="OnRangeChanged"
+                            Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                            Class="rp-range" PlaceholderStart="@L["w.date"]" PlaceholderEnd="@L["w.date"]"
+                            MaxDate="DateTime.Today" />
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">@RangeLabel</MudChip>
+        <span style="flex: 1;"></span>
+        <ReportExport Title="@L["crep.title"]" Subtitle="@L["crep.sub"]" RangeLabel="@RangeLabel"
+                      Columns="@ExportColumns" Fetch="ExportRows" FetchTotals="ExportTotals" />
+    </div>
+
+    @* ---------- The shape of the customer base ---------- *@
+    <MudGrid Spacing="3" Class="mb-1">
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["crep.customers"]" Value="@(_all is null ? "…" : _all.Count.ToString("N0"))"
+                      Icon="@Icons.Material.Filled.Groups" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.revenue"]" Value="@(_all is null ? "…" : Fmt.RialShort(_all.Sum(c => c.Total)).Value)"
+                      Icon="@Icons.Material.Filled.Payments" Color="Color.Success" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["crep.avgSpend"]"
+                      Value="@(_all is null || _all.Count == 0 ? "…" : Fmt.RialShort(_all.Sum(c => c.Total) / _all.Count).Value)"
+                      Icon="@Icons.Material.Filled.AccountBalanceWallet" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["crep.repeat"]" Value="@RepeatLabel" Hint="@L["crep.repeatHint"]"
+                      Icon="@Icons.Material.Filled.Loop" Color="Color.Warning" />
+        </MudItem>
+    </MudGrid>
+
+    <div class="my-4"></div>
+
+    @if (_all is null)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card"><Loader /></MudPaper>
+    }
+    else if (_all.Count == 0)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+            <EmptyState Emoji="👋" Title="@L["rep.noCustomers"]" Subtitle="@L["crep.emptySub"]" />
+        </MudPaper>
+    }
+    else
+    {
+        var grand = _all.Sum(c => c.Total);
+
+        @* ---------- The regulars ---------- *@
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card mb-4">
+            <div class="d-flex align-center mb-3" style="gap: 8px;">
+                <MudIcon Icon="@Icons.Material.Filled.Favorite" Style="color:#f4511e;" />
+                <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["crep.podium"]</MudText>
+            </div>
+            <div class="cr-cards">
+                @foreach (var (person, index) in _all.Take(4).Select((c, i) => (c, i)))
+                {
+                    <div class="cr-card">
+                        <span class="av">@Initials(person.Name)</span>
+                        <div class="nm">@person.Name</div>
+                        <div class="amt">@Fmt.RialShort(person.Total)</div>
+                        <div class="sub">@string.Format(L["crep.ordersN"], person.Orders) · @L["crep.avg"] @Fmt.RialShort(person.Orders == 0 ? 0 : person.Total / person.Orders)</div>
+                        <span class="rk r@(Math.Min(index + 1, 4))">@(index + 1)</span>
+                    </div>
+                }
+            </div>
+        </MudPaper>
+
+        @* ---------- Everyone, with their orders one tap away ---------- *@
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+            <div class="rp-toolbar mb-3">
+                <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["crep.allCustomers"]</MudText>
+                <MudTextField T="string" Value="_search" ValueChanged="OnSearch"
+                              Placeholder="@L["rep.filterCustomer"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Immediate="true" DebounceInterval="350" Clearable="true" Class="rp-search"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+            </div>
+
+            @if (Shown.Count == 0)
+            {
+                <div class="pv-empty">
+                    <span class="em">🔍</span>
+                    <MudText Typo="Typo.body1" Style="font-weight: 700;">@L["rep.noMatchCustomer"]</MudText>
+                </div>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">@L["rep.tapCustomer"]</MudText>
+                <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 44px;">#</th>
+                            <th>@L["w.customer"]</th>
+                            <th class="num">@L["w.orders"]</th>
+                            <th class="num">@L["crep.avg"]</th>
+                            <th class="num">@L["common.total"] (@((MarkupString)Fmt.RialSvg))</th>
+                            <th style="width: 110px;">@L["prep.share"]</th>
+                            <th style="width: 34px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var person in Page)
+                        {
+                            var row = person;
+                            var rank = _all.IndexOf(row) + 1;
+                            var share = grand == 0 ? 0 : (double)(row.Total / grand * 100);
+                            var isOpen = _open == rank;
+                            <tr class="rp-click" @onclick="@(() => _open = isOpen ? -1 : rank)">
+                                <td><span class="rk r@(Math.Min(rank, 4))">@rank</span></td>
+                                <td class="strong">@row.Name</td>
+                                <td class="num">@row.Orders</td>
+                                <td class="num">@Fmt.RialShort(row.Orders == 0 ? 0 : row.Total / row.Orders)</td>
+                                <td class="num strong">@Fmt.RialShort(row.Total)</td>
+                                <td>
+                                    <div class="pr-share">
+                                        <i style="width:@Math.Round(share, 1).ToString(System.Globalization.CultureInfo.InvariantCulture)%"></i>
+                                        <b>@share.ToString("0.0")%</b>
+                                    </div>
+                                </td>
+                                <td><MudIcon Icon="@(isOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" Style="opacity: .5;" /></td>
+                            </tr>
+                            @if (isOpen && row.Rows is { Count: > 0 })
+                            {
+                                <tr class="rp-detail">
+                                    <td colspan="7">
+                                        <table class="rp-inner">
+                                            <thead>
+                                                <tr><th>@L["rep.orderCol"]</th><th>@L["w.date"]</th><th>@L["common.status"]</th><th class="num">@L["rep.amountCol"]</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach (var order in row.Rows)
+                                                {
+                                                    <tr>
+                                                        <td class="strong">@order.Number</td>
+                                                        <td>@order.At.ToString("d MMM yyyy · HH:mm")</td>
+                                                        <td><span class="st s-@order.Status.ToString().ToLowerInvariant()">@L["status." + order.Status]</span></td>
+                                                        <td class="num strong">@Fmt.RialShort(order.Amount)</td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="total">
+                            <td></td>
+                            <td>@L["common.total"]</td>
+                            <td class="num">@_all.Sum(c => c.Orders)</td>
+                            <td></td>
+                            <td class="num strong">@Fmt.RialShort(grand)</td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </MudSimpleTable>
+
+                @if (Shown.Count > PageSize)
+                {
+                    <div class="rp-pager">
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@string.Format(L["rep.customersCount"], Shown.Count)</MudText>
+                        <MudPagination Count="@PageCount" Selected="@(_page + 1)" SelectedChanged="OnPage"
+                                       Size="Size.Small" Color="Color.Primary" />
+                    </div>
+                }
+            }
+        </MudPaper>
+    }
+</div>
+
+@code {
+    private const int PageSize = 15;
+
+    /// <summary>One read for the whole range — see the note on the product report.</summary>
+    private const int FetchAll = 2000;
+
+    private string _period = "week";
+    private DateRange? _range;
+    private bool _initialized;
+
+    private List<CustomerSalesDto>? _all;
+    private string _search = "";
+    private int _page;
+
+    /// <summary>Rank of the expanded row, or -1. Rank rather than index, so opening a
+    /// row and then paging does not leave a different customer expanded.</summary>
+    private int _open = -1;
+
+    private DateTime? RangeFrom => _range?.Start;
+    private DateTime? RangeTo => _range?.End;
+
+    private List<CustomerSalesDto> Shown => (_all ?? [])
+        .Where(c => _search.Length == 0 || c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private List<CustomerSalesDto> Page => Shown.Skip(_page * PageSize).Take(PageSize).ToList();
+
+    private int PageCount => Math.Max(1, (int)Math.Ceiling(Shown.Count / (double)PageSize));
+
+    /// <summary>The share who came back for a second order — the one number that says
+    /// whether the shop is building regulars or renting strangers.</summary>
+    private string RepeatLabel
+    {
+        get
+        {
+            if (_all is null || _all.Count == 0) return "…";
+            var repeat = _all.Count(c => c.Orders > 1);
+            return $"{Math.Round(repeat * 100.0 / _all.Count)}%";
+        }
+    }
+
+    private string RangeLabel => _range is { Start: not null, End: not null }
+        ? $"{_range.Start:d MMM} – {_range.End:d MMM yyyy}"
+        : _period switch
+        {
+            "day" => L["vis.todayHour"],
+            "month" => L["vis.last30"],
+            "year" => L["vis.last12m"],
+            _ => L["vis.last7"]
+        };
+
+    private static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "؟";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1
+            ? parts[0][..1].ToUpperInvariant()
+            : $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_initialized) return;
+        _initialized = true;
+        await Load();
+    }
+
+    private async Task SetPeriod(string period)
+    {
+        _period = period;
+        _range = null;
+        await Load();
+    }
+
+    private async Task OnRangeChanged(DateRange? range)
+    {
+        if (range?.Start is null || range.End is null)
+        {
+            _range = null;
+            await Load();
+            return;
+        }
+        var start = range.Start.Value.Date;
+        var end = range.End.Value.Date;
+        if ((end - start).TotalDays > 30) end = start.AddDays(30);
+        _range = new DateRange(start, end);
+        await Load();
+    }
+
+    private void OnSearch(string value)
+    {
+        _search = value ?? "";
+        _page = 0;
+        _open = -1;
+    }
+
+    private void OnPage(int page)
+    {
+        _page = page - 1;
+        _open = -1;
+    }
+
+    private async Task Load()
+    {
+        _all = null;
+        _search = "";
+        _page = 0;
+        _open = -1;
+        var page = await Api.GetMyCustomerReportAsync(_period, null, 0, FetchAll, RangeFrom, RangeTo);
+        _all = page?.Rows ?? [];
+    }
+
+    // ---------- Export ----------
+
+    private List<ExportColumnDto> ExportColumns =>
+    [
+        new("#", Numeric: true, Width: 6),
+        new(L["w.customer"], Width: 30),
+        new(L["w.orders"], Numeric: true),
+        new($"{L["crep.avg"]} ({Fmt.Symbol})", Numeric: true),
+        new($"{L["common.total"]} ({Fmt.Symbol})", Numeric: true),
+        new(L["prep.share"], Numeric: true),
+    ];
+
+    private Task<List<List<string>>> ExportRows()
+    {
+        var rows = _all ?? [];
+        var grand = rows.Sum(c => c.Total);
+        return Task.FromResult(rows.Select((c, i) => new List<string>
+        {
+            (i + 1).ToString(),
+            c.Name,
+            c.Orders.ToString(),
+            (c.Orders == 0 ? 0 : c.Total / c.Orders).ToString("0.000"),
+            c.Total.ToString("0.000"),
+            (grand == 0 ? 0 : c.Total / grand * 100).ToString("0.0"),
+        }).ToList());
+    }
+
+    private Task<List<string>?> ExportTotals()
+    {
+        var rows = _all ?? [];
+        return Task.FromResult<List<string>?>(
+        [
+            "",
+            L["common.total"],
+            rows.Sum(c => c.Orders).ToString(),
+            "",
+            rows.Sum(c => c.Total).ToString("0.000"),
+            "100.0",
+        ]);
+    }
+}

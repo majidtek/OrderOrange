@@ -1,0 +1,173 @@
+﻿@page "/daily-report"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Partner — Daily report</PageTitle>
+<PageHeader Title="@L["drep.title"]" Subtitle="@L["drep.sub"]" />
+
+@* One day, every invoice, in full: pick the day, read the totals, and open any invoice in
+   place to see exactly what was on it. *@
+<div class="d-flex align-center mb-4" style="gap: 10px; flex-wrap: wrap;">
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Class="mf-flip-rtl"
+                   OnClick="@(() => ShiftDay(-1))" />
+    <div style="max-width: 190px;">
+        <MfDatePicker DateFormat="yyyy-MM-dd" Date="_date" DateChanged="OnDate" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   MaxDate="DateTime.Today" />
+    </div>
+    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Class="mf-flip-rtl"
+                   Disabled="@(_date >= DateTime.Today)" OnClick="@(() => ShiftDay(1))" />
+    @if (_date.Date == DateTime.Today)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["inv.today"]</MudChip>
+    }
+    <span style="flex: 1;"></span>
+    <ReportExport Title="@L["drep.title"]" RangeLabel="@_date.ToString("yyyy-MM-dd")"
+                  Columns="@ExportColumns" Fetch="ExportRows" />
+</div>
+
+@if (_report is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+}
+else
+{
+    <MudGrid Spacing="3" Class="mb-2">
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["drep.invoices"]" Value="@_report.Summary.Live.ToString()" Icon="@Icons.Material.Filled.ReceiptLong" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["drep.revenue"]" Value="@Fmt.RialShort(_report.Summary.Total).Value" Icon="@Icons.Material.Filled.Payments" Color="Color.Success" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["drep.items"]" Value="@_report.Summary.ItemCount.ToString()" Icon="@Icons.Material.Filled.Fastfood" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["inv.cancelled"]" Value="@_report.Summary.Cancelled.ToString()" Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" />
+        </MudItem>
+    </MudGrid>
+
+    @if (_report.Rows.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="my-8" Align="Align.Center">@L["inv.none"]</MudText>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow-x: auto;">
+            @foreach (var row in _report.Rows)
+            {
+                var r = row;
+                var open = _openId == r.Id;
+                <div class="drep-row @(open ? "open" : "") @(r.Status == "Cancelled" ? "dead" : "")"
+                     @onclick="@(() => Toggle(r.Id))">
+                    <span class="no mf-ascii">@r.Number</span>
+                    <span class="tm">@r.PlacedAt.ToString("HH:mm")</span>
+                    <span class="cu">@r.CustomerName@(r.TableName is not null ? $" · {r.TableName}" : "")</span>
+                    <span class="ct">@r.ItemCount @L["inv.items"]</span>
+                    <span class="st">
+                        @if (r.Status == "Cancelled")
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">
+                                @L["inv.cancelled"]@(r.ReplacedByNumber is not null ? $" → {r.ReplacedByNumber}" : "")
+                            </MudChip>
+                        }
+                        else if (r.IsPaid)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">@L["w.paid"]</MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@L["w.unpaid"]</MudChip>
+                        }
+                    </span>
+                    <b class="tt">@Fmt.Rial(r.Total)</b>
+                    <MudIcon Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                </div>
+                @if (open)
+                {
+                    <div class="drep-detail">
+                        @if (_detail is null)
+                        {
+                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="my-2" />
+                        }
+                        else
+                        {
+                            @foreach (var line in _detail.Lines)
+                            {
+                                <div class="ln">
+                                    <span class="q">@line.Quantity ×</span>
+                                    <span class="nm">@line.Name@(line.Notes is { Length: > 0 } ? $" — {line.Notes}" : "")</span>
+                                    <span class="pr">@Fmt.Rial(line.UnitPrice * line.Quantity)</span>
+                                </div>
+                            }
+                            <div class="ln sum"><span class="q"></span><span class="nm">@L["common.subtotal"]</span><span class="pr">@Fmt.Rial(_detail.Subtotal)</span></div>
+                            @if (_detail.TaxAmount > 0)
+                            {
+                                <div class="ln sum"><span class="q"></span><span class="nm">@L["drep.tax"] (@_detail.TaxPercent.ToString("0.#")%)</span><span class="pr">@Fmt.Rial(_detail.TaxAmount)</span></div>
+                            }
+                            <div class="ln sum total"><span class="q"></span><span class="nm">@L["inv.total"]</span><span class="pr">@Fmt.Rial(_detail.Total)</span></div>
+                        }
+                    </div>
+                }
+            }
+        </MudPaper>
+    }
+}
+
+@code {
+    private DateTime _date = DateTime.Today;
+    private DailyInvoicesDto? _report;
+    private int? _openId;
+    private InvoiceDetailDto? _detail;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _report = null;
+        _openId = null;
+        _detail = null;
+        _report = await Api.GetDailyInvoicesAsync(_date);
+    }
+
+    private async Task OnDate(DateTime? value)
+    {
+        _date = value?.Date ?? DateTime.Today;
+        await Load();
+    }
+
+    private async Task ShiftDay(int by)
+    {
+        _date = _date.AddDays(by);
+        if (_date > DateTime.Today) _date = DateTime.Today;
+        await Load();
+    }
+
+    /// <summary>Open an invoice in place; open another and the first folds shut.</summary>
+    private async Task Toggle(int id)
+    {
+        if (_openId == id) { _openId = null; _detail = null; return; }
+        _openId = id;
+        _detail = null;
+        StateHasChanged();
+        _detail = await Api.GetInvoiceAsync(id);
+    }
+
+    // ---------- Excel / print ----------
+    private List<ExportColumnDto> ExportColumns =>
+    [
+        new(L["inv.number"]),
+        new(L["inv.when"]),
+        new(L["inv.customer"]),
+        new(L["inv.items"], Numeric: true),
+        new(L["inv.status"]),
+        new(L["inv.total"], Numeric: true),
+    ];
+
+    private Task<List<List<string>>> ExportRows() =>
+        Task.FromResult((_report?.Rows ?? []).Select(r => new List<string>
+        {
+            r.Number, r.PlacedAt.ToString("HH:mm"),
+            r.CustomerName + (r.TableName is not null ? $" · {r.TableName}" : ""),
+            r.ItemCount.ToString(), r.Status, r.Total.ToString("0.000"),
+        }).ToList());
+}

@@ -1,0 +1,63 @@
+@namespace OrderOrange.ClientCore.Components
+
+@* A phone number kept private until it is asked for. A customer list on a counter
+   screen is read by whoever walks past it, so the digits stay behind a hatch until
+   someone taps — then they are plain, selectable text, ready to dial or copy. *@
+
+@if (string.IsNullOrWhiteSpace(Phone))
+{
+    <span class="ph-none">—</span>
+}
+else if (_open && Tel)
+{
+    @* Revealed and dialable: tapping the number now places the call. *@
+    <a class="ph-mask open mf-ltr" href="tel:@Phone" @onclick:stopPropagation="true">📞 @Phone</a>
+}
+else if (_open)
+{
+    <span class="ph-mask open" @onclick="Hide" @onclick:stopPropagation="true" title="@Hint">
+        <span class="num mf-ltr">@Phone</span>
+        <MudIcon Icon="@Icons.Material.Filled.VisibilityOff" Class="eye" />
+    </span>
+}
+else
+{
+    @* The eye says out loud what the hatch only implies: this can be opened. *@
+    <button type="button" class="ph-mask" @onclick="Show" @onclick:stopPropagation="true"
+            title="@Hint" aria-label="@Hint">
+        <span class="bars" aria-hidden="true"></span>
+        <span class="tail mf-ltr">@Tail</span>
+        <MudIcon Icon="@Icons.Material.Filled.Visibility" Class="eye" />
+    </button>
+}
+
+@code {
+    [Parameter] public string? Phone { get; set; }
+
+    /// <summary>Tooltip for the closed state — pass the localized "tap to show".</summary>
+    [Parameter] public string? Hint { get; set; }
+
+    /// <summary>How many digits stay visible so a row is still recognisable.</summary>
+    [Parameter] public int Reveal { get; set; } = 3;
+
+    /// <summary>Once revealed, render as a tel: link so one more tap dials it.</summary>
+    [Parameter] public bool Tel { get; set; }
+
+    private bool _open;
+
+    private void Show() => _open = true;
+    private void Hide() => _open = false;
+
+    /// <summary>The last few digits — enough to tell two customers apart, not enough to dial.</summary>
+    private string Tail
+    {
+        get
+        {
+            var digits = new string((Phone ?? "").Where(char.IsDigit).ToArray());
+            return digits.Length <= Reveal ? digits : digits[^Reveal..];
+        }
+    }
+
+    /// <summary>A new row must not inherit the previous one's open state.</summary>
+    protected override void OnParametersSet() { }
+}

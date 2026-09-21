@@ -1,0 +1,186 @@
+@page "/survey/{StoreId:int}"
+@layout OrderOrange.ClientWeb.Components.Layout.PublicLayout
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@* The guest's side of a survey: the store's live questionnaire, one tap per answer,
+   an optional line of their own, one button to send. Anonymous — nothing is asked
+   about who they are. Answers are compact chips, so a seven-question survey fits
+   one phone screen and a half instead of a scroll of bars. *@
+
+<PageTitle>@(_survey?.StoreName ?? "OrderOrange") — @L["sv.take"]</PageTitle>
+
+<div class="sv-pub v2">
+    @if (_loading)
+    {
+        <Loader FullPage="true" />
+    }
+    else if (_survey is null)
+    {
+        <div class="sv-pub-card center">
+            <span class="big">📝</span>
+            <h2>@L["sv.pubNone"]</h2>
+            <p>@L["sv.pubNoneSub"]</p>
+        </div>
+    }
+    else if (_done)
+    {
+        <div class="sv-pub-card center">
+            <span class="tick">✓</span>
+            <h2>@L["sv.thanks"]</h2>
+            <p>@string.Format(L["sv.thanksSub"], _survey.StoreName)</p>
+            <small class="sv-returning">@L["sv.returning"]</small>
+            <a class="sv-back" href="@BackHref" @onclick="GoBack" @onclick:preventDefault="true">@L["common.back"]</a>
+        </div>
+    }
+    else
+    {
+        <div class="sv-pub-card">
+            <header class="sv-head">
+                @if (!string.IsNullOrEmpty(_survey.LogoData))
+                {
+                    <img src="@_survey.LogoData" alt="@_survey.StoreName" />
+                }
+                <div class="t">
+                    <small>@_survey.StoreName</small>
+                    <h1>@_survey.Title</h1>
+                </div>
+            </header>
+            <div class="sv-progress" role="progressbar" aria-valuenow="@Answered" aria-valuemax="@_survey.Questions.Count">
+                <span style="width:@(Progress)%"></span>
+            </div>
+            <small class="sv-progress-lb">@string.Format(L["sv.progress"], Answered, _survey.Questions.Count)</small>
+
+            @for (var qi = 0; qi < _survey.Questions.Count; qi++)
+            {
+                var q = _survey.Questions[qi];
+                var picks = _picks[q.Id];
+                <section class="sv-qa @(picks.Count > 0 ? "done" : "")">
+                    <div class="qh">
+                        <span class="n">@(picks.Count > 0 ? "✓" : (qi + 1).ToString())</span>
+                        <h3>@q.Text</h3>
+                    </div>
+                    @if (q.Multi)
+                    {
+                        <small class="hint">@L["sv.pickMany"]</small>
+                    }
+                    <div class="chips">
+                        @for (var oi = 0; oi < q.Options.Count; oi++)
+                        {
+                            var index = oi;
+                            var on = picks.Contains(index);
+                            <button type="button" class="chip @(on ? "on" : "")" aria-pressed="@(on ? "true" : "false")"
+                                    @onclick="@(() => Toggle(q, index))">
+                                @if (q.Multi)
+                                {
+                                    <span class="box">@(on ? "✓" : "")</span>
+                                }
+                                else
+                                {
+                                    <span class="dot"></span>
+                                }
+                                @q.Options[index]
+                            </button>
+                        }
+                    </div>
+                </section>
+            }
+
+            <section class="sv-qa">
+                <div class="qh">
+                    <span class="n">✎</span>
+                    <h3>@L["sv.comment"]</h3>
+                </div>
+                <textarea rows="3" maxlength="500" placeholder="@L["sv.commentHint"]" @bind="_comment" @bind:event="oninput"></textarea>
+            </section>
+
+            @if (_error is not null)
+            {
+                <div class="sv-error">@_error</div>
+            }
+
+            <footer class="sv-foot">
+                <button type="button" class="sv-send" disabled="@(_busy || !AnythingPicked)" @onclick="Send">
+                    @L["sv.send"]
+                </button>
+                <small>@L["sv.anon"]</small>
+            </footer>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int StoreId { get; set; }
+
+    /// <summary>The table code when the guest came from a table page — kept as the answer's source.</summary>
+    [SupplyParameterFromQuery(Name = "t")] public string? Table { get; set; }
+
+    private PublicSurveyDto? _survey;
+    private readonly Dictionary<string, HashSet<int>> _picks = [];
+    private string _comment = "";
+    private bool _loading = true;
+    private bool _busy;
+    private bool _done;
+    private string? _error;
+
+    private int Answered => _picks.Values.Count(p => p.Count > 0);
+    private int Progress => _survey is { Questions.Count: > 0 } ? (int)Math.Round(Answered * 100.0 / _survey.Questions.Count) : 0;
+    private bool AnythingPicked => Answered > 0 || _comment.Trim().Length > 0;
+
+    private string BackHref => string.IsNullOrEmpty(Table) ? $"/store/{StoreId}" : $"/reserve/{Table}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _survey = await Api.GetPublicSurveyAsync(StoreId);
+        foreach (var q in _survey?.Questions ?? []) _picks[q.Id] = [];
+        _loading = false;
+    }
+
+    private void Toggle(SurveyQuestionDto q, int index)
+    {
+        var set = _picks[q.Id];
+        if (set.Contains(index)) { set.Remove(index); return; }
+        if (!q.Multi) set.Clear();
+        set.Add(index);
+    }
+
+    private async Task Send()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var answers = _picks.Where(p => p.Value.Count > 0)
+                .Select(p => new SurveyAnswerDto(p.Key, p.Value.OrderBy(i => i).ToList())).ToList();
+            var (ok, error) = await Api.AnswerSurveyAsync(StoreId, _survey!.Id,
+                new SubmitSurveyRequest(answers, _comment.Trim(), Table));
+            if (!ok) { _error = L.ServerError(error) ?? L["common.wentWrong"]; return; }
+            _done = true;
+        }
+        finally { _busy = false; }
+
+        // A moment of thanks, then the guest is returned to where they came from —
+        // the table page or the shop page — without having to find their way back.
+        StateHasChanged();
+        await Task.Delay(2500);
+        if (_done) await GoBack();
+    }
+
+    /// <summary>
+    /// Back to the page that sent the guest here. The browser's own history is the
+    /// truth when there is one (the shop page, the table page, a chat); a guest who
+    /// opened the link cold — from a QR card or a message — lands on the shop page,
+    /// or on their table page when the link carried the table code.
+    /// </summary>
+    private async Task GoBack()
+    {
+        try
+        {
+            var depth = await JS.InvokeAsync<int>("eval", "history.length");
+            if (depth > 1) { await JS.InvokeVoidAsync("history.back"); return; }
+        }
+        catch { }
+        Nav.NavigateTo(BackHref, forceLoad: true);
+    }
+}

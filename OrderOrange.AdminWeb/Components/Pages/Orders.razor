@@ -1,0 +1,126 @@
+@page "/orders"
+@inject ApiClient Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject LanguageService L
+
+<PageTitle>Admin — Orders</PageTitle>
+
+<PageHeader Title="@L["admin.ordersCount"]" Subtitle="@L["admin.ordersSub"]" />
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-4 d-flex flex-wrap align-center" Style="gap: 12px;">
+    <MudSelect Margin="Margin.Dense" T="OrderStatus?" Value="_status" ValueChanged="OnStatusChanged" Label="@L["common.status"]" Clearable="true"
+               Variant="Variant.Outlined" Dense="true" Style="min-width: 220px;">
+        @foreach (var status in Enum.GetValues<OrderStatus>())
+        {
+            <MudSelectItem T="OrderStatus?" Value="@status">@Fmt.StatusLabel(status, L)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudTextField Margin="Margin.Dense" T="string" @bind-Value="_search" Label="@L["admin.searchOrders"]" Immediate="true"
+                  Variant="Variant.Outlined" Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
+                  OnAdornmentClick="Refresh" OnKeyDown="@(e => e.Key == "Enter" ? Refresh() : Task.CompletedTask)"
+                  Style="min-width: 280px;" Class="flex-grow-1" />
+    <MudButton Variant="Variant.Outlined" OnClick="Refresh" StartIcon="@Icons.Material.Filled.Refresh">@L["common.refresh"]</MudButton>
+</MudPaper>
+
+<AutoRefresh OnRefresh="Refresh" Seconds="30" />
+
+<MudTable T="OrderDto" @ref="_table" ServerData="LoadOrders" Hover="true" Dense="true"
+          Elevation="0" Outlined="true" Class="rounded-xl" RowsPerPage="25">
+    <HeaderContent>
+        <MudTh>@L["rep.orderCol"]</MudTh>
+        <MudTh>@L["admin.placed"]</MudTh>
+        <MudTh>@L["w.customer"]</MudTh>
+        <MudTh>@L["admin.restaurant"]</MudTh>
+        <MudTh>@L["admin.driver"]</MudTh>
+        <MudTh>@L["common.total"]</MudTh>
+        <MudTh>@L["common.status"]</MudTh>
+        <MudTh />
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd>
+            <b>@context.Number</b>@(context.IsPaid ? " 💳" : "")
+            @if (context.OrderType == OrderType.Pickup)
+            {
+                <span class="oo-pickup ml-1">🏪 @L["order.pickup"]</span>
+            }
+        </MudTd>
+        <MudTd>@context.PlacedAt.ToString("dd MMM, HH:mm")</MudTd>
+        <MudTd>@context.CustomerName</MudTd>
+        <MudTd>@context.RestaurantLogoEmoji @context.RestaurantName</MudTd>
+        @* A collection has no rider and cannot be given one — say so rather than
+           showing an empty cell that looks like "not assigned yet". *@
+        <MudTd>@(context.OrderType == OrderType.Pickup ? L["order.pickup"] : context.DriverName ?? "—")</MudTd>
+        <MudTd>@Fmt.Rial(context.Total)</MudTd>
+        <MudTd><StatusChip Status="@context.Status" /></MudTd>
+        <MudTd Style="white-space: nowrap;">
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => Details(context))">@L["common.details"]</MudButton>
+            @if (context.Status is not (OrderStatus.Delivered or OrderStatus.Cancelled or OrderStatus.Rejected))
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.SkipNext" Size="Size.Small" Color="Color.Success"
+                               title="@L["admin.nextStatus"]" OnClick="@(() => Advance(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Color="Color.Error"
+                               title="@L["admin.cancelThis"]" OnClick="@(() => Cancel(context))" />
+            }
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent>
+        <EmptyState Emoji="🔍" Title="@L["admin.noOrders"]" />
+    </NoRecordsContent>
+    <PagerContent>
+        <MudTablePager RowsPerPageOptions="new[] { 25, 50, 100 }" />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private MudTable<OrderDto>? _table;
+    private OrderStatus? _status;
+    private string _search = "";
+
+    private string? SearchOrNull => string.IsNullOrWhiteSpace(_search) ? null : _search;
+
+    /// <summary>Server-side page load — only the visible page travels over the wire.</summary>
+    private async Task<TableData<OrderDto>> LoadOrders(TableState state, CancellationToken _)
+    {
+        var total = await Api.GetAdminOrdersCountAsync(_status, SearchOrNull) ?? 0;
+        var items = await Api.GetAdminOrdersAsync(_status, SearchOrNull, state.Page * state.PageSize, state.PageSize) ?? [];
+        return new TableData<OrderDto> { TotalItems = total, Items = items };
+    }
+
+    private Task Refresh() => _table?.ReloadServerData() ?? Task.CompletedTask;
+
+    private async Task OnStatusChanged(OrderStatus? status)
+    {
+        _status = status;
+        await Refresh();
+    }
+
+    private async Task Details(OrderDto order)
+    {
+        var parameters = new DialogParameters<OrderDetailsDialog> { { d => d.Order, order } };
+        await Dialogs.ShowAsync<OrderDetailsDialog>(order.Number, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true });
+    }
+
+    private async Task Cancel(OrderDto order)
+    {
+        var parameters = new DialogParameters<CancelOrderDialog> { { d => d.OrderNumber, order.Number } };
+        var dialog = await Dialogs.ShowAsync<CancelOrderDialog>(L["admin.cancelOrder"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled != false || result.Data is not string reason) return;
+
+        var (ok, error) = await Api.CancelOrderAsAdminAsync(order.Id, reason);
+        if (ok) Snackbar.Add($"{order.Number} cancelled.", Severity.Warning);
+        else Snackbar.Add(error ?? L["common.cancelFail"], Severity.Error);
+        await Refresh();
+    }
+
+    /// <summary>Support tool: push a stuck order one step forward in its lifecycle.</summary>
+    private async Task Advance(OrderDto order)
+    {
+        var (ok, error) = await Api.AdminAdvanceOrderAsync(order.Id);
+        if (ok) Snackbar.Add($"{order.Number} → {L["admin.nextStatus"]} ✓", Severity.Success);
+        else Snackbar.Add(error ?? L["common.advanceFail"], Severity.Error);
+        await Refresh();
+    }
+}

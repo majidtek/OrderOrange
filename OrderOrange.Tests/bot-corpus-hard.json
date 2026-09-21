@@ -1,0 +1,2312 @@
+[
+  {
+    "code": "en",
+    "cases": [
+      {
+        "text": "well hello again my favorite food robot, long time no see",
+        "expect": "Greeting"
+      },
+      {
+        "text": "heyyy good evening, just popping in to say hi before anything else",
+        "expect": "Greeting"
+      },
+      {
+        "text": "im honestly lost here, can you walk me through what this bot can actually do?",
+        "expect": "Help"
+      },
+      {
+        "text": "this is my first time using this thing, what are my options exactly?",
+        "expect": "Help"
+      },
+      {
+        "text": "could u explain what commands you understand? i keep gessing the wrong ones",
+        "expect": "Help"
+      },
+      {
+        "text": "you sorted that out way faster than i expected, appreciate it a lot",
+        "expect": "Thanks"
+      },
+      {
+        "text": "thanx a millionnn, you totally saved my dinner tonight fr",
+        "expect": "Thanks"
+      },
+      {
+        "text": "my fridge is completely empty and im starving, lets get some food ordered",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "could you get me two large pepperoni pizzas and one garlic bread please",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "i wanna orderr 3 chicken shawarma wraps and a large fries",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "been craving sushi all day, time to finally do something about that",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "the kids are hungry again, lets put together a burger order for them",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "honestly too tired to cook tonight so lets order somthing for dinner",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "i think ill treat myself, get me one family bucket of fried chicken",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "its been over an hour and nothing came, where is my food exactly?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "the driver was supposedly nearby twenty minutes ago, whats going on with my delivery?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "can you check how far along my order is, my lunch break ends soon",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "im not tryna be rude but srsly how much longer for my order??",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "ordered at seven and its almost nine now, someone tell me where my dinner is",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "any update on the biryani i ordered? the app hasnt moved from preparing in ages",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "wheres my foood, the map shows the guy driving in circles lol",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "plans changed last minute, i need to cancel the order i just placed",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "please dont send that order out, we ended up cooking at home instead",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "im gonna cancle my order, it says itll take way too long tonight",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "i changed my mind about tonight, cancel that delivery before it leaves the restaurant",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "before i pay can you show me everything ive added so far?",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "remind me whats sittin in my basket, i kinda lost trak while browsing",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "can i get a quick look at my cart items and the total please",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "lets just start over from scratch, wipe everything out of my cart",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "empty the whole baskett please, i picked all the wrong stuff earlier",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "take the cheesecake out of my cart, im trying to be good this week",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "on second thought drop the onion rings from my order, too much food",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "pls remvoe the diet coke, i added it by accident somehow",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "everything in the cart looks right so lets go ahead and place the order",
+        "expect": "Checkout"
+      },
+      {
+        "text": "im done addin stuff, just take me to paymnt please",
+        "expect": "Checkout"
+      },
+      {
+        "text": "ok lets finalise this order, charge my usual card and send the food",
+        "expect": "Checkout"
+      },
+      {
+        "text": "thats everything i need, procede to checkout whenever youre ready",
+        "expect": "Checkout"
+      },
+      {
+        "text": "just give me the exact same thing i got last friday, that was perfect",
+        "expect": "Reorder"
+      },
+      {
+        "text": "can we repeat my last order pleasee? too lazy to pick evrything again",
+        "expect": "Reorder"
+      },
+      {
+        "text": "nah, definitely not, i dont want anything like that right now",
+        "expect": "No"
+      }
+    ]
+  },
+  {
+    "code": "ar",
+    "cases": [
+      {
+        "text": "هلا والله بالغالين، مساكم الله بالنور، عساكم طيبين وبخير جميعاً",
+        "expect": "Greeting"
+      },
+      {
+        "text": "والله جوعان موت ومن الصبح ما ذقت شي، أبغى شي دسم يسد الجوع",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "صار لي ساعه كامله منتظر ولا شي وصل، وين طلبي بالضبط ومتا بيوصل",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "أول مرة أستخدم هالتطبيق صراحة، ممكن تشرح لي شو تقدر تسوي لي بالضبط؟",
+        "expect": "Help"
+      },
+      {
+        "text": "بغيت اطلب برجر دجاج عدد اثنين مع بطاطس كبير وببسي بارد وزيدو صوص ثوم",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "تسلم يمينك والله ما قصرت معاي، خدمة ممتازة وسريعة، الله يعطيكم العافية جميعاً",
+        "expect": "Thanks"
+      },
+      {
+        "text": "تاخرتو علي وايد وما عاد ابغى الطلب، الغوه نهائيا ورجعو لي فلوسي",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "قبل ما أكمل أبغى أشوف وش اللي حاطته في السلة، ورّوني المحتويات كلها",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "يا جماعة الطلب تاخر وايد اليوم، ممكن اعرف السايق وين واصل الحين؟",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "بدي اطلب وجبة شاورما عربي دبل مع بطاطا مقلية وكولا، وزيدلي كتير توم",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "خلاص تمام كل شي في السلة مضبوط، كملوا لي إجراءات الدفع ووصلوه البيت",
+        "expect": "Checkout"
+      },
+      {
+        "text": "لو تكرمت أريد أن أعرف ما هي الخدمات التي يقدمها هذا المساعد وكيف أستخدمه",
+        "expect": "Help"
+      },
+      {
+        "text": "يا عم بقالي ساعه مستني الاوردر ومحدش بيرد عليا، هو فين دلوقتي بالظبط؟",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "خلوا كل شي مثل ما هو بس شيلوا البيبسي من السلة، ما عاد أبغاه",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "wallah je3an moot, abi burger w fries w pepsi, sawwli order jdeed 3ala sur3a",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "غيرت رأيي في كل اللي اخترته من البداية، فضّوا لي السلة كاملة بلا استثناء",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "sar li nos sa3a mestani el order, waynah el delivery ta7deedan al7een?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "حصل معي ظرف طارئ ولن أكون في المنزل، أرجو إلغاء طلبي الأخير فوراً",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "ابيي اطلب عشا للبيت الليله، شي رز مندي لحم يكفي حق ثلاث اشخاص",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "نسيت صراحة وش ضفت من أكل قبل شوي، اعرضوا لي سلة المشتريات عشان أتأكد",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "hala wallah shbabkom, salam 3laikum, sh5barkum el yom, 3asakum tayybeen",
+        "expect": "Greeting"
+      },
+      {
+        "text": "ياااخي وين الطلب ليش متاخر كذا، الاكل بيبرد والعيال جوعانين، شيكو لي عليه",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "لقد انتهيت من اختيار كل ما أحتاج إليه، وأرغب في إتمام عملية الدفع الآن",
+        "expect": "Checkout"
+      },
+      {
+        "text": "طلعلي اني ضايف وجبتين برجر بالغلط، احذفو لي وحده منهم وخلو الباقي",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "خلاص ما ابي الطلب غيرت رايي، الغو لي الاوردر قبل لا يطلع من المطعم",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "متشكر اوي يا باشا علي المساعده، انت سهلتلي حاجات كتير كنت تايه فيها",
+        "expect": "Thanks"
+      },
+      {
+        "text": "عجبني وايد الطلب اللي طلبته الأسبوع الماضي، أعيدوا لي نفس الطلبية بالضبط بدون تغيير",
+        "expect": "Reorder"
+      },
+      {
+        "text": "أرجو التكرم بإخباري عن حالة طلبي الأخير، فقد مضى وقت طويل ولم يصلني شيء",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "أرغب في طلب وجبة غداء عائلية تكفي خمسة أشخاص من مطعمكم، فهل يمكنني البدء الآن؟",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "ورني السله شو فيها بالضبط الحين، حاس اني ضفت اشيا وايد زياده عن اللزوم",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "ياخي انا ضايع ما عرفت كيف اتعامل مع البوت هذاا، علموني وش الاوامر اللي اكتبها",
+        "expect": "Help"
+      },
+      {
+        "text": "يالله خلصنااا بسرعه لو سمحت، اعتمد الطلب وكمل الدفع بالبطاقه قبل لا يسكر المطعم",
+        "expect": "Checkout"
+      },
+      {
+        "text": "شكلكم مب قادرين توصلون اليوم أبداً، عيل بطلوا الطلب أحسن ولا تحسبون علي شي",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "معلش شيل البطاطس الكبيرة من الطلب وسيب الباقي زي ما هو، غيرت رأيي فيها",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "عمول معروف شوفلي وين صار طلبي، الدليفري صرلو ساعة طالع من المطعم وبعدو ما وصل",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "في أغراض كتير ضفتها بالغلط وما بدي ولا وحدة منها، امسح السلة كلها من أساسها",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "من زمان ما طلبت من عندكم والبطن قاعد يصيح، يالله افتحوا لي طلب جديد",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "ما عندي مزاج اختار من جديد ولا اقلب بالقوايم، كرر لي اخر اوردر بنفس التفاصيل",
+        "expect": "Reorder"
+      },
+      {
+        "text": "زين عاد ما أبغى أضيف شي ثاني خلاص، دزوا الطلب للمطعم وحاسبوني على اللي موجود",
+        "expect": "Checkout"
+      },
+      {
+        "text": "لا يا طويل العمر، مب ودي بأي إضافات ثانية أبداً، اللي طلبته يكفيني وزيادة",
+        "expect": "No"
+      }
+    ]
+  },
+  {
+    "code": "fa",
+    "cases": [
+      {
+        "text": "سلام و عرض ادب، وقتتون بخیر، امیدوارم امشب سرتون خیلی شلوغ نباشه",
+        "expect": "Greeting"
+      },
+      {
+        "text": "سلاممم خسته نباشيد، شب جمعه‌تون بخير، چطورين شما؟",
+        "expect": "Greeting"
+      },
+      {
+        "text": "ببخشید من اولین باره از این برنامه استفاده میکنم، میشه بگید دقیقا چطوری کار میکنه؟",
+        "expect": "Help"
+      },
+      {
+        "text": "راستش گيج شدم اصن نميدونم اينجا چه كارايى ميشه كرد، يه راهنمايى ميكنى؟",
+        "expect": "Help"
+      },
+      {
+        "text": "میشه یه توضیح بدید که شما دقیقا چه امکاناتی دارید و چه کمکی از دستتون برمیاد؟",
+        "expect": "Help"
+      },
+      {
+        "text": "واقعا از راهنمایی خوبتون ممنونم، خیلی کارم رو راحت کردید امشب",
+        "expect": "Thanks"
+      },
+      {
+        "text": "دمت گرم داداش، عالی بوووود، خیلی لطف کردی جبران میکنم",
+        "expect": "Thanks"
+      },
+      {
+        "text": "از صبح هیچی نخوردم و دارم از گشنگی میمیرم، یه چیزی میخوام سفارش بدم",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "امشب اصلا حال آشپزی ندارم، ببین چی داری که بشه برای شام گرفت",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "لطفا دو تا پیتزا پپرونی بزرگ و یه نوشابه خانواده برای من ثبت کن",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "ميخوام سه تا ساندويچ فلافل با سيب زمينى سفارش بدم واسه بچه ها",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "هوس یه کباب کوبیده حسابی کردم، ببین از کدوم رستوران میتونی برام جورش کنی",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "مهمون دارم امشب، یه چلوکباب سلطانی و دو تا جوجه کباب لازم دارم زود",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "گشنمههههه بدو یه چیز درست حسابی واسه ناهار میخوام سفارش بدم",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "یه ساعته منتظرم و هنوز هیچییی نیومده، این سفارش من دقیقا کجاست الان؟",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "ببخشید مزاحم میشم، میخواستم بدونم غذایی که سفارش دادم الان تو چه مرحله‌ایه",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "پیک شما نیم ساعت پیش راه افتاده بود، الان کجای مسیره که هنوز نرسیده؟",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "سفارشم كجا موند پس؟ بچه ها گشنشونه و همش دارن ميپرسن كى ميرسه",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "غذای من قرار بود ساعت هشت برسه، الان هشت و نیمه، وضعیتش رو چک میکنید؟",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "چرا انقد طوووول کشیده؟ فقط بگو سفارشم الان دست کیه و کی میرسه",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "میشه لینک رهگیری پیکو بفرستی ببینم دقیقا کجاست؟ کارم داره دیر میشه",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "برنامه‌مون عوض شد و داریم میریم بیرون، لطفا کل سفارشی که دادم رو کنسل کن",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "راستش پشیمون شدم، دیگه نمیخوامش، اون سفارشو لغو کن برام ممنون میشم",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "ديگه دير شده به دردم نميخوره، سفارشو كنسلش كن لطفا",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "اشتباهی از یه رستوران دیگه سفارش دادم، میشه قبل از اینکه آماده بشه لغوش کنید؟",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "قبل از اینکه ادامه بدم، میشه یه بار نشونم بدی تو سبد خریدم چیا هست؟",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "یادم نیست چیا انتخاب کردم تا الان، محتوای سبدمو یه نمایش بده لطفا",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "ببينم سبد خريدم الان چى توشه؟ فك كنم يه چيزايى اضافه كردم يادم رفته",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "این سبد رو کلا خالیش کن، میخوام از اول همه چی رو دوباره انتخاب کنم",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "هرچى تا الان تو سبد ريختم رو بريز دور، هيچكدومشو ديگه نميخوام",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "اون نوشابه‌ای که اضافه کردم رو از سبد بردار، دکتر گفته نوشابه نخورم",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "فقط سالاد سزار رو از لیستم حذف کن، بقیه سفارش سر جاش بمونه",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "پيتزا رو از سبد حذفش كن ولى بقيه چيزا باشه دست نزن",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "همه چی رو انتخاب کردم دیگه، بریم مرحله پرداخت که تمومش کنیم",
+        "expect": "Checkout"
+      },
+      {
+        "text": "سبدم کامله، لطفا سفارشو نهایی کن و صورتحساب رو بزن که پرداخت کنم",
+        "expect": "Checkout"
+      },
+      {
+        "text": "خب دیگه بسههه، همینا رو حساب کن بریم واسه پرداخت",
+        "expect": "Checkout"
+      },
+      {
+        "text": "میخوام همین الان تسویه کنم، هزینه رو از کیف پولم کم کن و ثبتش کن",
+        "expect": "Checkout"
+      },
+      {
+        "text": "همون سفارشی که هفته پیش دادم عالی بود، دقیقا همونو دوباره برام بزن",
+        "expect": "Reorder"
+      },
+      {
+        "text": "حوصله انتخاب ندارم، همون غذاى دفعه قبلو دوباره سفارش بده برام",
+        "expect": "Reorder"
+      },
+      {
+        "text": "نه، فعلا چیز دیگه‌ای نمیخوام، همین که هست کافیه",
+        "expect": "No"
+      }
+    ]
+  },
+  {
+    "code": "ur",
+    "cases": [
+      {
+        "text": "السلام علیکم، کیسے ہیں آپ؟ کافی دنوں بعد آج آپ کی ایپ کھولی ہے میں نے",
+        "expect": "Greeting"
+      },
+      {
+        "text": "رات کے کھانے کا گھر میں کوئی بندوبست نہیں ہے، آج باہر سے کچھ منگوانا پڑے گا",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "ایک گھنٹہ ہوگیا آرڈر کیے ہوئے اور ابھی تک کچھ نہیں آیا، کدھر ہے میرا کھانا؟",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "مجھے سمجھ نہیں آ رہی کہ یہ ایپ کیسے چلتی ہے، ذرا بتائیں آپ کیا کیا کر سکتے ہیں",
+        "expect": "Help"
+      },
+      {
+        "text": "دو زنگر برگر اور ایک لارج فرائز منگوا دو، ساتھ کولڈ ڈرنک بھی ڈال دینا پلیزز",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "ذرا دکھانا تو کہ اب تک میں نے اپنی ٹوکری میں کیا کیا ڈالا ہوا ہے",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "رائیڈر ابھی کتنی دور ہے؟ مہمان کب سے بیٹھے کھانے کا انتظار کر رہے ہیں",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "ارادہ بدل گیا ہے میرا، ابھی جو آرڈر کیا تھا اسے مہربانی کر کے ختم کر دیں",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "بہت شکریہ بھائی، آپ نے میرا کام واقعی آسان کر دیا، اللہ آپ کو خوش رکھے",
+        "expect": "Thanks"
+      },
+      {
+        "text": "بس اب کچھ اور نہیں چاہیے، جو کارٹ میں ہے اسی کی پیمنٹ کر کے آرڈر فائنل کر دیں",
+        "expect": "Checkout"
+      },
+      {
+        "text": "yaaar itni dair ho gai hai, mera order kahan phncha hai zra check kro to",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "برگر تو رہنے دیں مگر جو کولڈ ڈرنک ساتھ ڈالی تھی وہ کارٹ سے نکال دیں",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "بھوک سے برا حال ہو رہا ہے یار، جلدی سے کچھ کھانے کا آرڈر کرنا ہے مجھے",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "yar mjhe kch samajh nai aa rha, ye app use kese krte hain zara guide kr do",
+        "expect": "Help"
+      },
+      {
+        "text": "بھائی میرا آرڈر کس اسٹیج پہ ہے زرا چیک کر کے بتاؤ، کافی دیر ہو رہی ہے",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "یہ سب چیزیں غلط ڈل گئی ہیں، پوری ٹوکری خالی کر دو، میں نئے سرے سے شروع کروں گا",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "آفس میں سب کے لیے تین چکن بریانی اور چار روٹیاں آرڈر کرنی ہیں، لگا دو بھائی",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "اتنی دیر میں تو ہم خود ہی بنا لیتے کھانا، رہنے دیں اب، آرڈر کینسل کر دیں",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "assalam o alaikum bhai, kia haal chal hain ap k? kafi dino baad aya hun idhar",
+        "expect": "Greeting"
+      },
+      {
+        "text": "سب کچھ منتخب کر لیا ہے میں نے، اب چلو ادائیگی والا مرحلہ بھی مکمل کرتے ہیں",
+        "expect": "Checkout"
+      },
+      {
+        "text": "ایپ پر لکھا ہے کھانا راستے میں ہے مگر آدھا گھنٹہ ہو گیا، اصل صورتحال کیا ہے؟",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "پچھلی دفعہ جو کھانا منگوایا تھا بالکل وہی دوبارہ بھجوا دیں، بہت ہی مزے کا تھا",
+        "expect": "Reorder"
+      },
+      {
+        "text": "بچوں کی ضد ہے کہ آج پیزا ہی کھانا ہے، ایک لارج پیزا آرڈر کر دیں ہمارے لیے",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "مجھے یاد نہیں رہا کہ کارٹ میں اس وقت کتنی چیزیں پڑی ہیں، مکمل لسٹ دکھا دیں",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "نہیں نہیں، رہنے دیں، مجھے فی الحال اس چیز میں کوئی دلچسپی نہیں ہے بالکل بھی",
+        "expect": "No"
+      },
+      {
+        "text": "مجھے بس اتنا بتا دیں کہ ڈیلیوری والا کب تک پہنچے گا میرے گھر کے پتے پر",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "غلطی سے آرڈر لگ گیا ہے، جلدی سے کنسل کر دو اس سے پہلے کہ کھانا بننا شروع ہو",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "یہ بوٹ میں پہلی بار استعمال کر رہا ہوں، بتاؤ تم سے کون کون سے کام کروا سکتا ہوں",
+        "expect": "Help"
+      },
+      {
+        "text": "سوچ لیا ہے کہ آج فرائز نہیں کھانے، بس صرف وہ والی چیز کارٹ سے ہٹا دو",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "جلدی سے چیک آوٹ کر دو بھائی، مہمان پہنچنے والے ہیں اور ٹائم بلکل نہیں ہے",
+        "expect": "Checkout"
+      },
+      {
+        "text": "aj dil kr rha hai bahir se kch mangwa lein, chalo order start krte hain jaldi",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "پیٹ میں چوہے دوڑ رہے ہیں اور آرڈر کا کوئی اتا پتا نہیں، سٹیٹس تو دکھاو ذرا",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "شکریہہہ یار، تم نے تو آج کمال ہی کر دیا، دل خوش ہو گیا میرا",
+        "expect": "Thanks"
+      },
+      {
+        "text": "کارٹ میں جو کچھ بھی پڑا ہے سب اڑا دو یار، مجھے بلکل خالی کارٹ چاہیے اب",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "مہمانوں کا پروگرام ملتوی ہو گیا ہے، اس لیے میرا آج والا آرڈر منسوخ کر دیجیے",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "آرڈر فائنل کرنے سے پہلے ایک بار ٹوکری دیکھنی ہے کہ ٹوٹل کتنے کا بن رہا ہے",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "ہر دفعہ وہی کچھ منگواتا ہوں، میرا پچھلا والا آرڈر ہی ریپیٹ کر دو آج بھی یارر",
+        "expect": "Reorder"
+      },
+      {
+        "text": "غلطی سے دو دفعہ بریانی ایڈ ہوگئی ہے، ایک والی نکال دو پلیز کارٹ سے",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "آج کھانا بنانے کا بالکل موڈ نہیں ہے، چلو باہر سے ہی کچھ آرڈر کر لیتے ہیں",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "چلو بھئی اب ٹوکری فائنل کرو اور بل کی ادائیگی پر چلتے ہیں، زوروں کی بھوک لگی ہے",
+        "expect": "Checkout"
+      }
+    ]
+  },
+  {
+    "code": "hi",
+    "cases": [
+      {
+        "text": "नमस्ते भैया, कैसे हैं आप? आज बहुत दिनों बाद आपकी ऐप खोली है मैंने।",
+        "expect": "Greeting"
+      },
+      {
+        "text": "यारररर बहुत तेज़ भूख लगी है, जल्दी से कुछ खाने का इंतज़ाम करवा दो मेरे लिए।",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "एक घंटा हो गया ऑर्डर किए हुए और अभी तक कुछ नहीं आया, कहाँ है मेरा खाना?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "ज़रा दिखाना तो मेरी कार्ट में अभी क्या क्या पड़ा है, मुझे कुछ याद नहीं आ रहा।",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "यार मेरा प्लान बदल गया है, अभी जो ऑर्डर डाला था वो कैंसिल कर दो प्लीज़।",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "बस अब कुछ और नहीं जोड़ना मुझे, पेमेंट करके मेरा ऑर्डर फाइनल कर दो।",
+        "expect": "Checkout"
+      },
+      {
+        "text": "मुझे समझ नहीं आ रहा ये ऐप कैसे चलती है, ज़रा बताओगे क्या क्या कर सकते हो तुम?",
+        "expect": "Help"
+      },
+      {
+        "text": "दो चिकन बिरयानी और एक रायता लगा दो मेरे लिए, आज दावत का मूड है।",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "भैया डिलिवरी वाला कहा पहुंचा है अभी, बच्चे यहाँ भूख से रोए जा रहे हैं।",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "सुनो, कार्ट में से वो कोल्ड ड्रिंक निकाल दो, बाकी सब वैसा का वैसा रहने दो।",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "बहुत बहुत शुक्रिया भैया, आपने आज मेरा काम सच में बहुत आसान कर दिया।",
+        "expect": "Thanks"
+      },
+      {
+        "text": "पुरी कार्ट ही खाली कर दो यार, अब नए सिरे से सब कुछ डालूँगा मैं।",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "मेरा ऑर्डर कबतक आएगा, ज़रा स्टैटस चैक करके बताओ ना प्लिज़ मुझे।",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "bhai bhookh se bura haal ho gya hai, kuch khane ka order karwa de jaldi se",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "पिछली बार वाला ऑर्डर बहुत बढ़िया था, वही सेम चीज़ें आज फिर से मंगवा दो।",
+        "expect": "Reorder"
+      },
+      {
+        "text": "इतनी देर हो चुकी है कि अब खाने का मन ही नहीं रहा, ये ऑर्डर रद्द ही कर दो।",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "एक बार कार्ट खोल के दिखाओ, देखना है अब तक कुल कितने का सामान हो गया।",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "जो चाहिए था सब ले लिया है, अब बिल बना दो और ऑर्डर आगे बढ़ा दो।",
+        "expect": "Checkout"
+      },
+      {
+        "text": "आज खाना बनाने का बिलकुल मन नहीं है, चलो बाहर से ही कुछ मंगवा लेते हैं।",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "yaar 45 minute ho gaye order kiye hue, ab tak kuch nahi aya, kaha atka hai wo?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "पहली बार इस्तमाल कर रही हूँ ये ऐप, थोड़ा समझा दो यहाँ कौन कौन से फीचर मिलते हैं?",
+        "expect": "Help"
+      },
+      {
+        "text": "मैंने गल्ती से दो पिज्जा डाल दिए थे, उनमें से एक कार्ट से हटा दो प्लीज़।",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "sorry yar galti se order place ho gya tha, isko cancel kar do abhi ke abhi",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "ऑफिस से निकलने में देर हो गई, घर के लिए एक पनीर बटर मसाला और चार रोटी भिजवा दो।",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "ऐप में लिखा था तीस मिनट में आ जाएगा, अभी तक राइडर निकला भी नहीं, क्या चल रहा है?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "नहि यार रहने दो, मुझे अभी ये वाला बिलकुल भी नहीं चाहिए।",
+        "expect": "No"
+      },
+      {
+        "text": "bas ho gya mera selection, ab payment wala page khol do, checkout karna hai mujhe",
+        "expect": "Checkout"
+      },
+      {
+        "text": "सुनो, मुझे तीन आलू पराठे और एक मीठी लस्सी का ऑर्डर लगाना है अभी।",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "थोड़ा देखके बताओ मेरा वाला ऑर्डर कहाँ तक पहुंचा, मेहमान बैठे इंतज़ार कर रहे हैं।",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "अरे हेलो हेलो, गुड ईवनिंग जी, कैसा चल रहा है आपका सब कुछ?",
+        "expect": "Greeting"
+      },
+      {
+        "text": "जो भी कार्ट में डाला था वो सब एक साथ हटा दो, उसमें से कुछ नहीं चाहिए अब।",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "थैंक्यू सो मचचच यार, तुम तो कमाल निकले, बड़ी मदद हो गई मेरी आज।",
+        "expect": "Thanks"
+      },
+      {
+        "text": "गुलाब जामुन खाने का मन नहीं है अब, उसको कार्ट से उड़ा दो भैया।",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "मम्मी ने घर पे खाना बना लिया है, तो मेरा वाला ऑर्डर कैंसल कर देना अब।",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "शाम को मेहमान आने वाले हैं, कुछ अच्छा सा खाना ऑर्डर करना है मुझे अभी।",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "सुबह का ऑर्डर डाला हुआ है और अब दोपहर होने को है, पता तो करो कहाँ है वो।",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "cart me kya kya add kiya tha zara dikha do, mai to bhool hi gya sab",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "भाई ये बॉट क्या क्या काम कर सकता है, एक बार पूरी लिस्ट बता दो मुझे।",
+        "expect": "Help"
+      },
+      {
+        "text": "कार्ट में जो पड़ा है वही फाइनल है, अब पेमेंट करवा के ऑर्डर लगा ही दो।",
+        "expect": "Checkout"
+      },
+      {
+        "text": "हर संडे वाला मेरा रेगुलर ऑडर दोबारा लगा दो, वही जो पिछले हफ्ते लिया था।",
+        "expect": "Reorder"
+      }
+    ]
+  },
+  {
+    "code": "tr",
+    "cases": [
+      {
+        "text": "İyi akşamlar, kolay gelsin, umarım bugün yoğunluk yoktur sizde, her şey yolundadır.",
+        "expect": "Greeting"
+      },
+      {
+        "text": "Akşamdan beri hiçbir şey yemedim, midem kazınıyor resmen, artık bir şeyler söylesek iyi olur.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Bu uygulamayı ilk defa kullanıyorum, bana burada neler yapabildiğini biraz anlatır mısın acaba?",
+        "expect": "Help"
+      },
+      {
+        "text": "Bir saat oldu sipariş vereli, hâlâ ortada bir şey yok, nerede kaldı bu yemek?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "iki adet tavuk durum bir de buyuk ayran alalim, cok acele degil ama baslayalim artik",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Ne eklediğimi unuttum açıkçası, sepette şu an neler var bir gösterir misin bana?",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Yanlışlıkla sipariş verdim az önce, kartımdan para çekilmeden şu siparişi iptal edelim lütfen.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Çok sağ ol gerçekten, her şeyle tek tek ilgilendin, eline emeğine sağlık.",
+        "expect": "Thanks"
+      },
+      {
+        "text": "kurye daha yola cikmadi mi ya, uygulamada hala hazirlaniyor gozukuyor, ne durumda ogrenebilir miyim",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Sepette her şey tamam görünüyor bence, artık ödemeyi yapıp siparişi onaylayalım mı?",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Bugün canım fena halde lahmacun çekti, dört tane lahmacun ve iki ayran sipariş etmek istiyorum.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Arkadaşım gelmiyormuş bu akşam, onun için eklediğim tavuk dürümü sepetten çıkarır mısın?",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "hic anlamadim ben bu sistemi ya, hangi komutlar var neyi nasil yapiyoruz, anlatsana bi",
+        "expect": "Help"
+      },
+      {
+        "text": "Geçen hafta söylediğimiz o menü çok iyiydi, aynısından bir daha sipariş verelim bence.",
+        "expect": "Reorder"
+      },
+      {
+        "text": "Çocuklar acıktı bekliyor burada, siparişimiz yaklaşık ne zaman gelir, bir bakabilir misin?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Bu sepette çok saçmaladım, hepsini silip baştan başlamak istiyorum, sepeti komple boşalt.",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "yaaa cok aciktim artik dayanamiyorum, hemen bisiler soyleyelim su an",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Plan değişti, arkadaşlarla dışarıda yiyeceğiz, az önce verdiğim siparişi iptal et gitsin.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "selamlar yaa, ben yine geldim aksam aksam, nasilsiniz bakalim",
+        "expect": "Greeting"
+      },
+      {
+        "text": "Kapıda nakit ödemek istiyorum bu sefer, siparişi bu şekilde tamamlayabilir miyiz lütfen?",
+        "expect": "Checkout"
+      },
+      {
+        "text": "kirk dakkadir bekliyorum yaa hala gelen giden yok, benim siparis nerde allah askina",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Ofiste kalabalığız bugün, üç kıymalı pide bir de büyük boy mercimek çorbası söyleyebilir miyiz?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "yanlislikla iki porsiyon baklava eklemisim sepete, birini cikar yeter bana",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "Merhaba, az önce verdiğim siparişin tahmini teslimat süresini öğrenebilir miyim acaba?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Kafam karıştı açıkçası, sipariş vermek dışında burada başka hangi işlemleri yapabiliyorum, yardımcı olur musun?",
+        "expect": "Help"
+      },
+      {
+        "text": "tamamdir baska bisey istemiyorum, odeme adimina gecelim artik, bitirelim su isi",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Buzdolabı bomboş, yemek yapacak halim de kalmadı, en iyisi dışarıdan bir şeyler ısmarlamak.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "vazgectim ben bunlarin hepsinden ya, sepeti tamamen temizle, bastan yapariz sonra",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "Bu kadar bekletileceğini bilseydim hiç sipariş vermezdim, artık iptal etmek istiyorum siparişi.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "eyvallah kardesim ya cok yardimci oldun, sagolasin varolasin",
+        "expect": "Thanks"
+      },
+      {
+        "text": "Kurye adresi bulamadı mı acaba, haritada hiç hareket görünmüyor, sipariş şu an tam olarak nerede?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Sipariş vermeden önce son bir kez sepetin içeriğini kontrol etmek istiyorum, listeler misin?",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "aksam bize misafir gelecek, iki porsiyon iskender bir de kunefe ile siparise baslayalim hemen",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Yok yok, hiç istemiyorum öyle bir şey, gerek de yok bence, eklemeyelim.",
+        "expect": "No"
+      },
+      {
+        "text": "Sepetteki soğanlı olan pideyi istemiyorum artık, sadece onu listeden kaldıralım lütfen.",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "en son ne soylediysek ondan aynen bi daha olsun, ugrasamam simdi tek tek secmekle",
+        "expect": "Reorder"
+      },
+      {
+        "text": "Kusura bakmayın çok sık fikir değiştiriyorum ama bu siparişten vazgeçtim, iptal edebilir miyiz?",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "sepeti bi acsana, su an toplam kac lira tutuyo, neler varmis bi gorelim",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Yemek soğuyacak diye korkuyorum açıkçası, siparişimin şu anki durumunu kontrol eder misin lütfen?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "daha ne bekliyoruz ya, sepet hazir iste, odemeyi yapip su siparisi onaylayalim bitsin",
+        "expect": "Checkout"
+      }
+    ]
+  },
+  {
+    "code": "fr",
+    "cases": [
+      {
+        "text": "Salut salut, ça fait un bail que j'ai pas ouvert cette appli, comment ça va par ici ?",
+        "expect": "Greeting"
+      },
+      {
+        "text": "J'ai une de ces faims, il me faudrait quelque chose à manger assez vite là.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Ça fait presque une heure que j'attends et toujours rien devant ma porte, elle est où ma commande ?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Je suis un peu perdu, vous pouvez m'expliquer comment fonctionne cette application exactement ?",
+        "expect": "Help"
+      },
+      {
+        "text": "On est trois à la maison ce soir, mettez-moi deux pizzas margherita et un tacos poulet s'il vous plaît.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Avant d'aller plus loin, j'aimerais vérifier ce qu'il y a exactement dans mon panier.",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Finalement un ami nous a invités au restaurant, du coup il faut annuler ma commande en cours, désolé.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Le livreur devait arriver à 20h d'après l'appli, vous pouvez vérifier où il en est là ?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "je creve la dalle depuis midi la, faut absolument que je commande un truc a bouffer",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Franchement merci beaucoup, vous m'avez sauvé la soirée avec votre aide, c'est top.",
+        "expect": "Thanks"
+      },
+      {
+        "text": "C'est bon pour moi, on peut passer au paiement maintenant, j'ai tout ce qu'il me faut.",
+        "expect": "Checkout"
+      },
+      {
+        "text": "franchement je comprends rien a votre truc, c'est quoi les commandes que je peux taper ici ??",
+        "expect": "Help"
+      },
+      {
+        "text": "Réflexion faite, enlevez la salade césar du panier, mais laissez bien tout le reste hein.",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "ca fait 45 min que jattends franchement cest abusé, elle arrive quaaand ma bouffe ??",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "En fait je préfère repartir de zéro, videz complètement mon panier s'il vous plaît.",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "Le repas de vendredi dernier était excellent, vous pouvez me refaire exactement la même commande ?",
+        "expect": "Reorder"
+      },
+      {
+        "text": "Ça vous dérange pas de me lancer une commande, j'aimerais bien un couscous royal et deux boissons ?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Je voudrais juste savoir si ma commande est déjà partie du restaurant ou pas encore.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "je me suis trompee de resto en commandant, vous pouvez annuler la commande que je viens de passer svp ?",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "allez on valide la commande et on paye maintenant, jen peux plus dattendre moi",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Le frigo est complètement vide et j'ai zéro envie de cuisiner, je vais me faire livrer un repas.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "je sais plus trop ce que jai mis dans le panier tout a lheure, tu peux me montrer le contenu ?",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Dites-moi honnêtement, mon repas est encore loin, parce que les enfants commencent à s'impatienter sérieusement.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Est-ce que quelqu'un peut me dire ce que ce chatbot sait faire, parce que je débute complètement ?",
+        "expect": "Help"
+      },
+      {
+        "text": "jai trooop envie dun burger double cheese avec des frites la maintenant, on peut commander svp ??",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Ah non pas du tout, ce n'est pas ce que je voulais dire, oubliez ça.",
+        "expect": "No"
+      },
+      {
+        "text": "Mon fils ne veut plus de son sandwich au thon, vous pouvez le supprimer du panier ?",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "cest trop long la, tant pis pour ce soir, annulez ma commande jirai acheter un sandwich en bas",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Le panier me convient parfaitement, je voudrais finaliser et régler tout ça par carte.",
+        "expect": "Checkout"
+      },
+      {
+        "text": "bjr vous allez bien j'espere ? c'est encore moi, votre client fidele de tous les soirs",
+        "expect": "Greeting"
+      },
+      {
+        "text": "vous pouvez me dire ou en est le livreur pcq la jai faim et je vois rien bouger sur la carte",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "jai mis nimporte quoi dans le panier la, supprime tout ce quil y a dedans stp",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "Bon allez, la flemme de cuisiner ce soir encore une fois, je prendrais bien trois shawarmas et une salade.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "mercii bcp c'est gentil d'avoir répondu aussi vite, vous gérez vraiment",
+        "expect": "Thanks"
+      },
+      {
+        "text": "Vous seriez gentil d'annuler la commande numéro 4521, on a changé d'avis pour ce soir.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "finalement les frites c'est de trop, retire-les du panier stp mais garde bien le burger",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "Montrez-moi un peu mon panier, je veux voir le total avant de me décider.",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "jai la flemme de tout rechoisir, recommande moi la meme chose que la derniere fois stp",
+        "expect": "Reorder"
+      },
+      {
+        "text": "Bonsoir, petite question, est-ce que ma livraison de ce soir est toujours prévue dans les temps ?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Bon, arrêtons de tergiverser, procédons au règlement de la commande s'il vous plaît.",
+        "expect": "Checkout"
+      }
+    ]
+  },
+  {
+    "code": "es",
+    "cases": [
+      {
+        "text": "Buenas noches, ¿qué tal todo? Aquí ando otra vez dando vueltas por la aplicación.",
+        "expect": "Greeting"
+      },
+      {
+        "text": "holaa buenass que ondaa, espero que hoy me atiendan mejor que la ultima vez jaja",
+        "expect": "Greeting"
+      },
+      {
+        "text": "La verdad no entiendo muy bien cómo funciona esto, ¿me explicas qué puedo hacer aquí?",
+        "expect": "Help"
+      },
+      {
+        "text": "oye estoy medio perdido con la app, no se ni por donde empezar, ayudame porfa",
+        "expect": "Help"
+      },
+      {
+        "text": "¿Podrías decirme qué opciones tienes disponibles? Es la primera vez que uso este servicio.",
+        "expect": "Help"
+      },
+      {
+        "text": "Mil gracias por resolverlo todo tan rápido, de verdad que me salvaste la cena de hoy.",
+        "expect": "Thanks"
+      },
+      {
+        "text": "graciasss eres lo maximo, todo salio perfecto esta vez, se agradece un monton",
+        "expect": "Thanks"
+      },
+      {
+        "text": "Me está sonando la panza desde hace rato, ya va siendo hora de pedir algo de comer.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Ando con un antojo tremendo de pizza, ponme dos familiares de pepperoni y una de champiñones.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "quiero pedir tres hamburguesas dobles con queso y dos ordenes de papas grandes porfa",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "no tengo nada en la nevera y me da una flojera cocinar, mejor pido algo por aqui",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Se me antojó comida china, apúntame dos chow mein de pollo y unos rollitos primavera.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "ya es tardisimo y no he comido nada en todo el dia, quiero ordenar algo ya mismo",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Vienen mis amigos a ver el partido, necesito encargar cuatro alitas BBQ y dos pizzas grandes.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Llevo más de una hora esperando y no ha llegado absolutamente nada, ¿dónde está mi comida?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "oigan ya paso un monton de tiempo y el repartidor ni sus luces, que paso con mi pedido",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Disculpa, ¿me podrías decir por dónde viene el repartidor con mi orden en este momento?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "La app dice que salió hace cuarenta minutos pero aquí no aparece nadie todavía, ¿qué pasó?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "en serio, una hora esperando y nada que llega, al menos diganme cuanto falta porfavor",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "¿Sigue en camino mi pedido? Porque ya llevo un buen rato mirando por la ventana.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Quisiera saber el estado de mi orden, la pedí como a las ocho y ya son casi las nueve.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Mejor cancela el pedido, me acaban de invitar a cenar fuera y ya no lo necesito.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "oye me arrepenti, cancelame ese pedido porfavor antes de que lo empiecen a preparar",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Ya no quiero la orden, tardaron demasiado en confirmarla y perdí el interés, cancélala por favor.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "¿Todavía estoy a tiempo de cancelar mi pedido? Es que me surgió un imprevisto familiar.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Antes de seguir quiero revisar qué llevo hasta ahora, muéstrame lo que hay en mi carrito.",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "a ver ensename el carrito porque ya ni me acuerdo de todo lo que le meti",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "¿Me puedes mostrar el resumen de mi canasta? Quiero ver cuánto llevo gastado hasta ahora.",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Mejor vacía todo el carrito de una vez, quiero armar el pedido desde cero porque me confundí.",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "borrame todo lo que hay en el carrito porfa, cambie de opinion con todo lo que puse",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "Quita las papas fritas del carrito, que mi esposa dice que ya no las quiere.",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "me puse a pensar y mejor sacame el refresco grande del pedido, con el chico me basta",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "Elimina una de las dos hamburguesas que agregué, con una sola es más que suficiente para mí.",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "Ya está todo listo por mi parte, procede con el pago para que lo manden lo antes posible.",
+        "expect": "Checkout"
+      },
+      {
+        "text": "listo ya no quiero nada mas, cobrame de una vez y que salga el pedido",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Perfecto, así déjalo tal cual, ¿me confirmas el total y finalizamos la compra de una vez?",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Ya revisé todo y está bien, quiero pagar con tarjeta y cerrar el pedido de una vez.",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Quedé encantado con lo que pedí la semana pasada, tráeme exactamente lo mismo otra vez.",
+        "expect": "Reorder"
+      },
+      {
+        "text": "me da flojera ponerme a escoger, repiteme el ultimo pedido que hice tal cual estaba",
+        "expect": "Reorder"
+      },
+      {
+        "text": "No, la verdad prefiero que no, déjalo todo así como está por ahora.",
+        "expect": "No"
+      }
+    ]
+  },
+  {
+    "code": "de",
+    "cases": [
+      {
+        "text": "Guten Abend, ich hoffe, bei euch ist heute nicht so viel los wie letztes Mal.",
+        "expect": "Greeting"
+      },
+      {
+        "text": "hallo, ich bins mal wieder, euer treuester nachtkunde, schoenen abend erstmal",
+        "expect": "Greeting"
+      },
+      {
+        "text": "Ich blicke ehrlich gesagt nicht durch, wie dieser Chat funktioniert, kannst du mir erklären, was du alles kannst?",
+        "expect": "Help"
+      },
+      {
+        "text": "keine ahnung wie das hier läuft, was kann ich dir überhaupt alles schreiben??",
+        "expect": "Help"
+      },
+      {
+        "text": "Können Sie mir bitte einmal auflisten, welche Funktionen mir in diesem Chat zur Verfügung stehen?",
+        "expect": "Help"
+      },
+      {
+        "text": "Das ging ja schneller als gedacht, vielen lieben Dank für deine Hilfe eben!",
+        "expect": "Thanks"
+      },
+      {
+        "text": "danke dir viiielmals, du hast mir grad echt den abend gerettet",
+        "expect": "Thanks"
+      },
+      {
+        "text": "Mein Kühlschrank ist komplett leer und ich sterbe gleich vor Hunger, lass uns was bestellen.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Ich hätte heute Abend große Lust auf zwei große Pizzen Margherita und eine Cola, geht das?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "so, feierabend, jetzt brauch ich dringend was zu essen, am besten irgendwas mit nudeln",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Wir sitzen hier zu viert und keiner will kochen, also bestell uns mal vier Döner mit alles.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Konnten wir bitte eine Bestellung anfangen, ich mochte drei Chicken Burger und zweimal Pommes dazu.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "irgendwas warmes muss her, ich hab seit mittag nix gegessen, zeig mir mal was zum bestellen",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Ich würde gern eine neue Bestellung aufgeben, einmal die große Sushi Box und zwei Miso Suppen bitte.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Ich warte jetzt seit über einer Stunde und es ist immer noch nichts gekommen, wo bleibt mein Essen?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Der Fahrer sollte laut App schon längst da sein, können Sie nachschauen, wo meine Bestellung gerade steckt?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "sorry aber wie lang dauert das noch, die kinder sitzen hier schon hungrig am tisch",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Können Sie mir sagen, wie weit meine Lieferung ist, das Essen wird ja unterwegs langsam kalt.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "hallo?? bestellung vor ner stunde aufgegeben und nix kommt, wo ist der fahrer bitte",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Ich möchte nur kurz wissen, ob mein Essen schon unterwegs ist oder noch beim Restaurant liegt.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Es hieß 30 Minuten Lieferzeit, jetzt sind es 50, gibts mal nen aktuellen Status zu meiner Bestellung?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Es hat sich leider etwas dazwischengeschoben, ich muss die Bestellung von eben komplett stornieren.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "bitte die bestellung abbrechen, wir habens uns doch anders uberlegt, sorry für die umstände",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Wenn das Essen sowieso noch nicht unterwegs ist, dann storniert die Bestellung bitte einfach ganz.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Ich habe aus Versehen beim falschen Restaurant bestellt, können Sie die ganze Bestellung noch canceln?",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Bevor ich weitermache, zeig mir bitte nochmal, was ich alles in den Warenkorb gelegt habe.",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "ich hab ehrlich den überblick verloren, was liegt grad alles in meinem korb??",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Können Sie mir kurz den Inhalt meines Warenkorbs anzeigen, ich weiß nicht mehr, was schon drin ist.",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Am besten schmeißen wir alles aus dem Warenkorb raus und ich überlege nochmal ganz von vorne.",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "mach den korb bitte komplett leer, das war alles quatsch was ich da reingelegt hab",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "Die Pommes nehme ich jetzt doch nicht, bitte nimm die wieder aus dem Warenkorb raus.",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "hab mich vertan, die zweite pizza soll wieder raus aus dem korb, der rest bleibt drin",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "Können Sie bitte die Cola aus meiner Bestellung entfernen, ich habe zu Hause noch genug Getränke.",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "So, das reicht mir jetzt, wir können die Bestellung abschließen und zur Bezahlung übergehen.",
+        "expect": "Checkout"
+      },
+      {
+        "text": "alles drin was ich brauche, dann bring das jetzt mal zur kasse bitte",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Ich glaube, ich habe alles zusammen, lass uns die Bestellung jetzt endlich abschicken und bezahlen.",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Passt so, konnen wir bitte direkt zum Bezahlen, ich habs heute abend ein bisschen eilig.",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Das Essen von letzter Woche war so gut, bestell mir bitte genau das Gleiche nochmal.",
+        "expect": "Reorder"
+      },
+      {
+        "text": "einfach nochmal dieselbe bestellung wie beim letzten mal, das war perfekt so",
+        "expect": "Reorder"
+      },
+      {
+        "text": "Nee, das lassen wir lieber bleiben, das war doch keine so gute Idee von mir.",
+        "expect": "No"
+      }
+    ]
+  },
+  {
+    "code": "ru",
+    "cases": [
+      {
+        "text": "Добрый день, я у вас в приложении первый раз, решил зайти и поздороваться",
+        "expect": "Greeting"
+      },
+      {
+        "text": "Что-то я жутко проголодался за день, надо бы заказать себе чего-нибудь поесть",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Уже час прошёл, как я оформил заказ, а курьера всё нет, где моя еда?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Я вообще не понимаю, как пользоваться этим ботом, объясните пожалуйста, что он умеет",
+        "expect": "Help"
+      },
+      {
+        "text": "Хочу оформить заказ: две пиццы пепперони и одну маргариту, и желательно побыстрее",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Покажите, что у меня сейчас лежит в корзине, а то я уже забыл, что добавлял",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Планы резко поменялись, меня срочно вызвали на работу, отмените пожалуйста мой заказ",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Подскажите пожалуйста, где сейчас находится мой заказ и долго ли ещё ждать курьера?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Огромное спасибо, всё привезли горячим и даже раньше обещанного времени, вы большие молодцы",
+        "expect": "Thanks"
+      },
+      {
+        "text": "Всё, я выбрал что хотел, давайте уже оформлять заказ и переходить к оплате",
+        "expect": "Checkout"
+      },
+      {
+        "text": "давайте закажем три ролла филадельфия и мисо суп, а то оч кушать хочется",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "заказала еще в обед, уже почти вечер, а еды все нет, что происходит вообще???",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Уберите пожалуйста из корзины сырный соус, я передумала его брать, он там лишний",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "Хочу повторить свой прошлый заказ, тот же самый, что был в пятницу вечером",
+        "expect": "Reorder"
+      },
+      {
+        "text": "подскажите пж какие тут есть команды, а то я чета совсем запутался",
+        "expect": "Help"
+      },
+      {
+        "text": "Целый день на работе, готовить сил нет никаких, давайте закажем что-нибудь на ужин",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Давайте полностью очистим корзину, я хочу собрать весь заказ заново с нуля",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "Курьер должен был приехать двадцать минут назад, можете проверить, где он сейчас едет?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "я передумал, ничего уже не хочу, можно отменить заказ, пока его не начали готовить?",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Корзину я собрала, теперь хочу оплатить и оформить доставку на домашний адрес",
+        "expect": "Checkout"
+      },
+      {
+        "text": "мне бы большую шаурму и две порции картошки фри, можна так сделать?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "приветики)) ну что, я снова тут, как вы поживаете без меня)))",
+        "expect": "Greeting"
+      },
+      {
+        "text": "скок еще ждать доставку? писали 40 минут, а прошло уже больше часа",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "можно глянуть мою корзину? хочу проверить, не набрала ли я там лишнего",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "можно убрать из заказа одну колу? две это перебор, оставьте только одну",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "Соберите мне пожалуйста заказ: двойной бургер, кола и шесть штук наггетсов",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Слишком долго получается ждать, давайте отменим заказ, я лучше сам что-нибудь приготовлю",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Здравствуйте, хотела уточнить статус заказа, он там вообще готовится или про меня забыли?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "спс огромное, выручили меня сегодня вечером, а то я бы с голоду помер))",
+        "expect": "Thanks"
+      },
+      {
+        "text": "Можете рассказать, что вы вообще умеете делать? Я таким сервисом первый раз пользуюсь.",
+        "expect": "Help"
+      },
+      {
+        "text": "ну все, погнали оформлять, я оч голодный, оплачу картой как обычно",
+        "expect": "Checkout"
+      },
+      {
+        "text": "удалите из корзины вообще все пж, я там всякого лишнего понабрал по ошибке",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "чет капец как есть охота, погнали делать заказ, я уже всё решил",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "ребят, ну сколько можно ждать то, где моя еда, я весь извелся уже(((",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "удалите из корзины рол с угрем, жена сказала, что не будет его есть",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "атмените пожалуста мой заказ, ребенок с телефоном игрался и случайно его оформил",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "сделайте мне тоже самое, что я заказывал в прошлый раз, было очень вкусно",
+        "expect": "Reorder"
+      },
+      {
+        "text": "Напомните пожалуйста, что там у меня в корзине набралось и на какую сумму",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Нет, спасибо, больше ничего добавлять не нужно, мне этого вполне достаточно",
+        "expect": "No"
+      },
+      {
+        "text": "Можно уже перейти к оплате? Всё, что мне было нужно, я в корзину добавил.",
+        "expect": "Checkout"
+      }
+    ]
+  },
+  {
+    "code": "it",
+    "cases": [
+      {
+        "text": "Buonasera, è la prima volta che scrivo su questa chat, piacere di conoscervi comunque",
+        "expect": "Greeting"
+      },
+      {
+        "text": "ciaooo ci sei?? volevo solo vedere se questa chat risponde davvero a qualcuno",
+        "expect": "Greeting"
+      },
+      {
+        "text": "Non ho ben capito come funziona questo servizio, mi spieghi cosa sei in grado di fare?",
+        "expect": "Help"
+      },
+      {
+        "text": "nn capisco come si usa sto coso, me lo spieghi passo passo per favore?",
+        "expect": "Help"
+      },
+      {
+        "text": "Sono un po' persa tra tutte queste opzioni, quali comandi posso scriverti esattamente qui?",
+        "expect": "Help"
+      },
+      {
+        "text": "Sei stato davvero gentile e paziente oggi, ti ringrazio di cuore per l'aiuto",
+        "expect": "Thanks"
+      },
+      {
+        "text": "grazieee mille davvero, mi hai salvato la cena, sei un grande",
+        "expect": "Thanks"
+      },
+      {
+        "text": "Ho una fame assurda e il frigo è completamente vuoto, vediamo di ordinare qualcosa di buono",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "vorrei 2 margherite grandi e una porzione di patatine, si puo fare subito?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Mia moglie vuole il sushi e io il kebab, possiamo mettere insieme un ordine adesso?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "è tutto il giorno che penso a un hamburger con bacon, dai facciamo partire un ordine",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "mi porti tre panini col pollo e una coca zero? stasera ho ospiti a casa",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "nn ho voglia di cucinare stasera, ordiniamo qualcosa di caldo va, che muoio di fame",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Ho ospiti tra un'ora e niente in dispensa, aiutami a ordinare pizza per quattro persone",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "e passata piu di un'ora e non e arrivato niente, dove sta il mio ordine??",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Il rider doveva arrivare alle otto e sono quasi le nove, mi dite che fine ha fatto?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Scusate ma qui si fredda tutto, potete dirmi quanto manca esattamente alla consegna?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "l'app dice in consegna da quaranta minuti, qualcuno sa dirmi dov'è finito il fattorino?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Ho ordinato all'una ed è quasi ora di cena, potete controllare a che punto è la consegna?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Mi arriva la cena o devo mettermi ai fornelli? fatemi sapere dove si trova l'ordine",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "sto aspettando da un ora sotto casa e nn si vede nessuno, che fine ha fatto la consegna??",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Guarda, ho cambiato idea all'ultimo, non voglio più l'ordine, annullatelo prima che parta la consegna",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "mi si è liberata la serata e ceno fuori, si puo ancora disdire l'ordine di stasera?",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Ho selezionato il ristorante sbagliato completamente, meglio annullare tutto l'ordine, scusate il disturbo",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "annulla lordine per favore, il ristorante ha chiamato dicendo che ci mette due ore",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Prima di pagare vorrei ricontrollare cosa ho messo dentro, mi mostri il carrello?",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "non mi ricordo piu cosa ho aggiunto prima, fammi vedere il carrello un attimo",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Mi fai un riepilogo di quello che c'è nel carrello? temo di aver messo roba doppia",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Ho buttato dentro troppa roba a caso, svuota completamente il carrello che ricomincio con calma",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "lascia perdere tutto quello che ho aggiunto, cancella lintero carrello per favore",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "Ripensandoci il tiramisù è davvero troppo, toglilo pure dal carrello e lascia il resto",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "mi sono accorto di aver messo due volte le patatine, levane una per favore",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "togli la coca cola dallordine, mia figlia si è addormentata e tanto non la beve",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "Ok il carrello va benissimo così, procediamo pure con il pagamento che ho fame",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Direi che abbiamo finito di aggiungere, mandiamo l'ordine e passiamo alla cassa per favore",
+        "expect": "Checkout"
+      },
+      {
+        "text": "va bene tutto cosi comè, chiudi lordine e fammi pagare con la carta",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Non aggiungo nient'altro, confermiamo e paghiamo subito prima che il ristorante chiuda",
+        "expect": "Checkout"
+      },
+      {
+        "text": "Stasera zero fantasia, rifammi lo stesso identico ordine di venerdì scorso per favore",
+        "expect": "Reorder"
+      },
+      {
+        "text": "quella cena dell'altra volta era buonissima, me la puoi rifare uguale ugualeee?",
+        "expect": "Reorder"
+      },
+      {
+        "text": "no guarda, per stavolta lascia proprio perdere, magari ci ripenso un'altra volta",
+        "expect": "No"
+      }
+    ]
+  },
+  {
+    "code": "pt",
+    "cases": [
+      {
+        "text": "Oi, boa noite, tudo bem por aí? Espero que o movimento esteja tranquilo hoje.",
+        "expect": "Greeting"
+      },
+      {
+        "text": "Estou morrendo de fome depois do trabalho, queria pedir alguma coisa boa pra jantar hoje.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Já faz mais de uma hora que paguei e até agora nada da comida chegar aqui.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Não entendi direito como funciona esse aplicativo, pode me explicar o que você consegue fazer?",
+        "expect": "Help"
+      },
+      {
+        "text": "Me vê duas pizzas grandes de calabresa e uma coca de dois litros, por favor.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Antes de fechar quero conferir o que já coloquei, me mostra o carrinho como está?",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "Acabei mudando de ideia, surgiu um jantar de última hora, preciso cancelar o pedido que fiz.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Meu pedido saiu pra entrega faz tempo, consegue ver por onde o entregador anda agora?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Muito obrigado pela atenção, você me ajudou bastante hoje, viu? Fica com Deus.",
+        "expect": "Thanks"
+      },
+      {
+        "text": "acho q hj vou querer um combo de sushi, da pra comecar um pedido novo?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Já escolhi tudo que eu queria, pode fechar o pedido e mandar pra cozinha.",
+        "expect": "Checkout"
+      },
+      {
+        "text": "to esperando faz 40 minutos e o aplicativo nem atualiza o status, cade meu lanche??",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Pensando bem, tira a porção de batata frita do pedido, ficou caro demais assim.",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "Aquele pedido de sexta passada estava ótimo, quero exatamente a mesma coisa de novo hoje.",
+        "expect": "Reorder"
+      },
+      {
+        "text": "Coloquei um monte de coisa errada, apaga tudo do carrinho que eu começo de novo.",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "O pessoal aqui de casa tá com vontade de hambúrguer, vamos montar um pedido pra quatro pessoas.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "primeira vez q uso esse chat, quais comandos vcs aceitam aqui exatamente?",
+        "expect": "Help"
+      },
+      {
+        "text": "pode cancelar meu pedido pfvr? demorou demais e ja perdi a vontade",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "O restaurante já confirmou? Queria saber quanto tempo ainda falta pra chegar na minha casa.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "nem lembro mais oq eu adicionei, da pra ver os itens q tao no carrinho?",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "queria trs marmitas de frango grelhado com arroz, pode anotar ai pra mim",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "bora fechar logo esse pedido, pode cobrar no cartao cadastrado mesmo",
+        "expect": "Checkout"
+      },
+      {
+        "text": "gente ja passou do horario previsto e nada de aparecer, alguem sabe do meu pedido?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "meu filho desistiu do refri, tira ele do carrinho mas deixa o resto ta bom",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "oiii boa tardeee, tudo bom com vcs? passando aqui pra dar um alo",
+        "expect": "Greeting"
+      },
+      {
+        "text": "Fiz o pedido no endereço errado sem querer, melhor cancelar tudo antes que saia pra entrega.",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "Hoje não estou a fim de cozinhar de jeito nenhum, me ajuda a pedir um almoço decente.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Boa tarde, poderia verificar a situação do pedido 4582? Estou aguardando desde meio-dia aqui.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "esvazia o carrinho inteiro pra mim pfv, vou escolher outras coisas do zero",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "Confere se o endereço é o de sempre e finaliza aí no pagamento por pix, por favor.",
+        "expect": "Checkout"
+      },
+      {
+        "text": "to meio perdida aqui, me explica oq eu posso pedir pra vc fazer?",
+        "expect": "Help"
+      },
+      {
+        "text": "Pode tirar só o milk-shake de morango? O restante do pedido continua igual.",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "A moça do restaurante disse que já saiu, mas quero confirmar se tá chegando mesmo.",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "Anota aí: um açaí de 500ml com granola e mais duas coxinhas pra acompanhar.",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "Não vou mais querer, desisti do pedido, pode estornar o valor por favor?",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "valeu demaisss pela ajuda, deu tudo certo aqui no final",
+        "expect": "Thanks"
+      },
+      {
+        "text": "Quanto está dando o total até agora? Me lista tudo que tem no meu carrinho.",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "repete meu ultimo pedido ai, o de sempre mesmo, sem mudar nada",
+        "expect": "Reorder"
+      },
+      {
+        "text": "Não, pode deixar assim mesmo, não quero mudar mais nada no pedido.",
+        "expect": "No"
+      },
+      {
+        "text": "Acho que o carrinho já tá bom assim, manda concluir a compra pra mim.",
+        "expect": "Checkout"
+      }
+    ]
+  },
+  {
+    "code": "zh",
+    "cases": [
+      {
+        "text": "加班到现在肚子饿得咕咕叫，想整点热乎的吃吃",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "都过去一个多小时了还没送到，我的外卖到底跑哪去了",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "哈喽哈喽，我又来啦，今天也要麻烦你咯",
+        "expect": "Greeting"
+      },
+      {
+        "text": "就这些吧不加别的了，直接下单付款，送到老地址就行",
+        "expect": "Checkout"
+      },
+      {
+        "text": "那杯可乐不要了，帮我从购物车里删掉，其他的都留着",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "我头一回用这个平台，能不能教教我具体要怎么操作呀",
+        "expect": "Help"
+      },
+      {
+        "text": "帮我来两份麻辣汤再加一杯珍珠奶茶，记得多放辣哈",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "定单一直显示配送中，可楼下根本没人，还要等多久啊",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "临时有急事得出门，刚下的那一单麻烦帮我取消掉吧",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "我记不清刚才都往购物车里加了些啥了，帮我打开看一眼",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "帮了我大忙了真的，效率也太高了吧，非常感谢你呀",
+        "expect": "Thanks"
+      },
+      {
+        "text": "今晚实在不想做饭了，点个外买随便对付一口吧",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "骑手是不是迷路了，地图上位置半天没动，帮我看看啥情况",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "算了算了不吃这家了，把购物车里的东西统统清空吧",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "帮我把购物车里的东西提交订单，用微信支付就可以",
+        "expect": "Checkout"
+      },
+      {
+        "text": "上回点的那家黄焖鸡米饭挺好吃的，照原样再来一单",
+        "expect": "Reorder"
+      },
+      {
+        "text": "汤都该凉透了吧，查查我的餐现在送到哪个位置了",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "请问你都能帮我做些什么呢，有没有个功能介绍可以看看",
+        "expect": "Help"
+      },
+      {
+        "text": "来三串烤羊肉两瓶冰可乐一份炒面，晚上看球等着吃呢",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "点错店了点错店了，这单不要了，帮我把订单撤消一下",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "先别急着结账，让我康康购物车里现在都有哪些东西",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "不用了不用了，先这样就挺好，别的暂时都不需要",
+        "expect": "No"
+      },
+      {
+        "text": "我就说咋还没到呢，帮我瞅瞅骑手这会儿到底在哪儿了",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "刚才手滑多点了一份薯条，把多出来的那份给去掉吧",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "饿死了了了，随便给我点个汉堡套餐吧，要快快快",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "选好了选好了，赶紧帮我结帐吧，再磨蹭店家该打烊了",
+        "expect": "Checkout"
+      },
+      {
+        "text": "晚上好呀小助手，忙了一天终于能歇会儿了，来跟你打个招呼",
+        "expect": "Greeting"
+      },
+      {
+        "text": "麻烦帮我查一下刚才那单到哪了，孩子在家等着吃饭呢",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "车里乱七八糟加了一堆，帮我一健全部清空重新选",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "整不明白了啊啊啊，这玩意儿到底咋用，有没有教程给我一份",
+        "expect": "Help"
+      },
+      {
+        "text": "老板，整一份宫保鸡丁盖饭呗，米饭记得给我大份的",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "等这么久早没胃口了，把这单退掉吧，钱记得原路退回来",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "帮我看下购物车现在一共多少钱了，可别超预算了哈",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "懒得重新挑了，把我昨天那个订单原封不动再下一编吧",
+        "expect": "Reorder"
+      },
+      {
+        "text": "等了四十多分钟界面还写着商家备餐中？给我看看进度呗",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "辛苦啦辛苦啦，每次都这么靠谱，给你点个大大的赞",
+        "expect": "Thanks"
+      },
+      {
+        "text": "帮我把购物车里的蛋炒饭拿掉，突然不太想吃米饭了",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "突然嘴馋想吃芝士披萨了，帮我下一单呗，要多芝士那种",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "不好意思呀，朋友临时说要请客，我那份外卖就别送了，取消吧",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "可以买单了，备注写上不要香菜，然后直接付款吧",
+        "expect": "Checkout"
+      }
+    ]
+  },
+  {
+    "code": "ja",
+    "cases": [
+      {
+        "text": "こんばんは〜、また来ちゃいました。今日もいろいろお世話になりますね。",
+        "expect": "Greeting"
+      },
+      {
+        "text": "おはようございます、初めてこのアプリを使うんですけど、どうぞよろしくお願いします。",
+        "expect": "Greeting"
+      },
+      {
+        "text": "このアプリの使い方がいまいち分からないので、何ができるのか一通り教えてもらえますか?",
+        "expect": "Help"
+      },
+      {
+        "text": "ねえ、クーポンってどこから使うの?やり方がぜんぜん分かんないから教えてほしいんだけど。",
+        "expect": "Help"
+      },
+      {
+        "text": "初めてなのでそうさほうほうがよくわかりません、どんな機能があるのか説明してください。",
+        "expect": "Help"
+      },
+      {
+        "text": "さっきは丁寧に対応してくれて本当に助かりました、ありがとうございます!",
+        "expect": "Thanks"
+      },
+      {
+        "text": "さっきはありがとーーー!おかげでめっちゃ助かったわ〜、感謝感謝!",
+        "expect": "Thanks"
+      },
+      {
+        "text": "今日は疲れすぎて料理する気力がゼロなので、何か温かいものを頼みたい気分です。",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "マルゲリータピザ2枚とコーラ1本をお願いしたいんだけど、今からいけるかな?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "おなかぺこぺこすぎて死にそう、ラーメン大盛りいっこたのむわ〜、はやめでよろしく。",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "夜ご飯をまだ食べてなくて、お寿司の盛り合わせを一人前注文したいなと思ってます。",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "冷蔵庫がからっぽなんだよね、チキンカレー2つとナン3枚たのめたりする?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "友達が急にうちに来ることになったので、から揚げ弁当を3つ頼みたいんですけど。",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "なんか無性に甘いものが食べたい気分なんだけど、チーズケーキって届けてもらえたりする?",
+        "expect": "StartOrder"
+      },
+      {
+        "text": "もう1時間も待ってるのに何も届かないんだけど、私の注文いったいどうなってるの?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "さっき頼んだやつ、いまどのへんまで来ているのか確認してもらえますか?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "配達員さんの現在地ってみれます?そろそろ下に降りて待とうか迷ってるので。",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "注文してから45分たつのに連絡ひとつないし、いまの状況おしえてくれない?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "雨だから多少遅れるのは分かるけど、あとどれくらいで着くのかだけ知りたいんだよね。",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "アプリの画面がずっと「準備中」のままなんですけど、これ本当に進んでいるんでしょうか?",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "おそすぎーーー!30分前にたのんだピザまだ??いまどこにいるのか教えてよ!",
+        "expect": "TrackOrder"
+      },
+      {
+        "text": "すみません、急用が入ってしまったので、さっきの注文を取り消していただけますか?",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "ごめん、間違えて同じものを2回注文しちゃったみたいだから、あとのほうは取り消しといて。",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "やっぱ今日は外で食べることにしたわ、気が変わったからさっきのちゅうもんキャンセルでおねがい。",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "待ち時間が長すぎてもう耐えられないので、この注文自体をキャンセルしたいです。",
+        "expect": "CancelOrder"
+      },
+      {
+        "text": "お会計に進む前に、いまカートに何が入っているのか一度見せてもらえますか?",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "あれ、さっき追加したやつちゃんと入ってるかな?カートの中身みせて〜",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "全部でいくらになってるのか気になるから、カートの内容をここに表示してほしいな。",
+        "expect": "ShowCart"
+      },
+      {
+        "text": "ぜんぶ最初から選び直したい気分だから、カートの中身をいったん全部消してもらえる?",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "なんか頼みすぎたわ、カートまるごと空にしてやりなおすーーー、リセットよろしく。",
+        "expect": "ClearCart"
+      },
+      {
+        "text": "ポテトはやっぱりいらない気がしてきたので、カートから外しておいてもらえますか?",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "ダイエット中だったの思い出しちゃったから、デザートのプリンだけ削除してくれる?",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "コーラ2本もいらんかったわ、1本だけのこしてもう片方はけしといて。",
+        "expect": "RemoveItem"
+      },
+      {
+        "text": "内容はこれで間違いないので、このまま会計まで進めてもらってもいいですか?",
+        "expect": "Checkout"
+      },
+      {
+        "text": "もう決めた!この内容で注文かくていして、支払いはいつものカードでよろしく〜",
+        "expect": "Checkout"
+      },
+      {
+        "text": "時間がないから、カートに入ってるやつでさっさと決済しちゃってください。",
+        "expect": "Checkout"
+      },
+      {
+        "text": "選ぶのはもう終わったので、そのままお支払いを済ませてしまいたいです。",
+        "expect": "Checkout"
+      },
+      {
+        "text": "先週たのんだあのカレーセット、また同じ内容でもう一回お願いできるかな?",
+        "expect": "Reorder"
+      },
+      {
+        "text": "前回の注文がすごくおいしかったので、まったく同じものをもう一度リピートしたいです。",
+        "expect": "Reorder"
+      },
+      {
+        "text": "うーん、いえ、それは大丈夫です、今回はなしの方向でお願いしますね。",
+        "expect": "No"
+      }
+    ]
+  }
+]

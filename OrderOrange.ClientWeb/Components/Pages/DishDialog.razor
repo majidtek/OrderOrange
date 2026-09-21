@@ -1,0 +1,260 @@
+@inject LanguageService L
+@inject ApiClient Api
+@inject CartState Cart
+@inject IJSRuntime JS
+
+@* Talabat-style dish sheet: big emoji, description, quantity stepper, note, add button. *@
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex flex-column align-center mb-3">
+            @if (_gallery is { Count: > 1 })
+            {
+                @* Partner uploaded several photos — crossfade through them, main first. *@
+                <div class="mf-dish-slides n@(_gallery.Count)">
+                    @for (var i = 0; i < _gallery.Count; i++)
+                    {
+                        <img style="animation-delay: @(i * 4)s" src="@_gallery[i].Data" alt="@Dish.Name" />
+                    }
+                </div>
+            }
+            else if ((Dish.Photo ?? FoodPhoto.ForDish(Dish.Name, Restaurant?.DishStockPhotos ?? true)) is string dishPhoto)
+            {
+                <img src="@dishPhoto" alt="@Dish.Name"
+                     style="width: 100%; max-height: 190px; object-fit: cover; border-radius: 16px;" />
+            }
+            else
+            {
+                <div style="font-size: 74px; line-height: 1;">@Dish.ImageEmoji</div>
+            }
+            @* The item's own name in the reader's language — the canonical English one was
+               showing above a fully translated sheet. *@
+            <MudText Typo="Typo.h6" Class="mt-2" Align="Align.Center">@Dish.NameFor(L.Locale)</MudText>
+            @if (Dish.IsPopular)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">★ @L["rest.popular"]</MudChip>
+            }
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="mt-1">@Dish.DescriptionFor(L.Locale)</MudText>
+
+            @* ---------- Facts: calories, veg, spicy ---------- *@
+            <div class="mf-dish-facts mt-2">
+                @if (Dish.LeadTimeDays > 0)
+                {
+                    <span class="mf-fact">🗓️ @string.Format(L["dish.leadDays"], Dish.LeadTimeDays)</span>
+                }
+                else if (Dish.HasWindow)
+                {
+                    <span class="mf-fact">🕐 @(ItemAvailability.TimeLabel(Dish.AvailableFromMinutes, Dish.AvailableToMinutes) is { Length: > 0 } tl ? tl : L["rest.notToday"])</span>
+                }
+                @* Calories, "vegetarian" and "spicy" are guesses DishInfo derives from the
+                   NAME, for the generated food catalogue. On a shop they are nonsense and
+                   worse than nonsense: a bar of saffron soap was being labelled 350 kcal,
+                   which reads as "edible". Food verticals only. *@
+                @if (IsFood)
+                {
+                    <span class="mf-fact">🔥 @string.Format(L["dish.cal"], Info.Calories)</span>
+                    @if (Info.Vegetarian)
+                    {
+                        <span class="mf-fact veg">🥗 @L["dish.veg"]</span>
+                    }
+                    @if (Info.Spicy)
+                    {
+                        <span class="mf-fact hot">🌶️ @L["dish.spicy"]</span>
+                    }
+                }
+            </div>
+            @if (Dish.HasDiscount)
+            {
+                @* On offer: the deal is the headline, not a footnote next to the price. *@
+                <div class="mf-dish-deal mt-2">
+                    <span class="pct">-@Dish.DiscountPercent.ToString("0.#")%</span>
+                    <span class="mf-price lg">
+                        <span class="now">@Fmt.Rial(Dish.FinalPrice)</span>
+                        <span class="was">@Fmt.Rial(Dish.Price)</span>
+                        <span class="save">@((MarkupString)string.Format(L["home.dealSave"], Fmt.Rial(Dish.Price - Dish.FinalPrice)))</span>
+                    </span>
+                </div>
+            }
+            else
+            {
+                <MudText Typo="Typo.h6" Color="Color.Primary" Class="mt-2">@Fmt.Rial(Dish.Price)</MudText>
+            }
+        </div>
+
+        @* Quantity and instructions come first — they are what the customer is here to
+           set. The ingredient list is reference material, so it sits at the end. *@
+        @* Down to zero when it is already in the basket — that is how you remove it.
+           The whole control steps aside for a spinner while the server confirms. *@
+        <div class="d-flex align-center justify-center mb-4">
+            <span class="mf-qty-inline mf-qty-lg" data-qty="@_quantity" onclick="mfQty.busy(this,event)">
+                <MudIconButton Icon="@(_quantity == 1 && MinQuantity == 0 ? Icons.Material.Filled.DeleteOutline : Icons.Material.Filled.RemoveCircle)"
+                               Color="@(_quantity == 1 && MinQuantity == 0 ? Color.Error : Color.Primary)" Size="Size.Large"
+                               Disabled="@(_quantity <= MinQuantity)" OnClick="@(() => Bump(-1))" />
+                <b>@_quantity</b>
+                <MudIconButton Icon="@Icons.Material.Filled.AddCircle" Color="Color.Primary" Size="Size.Large"
+                               OnClick="@(() => Bump(1))" />
+            </span>
+        </div>
+
+        @* "e.g. no onions, extra sauce" is kitchen language. A shop gets a shop's prompt. *@
+        <MudTextField Margin="Margin.Dense" T="string" Value="_notes" ValueChanged="NotesChanged" Label="@L["dish.notes"]"
+                      Variant="Variant.Outlined" Lines="2"
+                      Placeholder="@L[IsFood ? "dish.notesPh" : "dish.notesPhShop"]" />
+
+        @* ---------- What's inside ----------
+           A real shop writes its own ingredients; DishInfo only guesses them from the name
+           for the generated catalogue, and its fallback ("fresh ingredients · spices ·
+           herbs") was being printed under a bar of soap. Prefer what the owner actually
+           typed, fall back to the guess only for food, and show nothing at all otherwise. *@
+        @{
+            var written = Dish.IngredientList;
+        }
+        @if (written.Length > 0 || IsFood)
+        {
+            <div class="mf-dish-sec mt-4">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 800;" Class="mb-2">🧾 @L["dish.ingredients"]</MudText>
+                <div class="mf-ing-wrap">
+                    @if (written.Length > 0)
+                    {
+                        @foreach (var ingredient in written)
+                        {
+                            <span class="mf-ing-chip">@ingredient</span>
+                        }
+                    }
+                    else
+                    {
+                        @foreach (var ingredient in Info.Ingredients)
+                        {
+                            <span class="mf-ing-chip"><span class="em">@ingredient.Emoji</span>@L[ingredient.Key]</span>
+                        }
+                    }
+                </div>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        @* Once the stepper has written to the basket there is nothing left to confirm —
+           the button just closes the sheet. Until then it is the one-tap "add 1". *@
+        @if (_live)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.Check" OnClick="DoneAndClose">
+                @* The running line total still belongs here — it is feedback now, not a prompt. *@
+                @L["dish.done"]@(_quantity > 0 ? $" · {_quantity} · {Fmt.Money(Dish.FinalPrice * _quantity)}" : "")
+            </MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large"
+                       StartIcon="@Icons.Material.Filled.AddShoppingCart" OnClick="AddAndClose">
+                @L["dish.add"] @_quantity · @Fmt.Rial(Dish.FinalPrice * _quantity)
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public MenuItemDto Dish { get; set; } = default!;
+
+    /// <summary>
+    /// Which store this dish belongs to. Needed to look the line up: menu-item ids are
+    /// unique per store for real rows but shared across the virtual template menus.
+    /// </summary>
+    [Parameter] public RestaurantCardDto? Restaurant { get; set; }
+
+    private DishInfo.Details Info => DishInfo.For(Dish.Name);
+
+    /// <summary>
+    /// Is this a kitchen, or a shop? Calories, "vegetarian", "spicy" and the
+    /// "no onions, extra sauce" prompt only make sense for food. A null Restaurant means
+    /// the caller did not say, and every caller that does not say is a food page.
+    /// </summary>
+    private bool IsFood => Restaurant is null || Restaurant.StoreType == StoreType.Restaurant;
+
+    private int _quantity = 1;
+    private string _notes = "";
+    private List<DishPhotoDto>? _gallery;
+
+    /// <summary>
+    /// True once this sheet and the basket are in sync — either the dish was already in
+    /// the basket when it opened, or the stepper has written to it. From then on every
+    /// tap goes straight through, so there is nothing left for a confirm button to do.
+    /// </summary>
+    private bool _live;
+
+    /// <summary>Zero is only offered once the line exists — there it means "remove".</summary>
+    private int MinQuantity => _live ? 0 : 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Open on what the customer already chose, not on 1. Reopening a dish should
+        // let them adjust it, not silently start over.
+        if (Restaurant is not null && Cart.FindLine(Restaurant.Id, Dish.Id) is { } line)
+        {
+            _quantity = line.Quantity;
+            _notes = line.Notes ?? "";
+            _live = true;
+        }
+
+        // Only real items with an uploaded photo can have a gallery — skip the call otherwise.
+        if (Dish.Id > 0 && Dish.Photo is not null)
+            _gallery = await Api.GetDishPhotosAsync(Dish.Id);
+    }
+
+    /// <summary>
+    /// The stepper IS the basket: a tap lands in it immediately instead of waiting for a
+    /// confirm button, so the count in the header moves while the sheet is still open.
+    /// </summary>
+    /// <summary>Each render IS the answer the spinner was waiting for.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try { await JS.InvokeVoidAsync("mfQty.settled"); } catch { }
+    }
+
+    private void Bump(int delta)
+    {
+        // Outside its serving window, the sheet informs but never sells.
+        if (delta > 0 && !Dish.OrderableAt(DateTime.Now)) return;
+        var next = _quantity + delta;
+        if (next < MinQuantity) return;
+        _quantity = next;
+        Apply();
+    }
+
+    /// <summary>Notes are saved on blur, but only for a line that actually exists yet.</summary>
+    private void NotesChanged(string value)
+    {
+        _notes = value ?? "";
+        if (_live) Apply();
+    }
+
+    private void Apply()
+    {
+        if (Restaurant is null) return;
+        Cart.SetQuantity(Restaurant, Dish, _quantity, Trimmed);
+        _live = true;
+    }
+
+    /// <summary>The one-tap path for a dish that is not in the basket yet.</summary>
+    private void AddAndClose()
+    {
+        if (!Dish.OrderableAt(DateTime.Now)) { Dialog.Close(); return; }
+        Apply();
+        Dialog.Close();
+    }
+
+    /// <summary>
+    /// Everything is saved already. The one loose end is a note still being typed: tapping
+    /// this blurs the field first, so its value lands before the sheet closes — but only a
+    /// commit here guarantees it, since blur and click are separate round trips.
+    /// </summary>
+    private void DoneAndClose()
+    {
+        if (_quantity > 0) Apply();
+        Dialog.Close();
+    }
+
+    private string? Trimmed => string.IsNullOrWhiteSpace(_notes) ? null : _notes.Trim();
+}

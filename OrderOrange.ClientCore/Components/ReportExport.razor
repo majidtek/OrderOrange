@@ -1,0 +1,214 @@
+@namespace OrderOrange.ClientCore.Components
+@using OrderOrange.ClientCore.Services
+@using OrderOrange.Shared
+@inject ApiClient Api
+@inject AppState State
+@inject LanguageService L
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+@* Excel and A4 print for any report, from one place.
+
+   The page owns its data and its formatting; this component only asks for the whole
+   grid when the partner actually clicks something. That matters because report pages
+   are paged ten rows at a time — exporting what is on screen would quietly hand over
+   page one and call it the report. *@
+
+<div class="rx no-print">
+    <button type="button" class="rx-btn xl" disabled="@_busy" @onclick="ToExcel">
+        @if (_busy && _which == "xl")
+        {
+            <span class="rx-spin"></span>
+        }
+        else
+        {
+            <MudIcon Icon="@Icons.Material.Filled.GridOn" />
+        }
+        <span>@L["exp.excel"]</span>
+    </button>
+    <button type="button" class="rx-btn pr" disabled="@_busy" @onclick="ToPrint">
+        @if (_busy && _which == "pr")
+        {
+            <span class="rx-spin"></span>
+        }
+        else
+        {
+            <MudIcon Icon="@Icons.Material.Filled.Print" />
+        }
+        <span>@L["exp.print"]</span>
+    </button>
+</div>
+
+@* The print sheet. Invisible on screen at all times; the print stylesheet hides the
+   entire app and reveals only this. It is built fresh on each print so the paper
+   always carries the range and the row count that were current when it was asked for. *@
+@if (_printRows is not null)
+{
+    <div class="rx-sheet" aria-hidden="true">
+        <header class="rx-head">
+            <div class="rx-brand">
+                <img src="_content/OrderOrange.ClientCore/logo.svg?v=4" alt="" class="rx-logo" />
+                <div>
+                    <div class="rx-store">@StoreName</div>
+                    <div class="rx-by">OrderOrange · MajidTek</div>
+                </div>
+            </div>
+            <div class="rx-meta">
+                <div class="rx-title">@Title</div>
+                @if (!string.IsNullOrWhiteSpace(RangeLabel))
+                {
+                    <div class="rx-range">@RangeLabel</div>
+                }
+                <div class="rx-who">
+                    @if (!string.IsNullOrWhiteSpace(State.FullName))
+                    {
+                        <span>@string.Format(L["exp.preparedBy"], State.FullName)</span>
+                    }
+                    <span>@DateTime.Now.ToString("dd MMM yyyy · HH:mm")</span>
+                </div>
+            </div>
+        </header>
+
+        <table class="rx-table">
+            <thead>
+                <tr>
+                    @foreach (var column in Columns)
+                    {
+                        <th class="@(column.Numeric ? "num" : "")">@column.Header</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _printRows)
+                {
+                    <tr>
+                        @for (var c = 0; c < Columns.Count; c++)
+                        {
+                            <td class="@(Columns[c].Numeric ? "num" : "")">@(c < row.Count ? row[c] : "")</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+            @if (_printTotals is { Count: > 0 })
+            {
+                <tfoot>
+                    <tr>
+                        @for (var c = 0; c < Columns.Count; c++)
+                        {
+                            <td class="@(Columns[c].Numeric ? "num" : "")">@(c < _printTotals.Count ? _printTotals[c] : "")</td>
+                        }
+                    </tr>
+                </tfoot>
+            }
+        </table>
+
+        <footer class="rx-foot">
+            <span>@string.Format(L["exp.rowCount"], _printRows.Count)</span>
+            <span>@StoreName · @Title</span>
+        </footer>
+    </div>
+}
+
+@code {
+    /// <summary>Report name — the sheet tab, the file name and the paper heading.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>One line under the title, e.g. what the report measures.</summary>
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>The period the figures cover. Printed prominently: a report without
+    /// its date range is a number with no meaning.</summary>
+    [Parameter] public string? RangeLabel { get; set; }
+
+    [Parameter, EditorRequired] public List<ExportColumnDto> Columns { get; set; } = [];
+
+    /// <summary>Fetches EVERY row, not the page on screen. Called on click, never on
+    /// render, so opening a report never pays for an export nobody asked for.</summary>
+    [Parameter, EditorRequired] public Func<Task<List<List<string>>>> Fetch { get; set; } = () => Task.FromResult(new List<List<string>>());
+
+    /// <summary>An optional summary line, laid out against the same columns.</summary>
+    [Parameter] public Func<Task<List<string>?>>? FetchTotals { get; set; }
+
+    private bool _busy;
+    private string _which = "";
+    private List<List<string>>? _printRows;
+    private List<string>? _printTotals;
+
+    private string StoreName => State.RestaurantName ?? "OrderOrange";
+
+    private async Task<(List<List<string>> rows, List<string>? totals)?> Gather()
+    {
+        var rows = await Fetch();
+        if (rows.Count == 0)
+        {
+            Snackbar.Add(L["exp.nothing"], Severity.Info);
+            return null;
+        }
+        var totals = FetchTotals is null ? null : await FetchTotals();
+        return (rows, totals);
+    }
+
+    private async Task ToExcel()
+    {
+        _busy = true;
+        _which = "xl";
+        try
+        {
+            var got = await Gather();
+            if (got is null) return;
+
+            var bytes = await Api.ExportXlsxAsync(new ExportSheetRequest(
+                Title, Subtitle, RangeLabel, StoreName, State.FullName,
+                Columns, got.Value.rows, got.Value.totals,
+                LogoData: null, SheetName: Title, Rtl: L.IsRtl));
+
+            if (bytes is null || bytes.Length == 0)
+            {
+                Snackbar.Add(L["exp.failed"], Severity.Error);
+                return;
+            }
+
+            var name = $"{Title}-{DateTime.Now:yyyyMMdd-HHmm}.xlsx";
+            await JS.InvokeVoidAsync("mfExport.saveBase64", Convert.ToBase64String(bytes), name,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            Snackbar.Add(string.Format(L["exp.saved"], got.Value.rows.Count), Severity.Success);
+        }
+        catch (Exception)
+        {
+            Snackbar.Add(L["exp.failed"], Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+            _which = "";
+        }
+    }
+
+    private async Task ToPrint()
+    {
+        _busy = true;
+        _which = "pr";
+        try
+        {
+            var got = await Gather();
+            if (got is null) return;
+
+            _printRows = got.Value.rows;
+            _printTotals = got.Value.totals;
+
+            // Render the sheet, THEN print. Without the explicit re-render the dialog
+            // opens on a DOM that does not contain the table yet.
+            StateHasChanged();
+            await JS.InvokeVoidAsync("mfExport.print");
+        }
+        catch (Exception)
+        {
+            Snackbar.Add(L["exp.failed"], Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+            _which = "";
+        }
+    }
+}

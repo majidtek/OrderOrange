@@ -1,0 +1,65 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Nav
+@inject LanguageService Lang
+@implements IDisposable
+
+@* A layout with no SessionGate — for pages anyone may open, such as a scanned bill. *@
+
+<MudThemeProvider Theme="Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    @* These three render OUTSIDE the page tree — dialogs, menus, toasts. They must sit
+       inside the RTL provider or none of what they draw ever flips for Arabic/Persian/
+       Urdu, which is exactly the bug this fixed. *@
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    @* A table-QR scan is many guests' very FIRST touch of the platform — they too get
+       to choose their language before anything else speaks at them. Shown once ever;
+       a stored choice skips it. *@
+    <LanguageGate />
+    @if (!_gateOnly)
+    {
+        <div class="pub-shell">
+            @Body
+        </div>
+    }
+</MudRTLProvider>
+
+@code {
+    private static readonly MudTheme Theme = FoodTheme.Build();
+
+    private bool _gateOnly;
+
+    protected override void OnInitialized() => Lang.Changed += OnLangChanged;
+
+    /// <summary>
+    /// Public pages must still honor the visitor's saved language — without this,
+    /// picking a language reloads the page straight back into the default.
+    /// A first-timer sees ONLY the picker: the page loads once, in their language.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Lang.EnsureLoadedAsync();
+        await ApplyUrlLanguageAsync();
+
+    }
+
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.Changed -= OnLangChanged;
+
+    /// <summary>
+    /// Search results and shared links carry the language in the address (?lang=ar);
+    /// arriving through one of them switches the app to that language and remembers it.
+    /// </summary>
+    private async Task ApplyUrlLanguageAsync()
+    {
+        try
+        {
+            var q = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["lang"];
+            if (!string.IsNullOrWhiteSpace(q) && q != Lang.Locale && LanguageService.SupportedLanguages.Any(l => l.Code == q))
+                await Lang.SetLocaleAsync(q.Trim().ToLowerInvariant());
+        }
+        catch { /* a bad query string is not worth a broken page */ }
+    }
+}

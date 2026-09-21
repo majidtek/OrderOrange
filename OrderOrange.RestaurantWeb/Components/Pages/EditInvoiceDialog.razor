@@ -1,0 +1,231 @@
+﻿@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+
+@* Editing an invoice = cancelling it and writing a corrected copy — the dialog says so
+   plainly rather than pretending the numbers change in place. Fullscreen, built like a
+   small till: the bill on one side, the store's whole menu — searchable — on the other.
+   Tap a dish to add it; steppers and the price field fix what's already on the bill. *@
+<MudDialog Class="ied-dialog">
+    <DialogContent>
+        @if (_detail is null)
+        {
+            <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-6" />
+        }
+        else
+        {
+            <div class="ied-wrap">
+                @* ---------- The bill being corrected ---------- *@
+                <aside class="ied-bill">
+                    <div class="ied-explain">
+                        <span class="ic">ℹ️</span>
+                        <span>@string.Format(L["inv.editExplain"], _detail.Number)</span>
+                    </div>
+
+                    <div class="ied-lines">
+                        @foreach (var (line, i) in _lines.Select((l, i) => (l, i)))
+                        {
+                            var idx = i;
+                            <div class="ied-line">
+                                <div class="inf">
+                                    <b class="nm">@(line.Picked?.NameFor(L.Locale) ?? line.Name)</b>
+                                    <span class="pr">
+                                        <MudNumericField T="decimal" @bind-Value="line.UnitPrice" Min="0" Format="0.000"
+                                                         Variant="Variant.Text" Margin="Margin.Dense" Class="mf-ltr ied-price"
+                                                         HideSpinButtons="true" />
+                                    </span>
+                                </div>
+                                <div class="qty">
+                                    <button type="button" class="st" @onclick="@(() => Bump(line, -1))">−</button>
+                                    <b>@line.Quantity</b>
+                                    <button type="button" class="st" @onclick="@(() => Bump(line, +1))">+</button>
+                                </div>
+                                <b class="tt">@Fmt.Rial(line.UnitPrice * line.Quantity)</b>
+                                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
+                                               OnClick="@(() => _lines.RemoveAt(idx))" />
+                            </div>
+                        }
+                        @if (_lines.Count == 0)
+                        {
+                            <div class="ied-empty">🧾 @L["inv.lineInvalid"]</div>
+                        }
+                    </div>
+
+                    <div class="ied-totals">
+                        <div class="rw"><span>@L["common.subtotal"]</span><b>@Fmt.Rial(Subtotal)</b></div>
+                        @if (_detail.TaxPercent > 0)
+                        {
+                            <div class="rw"><span>@L["drep.tax"] (@_detail.TaxPercent.ToString("0.#")%)</span><b>@Fmt.Rial(Tax)</b></div>
+                        }
+                        <div class="rw grand">
+                            <span>@L["inv.newTotal"]</span>
+                            <b>@Fmt.Rial(NewTotal)</b>
+                        </div>
+                        <div class="rw was"><span>@L["inv.wasTotal"]</span><s>@Fmt.Rial(_detail.Total)</s></div>
+                    </div>
+
+                    <MudTextField Margin="Margin.Dense" @bind-Value="_reason" Label="@L["inv.reason"]" Variant="Variant.Outlined"
+                                  Lines="2" MaxLength="400" Class="mt-2" HelperText="@L["inv.reasonHint"]" />
+                </aside>
+
+                @* ---------- The menu: search, filter by group, tap to add ---------- *@
+                <section class="ied-menu">
+                    <div class="ied-search">
+                        <MudIcon Icon="@Icons.Material.Filled.Search" />
+                        <input placeholder="@L["common.search"]…" value="@_search"
+                               @oninput="@(e => _search = e.Value?.ToString() ?? "")" />
+                        @if (_search.Length > 0)
+                        {
+                            <button type="button" @onclick="@(() => _search = "")">✕</button>
+                        }
+                    </div>
+                    <div class="ied-cats">
+                        <button type="button" class="@(_catId == 0 ? "on" : "")" @onclick="@(() => _catId = 0)">@L["admin.all"]</button>
+                        @foreach (var cat in _categories)
+                        {
+                            var c = cat;
+                            <button type="button" class="@(_catId == c.Id ? "on" : "")" @onclick="@(() => _catId = c.Id)">@c.NameFor(L.Locale)</button>
+                        }
+                    </div>
+                    <div class="ied-grid">
+                        @foreach (var item in Visible)
+                        {
+                            var m = item;
+                            var count = _lines.Where(l => l.MenuItemId == m.Id).Sum(l => l.Quantity);
+                            <button type="button" class="ied-tile @(count > 0 ? "on" : "")" @onclick="@(() => Add(m))">
+                                <span class="ph">
+                                    @if ((m.Photo ?? FoodPhoto.ForDish(m.Name)) is string photo)
+                                    {
+                                        <img src="@photo" alt="@m.Name" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <span class="em">@m.ImageEmoji</span>
+                                    }
+                                    @if (count > 0)
+                                    {
+                                        <span class="ct">@count</span>
+                                    }
+                                </span>
+                                <span class="nm">@m.NameFor(L.Locale)</span>
+                                <b class="pr">@Fmt.Rial(m.FinalPrice)</b>
+                            </button>
+                        }
+                    </div>
+                </section>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large"
+                   Disabled="@(_busy || _detail is null)" OnClick="Confirm">
+            @L["inv.editConfirm"] · @Fmt.Rial(NewTotal)
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public InvoiceRowDto Row { get; set; } = default!;
+
+    private sealed class EditableLine
+    {
+        public int MenuItemId;
+        public string Name = "";
+        public decimal UnitPrice;
+        public int Quantity = 1;
+        public string? Notes;
+
+        /// <summary>The menu entry backing this line, once one is picked.</summary>
+        public MenuItemDto? Picked;
+    }
+
+    private InvoiceDetailDto? _detail;
+    private List<EditableLine> _lines = [];
+    private List<MenuCategoryDto> _categories = [];
+    private string _search = "";
+    private int _catId;
+    private string _reason = "";
+    private bool _busy;
+
+    private IEnumerable<MenuItemDto> Visible
+    {
+        get
+        {
+            var pool = _catId == 0
+                ? _categories.SelectMany(c => c.Items)
+                : _categories.Where(c => c.Id == _catId).SelectMany(c => c.Items);
+            var t = _search.Trim();
+            if (t.Length == 0) return pool;
+            // Every tongue the dish is named in — the cashier types Farsi at an English
+            // screen and still finds the item.
+            return pool.Where(m =>
+                m.Name.Contains(t, StringComparison.OrdinalIgnoreCase)
+                || (m.Names?.Values.Any(n => n.Contains(t, StringComparison.OrdinalIgnoreCase)) ?? false));
+        }
+    }
+
+    /// <summary>Tap a tile: an item already on the bill counts up, a new one joins it.</summary>
+    private void Add(MenuItemDto item)
+    {
+        if (_lines.FirstOrDefault(l => l.MenuItemId == item.Id) is { } existing)
+        {
+            existing.Quantity = Math.Min(99, existing.Quantity + 1);
+            return;
+        }
+        _lines.Add(new EditableLine
+        {
+            MenuItemId = item.Id, Name = item.Name,
+            UnitPrice = item.FinalPrice,   // what the shop sells it for right now
+            Picked = item,
+        });
+    }
+
+    /// <summary>The stepper: down from 1 takes the line off the bill entirely.</summary>
+    private void Bump(EditableLine line, int by)
+    {
+        var next = line.Quantity + by;
+        if (next <= 0) { _lines.Remove(line); return; }
+        line.Quantity = Math.Min(99, next);
+    }
+
+    private decimal Subtotal => _lines.Sum(l => l.UnitPrice * l.Quantity);
+    private decimal Tax => _detail is null ? 0 : Math.Round(Subtotal * _detail.TaxPercent / 100m, 3);
+
+    private decimal NewTotal =>
+        _detail is null ? 0
+        : Subtotal + Tax + (_detail.Total - _detail.Subtotal - _detail.TaxAmount); // fees carry over unchanged
+
+    protected override async Task OnInitializedAsync()
+    {
+        _detail = await Api.GetInvoiceAsync(Row.Id);
+        _categories = await Api.GetMyMenuBasicAsync() ?? [];
+        var all = _categories.SelectMany(c => c.Items).ToList();
+        if (_detail is not null)
+            _lines = _detail.Lines.Select(l => new EditableLine
+            {
+                MenuItemId = l.MenuItemId, Name = l.Name, UnitPrice = l.UnitPrice,
+                Quantity = l.Quantity, Notes = l.Notes,
+                Picked = all.FirstOrDefault(m => m.Id == l.MenuItemId),
+            }).ToList();
+    }
+
+    private async Task Confirm()
+    {
+        if (_lines.Count == 0 || _lines.Any(l => string.IsNullOrWhiteSpace(l.Name)))
+        {
+            Snackbar.Add(L["inv.lineInvalid"], Severity.Warning);
+            return;
+        }
+        _busy = true;
+        var req = new ReplaceInvoiceRequest(
+            _lines.Select(l => new InvoiceLineDto(l.MenuItemId, l.Name.Trim(), l.UnitPrice, l.Quantity, l.Notes)).ToList(),
+            _reason,
+            _detail!.IsPaid);
+        var (ok, error) = await Api.ReplaceInvoiceAsync(Row.Id, req);
+        _busy = false;
+        if (ok) Dialog.Close(DialogResult.Ok(true));
+        else Snackbar.Add(error ?? L["common.error"], Severity.Error);
+    }
+}

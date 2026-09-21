@@ -1,0 +1,280 @@
+@page "/deliveries"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The shop's own delivery run. Shops that drive their own orders never see a
+platform rider: here they hand each order to one of their people, share that
+person's live position with the customer, and close it on arrival. *@
+
+<PageTitle>Partner — Deliveries</PageTitle>
+
+<PageHeader Title="@L["deliv.title"]" Subtitle="@L["deliv.sub"]" />
+
+@if (_orders is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <AutoRefresh OnRefresh="Reload" Seconds="20" />
+
+    @if (_sharingId is not null)
+    {
+        @* One clear banner while the phone is broadcasting — this must never run unnoticed. *@
+        <div class="dv-live">
+            <span class="dot"></span>
+            <div>
+                <b>@L["deliv.sharingNow"]</b>
+                <small>@_sharingLabel@(_lastFix is null ? "" : $" · {_lastFix:HH:mm:ss}")</small>
+            </div>
+            <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small" OnClick="StopSharing">
+                @L["deliv.stopShare"]
+            </MudButton>
+        </div>
+    }
+
+    @if (_orders.Count == 0)
+    {
+        <EmptyState Emoji="🛵" Title="@L["deliv.none"]" Subtitle="@L["deliv.noneSub"]" />
+    }
+    else
+    {
+        <div class="dv-grid">
+            @foreach (var order in _orders.Skip(ClampedPage * ListPageSize).Take(ListPageSize))
+            {
+                var o = order;
+                <div class="dv-card @(o.Status == OrderStatus.OnTheWay ? "out" : "")">
+                    <div class="hd">
+                        <span class="no">#@o.Number</span>
+                        <span class="st @StatusClass(o.Status)">@L[$"status.{o.Status}"]</span>
+                        <span class="tm">@o.PlacedAt.ToString("HH:mm")</span>
+                    </div>
+
+                    <div class="who">
+                        <b>@o.CustomerName</b>
+                        @if (!string.IsNullOrWhiteSpace(o.CustomerPhone))
+                        {
+                            <a class="tel mf-ltr" href="tel:@o.CustomerPhone">@o.CustomerPhone</a>
+                        }
+                    </div>
+
+                    <div class="addr">
+                        <MudIcon Icon="@Icons.Material.Filled.Place" />
+                        <span>@(string.IsNullOrWhiteSpace(o.DeliveryAddress) ? "—" : o.DeliveryAddress)</span>
+                    </div>
+
+                    <div class="meta">
+                        <span>@o.Items.Sum(i => i.Quantity) @L["deliv.items"]</span>
+                        <b class="mf-ltr">@Fmt.Rial(o.Total)</b>
+                        <span class="pay">@L[$"pay.{o.PaymentMethod}"]</span>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(o.CourierName))
+                    {
+                        <div class="courier">
+                            <MudIcon Icon="@Icons.Material.Filled.DeliveryDining" />
+                            <span><b>@o.CourierName</b>@(string.IsNullOrWhiteSpace(o.CourierPhone) ? "" : $" · {o.CourierPhone}")</span>
+                        </div>
+                    }
+
+                    <div class="acts">
+                        @if (o.DeliveryLat is not null && o.DeliveryLng is not null)
+                        {
+                            <a class="dv-btn ghost" target="_blank" rel="noopener"
+                                href="@($"https://www.google.com/maps/dir/?api=1&destination={o.DeliveryLat},{o.DeliveryLng}")">
+                                <MudIcon Icon="@Icons.Material.Filled.Navigation" /> @L["deliv.navigate"]
+                            </a>
+                        }
+                        <button type="button" class="dv-btn ghost" @onclick="@(() => OpenAssign(o))">
+                            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" />
+                            @(string.IsNullOrWhiteSpace(o.CourierName) ? L["deliv.assign"] : L["deliv.change"])
+                        </button>
+
+                        @if (_sharingId == o.Id)
+                        {
+                            <button type="button" class="dv-btn live" @onclick="StopSharing">
+                                <MudIcon Icon="@Icons.Material.Filled.LocationOn" /> @L["deliv.stopShare"]
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button" class="dv-btn share" @onclick="@(() => StartSharing(o))">
+                                <MudIcon Icon="@Icons.Material.Filled.MyLocation" /> @L["deliv.share"]
+                            </button>
+                        }
+
+                        <button type="button" class="dv-btn done" disabled="@_busy" @onclick="@(() => MarkDelivered(o))">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" /> @L["deliv.delivered"]
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+        @if (_orders.Count > ListPageSize)
+        {
+            <Pager Page="ClampedPage" Pages="@(((_orders.Count - 1) / ListPageSize) + 1)" PageChanged="@(p => _listPage = p)" />
+        }
+    }
+}
+
+@* ---- Who is taking it ---- *@
+<MudDialog @bind-Visible="_assignOpen" Options="_dialogOptions" Class="mf-lang-dialog">
+    <TitleContent>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <div class="mf-lang-badge"><MudIcon Icon="@Icons.Material.Filled.DeliveryDining" /></div>
+            <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["deliv.assignTitle"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (_staff is { Count: > 0 })
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">@L["deliv.pickStaff"]</MudText>
+            <div class="dv-staff mb-3">
+                @foreach (var member in _staff)
+                {
+                    var s = member;
+                    <button type="button" class="@(_courierName == s.FullName ? "on" : "")"
+                        @onclick="@(() => { _courierName = s.FullName; _courierPhone = s.Phone ?? ""; })">
+                        @s.FullName
+                    </button>
+                }
+            </div>
+        }
+        <MudTextField @bind-Value="_courierName" Label="@L["deliv.courierName"]" Variant="Variant.Outlined"
+            Margin="Margin.Dense" Class="mb-3" />
+        <MudTextField @bind-Value="_courierPhone" Label="@L["common.phone"]" Variant="Variant.Outlined"
+            Margin="Margin.Dense" Class="mf-ltr" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _assignOpen = false)">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_busy" OnClick="SaveCourier">
+            @L["deliv.sendOut"]
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly DialogOptions _dialogOptions = new()
+    {
+        MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true
+    };
+
+    private List<OrderDto>? _orders;
+        private List<StaffDto>? _staff;
+            private bool _busy;
+
+            // ---- assigning ----
+            private bool _assignOpen;
+            private OrderDto? _assigning;
+            private string _courierName = "";
+            private string _courierPhone = "";
+
+            // ---- live sharing ----
+            private int? _sharingId;
+            private string _sharingLabel = "";
+            private DateTime? _lastFix;
+            private System.Threading.Timer? _pusher;
+            private DotNetObjectReference<Deliveries>? _selfRef;
+
+                protected override async Task OnInitializedAsync()
+                {
+                    await Reload();
+                    _staff = (await Api.GetStaffAsync("active", null))?.Rows;
+                }
+
+                private const int ListPageSize = 24;
+                private int _listPage;
+                private int ClampedPage => Math.Clamp(_listPage, 0, Math.Max(0, ((_orders?.Count ?? 1) - 1) / ListPageSize));
+                private async Task Reload() => _orders = await Api.GetMyDeliveriesAsync() ?? [];
+
+                private void OpenAssign(OrderDto order)
+                {
+                    _assigning = order;
+                    _courierName = order.CourierName ?? "";
+                    _courierPhone = order.CourierPhone ?? "";
+                    _assignOpen = true;
+                }
+
+                private async Task SaveCourier()
+                {
+                    if (_assigning is null || string.IsNullOrWhiteSpace(_courierName)) return;
+                    _busy = true;
+                    try
+                    {
+                        var (ok, error) = await Api.AssignCourierAsync(_assigning.Id, _courierName.Trim(), _courierPhone.Trim());
+                        if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+                        _assignOpen = false;
+                        await Reload();
+                    }
+                    finally { _busy = false; }
+                }
+
+                /// <summary>
+                    /// Starts broadcasting THIS phone's position onto the order, which is what the
+                    /// customer's tracking map reads. Only one order at a time — a phone can only
+                    /// be in one place.
+                    /// </summary>
+                private async Task StartSharing(OrderDto order)
+                {
+                    _selfRef ??= DotNetObjectReference.Create(this);
+                    bool ok;
+                    try { ok = await JS.InvokeAsync<bool>("mfCourier.start", _selfRef); }
+                        catch { ok = false; }
+                        if (!ok) { Snackbar.Add(L["deliv.gpsDenied"], Severity.Warning); return; }
+
+                        _sharingId = order.Id;
+                        _sharingLabel = string.IsNullOrWhiteSpace(order.CourierName) ? $"#{order.Number}" : $"{order.CourierName} · #{order.Number}";
+                        Snackbar.Add(L["deliv.sharingStarted"], Severity.Success);
+                    }
+
+                    /// <summary>Called from the browser each time the device reports a new fix.</summary>
+                    [JSInvokable]
+                    public async Task OnFix(double lat, double lng)
+                    {
+                        if (_sharingId is not { } id) return;
+                        _lastFix = DateTime.Now;
+                        await Api.PushCourierLocationAsync(id, lat, lng);
+                        await InvokeAsync(StateHasChanged);
+                    }
+
+                    private async Task StopSharing()
+                    {
+                        try { await JS.InvokeVoidAsync("mfCourier.stop"); } catch { }
+                        _sharingId = null;
+                        _lastFix = null;
+                        _pusher?.Dispose();
+                        _pusher = null;
+                    }
+
+                    private async Task MarkDelivered(OrderDto order)
+                    {
+                        _busy = true;
+                        try
+                        {
+                            var (ok, error) = await Api.MarkSelfDeliveredAsync(order.Id);
+                            if (!ok) { Snackbar.Add(error ?? L["common.updateFail"], Severity.Error); return; }
+                            if (_sharingId == order.Id) await StopSharing();
+                            Snackbar.Add(string.Format(L["deliv.doneToast"], order.Number), Severity.Success);
+                            await Reload();
+                        }
+                        finally { _busy = false; }
+                    }
+
+                    private static string StatusClass(OrderStatus status) => status switch
+                    {
+                        OrderStatus.OnTheWay => "way",
+                        OrderStatus.Ready => "ready",
+                        OrderStatus.Preparing => "prep",
+                        _ => ""
+                    };
+
+                    public void Dispose()
+                    {
+                        _pusher?.Dispose();
+                        _selfRef?.Dispose();
+                        try { _ = JS.InvokeVoidAsync("mfCourier.stop"); } catch { }
+                    }
+                }

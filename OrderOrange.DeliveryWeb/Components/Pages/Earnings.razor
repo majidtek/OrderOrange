@@ -1,0 +1,187 @@
+@page "/earnings"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Delivery — Earnings</PageTitle>
+
+@if (_earnings is null || _history is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    @* ---------- Earnings hero ---------- *@
+    <div class="dlv-ehero mb-4">
+        <div class="d-flex align-center flex-wrap" style="gap: 18px;">
+            <div class="flex-grow-1" style="min-width: 180px;">
+                <div class="cap">@L["driver.today"]</div>
+                <div class="big">@Fmt.Rial(_earnings.TodayEarnings)</div>
+                <MudText Typo="Typo.body2" Style="opacity:.85;" Class="mt-1">
+                    🛵 @_earnings.TodayDeliveries @L["driver.deliveries"].ToLowerInvariant()
+                </MudText>
+            </div>
+            <div style="font-size: 56px; filter: drop-shadow(0 8px 16px rgba(0,0,0,.2));">💰</div>
+        </div>
+    </div>
+
+    @* ---------- Stat tiles ---------- *@
+    <div class="dlv-stats-grid">
+        <div class="dlv-stat">
+            <div class="ic">📅</div>
+            <div class="k">@L["driver.week"]</div>
+            <div class="v">@Fmt.Rial(_earnings.WeekEarnings)</div>
+        </div>
+        <div class="dlv-stat" style="animation-delay:.06s;">
+            <div class="ic">🏦</div>
+            <div class="k">@L["driver.alltime"]</div>
+            <div class="v">@Fmt.Rial(_earnings.TotalEarnings)</div>
+            <div class="h">@_earnings.TotalDeliveries @L["driver.deliveries"].ToLowerInvariant()</div>
+        </div>
+        <div class="dlv-stat" style="animation-delay:.12s;">
+            <div class="ic">📈</div>
+            <div class="k">@L["driver.avg"]</div>
+            <div class="v">@Fmt.Rial(_earnings.TotalDeliveries == 0 ? 0 : _earnings.TotalEarnings / _earnings.TotalDeliveries)</div>
+        </div>
+    </div>
+
+    @if (_earnings.PerDay.Count > 0)
+    {
+        <div class="dlv-card mb-4">
+            <div class="d-flex align-center flex-wrap mb-2" style="gap: 10px;">
+                <MudText Typo="Typo.h6" Style="font-weight: 800;">📊 @L["driver.byday"]</MudText>
+                <MudSpacer />
+                <div class="dlv-filter">
+                    @foreach (var d in PeriodOptions)
+                    {
+                        var days = d;
+                        <span class="dlv-fchip @(_days == days ? "on" : "")" @onclick="@(() => SetPeriod(days))">@days d</span>
+                    }
+                </div>
+            </div>
+            @if (_series.Count > 0)
+            {
+                <MudChart ChartType="ChartType.Bar" ChartSeries="_series" XAxisLabels="_labels"
+                          Height="220px" Width="100%" />
+            }
+        </div>
+    }
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <div class="dlv-card">
+                <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mb-3">🗓️ @L["driver.byday"]</MudText>
+                @if (_earnings.PerDay.Count == 0)
+                {
+                    <EmptyState Emoji="📈" Title="@L["driver.none"]" />
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" Hover="true">
+                        <thead>
+                            <tr>
+                                <th>@L["driver.date"]</th>
+                                <th>@L["driver.deliveries"]</th>
+                                <th style="text-align:right;">@L["driver.earned"]</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var day in _earnings.PerDay)
+                            {
+                                <tr>
+                                    <td>@day.Date.ToString("ddd, dd MMM")</td>
+                                    <td>@day.Deliveries</td>
+                                    <td style="text-align:right;"><b>@Fmt.Rial(day.Earnings)</b></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            </div>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <div class="dlv-card">
+                <div class="d-flex align-center flex-wrap mb-2" style="gap: 10px;">
+                    <MudText Typo="Typo.h6" Style="font-weight: 800;">🛵 @L["driver.history"]</MudText>
+                    <MudSpacer />
+                    <MudDateRangePicker ShowToolbar="false" @bind-DateRange="_range" @bind-DateRange:after="ApplyRange"
+                                        PickerVariant="PickerVariant.Inline" AnchorOrigin="Origin.BottomCenter" TransformOrigin="Origin.TopCenter" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                        DisplayMonths="1" Label="@L["driver.date"]" Clearable="true" AutoClose="true"
+                                        Style="max-width: 260px;" />
+                </div>
+                @if (_history.Count == 0)
+                {
+                    <EmptyState Emoji="🛵" Title="@L["driver.none"]" />
+                }
+                else
+                {
+                    @foreach (var order in _history)
+                    {
+                        <div class="dlv-hrow">
+                            <div class="em">@(string.IsNullOrEmpty(order.RestaurantLogoEmoji) ? "🍳" : order.RestaurantLogoEmoji)</div>
+                            <div class="flex-grow-1" style="min-width: 0;">
+                                <MudText Typo="Typo.body2" Style="font-weight: 600;">@order.RestaurantName</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@order.Number · @order.PlacedAt.ToString("dd MMM, HH:mm")</MudText>
+                            </div>
+                            <span class="fee">+@Fmt.Rial(order.DeliveryFee)</span>
+                        </div>
+                    }
+                    <InfiniteScroll OnLoadMore="LoadMore" HasMore="_hasMore" />
+                }
+            </div>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private const int PageSize = 25;
+    private static readonly int[] PeriodOptions = [7, 14, 30, 90];
+
+    private EarningsDto? _earnings;
+    private List<OrderDto>? _history;
+    private bool _hasMore = true;
+    private List<ChartSeries> _series = [];
+    private string[] _labels = [];
+    private int _days = 14;
+    private DateRange? _range;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEarnings();
+        await ReloadHistory();
+    }
+
+    private async Task LoadEarnings()
+    {
+        _earnings = await Api.GetEarningsAsync(_days);
+        _series = [];
+        _labels = [];
+        if (_earnings is { PerDay.Count: > 0 })
+        {
+            var days = _earnings.PerDay.OrderBy(d => d.Date).ToList();
+            _labels = days.Select(d => d.Date.ToString("dd/MM")).ToArray();
+            _series = [new ChartSeries { Name = "OMR", Data = days.Select(d => (double)d.Earnings).ToArray() }];
+        }
+    }
+
+    private async Task SetPeriod(int days)
+    {
+        _days = days;
+        await LoadEarnings();
+    }
+
+    private Task ApplyRange() => ReloadHistory();
+
+    private async Task ReloadHistory()
+    {
+        _history = await Api.GetDriverHistoryAsync(0, PageSize, _range?.Start, _range?.End) ?? [];
+        _hasMore = _history.Count == PageSize;
+    }
+
+    private async Task LoadMore()
+    {
+        if (_history is null) return;
+        var page = await Api.GetDriverHistoryAsync(_history.Count, PageSize, _range?.Start, _range?.End) ?? [];
+        _history.AddRange(page);
+        _hasMore = page.Count == PageSize;
+    }
+}

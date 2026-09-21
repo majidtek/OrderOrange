@@ -1,0 +1,162 @@
+@inject ApiClient Api
+@inject ISnackbar Snack
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject LanguageService L
+@implements IDisposable
+
+@* Who joined the platform: a new shop, a new customer, a new rider. Polled every 30 seconds
+   while the panel is open, and pushed to this device by the server when it is closed. *@
+
+<MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+         ListClass="jb-list" Class="jb" Dense="true" OpenChanged="OnOpenChanged">
+    <ActivatorContent>
+        <span class="jb-wrap">
+            <MudIconButton Icon="@Icons.Material.Filled.NotificationsNone" Color="Color.Inherit" />
+            @if (_unread > 0)
+            {
+                <span class="jb-count">@(_unread > 99 ? "99+" : _unread.ToString())</span>
+            }
+        </span>
+    </ActivatorContent>
+    <ChildContent>
+        <div class="jb-head">
+            <span>@L["joins.title"]</span>
+            @if (_unread > 0)
+            {
+                <span class="jb-new">@_unread</span>
+            }
+        </div>
+
+        @if (_items.Count == 0)
+        {
+            <div class="jb-empty">@L["joins.empty"]</div>
+        }
+        else
+        {
+            @foreach (var a in _items.Take(20))
+            {
+                var alert = a;
+                <button type="button" class="jb-row @(alert.Read ? "" : "un")" @onclick="@(() => Go(alert))">
+                    <span class="jb-ic @alert.Kind">@Mark(alert.Kind)</span>
+                    <span class="jb-txt">
+                        <span class="t">@Headline(alert)</span>
+                        <span class="b">@alert.Body</span>
+                    </span>
+                    <span class="jb-when">@When(alert.CreatedAt)</span>
+                </button>
+            }
+        }
+    </ChildContent>
+</MudMenu>
+
+@code {
+    private List<AdminAlertDto> _items = [];
+    private int _unread;
+    private int _latestId;
+    private bool _primed;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        await SubscribePushAsync();
+        _timer = new System.Threading.Timer(
+            async _ => await InvokeAsync(async () => { await PollAsync(); StateHasChanged(); }), null, 30000, 30000);
+    }
+
+    /// <summary>The full list — on open, and once at startup so the badge is honest.</summary>
+    private async Task LoadAsync()
+    {
+        try
+        {
+            if (await Api.AdminAlertsAsync() is not { } data) return;
+            _items = data.Items;
+            _unread = data.Unread;
+            if (_items.Count > 0) _latestId = Math.Max(_latestId, _items[0].Id);
+            _primed = true;
+        }
+        catch { /* the bell is a convenience; a failed poll must not break the panel */ }
+    }
+
+    /// <summary>The cheap poll: a count, plus the newest line so an arrival can be announced.</summary>
+    private async Task PollAsync()
+    {
+        AdminAlertsDto? s = null;
+        try { s = await Api.AdminAlertsSummaryAsync(); } catch { }
+        if (s is null) return;
+        _unread = s.Unread;
+
+        var latest = s.Items.FirstOrDefault();
+        if (latest is null || latest.Id <= _latestId) return;
+        _latestId = latest.Id;
+        if (!_primed) { _primed = true; return; }   // never announce the backlog
+
+        await LoadAsync();
+        var line = $"{Headline(latest)} — {latest.Body}";
+        Snack.Add(line, Severity.Info, o =>
+        {
+            o.Action = L["joins.open"];
+            o.OnClick = _ => { Nav.NavigateTo(latest.Url ?? "/users"); return Task.CompletedTask; };
+            o.VisibleStateDuration = 12000;
+        });
+        try { await JS.InvokeVoidAsync("mfNotify.show", L["joins.title"], line, latest.Url ?? "/"); }
+        catch { }
+    }
+
+    /// <summary>Opening the panel clears the count and refreshes the list.</summary>
+    private async Task OnOpenChanged(bool open)
+    {
+        if (!open) return;
+        await LoadAsync();
+        if (_unread == 0) return;
+        try { await Api.AdminAlertsReadAsync(); } catch { return; }
+        _unread = 0;
+        _items = _items.Select(i => i with { Read = true }).ToList();
+    }
+
+    private void Go(AdminAlertDto alert) => Nav.NavigateTo(alert.Url ?? "/users");
+
+    /// <summary>
+    /// Registers this browser for real push, so a sign-up reaches the phone with the admin
+    /// site closed. Needs the viewer to allow notifications once.
+    /// </summary>
+    private async Task SubscribePushAsync()
+    {
+        try
+        {
+            var permission = await JS.InvokeAsync<string>("mfNotify.init");
+            if (permission != "granted") return;
+            if (await Api.GetPushVapidAsync() is not { } vapid) return;
+            var sub = await JS.InvokeAsync<PushSubscribeRequest?>("mfNotify.subscribePush", vapid.PublicKey);
+            if (sub is not null) await Api.SubscribePushAsync(sub);
+        }
+        catch { /* push is the bonus channel; the poll still covers an open tab */ }
+    }
+
+    private string Headline(AdminAlertDto a) => a.Kind switch
+    {
+        "business" => L["joins.business"],
+        "driver" => L["joins.driver"],
+        _ => L["joins.user"],
+    };
+
+    private static string Mark(string kind) => kind switch
+    {
+        "business" => "🏪",
+        "driver" => "🛵",
+        _ => "🙂",
+    };
+
+    /// <summary>"4 m", "3 h", "2 d" — enough to know whether this is news.</summary>
+    private string When(DateTime utc)
+    {
+        var span = DateTime.UtcNow - utc;
+        if (span < TimeSpan.FromMinutes(1)) return L["joins.now"];
+        if (span < TimeSpan.FromHours(1)) return $"{(int)span.TotalMinutes} {L["joins.m"]}";
+        if (span < TimeSpan.FromDays(1)) return $"{(int)span.TotalHours} {L["joins.h"]}";
+        return $"{(int)span.TotalDays} {L["joins.d"]}";
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

@@ -1,0 +1,143 @@
+@page "/contracts"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+@* Standing supply agreements — "10 trays, 10 deliveries a month, at this price".
+   Written here, kept on file, and emailed to the customer as a lettered document
+   wearing the store's own logo and details. *@
+
+<PageTitle>Partner — Contracts</PageTitle>
+
+<div class="d-flex align-center mb-4" style="gap: 12px;">
+    <div style="flex: 1;">
+        <MudText Typo="Typo.h5" Style="font-weight: 800;">@L["ct.title"]</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@L["ct.sub"]</MudText>
+    </div>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="@(() => Open(null))">@L["ct.new"]</MudButton>
+</div>
+
+@if (_list is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+}
+else if (_list.Count == 0)
+{
+    <MudPaper Elevation="0" Outlined="true" Class="pa-8 rounded-xl text-center">
+        <div style="font-size: 44px;">📄</div>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mt-2">@L["ct.empty"]</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@L["ct.emptySub"]</MudText>
+    </MudPaper>
+}
+else
+{
+    <div class="ct-list">
+        @foreach (var c in _list)
+        {
+            var contract = c;
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl ct-row">
+                <div class="who">
+                    <b>@contract.CustomerName</b>
+                    @if (contract.CustomerEmail is { Length: > 0 })
+                    {
+                        <small class="mf-ltr">@contract.CustomerEmail</small>
+                    }
+                </div>
+                <div class="what">
+                    <b>@contract.Lines.Sum(l => l.Quantity) × @L["ct.products"]</b>
+                    <small>@string.Format(L["ct.terms"], contract.TimesPerMonth)</small>
+                    <small>
+                        🗓️ @contract.StartDate.ToString("dd MMM yyyy")
+                        · @(contract.Months == 0 ? L["ct.openEnded"] : $"{contract.Months} {L["w.month"]}")
+                    </small>
+                </div>
+                <div class="price"><b>@Fmt.Rial(contract.MonthlyPrice)</b><small>/ @L["w.month"]</small></div>
+                <div class="acts">
+                    @if (contract.AcceptedAt is { } accepted)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled"
+                                 title="@contract.AcceptedBy">
+                            ✓ @L["ct.acceptedTitle"] @accepted.ToString("dd MMM")
+                        </MudChip>
+                    }
+                    else if (contract.SentAt is { } sent)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
+                            ✉️ @sent.ToString("dd MMM HH:mm")
+                        </MudChip>
+                    }
+                    @if (contract.Replies is { Count: > 0 } replies)
+                    {
+                        @* The customer's latest word, right on the row. *@
+                        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text"
+                                 title="@replies[^1].Text">
+                            💬 @replies.Count
+                        </MudChip>
+                    }
+                    <MudIconButton Icon="@Icons.Material.Filled.Email" Size="Size.Small" Color="Color.Primary"
+                                   Disabled="@(_mailing == contract.Id || contract.CustomerEmail.Length == 0)"
+                                   title="@L["ct.email"]" OnClick="@(() => Email(contract))" />
+                    @* The public letter — the same page the customer's link opens. From
+                       there the browser's print gives the PDF, so this IS "download". *@
+                    <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf" Size="Size.Small"
+                                   title="@L["ct.pdf"]"
+                                   Href="@(contract.PdfUrl is { Length: > 0 } ? contract.PdfUrl : contract.PublicUrl + "?print=1")"
+                                   Target="_blank" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="@(() => Open(contract))" />
+                    @* An old contract as the DRAFT for a new one: same terms, new customer. *@
+                    <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small"
+                                   title="@L["ct.copy"]" OnClick="@(() => Open(contract, asCopy: true))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => Delete(contract))" />
+                </div>
+            </MudPaper>
+        }
+    </div>
+}
+
+@code {
+    private List<ContractDto>? _list;
+    private int _mailing;
+
+    protected override async Task OnInitializedAsync() => _list = await Api.GetContractsAsync() ?? [];
+
+    private async Task Open(ContractDto? existing, bool asCopy = false)
+    {
+        var parameters = new DialogParameters<ContractDialog>
+        {
+            { d => d.Existing, existing },
+            { d => d.AsCopy, asCopy },
+        };
+        var dialog = await Dialogs.ShowAsync<ContractDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        if ((await dialog.Result)?.Data is ContractDto)
+            _list = await Api.GetContractsAsync() ?? [];
+    }
+
+    private async Task Email(ContractDto contract)
+    {
+        _mailing = contract.Id;
+        try
+        {
+            var (updated, error) = await Api.EmailContractAsync(contract.Id);
+            if (updated is null) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+            Snackbar.Add(string.Format(L["ct.sentMsg"], updated.CustomerEmail), Severity.Success);
+            _list = await Api.GetContractsAsync() ?? [];
+        }
+        finally { _mailing = 0; }
+    }
+
+    private async Task Delete(ContractDto contract)
+    {
+        var sure = await Dialogs.ShowMessageBox(L["ct.deleteTitle"],
+            string.Format(L["ct.deleteBody"], contract.CustomerName),
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (sure != true) return;
+        var (ok, error) = await Api.DeleteContractAsync(contract.Id);
+        if (!ok) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+        _list = await Api.GetContractsAsync() ?? [];
+    }
+}

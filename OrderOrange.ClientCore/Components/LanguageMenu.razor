@@ -1,0 +1,83 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* Language switcher — opens a modern dialog with a grid of flag + native-name
+   tiles (every /Localization JSON file). The current language is highlighted. *@
+
+@if (Compact)
+{
+    <MudIconButton Icon="@Icons.Material.Filled.Translate" Color="Color.Inherit" OnClick="@(() => _open = true)" />
+}
+else
+{
+    <MudButton StartIcon="@Icons.Material.Filled.Translate" Color="Color.Inherit" Class="mf-nav-pill"
+               OnClick="@(() => _open = true)">
+        @Lang.FlagEmoji @Lang.NativeName
+    </MudButton>
+}
+
+<MudDialog @bind-Visible="_open" Options="_options" Class="mf-lang-dialog">
+    @* No title: the strip says everything. The header keeps only the ✕. *@
+    <TitleContent></TitleContent>
+    <DialogContent>
+        @* A plain, roomy grid — two columns on a phone, scrolling when it runs long.
+           Each language in its own script, the current one clearly marked. *@
+        <div class="mf-lang-list">
+            @foreach (var language in LanguageService.SupportedLanguages)
+            {
+                var option = language;
+                <button type="button" class="mf-lang-row @(option.Code == Lang.Locale ? "on" : "")"
+                        @onclick="@(() => Pick(option.Code))">
+                    <span class="fl">@option.Flag</span>
+                    <span class="nm">@option.NativeName</span>
+                    @if (option.Code == Lang.Locale)
+                    {
+                        <span class="tick">✓</span>
+                    }
+                </button>
+            }
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [Parameter] public bool Compact { get; set; }
+
+    private bool _open;
+
+    private static readonly DialogOptions _options = new()
+    {
+        MaxWidth = MaxWidth.ExtraSmall,
+        FullWidth = true,
+        CloseButton = true,
+        BackdropClick = true,
+        Position = DialogPosition.Center,
+        // A deeper scrim than the default: the picker should feel lifted off the shop.
+        BackgroundClass = "mf-lang-scrim"
+    };
+
+    private async Task Pick(string code)
+    {
+        _open = false;
+        var changed = code != Lang.Locale;
+        await Lang.SetLocaleAsync(code);   // persists to storage before the reload
+        if (changed)
+        {
+            // Hard reload: fonts, direction and every prerendered string start
+            // fresh in the new language instead of live-patching the DOM.
+            // Refresh(forceReload), not NavigateTo(Nav.Uri, forceLoad) — navigating
+            // to the URL the app is already on can be treated as an enhanced
+            // navigation and never actually reload the document.
+            Nav.Refresh(forceReload: true);
+        }
+    }
+
+    protected override void OnInitialized() => Lang.Changed += OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Lang.Changed -= OnChanged;
+}

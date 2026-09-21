@@ -1,0 +1,167 @@
+@page "/reviews"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Partner — Reviews</PageTitle>
+
+<PageHeader Title="@L["nav.reviews"]" Subtitle="@L["partner.reviewsSub"]" />
+
+@if (_reviews is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_reviews.Count == 0)
+{
+    <EmptyState Emoji="⭐" Title="@L["partner.noReviews"]" Subtitle="@L["partner.noReviewsSub"]" />
+}
+else
+{
+    @* ---------- The score, and where it comes from ---------- *@
+    <div class="rv-top">
+        <div class="rv-score">
+            <div class="big mf-ltr">@_average.ToString("0.0")</div>
+            <div class="stars">@Stars(_average)</div>
+            <small>@string.Format(L["rv.fromCount"], _reviews.Count)</small>
+        </div>
+
+        <div class="rv-bars">
+            <div class="hd">@L["rv.breakdown"]</div>
+            @for (var star = 5; star >= 1; star--)
+            {
+                var count = _counts[star];
+                var share = _reviews.Count == 0 ? 0 : count * 100.0 / _reviews.Count;
+                <button type="button" class="rv-bar @(_filter == star ? "on" : "")" @onclick="@(() => Toggle(star))">
+                    <span class="lbl mf-ltr">@star ★</span>
+                    <span class="track"><span class="fill s@(star)" style="width:@share.ToString("0.#")%"></span></span>
+                    <span class="num mf-ltr">@count</span>
+                </button>
+            }
+        </div>
+
+        <div class="rv-pills">
+            <div class="rv-pill good">
+                <span class="ic">👍</span>
+                <div><b>@(_counts[5] + _counts[4])</b><small>@L["rv.happy"]</small></div>
+            </div>
+            <div class="rv-pill warn">
+                <span class="ic">⚠️</span>
+                <div><b>@(_counts[2] + _counts[1])</b><small>@L["partner.needsAttention2"]</small></div>
+            </div>
+            <div class="rv-pill note">
+                <span class="ic">💬</span>
+                <div><b>@_reviews.Count(r => !string.IsNullOrWhiteSpace(r.Comment))</b><small>@L["rv.written"]</small></div>
+            </div>
+        </div>
+    </div>
+
+    @* ---------- Filters ---------- *@
+    <div class="rv-filters">
+        <button type="button" class="rv-chip @(_filter is null && !_onlyComments ? "on" : "")" @onclick="ShowAll">
+            @L["rv.all"] <i>@_reviews.Count</i>
+        </button>
+        <button type="button" class="rv-chip @(_filter == 5 ? "on" : "")" @onclick="@(() => Toggle(5))">★ 5 <i>@_counts[5]</i></button>
+        <button type="button" class="rv-chip @(_filter == 4 ? "on" : "")" @onclick="@(() => Toggle(4))">★ 4 <i>@_counts[4]</i></button>
+        <button type="button" class="rv-chip @(_filter == 3 ? "on" : "")" @onclick="@(() => Toggle(3))">★ 3 <i>@_counts[3]</i></button>
+        <button type="button" class="rv-chip danger @(_filter == 0 ? "on" : "")" @onclick="@(() => Toggle(0))">
+            @L["partner.needsAttention2"] <i>@(_counts[2] + _counts[1])</i>
+        </button>
+        <button type="button" class="rv-chip @(_onlyComments ? "on" : "")" @onclick="ToggleComments">💬 @L["rv.written"]</button>
+    </div>
+
+    @* ---------- The reviews ---------- *@
+    @if (Visible.Count == 0)
+    {
+        <EmptyState Emoji="🔍" Title="@L["rv.noMatch"]" Subtitle="@L["rv.noMatchSub"]" />
+    }
+    else
+    {
+        <div class="rv-list">
+            @foreach (var review in Visible)
+            {
+                <article class="rv-card @Tone(review.RestaurantRating)">
+                    <div class="hd">
+                        <span class="ava" style="background:@Hue(review.CustomerName)">@Initial(review.CustomerName)</span>
+                        <div class="who">
+                            <b>@review.CustomerName</b>
+                            <small>@Fmt.TimeAgo(review.CreatedAt, L)</small>
+                        </div>
+                        <span class="rate mf-ltr">@Stars(review.RestaurantRating)</span>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(review.Comment))
+                    {
+                        <p class="say">@review.Comment</p>
+                    }
+                    else
+                    {
+                        <p class="say muted">@L["rv.starsOnly"]</p>
+                    }
+
+                    @if (review.DriverRating is { } driver)
+                    {
+                        <div class="meta"><span class="tag">🛵 @L["rv.courier"] @Stars(driver)</span></div>
+                    }
+                </article>
+            }
+        </div>
+    }
+}
+
+@code {
+    private List<ReviewDto>? _reviews;
+    private double _average;
+
+    /// <summary>How many reviews sit on each star, 1..5.</summary>
+    private readonly int[] _counts = new int[6];
+
+    /// <summary>5..3 filter one band; 0 means "two stars and below"; null means all.</summary>
+    private int? _filter;
+    private bool _onlyComments;
+
+    private List<ReviewDto> Visible =>
+        (_reviews ?? [])
+            .Where(r => _filter switch
+            {
+                null => true,
+                0 => r.RestaurantRating <= 2,
+                var s => r.RestaurantRating == s,
+            })
+            .Where(r => !_onlyComments || !string.IsNullOrWhiteSpace(r.Comment))
+            .OrderByDescending(r => r.CreatedAt)
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _reviews = await Api.GetMyRestaurantReviewsAsync();
+        if (_reviews is { Count: > 0 })
+        {
+            _average = _reviews.Average(r => r.RestaurantRating);
+            foreach (var review in _reviews)
+                if (review.RestaurantRating is >= 1 and <= 5)
+                    _counts[review.RestaurantRating]++;
+        }
+    }
+
+    private void ShowAll() { _filter = null; _onlyComments = false; }
+    private void Toggle(int star) => _filter = _filter == star ? null : star;
+    private void ToggleComments() => _onlyComments = !_onlyComments;
+
+    /// <summary>Filled stars up to the score, hollow for the rest — halves round up.</summary>
+    private static string Stars(double score)
+    {
+        var filled = (int)Math.Round(score, MidpointRounding.AwayFromZero);
+        return new string('★', Math.Clamp(filled, 0, 5)) + new string('☆', Math.Clamp(5 - filled, 0, 5));
+    }
+
+    private static string Initial(string name) =>
+        string.IsNullOrWhiteSpace(name) ? "•" : name.Trim()[..1].ToUpperInvariant();
+
+    /// <summary>A stable colour per person, so the same guest always looks the same.</summary>
+    private static string Hue(string name)
+    {
+        var hash = name.Sum(c => c) % 360;
+        return $"linear-gradient(135deg, hsl({hash} 62% 58%), hsl({(hash + 40) % 360} 62% 46%))";
+    }
+
+    private static string Tone(int stars) => stars >= 4 ? "good" : stars == 3 ? "mid" : "low";
+}

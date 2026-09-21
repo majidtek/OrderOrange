@@ -1,0 +1,83 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@implements IDisposable
+@using OrderOrange.RestaurantWeb.Components.Pages
+
+@* The stock bell: rings when an order's deduction pushes a material under its
+   minimum. Lives in the app bar, polls quietly, goes calm once opened. *@
+
+<MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="sb-menu"
+         OnOpenChanged="OnOpenChangedAsync">
+    <ActivatorContent>
+        <MudBadge Content="@_data?.UnseenCount" Visible="@(_data is { UnseenCount: > 0 })"
+                  Color="Color.Error" Overlap="true" Bordered="true">
+            <MudIconButton Icon="@Icons.Material.Filled.NotificationsNone" Color="Color.Inherit"
+                           title="@L["sbell.title"]" />
+        </MudBadge>
+    </ActivatorContent>
+    <ChildContent>
+        <div class="sb-panel">
+            <div class="sb-hd">🔔 @L["sbell.title"]</div>
+            @if (_data is null || _data.Alerts.Count == 0)
+            {
+                <div class="sb-empty">✅ @L["sbell.empty"]</div>
+            }
+            else
+            {
+                @foreach (var alert in _data.Alerts.Take(6))
+                {
+                    <button type="button" class="sb-row @alert.Type @(alert.Seen ? "" : "fresh")"
+                            @onclick="OpenAllAsync">
+                        <span class="ic">@(alert.Type == "out" ? "🚫" : "⚠️")</span>
+                        <span class="tx">
+                            <b>@alert.MaterialName</b>
+                            <small>
+                                @(alert.Type == "out"
+                                    ? L["sbell.out"]
+                                    : string.Format(L["sbell.low"], alert.Quantity.ToString("0.##"), L[$"mat.unit.{alert.Unit}"]))
+                                · @Fmt.TimeAgo(alert.CreatedAt, L)
+                            </small>
+                        </span>
+                    </button>
+                }
+                <button type="button" class="sb-all" @onclick="OpenAllAsync">🔔 @L["sbell.viewAll"]</button>
+            }
+        </div>
+    </ChildContent>
+</MudMenu>
+
+@code {
+    private StockAlertsDto? _data;
+    private Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        // A quiet poll — the bell must notice a busy night without being asked.
+        _timer = new Timer(async _ =>
+        {
+            try { await RefreshAsync(); await InvokeAsync(StateHasChanged); } catch { }
+        }, null, TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(90));
+    }
+
+    private async Task RefreshAsync() => _data = await Api.GetStockAlertsAsync();
+
+    private async Task OnOpenChangedAsync(bool open)
+    {
+        if (!open || _data is not { UnseenCount: > 0 }) return;
+        await Api.MarkStockAlertsSeenAsync();
+        _data = _data with { UnseenCount = 0 };   // instant calm; rows keep their glow until reload
+    }
+
+    /// <summary>The full picture lives in the dialog — stock now, minimums, restock.</summary>
+    private async Task OpenAllAsync()
+    {
+        var dialog = await Dialogs.ShowAsync<StockAlertsDialog>(L["sbell.title"], new DialogParameters(),
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true });
+        await dialog.Result;
+        await RefreshAsync();   // restocks inside the dialog change what the bell shows
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

@@ -1,0 +1,319 @@
+﻿@page "/attendance/report"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+@* The owner's side of attendance: leave requests waiting for a decision first, then a
+   period, the people with their days and hours, and every shift with a map pin. *@
+
+<PageTitle>Partner — @L["att.report.title"]</PageTitle>
+
+<PageHeader Title="@L["att.report.title"]" Subtitle="@L["att.report.sub"]">
+    <Actions>
+        @if (_report is not null)
+        {
+            <ReportExport Title="@L["att.report.title"]" Subtitle="@L["att.report.sub"]" RangeLabel="@RangeLabel"
+                          Columns="@ExportColumns" Fetch="ExportRows" FetchTotals="ExportTotals" />
+        }
+    </Actions>
+</PageHeader>
+
+<div class="att-filters">
+    <MudButton Variant="@(_range == "week" ? Variant.Filled : Variant.Outlined)" Size="Size.Small" Color="Color.Primary" OnClick="@(() => SetRange("week"))">@L["att.range.week"]</MudButton>
+    <MudButton Variant="@(_range == "month" ? Variant.Filled : Variant.Outlined)" Size="Size.Small" Color="Color.Primary" OnClick="@(() => SetRange("month"))">@L["att.range.month"]</MudButton>
+    <MudButton Variant="@(_range == "last" ? Variant.Filled : Variant.Outlined)" Size="Size.Small" Color="Color.Primary" OnClick="@(() => SetRange("last"))">@L["att.range.last"]</MudButton>
+    <MfDateRangePicker @bind-DateRange="_custom" Margin="Margin.Dense" Variant="Variant.Outlined" Class="att-range"
+                        DateFormat="yyyy-MM-dd" Label="@RangeLabel" />
+    @if (_people.Count > 1)
+    {
+        <MudSelect T="int" Value="_userId" ValueChanged="SetUser" Label="@L["att.person"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="att-person">
+            <MudSelectItem T="int" Value="0">@L["att.everyone"]</MudSelectItem>
+            @foreach (var p in _people)
+            {
+                <MudSelectItem T="int" Value="@p.UserId">@(p.StaffName ?? p.Name)</MudSelectItem>
+            }
+        </MudSelect>
+    }
+</div>
+
+@if (_report is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    @* ---------- Leave waiting for a decision ---------- *@
+    @if (_report.PendingLeaves > 0)
+    {
+        <div class="lv-pending">
+            <b class="hd">@string.Format(L["lv.pendingTitle"], _report.PendingLeaves)</b>
+            @foreach (var lv in _report.Leaves.Where(l => l.Status == "pending"))
+            {
+                var leave = lv;
+                <div class="lv-req">
+                    <span class="kind">@(leave.Kind == "hourly" ? "⏱" : "📅")</span>
+                    <div class="txt">
+                        <b>@(leave.StaffName ?? leave.UserName)</b>
+                        <span>@LeaveSpan(leave)</span>
+                        @if (!string.IsNullOrEmpty(leave.Reason)) { <small>“@leave.Reason”</small> }
+                        <small class="when">@string.Format(L["lv.askedAt"], leave.RequestedAt.ToString("d MMM HH:mm"))</small>
+                    </div>
+                    <div class="acts">
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_busy"
+                                   StartIcon="@Icons.Material.Filled.Check" OnClick="@(() => Decide(leave, true))">@L["lv.approve"]</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy"
+                                   StartIcon="@Icons.Material.Filled.Close" OnClick="@(() => Decide(leave, false))">@L["lv.reject"]</MudButton>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_report.Rows.Count > 0 && _report.StoreLat is null)
+    {
+        <div class="att-notice mb-3">@L["att.storePinMissing"]</div>
+    }
+
+    @if (_report.Rows.Count == 0 && _report.Leaves.Count == 0)
+    {
+        <EmptyState Emoji="🕒" Title="@L["att.none"]" Subtitle="@L["att.noneSub"]" />
+    }
+    else
+    {
+        @if (_report.OpenNow > 0)
+        {
+            <div class="att-open-now"><span class="dot"></span> @string.Format(L["att.openNow"], _report.OpenNow)</div>
+        }
+
+        <div class="att-people">
+            @foreach (var p in _report.People)
+            {
+                <div class="att-person-card">
+                    <b>@(p.StaffName ?? p.Name)</b>
+                    @if (p.StaffName is not null && p.StaffName != p.Name)
+                    {
+                        <small>@p.Name</small>
+                    }
+                    <div class="nums">
+                        <span><b>@p.Hours.ToString("0.#")</b> @L["att.h"]</span>
+                        <span><b>@p.Days</b> @L["att.days"]</span>
+                        @if (p.LeaveDays > 0 || p.LeaveHours > 0)
+                        {
+                            <span class="lv">@L["lv.short"]: @(p.LeaveDays > 0 ? $"{p.LeaveDays} {L["att.days"]}" : "")@(p.LeaveDays > 0 && p.LeaveHours > 0 ? " · " : "")@(p.LeaveHours > 0 ? $"{p.LeaveHours:0.#} {L["att.h"]}" : "")</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        @if (_report.Rows.Count > 0)
+        {
+            <div class="att-table-wrap">
+                <table class="att-table">
+                    <thead>
+                        <tr>
+                            <th>@L["att.person"]</th>
+                            <th>@L["att.date"]</th>
+                            <th>@L["att.in"]</th>
+                            <th>@L["att.out"]</th>
+                            <th class="num">@L["att.hours"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _report.Rows)
+                        {
+                            <tr class="@(r.OutAt is null ? "open" : "")">
+                                <td><b data-date="@r.InAt.ToString("ddd d MMM")">@(r.StaffName ?? r.UserName)</b></td>
+                                <td>@r.InAt.ToString("ddd d MMM")</td>
+                                <td class="io-cell">
+                                    <div class="io"><span class="t">@r.InAt.ToString("HH:mm")</span>@LocChip(r.StaffName ?? r.UserName, r.InAt, r.InLat, r.InLng, r.InAccuracy, r.InDistanceM)</div>
+                                </td>
+                                <td class="io-cell">
+                                    @if (r.OutAt is null)
+                                    {
+                                        <span class="badge">@L["att.open"]</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="io"><span class="t">@r.OutAt.Value.ToString("HH:mm")</span>@LocChip(r.StaffName ?? r.UserName, r.OutAt.Value, r.OutLat, r.OutLng, r.OutAccuracy, r.OutDistanceM)</div>
+                                    }
+                                </td>
+                                <td class="num">@r.Hours.ToString("0.0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+
+        @* ---------- Leave decided in this period ---------- *@
+        @if (_report.Leaves.Any(l => l.Status != "pending"))
+        {
+            <div class="att-table-wrap mt-3">
+                <table class="att-table">
+                    <thead>
+                        <tr>
+                            <th>@L["lv.title"]</th>
+                            <th>@L["att.person"]</th>
+                            <th>@L["lv.when"]</th>
+                            <th>@L["lv.reason"]</th>
+                            <th>@L["lv.status"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var lv in _report.Leaves.Where(l => l.Status != "pending"))
+                        {
+                            <tr>
+                                <td>@(lv.Kind == "hourly" ? "⏱ " + L["lv.hourly"] : "📅 " + L["lv.daily"])</td>
+                                <td><b>@(lv.StaffName ?? lv.UserName)</b></td>
+                                <td>@LeaveSpan(lv)</td>
+                                <td>@lv.Reason</td>
+                                <td><span class="lv-st @lv.Status">@L["lv.st." + lv.Status]</span> <small>@lv.DecidedBy</small></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+}
+
+@* ---------- Where the press happened: the map, right here ---------- *@
+@if (_map is { } map)
+{
+    <div class="oo-modal" @onclick="@(() => _map = null)">
+        <div class="tm-sheet att-map-sheet" @onclick:stopPropagation="true">
+            <div class="head">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Place" /></span>
+                <b>@map.Who · @map.At.ToString("ddd d MMM HH:mm")</b>
+            </div>
+            <div class="att-map-meta">
+                @if (map.DistanceM is double d)
+                {
+                    <span class="att-loc @(d <= NearM ? "near" : "far")">@DistanceLabel(d)</span>
+                }
+                @if (map.AccuracyM is double a)
+                {
+                    <span class="acc">@string.Format(L["att.accuracy"], (int)a)</span>
+                }
+            </div>
+            <iframe class="att-map" src="@($"https://maps.google.com/maps?q={Inv(map.Lat)},{Inv(map.Lng)}&z=17&output=embed")" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            <div class="acts">
+                <MudButton Href="@($"https://maps.google.com/?q={Inv(map.Lat)},{Inv(map.Lng)}")" Target="_blank" StartIcon="@Icons.Material.Filled.OpenInNew">@L["att.openMaps"]</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => _map = null)">@L["common.close"]</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private const double NearM = 150;   // inside the store, give or take a phone's GPS wobble
+    private sealed record MapView(string Who, DateTime At, double Lat, double Lng, double? AccuracyM, double? DistanceM);
+    private MapView? _map;
+
+    private AttendanceReportDto? _report;
+    private List<AttendancePersonDto> _people = [];
+    private string _range = "week";
+    private int _userId;
+    private bool _busy;
+    private DateRange? _custom;
+    private DateRange? _applied;
+
+    private (DateTime from, DateTime to) Period => _range switch
+    {
+        "month" => (new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1), DateTime.Today),
+        "last" => (new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-1), new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1)),
+        "custom" when _custom is { Start: { } s, End: { } e } => (s, e),
+        _ => (DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek), DateTime.Today),
+    };
+
+    private string RangeLabel => $"{Period.from:d MMM} – {Period.to:d MMM yyyy}";
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_custom is { Start: not null, End: not null } && !ReferenceEquals(_custom, _applied))
+        {
+            _applied = _custom; _range = "custom"; await Load();
+        }
+    }
+
+    private async Task Load()
+    {
+        _report = null;
+        var (from, to) = Period;
+        _report = await Api.GetAttendanceReportAsync(from, to, _userId);
+        if (_userId == 0 && _report is not null) _people = _report.People;
+    }
+
+    private async Task SetRange(string range) { _range = range; await Load(); }
+    private async Task SetUser(int userId) { _userId = userId; await Load(); }
+
+    private string LeaveSpan(LeaveDto lv) => lv.Kind == "hourly"
+        ? $"{lv.From:ddd d MMM} · {lv.From:HH:mm}–{lv.To:HH:mm} ({lv.Hours:0.#} {L["att.h"]})"
+        : $"{lv.From:ddd d MMM} – {lv.To:ddd d MMM} ({lv.Days} {L["att.days"]})";
+
+    /// <summary>Approve or reject, with an optional line the person will read.</summary>
+    private async Task Decide(LeaveDto leave, bool approve)
+    {
+        var note = await Dialogs.ShowMessageBox(approve ? L["lv.approve"] : L["lv.reject"],
+            $"{leave.StaffName ?? leave.UserName} — {LeaveSpan(leave)}",
+            yesText: approve ? L["lv.approve"] : L["lv.reject"], cancelText: L["common.cancel"]);
+        if (note != true) return;
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.DecideLeaveAsync(leave.Id, approve, null);
+            if (!ok) { Snackbar.Add(L.ServerError(error) ?? L["common.wentWrong"], Severity.Error); return; }
+            Snackbar.Add(approve ? L["lv.approved"] : L["lv.rejected"], approve ? Severity.Success : Severity.Info);
+            await Load();
+        }
+        finally { _busy = false; }
+    }
+
+    private static string Inv(double d) => d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private string DistanceLabel(double metres) => metres < 1000
+        ? string.Format(L["att.atStore"], (int)metres)
+        : string.Format(L["att.far"], (metres / 1000).ToString("0.#"));
+
+    /// <summary>
+    /// The position as a chip the admin can read at a glance — "35 m from the store" in
+    /// green, "2.4 km away" in orange — and tap for the map. No position = a grey mark.
+    /// </summary>
+    private RenderFragment LocChip(string who, DateTime at, double? lat, double? lng, double? acc, double? distance) => __builder =>
+    {
+        if (lat is double la && lng is double lo)
+        {
+            var cls = distance is null ? "unknown" : distance <= NearM ? "near" : "far";
+            var text = distance is double d ? DistanceLabel(d) : L["att.map"];
+            <button type="button" class="att-loc @cls" title="@(acc is double a ? string.Format(L["att.accuracy"], (int)a) : "")"
+                    @onclick="@(() => _map = new MapView(who, at, la, lo, acc, distance))">📍 @text</button>
+        }
+        else
+        {
+            <span class="att-loc none" title="@L["att.noLocation"]">⊘ @L["att.noLocation"]</span>
+        }
+    };
+
+    // ---------- export ----------
+    private List<ExportColumnDto> ExportColumns =>
+    [
+        new(L["att.person"], Width: 26), new(L["att.date"], Width: 14), new(L["att.in"], Width: 10), new(L["att.out"], Width: 10),
+        new(L["att.hours"], Numeric: true, Width: 10), new(L["att.map"] + " (" + L["att.in"] + ")", Width: 30), new(L["att.map"] + " (" + L["att.out"] + ")", Width: 30),
+    ];
+
+    private Task<List<List<string>>> ExportRows() => Task.FromResult(
+        (_report?.Rows ?? []).Select(r => new List<string>
+        {
+            r.StaffName ?? r.UserName, r.InAt.ToString("yyyy-MM-dd"), r.InAt.ToString("HH:mm"), r.OutAt?.ToString("HH:mm") ?? "",
+            r.Hours.ToString("0.00"),
+            r.InLat is double a && r.InLng is double b ? $"{Inv(a)},{Inv(b)}" : "",
+            r.OutLat is double c && r.OutLng is double d ? $"{Inv(c)},{Inv(d)}" : "",
+        }).ToList());
+
+    private Task<List<string>?> ExportTotals() => Task.FromResult<List<string>?>(
+        [L["common.total"], "", "", "", (_report?.Rows.Sum(r => r.Hours) ?? 0).ToString("0.00"), "", ""]);
+}

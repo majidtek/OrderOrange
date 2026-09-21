@@ -1,0 +1,61 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>OrderOrange Partner — Store Portal</title>
+    <base href="/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Cairo:wght@400;600;800&family=Vazirmatn:wght@400;600;800&family=Noto+Sans+Devanagari:wght@400;600;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
+    <link rel="stylesheet" href="_content/Heron.MudCalendar/Heron.MudCalendar.min.css" />
+    <link rel="stylesheet" href="_content/OrderOrange.ClientCore/food.css?v=782" />
+    <link rel="icon" type="image/svg+xml" href="_content/OrderOrange.ClientCore/logo.svg?v=4" />
+    <!-- Must run before first paint so the page is never laid out twice. -->
+    <script src="_content/OrderOrange.ClientCore/mf-viewport.js?v=6"></script>
+</head>
+
+<body class="pf">
+    <div id="app">
+        <!-- Painted while the runtime downloads; replaced the moment the app boots. -->
+        <div class="mf-boot" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#fff7f0;font-family:Inter,system-ui,sans-serif;color:#7a4a2a">
+            <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="oo-b-paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8A3D"/><stop offset="0.55" stop-color="#FF5A00"/><stop offset="1" stop-color="#E64500"/></linearGradient><linearGradient id="oo-b-leaf" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2E9E4F"/><stop offset="1" stop-color="#57C97A"/></linearGradient></defs><path fill="url(#oo-b-paper)" d="M20 15h24a5 5 0 0 1 5 5v38l-5.8-4.2L37.4 58l-5.8-4.2L25.8 58 20 53.8 14.2 58V20a5 5 0 0 1 5-5z"/><path fill="#1F7A3C" d="M32 16.6c-.7 0-1.2-.6-1.2-1.2V11c0-.7.5-1.2 1.2-1.2s1.2.5 1.2 1.2v4.4c0 .6-.5 1.2-1.2 1.2z"/><path fill="url(#oo-b-leaf)" d="M33.4 12.2c2.9-4.3 8-5.9 12-5.3.8.1 1.3 1 1 1.7-1.4 3.8-4.8 7.9-10 8.2-1.4.1-2.6-.4-3.4-1.2-.9-.9-.8-2.3.4-3.4z"/><rect x="20.5" y="27" width="23" height="4" rx="2" fill="#FFFFFF" opacity=".95"/><rect x="20.5" y="35" width="16" height="4" rx="2" fill="#FFFFFF" opacity=".95"/><rect x="20.5" y="43" width="23" height="5" rx="2.5" fill="#FFD8BF"/></svg>
+            <div style="font-weight:700;font-size:15px">OrderOrange</div>
+            <div style="width:220px;height:6px;border-radius:999px;background:#ffd8bf;overflow:hidden"><div style="height:100%;width:var(--blazor-load-percentage,0%);background:linear-gradient(90deg,#ff8a3d,#ff5a00);transition:width .3s"></div></div>
+            <div style="font-size:12.5px;opacity:.7">Loading <span style="font-variant-numeric:tabular-nums" id="mf-boot-pct"></span></div>
+            <script>(function(){var el=document.getElementById('mf-boot-pct');function tick(){var v=getComputedStyle(document.documentElement).getPropertyValue('--blazor-load-percentage-text').replace(/"/g,'').trim();if(el)el.textContent=v||'';if(document.getElementById('mf-boot-pct'))setTimeout(tick,200);}tick();})();</script>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" data-nosnippet>
+        <span class="msg">Something went wrong.</span>
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-infinite.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-lang.js?v=6"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-export.js?v=10"></script>
+    <script src="_content/OrderOrange.ClientCore/html2canvas.min.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-palette.js?v=3"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-chat.js?v=8"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-qr.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-google.js?v=2"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-floor.js?v=35"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-barcode.js?v=1"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-courier.js?v=1"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-geo.js?v=1"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-nav.js?v=1"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-tour.js?v=5"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-menucard.js?v=3"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-kds.js?v=1"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-whmap.js?v=3"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-loyalty.js?v=2"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-voice.js?v=42"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+
+</html>

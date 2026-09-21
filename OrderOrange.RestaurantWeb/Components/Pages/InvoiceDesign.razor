@@ -1,0 +1,444 @@
+@page "/invoice-design"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>Partner — Invoice designer</PageTitle>
+
+<PageHeader Title="@L["nav.invoiceDesigner"]" Subtitle="@L["des.sub"]" />
+
+@if (_store is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="rd">
+        <div class="rd-controls">
+            @* ---------- One-click templates ---------- *@
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-1">🎭 @L["des.templates"]</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">@L["des.templatesHint"]</MudText>
+                <div class="rd-tpls">
+                    <button type="button" class="rd-tpl" @onclick="@(() => ApplyTemplate("market"))">
+                        <span class="x f-mono">- MARKET -</span><span>@L["des.tplMarket"]</span>
+                    </button>
+                    <button type="button" class="rd-tpl" @onclick="@(() => ApplyTemplate("minimal"))">
+                        <span class="x f-sans">Minimal</span><span>@L["des.tplMinimal"]</span>
+                    </button>
+                    <button type="button" class="rd-tpl" @onclick="@(() => ApplyTemplate("elegant"))">
+                        <span class="x f-serif">Elegant</span><span>@L["des.tplElegant"]</span>
+                    </button>
+                    <button type="button" class="rd-tpl" @onclick="@(() => ApplyTemplate("arabic"))">
+                        <span class="x f-cairo">✱ عربي ✱</span><span>@L["des.tplArabic"]</span>
+                    </button>
+                    <button type="button" class="rd-tpl" @onclick="@(() => ApplyTemplate("bold"))">
+                        <span class="x f-mono" style="font-weight: 900;">■ BOLD ■</span><span>@L["des.tplBold"]</span>
+                    </button>
+                </div>
+            </MudPaper>
+
+            @* ---------- Logo ---------- *@
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-2">🏷️ @L["des.logo"]</MudText>
+                <input type="file" id="rcpt-logo-input" accept="image/png,image/jpeg,image/webp" hidden />
+                <div class="d-flex align-center" style="gap: 12px;">
+                    <div class="rd-logo-box">
+                        @if (_logo is not null)
+                        {
+                            <img src="@_logo" alt="@L["common.logo"]" />
+                        }
+                        else
+                        {
+                            <span>@_store.LogoEmoji</span>
+                        }
+                    </div>
+                    <div class="d-flex flex-column" style="gap: 6px;">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Upload" OnClick="PickLogo" Disabled="_uploadingLogo">
+                            @(_uploadingLogo ? "…" : L["des.uploadLogo"])
+                        </MudButton>
+                        @if (_logo is not null)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Delete" OnClick="@(() => _logo = null)">
+                                @L["common.delete"]
+                            </MudButton>
+                        }
+                    </div>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.logoSize"]</MudText>
+                <div class="pv-seg" style="max-width: 280px;">
+                    <button type="button" class="@(_logoSize == "small" ? "on" : "")" @onclick="@(() => _logoSize = "small")">@L["des.small"]</button>
+                    <button type="button" class="@(_logoSize == "normal" ? "on" : "")" @onclick="@(() => _logoSize = "normal")">@L["des.normal"]</button>
+                    <button type="button" class="@(_logoSize == "large" ? "on" : "")" @onclick="@(() => _logoSize = "large")">@L["des.large"]</button>
+                </div>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">
+                    @L["des.logoHint"]
+                </MudText>
+            </MudPaper>
+
+            @* ---------- Messages ---------- *@
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-2">💬 @L["des.messages"]</MudText>
+                <MudTextField @bind-Value="_headerMessage" Label="@L["des.tagline"]" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Class="mb-3" Immediate="true" Placeholder="@L["des.taglinePh"]" MaxLength="200" />
+                <MudTextField @bind-Value="_footerMessage" Label="@L["des.thanks"]" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Class="mb-3" Immediate="true" Placeholder="@L["des.thanksPh"]" MaxLength="300" />
+                <MudTextField @bind-Value="_promo" Label="@L["des.promo"]" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Immediate="true" Placeholder="@L["des.promoPh"]" MaxLength="300" />
+            </MudPaper>
+
+            @* ---------- Typography ---------- *@
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-2">🔤 @L["des.font"]</MudText>
+                <div class="rd-fonts">
+                    <button type="button" class="rd-font f-mono @(_font == "mono" ? "on" : "")" @onclick="@(() => _font = "mono")">
+                        <span class="x">Aa</span><span>@L["des.fReceipt"]</span>
+                    </button>
+                    <button type="button" class="rd-font f-sans @(_font == "sans" ? "on" : "")" @onclick="@(() => _font = "sans")">
+                        <span class="x">Aa</span><span>@L["des.fClean"]</span>
+                    </button>
+                    <button type="button" class="rd-font f-serif @(_font == "serif" ? "on" : "")" @onclick="@(() => _font = "serif")">
+                        <span class="x">Aa</span><span>@L["des.fElegant"]</span>
+                    </button>
+                    <button type="button" class="rd-font f-cairo @(_font == "cairo" ? "on" : "")" @onclick="@(() => _font = "cairo")">
+                        <span class="x">عA</span><span>@L["des.fArabic"]</span>
+                    </button>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.textSize"]</MudText>
+                <div class="pv-seg" style="max-width: 280px;">
+                    <button type="button" class="@(_fontSize == "small" ? "on" : "")" @onclick="@(() => _fontSize = "small")">@L["des.small"]</button>
+                    <button type="button" class="@(_fontSize == "normal" ? "on" : "")" @onclick="@(() => _fontSize = "normal")">@L["des.normal"]</button>
+                    <button type="button" class="@(_fontSize == "large" ? "on" : "")" @onclick="@(() => _fontSize = "large")">@L["des.large"]</button>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.paperWidth"]</MudText>
+                <div class="pv-seg" style="max-width: 280px;">
+                    <button type="button" class="@(_paperWidth == 80 ? "on" : "")" @onclick="@(() => _paperWidth = 80)">80 mm</button>
+                    <button type="button" class="@(_paperWidth == 58 ? "on" : "")" @onclick="@(() => _paperWidth = 58)">58 mm</button>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.lineSpacing"]</MudText>
+                <div class="pv-seg" style="max-width: 320px;">
+                    <button type="button" class="@(_spacing == "compact" ? "on" : "")" @onclick="@(() => _spacing = "compact")">@L["des.compact"]</button>
+                    <button type="button" class="@(_spacing == "normal" ? "on" : "")" @onclick="@(() => _spacing = "normal")">@L["des.normal"]</button>
+                    <button type="button" class="@(_spacing == "relaxed" ? "on" : "")" @onclick="@(() => _spacing = "relaxed")">@L["des.relaxed"]</button>
+                </div>
+            </MudPaper>
+
+            @* ---------- Style ---------- *@
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-2">✨ @L["des.style"]</MudText>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-1">@L["des.separators"]</MudText>
+                <div class="rd-seps">
+                    <button type="button" class="rd-sep @(_separator == "dash" ? "on" : "")" @onclick="@(() => _separator = "dash")">
+                        <span class="x">- - - - -</span><span>@L["des.sepDash"]</span>
+                    </button>
+                    <button type="button" class="rd-sep @(_separator == "dots" ? "on" : "")" @onclick="@(() => _separator = "dots")">
+                        <span class="x">·······</span><span>@L["des.sepDots"]</span>
+                    </button>
+                    <button type="button" class="rd-sep @(_separator == "stars" ? "on" : "")" @onclick="@(() => _separator = "stars")">
+                        <span class="x">✱ ✱ ✱</span><span>@L["des.sepStars"]</span>
+                    </button>
+                    <button type="button" class="rd-sep @(_separator == "solid" ? "on" : "")" @onclick="@(() => _separator = "solid")">
+                        <span class="x">─────</span><span>@L["des.sepSolid"]</span>
+                    </button>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.totalRow"]</MudText>
+                <div class="pv-seg" style="max-width: 280px;">
+                    <button type="button" class="@(_totalStyle == "plain" ? "on" : "")" @onclick="@(() => _totalStyle = "plain")">@L["des.classic"]</button>
+                    <button type="button" class="@(_totalStyle == "invert" ? "on" : "")" @onclick="@(() => _totalStyle = "invert")">@L["des.highlighted"] ■</button>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.labels"]</MudText>
+                <div class="pv-seg" style="max-width: 320px;">
+                    <button type="button" class="@(_labelStyle == "en" ? "on" : "")" @onclick="@(() => _labelStyle = "en")">@L["des.english"]</button>
+                    <button type="button" class="@(_labelStyle == "bilingual" ? "on" : "")" @onclick="@(() => _labelStyle = "bilingual")">@L["des.bilingual"]</button>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.storeNameStyle"]</MudText>
+                <div class="pv-seg" style="max-width: 320px;">
+                    <button type="button" class="@(_headerStyle == "normal" ? "on" : "")" @onclick="@(() => _headerStyle = "normal")">@L["des.normal"]</button>
+                    <button type="button" class="@(_headerStyle == "big" ? "on" : "")" @onclick="@(() => _headerStyle = "big")">@L["des.big"]</button>
+                    <button type="button" class="@(_headerStyle == "boxed" ? "on" : "")" @onclick="@(() => _headerStyle = "boxed")">@L["des.boxed"] ▣</button>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.itemsLayout"]</MudText>
+                <div class="pv-seg" style="max-width: 280px;">
+                    <button type="button" class="@(_itemStyle == "lines" ? "on" : "")" @onclick="@(() => _itemStyle = "lines")">@L["des.simpleLines"]</button>
+                    <button type="button" class="@(_itemStyle == "table" ? "on" : "")" @onclick="@(() => _itemStyle = "table")">@L["des.table"]</button>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.frame"]</MudText>
+                <div class="pv-seg" style="max-width: 320px;">
+                    <button type="button" class="@(_frame == "none" ? "on" : "")" @onclick="@(() => _frame = "none")">@L["des.none"]</button>
+                    <button type="button" class="@(_frame == "box" ? "on" : "")" @onclick="@(() => _frame = "box")">@L["des.box"]</button>
+                    <button type="button" class="@(_frame == "double" ? "on" : "")" @onclick="@(() => _frame = "double")">@L["des.double"]</button>
+                </div>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.ink"]</MudText>
+                <div class="pv-seg" style="max-width: 280px;">
+                    <button type="button" class="@(_ink == "normal" ? "on" : "")" @onclick="@(() => _ink = "normal")">@L["des.normal"]</button>
+                    <button type="button" class="@(_ink == "bold" ? "on" : "")" @onclick="@(() => _ink = "bold")">@L["des.bold"]</button>
+                </div>
+            </MudPaper>
+
+            @* ---------- Elements ---------- *@
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-1">🧩 @L["des.elements"]</MudText>
+                <MudSwitch T="bool" @bind-Value="_showBarcode" Color="Color.Primary" Label="@L["des.barcode"]" />
+                <MudSwitch T="bool" @bind-Value="_showQr" Color="Color.Primary" Label="@L["des.qr"]" />
+                @if (_showQr)
+                {
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-2 mb-1">@L["des.qrMode"]</MudText>
+                    <div class="pv-seg pv-seg-3 mb-1">
+                        <button type="button" class="@(_qrMode == "verify" ? "on" : "")" @onclick="@(() => _qrMode = "verify")">@L["des.qrVerify"]</button>
+                        <button type="button" class="@(_qrMode == "store" ? "on" : "")" @onclick="@(() => _qrMode = "store")">@L["des.qrStore"]</button>
+                        <button type="button" class="@(_qrMode == "link" ? "on" : "")" @onclick="@(() => _qrMode = "link")">@L["des.qrCustom"]</button>
+                    </div>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                        @(_qrMode switch { "store" => L["des.qrStoreHint"], "link" => L["des.qrCustomHint"], _ => L["des.qrVerifyHint"] })
+                    </MudText>
+                    @if (_qrMode == "link")
+                    {
+                        <MudTextField @bind-Value="_qrLink" Label="@L["des.qrLink"]" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" Immediate="true" Class="mb-2" MaxLength="300"
+                                      Placeholder="@L["des.qrLinkPh"]"
+                                      HelperText="@L["des.qrLinkHint"]"
+                                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Link" />
+                    }
+                    <MudTextField @bind-Value="_qrCaption" Label="@L["des.qrCaption"]" Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" Immediate="true" Class="mb-2" MaxLength="80"
+                                  Placeholder="@(_qrMode == "verify" ? L["rcpt.verify"] : L["rcpt.scan"])"
+                                  HelperText="@L["des.qrCaptionHint"]"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.TextFields" />
+                    <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-2 mb-1">@L["des.qrSize"]</MudText>
+                    <div class="pv-seg pv-seg-3 mb-2">
+                        <button type="button" class="@(_qrSize == "small" ? "on" : "")" @onclick="@(() => _qrSize = "small")">@L["des.small"]</button>
+                        <button type="button" class="@(_qrSize == "normal" ? "on" : "")" @onclick="@(() => _qrSize = "normal")">@L["des.normal"]</button>
+                        <button type="button" class="@(_qrSize == "large" ? "on" : "")" @onclick="@(() => _qrSize = "large")">@L["des.large"]</button>
+                    </div>
+                }
+                <MudSwitch T="bool" @bind-Value="_showVat" Color="Color.Primary" Label="@L["des.crVat"]" />
+                <MudSwitch T="bool" @bind-Value="_showCourier" Color="Color.Primary" Label="@L["des.courierDetails"]" />
+                <MudSwitch T="bool" @bind-Value="_showAddress" Color="Color.Primary" Label="@L["des.storeAddress"]" />
+                <MudSwitch T="bool" Value="@(_stamp == "auto")" ValueChanged="@((bool v) => _stamp = v ? "auto" : "none")"
+                           Color="Color.Primary" Label="@L["des.stamp"]" />
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-2 mb-1">@L["des.copies"]</MudText>
+                <div class="pv-seg" style="max-width: 280px;">
+                    <button type="button" class="@(_copies == 1 ? "on" : "")" @onclick="@(() => _copies = 1)">@L["des.copy1"]</button>
+                    <button type="button" class="@(_copies == 2 ? "on" : "")" @onclick="@(() => _copies = 2)">@L["des.copy2"]</button>
+                </div>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">@L["des.copiesHint"]</MudText>
+            </MudPaper>
+
+        </div>
+
+        @* ---------- Live preview stage ---------- *@
+        <div class="rd-stage">
+            <div class="rdx-toolbar">
+                <span class="rd-stage-label">@L["des.livePreview"]</span>
+                <div class="rdx-zoom">
+                    <button type="button" class="@(_zoom == 80 ? "on" : "")" @onclick="@(() => _zoom = 80)">80%</button>
+                    <button type="button" class="@(_zoom == 100 ? "on" : "")" @onclick="@(() => _zoom = 100)">100%</button>
+                    <button type="button" class="@(_zoom == 125 ? "on" : "")" @onclick="@(() => _zoom = 125)">125%</button>
+                </div>
+            </div>
+            <div class="rdx-paper" style="transform: scale(@(_zoom / 100.0).ToString(System.Globalization.CultureInfo.InvariantCulture))">
+                <div class="rdx-tape"></div>
+                <ReceiptView Order="SampleOrder" Store="_store" Design="CurrentDesign" />
+            </div>
+        </div>
+    </div>
+
+    @* Always-visible floating action bar — Save can never scroll out of sight. *@
+    <div class="rdx-bar">
+        <MudButton Variant="Variant.Text" Style="color: rgba(255,255,255,.8);"
+                   StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="Reset">@L["des.reset"]</MudButton>
+        <MudButton Variant="Variant.Filled" Size="Size.Large" Class="rdx-save"
+                   StartIcon="@Icons.Material.Filled.Save" OnClick="Save" Disabled="_saving">
+            @(_saving ? "…" : L["des.save"])
+        </MudButton>
+    </div>
+}
+
+@code {
+    private MyRestaurantDto? _store;
+
+    private string? _logo;
+    private string _headerMessage = "";
+    private string _footerMessage = "";
+    private string _promo = "";
+    private string _font = "mono";
+    private string _fontSize = "normal";
+    private int _paperWidth = 80;
+    private bool _showBarcode = true;
+    private bool _showVat = true;
+    private bool _showCourier = true;
+    private string _separator = "dash";
+    private string _totalStyle = "plain";
+    private string _spacing = "normal";
+    private string _labelStyle = "en";
+    private bool _showQr;
+    private bool _showAddress = true;
+    private string _headerStyle = "normal";
+    private string _itemStyle = "lines";
+    private string _frame = "none";
+    private string _ink = "normal";
+    private string _logoSize = "normal";
+    private string _stamp = "none";
+    private int _copies = 1;
+    private string _qrLink = "";
+    private string _qrMode = "verify";
+    private string _qrCaption = "";
+    private string _qrSize = "normal";
+    private bool _uploadingLogo;
+    private bool _saving;
+    private int _zoom = 100;
+
+    private ReceiptDesignDto CurrentDesign => new(
+        _logo,
+        string.IsNullOrWhiteSpace(_headerMessage) ? null : _headerMessage,
+        string.IsNullOrWhiteSpace(_footerMessage) ? null : _footerMessage,
+        string.IsNullOrWhiteSpace(_promo) ? null : _promo,
+        _font, _fontSize, _paperWidth, _showBarcode, _showVat, _showCourier,
+        _separator, _totalStyle, _spacing, _labelStyle, _showQr, _showAddress,
+        _headerStyle, _itemStyle, _frame, _ink, _logoSize, _stamp, _copies,
+        string.IsNullOrWhiteSpace(_qrLink) ? null : _qrLink,
+        _qrMode,
+        string.IsNullOrWhiteSpace(_qrCaption) ? null : _qrCaption,
+        _qrSize);
+
+    /// <summary>One-tap looks — each template sets the full style set; texts and logo stay.</summary>
+    private void ApplyTemplate(string name)
+    {
+        (_font, _separator, _totalStyle, _spacing, _labelStyle, _headerStyle, _itemStyle, _frame, _ink) = name switch
+        {
+            "minimal" => ("sans", "solid", "invert", "relaxed", "en", "big", "table", "none", "normal"),
+            "elegant" => ("serif", "dots", "plain", "relaxed", "en", "boxed", "lines", "double", "normal"),
+            "arabic" => ("cairo", "stars", "plain", "normal", "bilingual", "boxed", "lines", "box", "bold"),
+            "bold" => ("mono", "solid", "invert", "compact", "en", "big", "table", "box", "bold"),
+            _ => ("mono", "dash", "plain", "normal", "en", "normal", "lines", "none", "normal")
+        };
+    }
+
+    /// <summary>A realistic sample order so the preview looks like the real thing.</summary>
+    private OrderDto SampleOrder => new(
+        123456, "MF-1234", OrderStatus.OnTheWay, DateTime.Now, 0,
+        "Ahmed Al Lawati", "+968 9123 4567",
+        _store!.Id, _store.Name, _store.LogoEmoji, _store.Area, _store.Phone,
+        99, "Demo Delivery", "+968 9876 5432",
+        "Home — Villa 12, Street 5, Al Khuwair", null, null,
+        PaymentMethod.CashOnDelivery,
+        7.700m, 0.600m, 0.300m, 0m, 8.600m,
+        "llease call when you arrive", null, 35, false, null, false,
+        [
+            new OrderItemDto(1, "Salmon Poke Bowl", 4.100m, 1, null),
+            new OrderItemDto(2, "Grilled Chicken Wrap", 2.300m, 1, "Extra sauce"),
+            new OrderItemDto(3, "Cold-Pressed Beet Juice", 1.300m, 1, null)
+        ],
+        [], DriverPlate: "9531 SG");
+
+    private sealed class PhotoPick
+    {
+        public string? DataUrl { get; set; }
+        public string? Error { get; set; }
+        public bool Image { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _store = await Api.GetMyRestaurantAsync();
+        var design = await Api.GetMyReceiptDesignAsync();
+        if (design is null) return;
+        _logo = design.Logo;
+        _headerMessage = design.HeaderMessage ?? "";
+        _footerMessage = design.FooterMessage ?? "";
+        _promo = design.Promo ?? "";
+        _font = design.Font;
+        _fontSize = design.FontSize;
+        _paperWidth = design.PaperWidth;
+        _showBarcode = design.ShowBarcode;
+        _showVat = design.ShowVat;
+        _showCourier = design.ShowCourier;
+        _separator = design.Separator;
+        _totalStyle = design.TotalStyle;
+        _spacing = design.Spacing;
+        _labelStyle = design.LabelStyle;
+        _showQr = design.ShowQr;
+        _showAddress = design.ShowAddress;
+        _headerStyle = design.HeaderStyle;
+        _itemStyle = design.ItemStyle;
+        _frame = design.Frame;
+        _ink = design.Ink;
+        _logoSize = design.LogoSize;
+        _stamp = design.Stamp;
+        _copies = design.Copies;
+        _qrLink = design.QrLink ?? "";
+        _qrMode = design.QrMode;
+        _qrCaption = design.QrCaption ?? "";
+        _qrSize = design.QrSize;
+    }
+
+    private async Task PickLogo()
+    {
+        _uploadingLogo = true;
+        try
+        {
+            PhotoPick? pick = null;
+            try { pick = await JS.InvokeAsync<PhotoPick?>("mfChat.pickCompressed", "rcpt-logo-input", 60); } catch { }
+            if (pick?.DataUrl is null || !pick.Image)
+            {
+                if (pick?.Error == "TOO_BIG") Snackbar.Add(L["des.logoTooLarge"], Severity.Warning);
+                return;
+            }
+            _logo = pick.DataUrl;
+        }
+        finally
+        {
+            _uploadingLogo = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        try
+        {
+            var (ok, error) = await Api.SaveMyReceiptDesignAsync(CurrentDesign);
+            if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+            Snackbar.Add(L["des.saved"], Severity.Success);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Reset()
+    {
+        _logo = null;
+        _headerMessage = "";
+        _footerMessage = "";
+        _promo = "";
+        _font = "mono";
+        _fontSize = "normal";
+        _paperWidth = 80;
+        _showBarcode = true;
+        _showVat = true;
+        _showCourier = true;
+        _separator = "dash";
+        _totalStyle = "plain";
+        _spacing = "normal";
+        _labelStyle = "en";
+        _showQr = false;
+        _showAddress = true;
+        _headerStyle = "normal";
+        _itemStyle = "lines";
+        _frame = "none";
+        _ink = "normal";
+        _logoSize = "normal";
+        _stamp = "none";
+        _copies = 1;
+        _qrLink = "";
+        _qrMode = "verify";
+        _qrCaption = "";
+        _qrSize = "normal";
+    }
+}

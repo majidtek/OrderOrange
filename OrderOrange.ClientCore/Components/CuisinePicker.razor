@@ -1,0 +1,188 @@
+@namespace OrderOrange.ClientCore.Components
+@inject ApiClient Api
+@inject LanguageService Lang
+
+@* Choosing from 65 cuisines. A dropdown that long is a scroll of despair on a phone, so
+   this renders as a field that opens a SEARCHABLE dialog — type "ira" and إيراني/ایرانی/
+   Iranian all find it, because the filter matches the translated name and the English
+   one at once. *@
+
+<div class="oo-picker-field" @onclick="OpenPicker">
+    <MudTextField Margin="Margin.Dense" T="string" Value="@Display" Label="@Label" Variant="Variant.Outlined"
+                  ReadOnly="true" Class="@Class"
+                  Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.ArrowDropDown"
+                  Style="pointer-events: none;" />
+</div>
+
+<MudDialog @bind-Visible="_open" Options="_options" Class="mf-lang-dialog">
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">@Label</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_search" Immediate="true" Clearable="true" AutoFocus="true"
+                      Placeholder="@Lang["cuisine.searchPh"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="mb-3" />
+
+        <div class="oo-picker-list">
+            @foreach (var cuisine in Filtered)
+            {
+                var item = cuisine;
+                var isMain = item.Id == Value;
+                var isExtra = Multi && _extras.Contains(item.Id);
+                <button type="button" class="oo-picker-tile @(isMain || isExtra ? "on" : "")"
+                        @onclick="@(() => Pick(item))" @onclick:stopPropagation="true">
+                    <span class="em">@item.Emoji</span>
+                    <span class="nm">@Lang.Data("cuisine", item.Name)</span>
+                    @if (Multi && isMain)
+                    {
+                        <span class="oo-picker-main">★</span>
+                    }
+                    @if (isExtra)
+                    {
+                        <span class="oo-picker-tick">✓</span>
+                    }
+                </button>
+            }
+            @if (!Filtered.Any())
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="my-4">
+                    @Lang["cuisine.noMatch"]
+                </MudText>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        @* Only the multi picker needs a close: single-choice closes on the pick itself. *@
+        @if (Multi)
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" FullWidth="true"
+                       OnClick="@(() => _open = false)">@Lang["common.save"]</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    /// <summary>The selected cuisine id — two-way bindable. In Multi mode, the MAIN one.</summary>
+    [Parameter] public int Value { get; set; }
+    [Parameter] public EventCallback<int> ValueChanged { get; set; }
+
+    /// <summary>
+    /// A kitchen can be more than one thing. With Multi on, the first pick is the main
+    /// type (starred) and every further tap toggles an extra; tapping the main hands the
+    /// star to the first extra, so there is always exactly one main while anything at
+    /// all is selected.
+    /// </summary>
+    [Parameter] public bool Multi { get; set; }
+
+    /// <summary>The extra cuisine ids beyond <see cref="Value"/> — two-way bindable.</summary>
+    [Parameter] public IEnumerable<int>? ExtraValues { get; set; }
+    [Parameter] public EventCallback<IEnumerable<int>> ExtraValuesChanged { get; set; }
+
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Narrow the list (the partner settings page filters by store type).</summary>
+    [Parameter] public IReadOnlyList<CuisineDto>? Choices { get; set; }
+
+    private static readonly DialogOptions _options = new()
+    {
+        MaxWidth = MaxWidth.ExtraSmall,
+        FullWidth = true,
+        CloseButton = true,
+        CloseOnEscapeKey = true,
+    };
+
+    private List<CuisineDto>? _loaded;
+    private bool _open;
+    private string _search = "";
+
+    /// <summary>The extras, kept in the order they were tapped.</summary>
+    private List<int> _extras = [];
+
+    private IReadOnlyList<CuisineDto> All => Choices ?? (IReadOnlyList<CuisineDto>?)_loaded ?? [];
+
+    private string Display
+    {
+        get
+        {
+            string One(int id) => All.FirstOrDefault(c => c.Id == id) is { } c
+                ? $"{c.Emoji} {Lang.Data("cuisine", c.Name)}"
+                : "";
+            var main = One(Value);
+            if (!Multi || _extras.Count == 0) return main;
+            var parts = new[] { main }.Concat(_extras.Select(One)).Where(p => p.Length > 0);
+            return string.Join(" · ", parts);
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Multi)
+            _extras = (ExtraValues ?? []).Where(id => id != Value).Distinct().ToList();
+    }
+
+    /// <summary>
+    /// Matches what the person SEES (the translated name) and what the data is (the
+    /// English name), so "ایرانی" and "iranian" both land on the same row.
+    /// </summary>
+    private IEnumerable<CuisineDto> Filtered
+    {
+        get
+        {
+            var term = _search.Trim();
+            if (term.Length == 0) return All;
+            return All.Where(c =>
+                Lang.Data("cuisine", c.Name).Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                c.Name.Contains(term, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Choices is null)
+            _loaded = await Api.GetCuisinesAsync();
+    }
+
+    private void OpenPicker()
+    {
+        _search = "";
+        _open = true;
+    }
+
+    private async Task Pick(CuisineDto cuisine)
+    {
+        if (!Multi)
+        {
+            _open = false;
+            if (cuisine.Id == Value) return;
+            Value = cuisine.Id;
+            await ValueChanged.InvokeAsync(cuisine.Id);
+            return;
+        }
+
+        // Multi: the dialog stays open, taps sculpt the set.
+        if (cuisine.Id == Value)
+        {
+            // Un-starring the main promotes the first extra, so a selection never
+            // exists without a main — the store row demands one.
+            if (_extras.Count == 0) return;
+            Value = _extras[0];
+            _extras.RemoveAt(0);
+            await ValueChanged.InvokeAsync(Value);
+        }
+        else if (_extras.Contains(cuisine.Id))
+        {
+            _extras.Remove(cuisine.Id);
+        }
+        else if (Value == 0)
+        {
+            Value = cuisine.Id;
+            await ValueChanged.InvokeAsync(Value);
+        }
+        else
+        {
+            _extras.Add(cuisine.Id);
+        }
+        await ExtraValuesChanged.InvokeAsync(_extras.ToList());
+    }
+}

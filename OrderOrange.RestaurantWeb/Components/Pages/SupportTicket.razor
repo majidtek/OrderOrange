@@ -1,0 +1,120 @@
+@page "/support/{Id}"
+@using OrderOrange.ClientCore.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* One ticket from the partner's chair: the conversation with support, the status
+   strip, and the two things only the partner can say — "solved" and "how was it". *@
+
+<PageTitle>Partner — Support</PageTitle>
+
+<div class="tk-page">
+@if (_detail is null)
+{
+    @if (_missing)
+    {
+        <EmptyState Emoji="🔍" Title="@L["tk.e.notFound"]" />
+    }
+    else
+    {
+        <Loader FullPage="true" />
+    }
+}
+else
+{
+    var t = _detail.Ticket;
+    <div class="tk-head">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Class="mf-flip-rtl" OnClick="@(() => Nav.NavigateTo("/support"))" />
+        <div class="ttl">
+            <div class="line">
+                <code>@t.Number</code>
+                <span class="pill @SupportUi.StatusCss(t.Status)">@L[$"tk.s.{t.Status}"]</span>
+                <span class="prio" style="--c:@SupportUi.PriorityColor(t.Priority)">● @L[$"tk.p.{t.Priority}"]</span>
+            </div>
+            <h2>@t.Subject</h2>
+            <small>@SupportUi.CategoryEmoji(t.Category) @L[$"tk.c.{t.Category}"] · @string.Format(L["tk.created"], t.CreatedAt.ToString("yyyy-MM-dd HH:mm"))@(t.AssignedTo is not null ? " · " + string.Format(L["tk.a.assigned"], t.AssignedTo) : "")</small>
+        </div>
+        <div class="acts">
+            @if (t.Status is "open" or "in_progress" or "waiting")
+            {
+                <MudButton Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small" StartIcon="@Icons.Material.Filled.TaskAlt" OnClick="Close">@L["tk.act.solved"]</MudButton>
+            }
+            else if (t.Status == "resolved")
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" StartIcon="@Icons.Material.Filled.TaskAlt" OnClick="Close">@L["tk.act.close"]</MudButton>
+            }
+        </div>
+    </div>
+
+    @if (t.Status is "resolved" or "closed")
+    {
+        <div class="tk-rate">
+            <b>@(t.Rating is null ? L["tk.act.rate"] : L["tk.act.rated"])</b>
+            <div class="stars">
+                @for (var i = 1; i <= 5; i++)
+                {
+                    var n = i;
+                    <button type="button" class="@((t.Rating ?? 0) >= n ? "on" : "")" disabled="@(t.Rating is not null)" @onclick="@(() => Rate(n))">★</button>
+                }
+            </div>
+            @if (t.Status == "closed")
+            {
+                <small>@L["tk.act.reopenHint"]</small>
+            }
+        </div>
+    }
+
+    <SupportThread Detail="_detail" Side="partner" CanReply="true" OnReply="Reply" FetchFile="FetchFile"
+                   ReplyHint="@(t.Status is "resolved" or "closed" ? L["tk.act.reopenHint"] : null)" />
+}
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private SupportTicketDetailDto? _detail;
+    private bool _missing;
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        _timer = new System.Threading.Timer(async _ => await InvokeAsync(async () => { await Load(silent: true); StateHasChanged(); }), null, 20000, 20000);
+    }
+
+    private async Task Load(bool silent = false)
+    {
+        var d = await Api.GetSupportTicketAsync(Id);
+        if (d is null) { if (!silent) _missing = true; return; }
+        _detail = d;
+    }
+
+    private async Task Reply(TicketReplyRequest req)
+    {
+        var (d, error) = await Api.ReplySupportTicketAsync(Id, req);
+        if (d is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        _detail = d;
+    }
+
+    private async Task Close()
+    {
+        var (d, error) = await Api.CloseSupportTicketAsync(Id);
+        if (d is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        _detail = d;
+    }
+
+    private async Task Rate(int n)
+    {
+        var (d, error) = await Api.RateSupportTicketAsync(Id, new TicketRateRequest(n));
+        if (d is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        _detail = d;
+        Snackbar.Add(L["tk.act.rated"], Severity.Success);
+    }
+
+    private Task<SupportFileDto?> FetchFile(string fileId) => Api.GetSupportFileAsync(Id, fileId);
+
+    public void Dispose() => _timer?.Dispose();
+}

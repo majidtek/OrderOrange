@@ -1,0 +1,336 @@
+﻿@page "/instagram/schedule"
+@using OrderOrange.Shared
+@using OrderOrange.ClientCore.Components
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* Plan a post: a picture, a caption, a day and an hour. The server publishes it at that
+   minute with the store's own Instagram token — nothing has to stay open. *@
+
+<PageTitle>OrderOrange — @L["igp.title"]</PageTitle>
+
+<div class="igp">
+    <div class="igp-head">
+        <div>
+            <MudText Typo="Typo.h5" Class="mb-1 ig-h5"><MudIcon Icon="@OrderOrange.ClientCore.Services.BrandIcons.Instagram" Class="ig-h5-ic" />@L["igp.title"]</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@L["igp.sub"]</MudText>
+        </div>
+        <MudButton Variant="Variant.Text" Href="/instagram" StartIcon="@Icons.Material.Filled.Send">@L["igp.postNow"]</MudButton>
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-4" />
+    }
+    else if (_ig is not { Connected: true })
+    {
+        <MudPaper Elevation="0" Class="igp-card igp-empty">
+            <span class="ic"><MudIcon Icon="@OrderOrange.ClientCore.Services.BrandIcons.Instagram" Style="width:30px;height:30px;color:#FF5A00;" /></span>
+            <MudText Typo="Typo.h6">@L["ig.connectTitle"]</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">@L["ig.sub"]</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/instagram">@L["ig.connect"]</MudButton>
+        </MudPaper>
+    }
+    else
+    {
+        <div class="igp-grid">
+            @* ---------------- the composer ---------------- *@
+            <MudPaper Elevation="0" Class="igp-card">
+                <div class="igp-compose">
+                    @* the picture *@
+                    <div class="igp-shot @(_photo is null && _menuItem is null ? "empty" : "")" @onclick="PickFile">
+                        @if (_photo is { Length: > 0 })
+                        {
+                            <img src="@_photo" alt="" />
+                        }
+                        else if (_menuItem is { Photo: { Length: > 0 } p })
+                        {
+                            <img src="@p" alt="@_menuItem.Name" />
+                        }
+                        else
+                        {
+                            <span class="hint">
+                                <span class="plus">@(_uploading ? "…" : "＋")</span>
+                                <b>@L["igp.addPhoto"]</b>
+                                <small>@L["igp.addPhotoHint"]</small>
+                            </span>
+                        }
+                        @if (_photo is not null || _menuItem is not null)
+                        {
+                            <button type="button" class="x" @onclick:stopPropagation="true" @onclick="ClearPhoto">✕</button>
+                        }
+                    </div>
+
+                    <div class="igp-fields">
+                        <div class="d-flex align-center mb-1" style="gap: 8px;">
+                            <span class="igp-lbl mb-0 flex-grow-1">@L["igp.fromMenu"]</span>
+                            <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Search"
+                                       OnClick="OpenPicker">@L["igp.allProducts"]</MudButton>
+                        </div>
+                        @if (_menuItem is not null)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text"
+                                     OnClose="@(() => ChooseDish(_menuItem))">@_menuItem.NameFor(L.Locale)</MudChip>
+                        }
+                        @if (_withPhotos.Count > 0)
+                        {
+                            <div class="igp-dishes">
+                                @foreach (var item in _withPhotos)
+                                {
+                                    var i = item;
+                                    <button type="button" class="@(_menuItem?.Id == i.Id ? "on" : "")" @onclick="@(() => ChooseDish(i))">
+                                        <img src="@i.Photo" alt="@i.Name" loading="lazy" />
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                        <MudTextField @bind-Value="_caption" Label="@L["ig.caption"]" Variant="Variant.Outlined"
+                                      Margin="Margin.Dense" Lines="5" Class="mt-2" Counter="2200" MaxLength="2200" />
+                        <div class="igp-tags">
+                            @foreach (var tag in Hashtags)
+                            {
+                                var t = tag;
+                                <button type="button" @onclick="@(() => AddTag(t))">@t</button>
+                            }
+                        </div>
+
+                        <span class="igp-lbl mt-3">@L["igp.when"]</span>
+                        <div class="igp-when">
+                            <MfDatePicker @bind-Date="_date" Label="@L["igp.date"]" MinDate="DateTime.Today" Class="flex-grow-1" />
+                            <MfTimePicker @bind-Time="_time" Label="@L["igp.time"]" Class="flex-grow-1" />
+                        </div>
+                        <div class="igp-quick">
+                            @foreach (var (label, at) in QuickSlots)
+                            {
+                                var when = at;
+                                <button type="button" @onclick="@(() => SetWhen(when))">@label</button>
+                            }
+                        </div>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">@WhenSummary</MudText>
+
+                        @if (_error is not null)
+                        {
+                            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_error</MudAlert>
+                        }
+
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
+                                   StartIcon="@Icons.Material.Filled.Schedule" Class="mt-3"
+                                   Disabled="@(_busy || !CanSchedule)" OnClick="Schedule">
+                            @(_busy ? L["igp.scheduling"] : L["igp.schedule"])
+                        </MudButton>
+                    </div>
+                </div>
+            </MudPaper>
+
+            @* ---------------- the plan ---------------- *@
+            <MudPaper Elevation="0" Class="igp-card">
+                <MudText Typo="Typo.subtitle1" Class="mb-1"><b>@L["igp.planned"]</b></MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">@L["igp.plannedSub"]</MudText>
+
+                @if (_posts is not { Count: > 0 })
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@L["igp.nothing"]</MudText>
+                }
+                else
+                {
+                    <div class="igp-list">
+                        @foreach (var post in _posts)
+                        {
+                            var p = post;
+                            <div class="igp-row @p.Status">
+                                <span class="th">
+                                    @if (p.ThumbUrl is { Length: > 0 } th)
+                                    {
+                                        <img src="@th" alt="" loading="lazy" />
+                                    }
+                                </span>
+                                <span class="body">
+                                    <b>@p.DueAt.ToString("ddd dd MMM · HH:mm")</b>
+                                    <span class="cap">@Short(p.Caption)</span>
+                                    @if (p.Error is { Length: > 0 } err && p.Status == "failed")
+                                    {
+                                        <span class="err">@err</span>
+                                    }
+                                </span>
+                                <span class="act">
+                                    <span class="state @p.Status">@L[$"igp.st.{p.Status}"]</span>
+                                    @if (p.Status == "scheduled")
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" OnClick="@(() => Cancel(p))" />
+                                    }
+                                    else if (p.Permalink is { Length: > 0 } link)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.OpenInNew" Size="Size.Small" Href="@link" Target="_blank" />
+                                    }
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+            </MudPaper>
+        </div>
+    }
+</div>
+
+@code {
+    private InstagramStatusDto? _ig;
+    private List<ScheduledPostDto>? _posts;
+    private List<MenuItemDto> _withPhotos = [];
+    private List<MenuCategoryDto> _menu = [];
+    private MenuItemDto? _menuItem;
+    private string? _photo, _error;
+    private string _caption = "";
+    private DateTime? _date = DateTime.Today;
+    private TimeSpan? _time = new TimeSpan(DateTime.Now.Hour + 1, 0, 0);
+    private bool _loading = true, _busy, _uploading;
+
+    private static readonly string[] Hashtags =
+        ["#OrderOrange", "#Oman", "#Muscat", "#FoodDelivery", "#مسقط", "#عمان"];
+
+    /// <summary>The three hours a restaurant actually posts at, one tap each.</summary>
+    private (string, DateTime)[] QuickSlots => [
+        (L["igp.tonight"], DateTime.Today.AddHours(19)),
+        (L["igp.tomorrowNoon"], DateTime.Today.AddDays(1).AddHours(12)),
+        (L["igp.tomorrowEve"], DateTime.Today.AddDays(1).AddHours(19)),
+    ];
+
+    private bool CanSchedule => _caption.Trim().Length > 0 && (_photo is not null || _menuItem is not null)
+                                && _date is not null && _time is not null;
+
+    private DateTime? When => _date is { } d && _time is { } t ? d.Date + t : null;
+
+    private string WhenSummary => When is { } w
+        ? (w <= DateTime.Now ? L["igp.past"] : string.Format(L["igp.inTime"], Human(w - DateTime.Now)))
+        : "";
+
+    private string Human(TimeSpan span) =>
+        span.TotalHours < 1 ? string.Format(L["igp.minutes"], (int)span.TotalMinutes)
+        : span.TotalDays < 1 ? string.Format(L["igp.hours"], (int)span.TotalHours)
+        : string.Format(L["igp.days"], (int)span.TotalDays);
+
+    private static string Short(string caption) =>
+        caption.Length <= 70 ? caption : caption[..70].TrimEnd() + "…";
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.Changed += OnLang;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _ig = await Api.GetInstagramAsync();
+        if (_ig is { Connected: true })
+        {
+            _posts = await Api.GetScheduledPostsAsync();
+            _menu = await Api.GetMyMenuAsync() ?? [];
+            _withPhotos = _menu.SelectMany(c => c.Items)
+                .Where(i => i.Photo is { Length: > 0 } && i.IsAvailable).Take(18).ToList();
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    /// <summary>The whole menu, searchable — the strip only shows the first few.</summary>
+    private async Task OpenPicker()
+    {
+        var parameters = new DialogParameters<PickProductDialog> { { d => d.Categories, _menu } };
+        var dialog = await Dialogs.ShowAsync<PickProductDialog>(L["igp.pickProduct"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result?.Canceled != false || result.Data is not MenuItemDto item) return;
+        _menuItem = null;              // force the caption seed to run for the new pick
+        ChooseDish(item);
+        StateHasChanged();
+    }
+
+    private void ChooseDish(MenuItemDto item)
+    {
+        _menuItem = _menuItem?.Id == item.Id ? null : item;
+        if (_menuItem is not null)
+        {
+            _photo = null;
+            if (_caption.Trim().Length == 0)
+                _caption = $"{item.NameFor(L.Locale)} — {item.Price:0.000} {Fmt.Symbol}\n\n{L["ig.captionSeed"]}\n\n#OrderOrange #Oman #Muscat";
+        }
+    }
+
+    private void ClearPhoto()
+    {
+        _photo = null;
+        _menuItem = null;
+    }
+
+    private void AddTag(string tag)
+    {
+        if (_caption.Contains(tag, StringComparison.OrdinalIgnoreCase)) return;
+        _caption = _caption.TrimEnd() + (_caption.Trim().Length == 0 ? "" : " ") + tag;
+    }
+
+    private void SetWhen(DateTime at)
+    {
+        _date = at.Date;
+        _time = at.TimeOfDay;
+    }
+
+    private async Task PickFile()
+    {
+        if (_uploading) return;
+        _uploading = true;
+        try
+        {
+            var meta = await JS.InvokeAsync<string?>("mfImage.pick", false, 680000);
+            if (string.IsNullOrEmpty(meta)) return;
+            if (meta is "huge" or "too-big") { _error = L["common.photoTooLarge"]; return; }
+            var parked = System.Text.Json.JsonDocument.Parse(meta);
+            var id = parked.RootElement.GetProperty("id").GetString()!;
+            var size = parked.RootElement.GetProperty("size").GetInt32();
+            var sb = new System.Text.StringBuilder(size);
+            for (var offset = 0; offset < size; offset += 50000)
+                sb.Append(await JS.InvokeAsync<string>("mfBlob.chunk", id, offset, 50000));
+            await JS.InvokeVoidAsync("mfBlob.end", id);
+            _photo = sb.ToString();
+            _menuItem = null;
+            _error = null;
+        }
+        catch { _error = L["common.photoTooLarge"]; }
+        finally { _uploading = false; StateHasChanged(); }
+    }
+
+    private async Task Schedule()
+    {
+        _error = null;
+        if (When is not { } when) return;
+        if (when <= DateTime.Now) { _error = L["igp.past"]; return; }
+        _busy = true;
+        try
+        {
+            var (post, error) = await Api.SchedulePostAsync(new SchedulePostRequest(
+                _caption.Trim(), when, _menuItem?.Id, null, _photo));
+            if (post is null) { _error = error ?? L["common.saveFail"]; return; }
+            Snackbar.Add(L["igp.scheduled"], Severity.Success);
+            _caption = "";
+            ClearPhoto();
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Cancel(ScheduledPostDto post)
+    {
+        var yes = await Dialogs.ShowMessageBox(L["igp.cancelTitle"], L["igp.cancelMsg"],
+            yesText: L["igp.cancelYes"], cancelText: L["common.cancel"]);
+        if (yes != true) return;
+        await Api.CancelScheduledPostAsync(post.Id);
+        await LoadAsync();
+    }
+
+    private void OnLang() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => L.Changed -= OnLang;
+}

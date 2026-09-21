@@ -1,0 +1,30 @@
+<mah:MetroWindow x:Class="LocalHandler.ChargeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:mah="clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro"
+        Title="Charge on card terminal" Height="380" Width="560"
+        WindowStartupLocation="CenterScreen" Topmost="True"
+        ShowMinButton="False" ShowMaxRestoreButton="False"
+        TitleCharacterCasing="Normal"
+        WindowTitleBrush="#20180F" TitleForeground="#F2E9DF"
+        GlowBrush="#F4511E" BorderThickness="0">
+    <Grid>
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#FFF3EC" Offset="0" />
+                <GradientStop Color="#FFE0CC" Offset="1" />
+            </LinearGradientBrush>
+        </Grid.Background>
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Text="💳  CHARGE ON CARD TERMINAL" FontSize="17" FontWeight="Bold"
+                       Foreground="#8A5B3A" HorizontalAlignment="Center" />
+            <TextBlock x:Name="AmountText" Text="0.000 OMR" FontSize="72" FontWeight="ExtraBold"
+                       Foreground="#241C15" HorizontalAlignment="Center" Margin="0,10,0,2" />
+            <TextBlock x:Name="RefText" Text="" FontSize="16" Foreground="#8A7F70"
+                       HorizontalAlignment="Center" Margin="0,0,0,26" />
+            <Button Content="  DONE — customer paid  " Click="Done_Click" Height="52" FontSize="16"
+                    FontWeight="Bold" Foreground="White" Background="#22A05E" BorderThickness="0"
+                    Padding="26,0" HorizontalAlignment="Center" Cursor="Hand" />
+        </StackPanel>
+    </Grid>
+</mah:MetroWindow>

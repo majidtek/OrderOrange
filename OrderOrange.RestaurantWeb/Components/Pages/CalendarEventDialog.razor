@@ -1,0 +1,108 @@
+﻿@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+
+@* Add or edit one calendar entry: what, when, which colour, and when to be reminded. *@
+<MudDialog>
+    <DialogContent>
+        <MudTextField @bind-Value="_title" Label="@L["cal.f.title"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="120" Class="mb-3" />
+        <div class="d-flex flex-wrap" style="gap: 12px;">
+            <MfDatePicker @bind-Date="_date" Label="@L["att.date"]" DateFormat="yyyy-MM-dd" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 flex-grow-1" />
+            @if (!_allDay)
+            {
+                <MfTimePicker @bind-Time="_start" Label="@L["cal.f.start"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Style="min-width: 120px;" />
+                <MfTimePicker @bind-Time="_end" Label="@L["cal.f.end"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="mb-3" Style="min-width: 120px;" />
+            }
+        </div>
+        <MudSwitch T="bool" @bind-Value="_allDay" Label="@L["cal.f.allDay"]" Size="Size.Small" />
+
+        <MudSelect T="int" @bind-Value="_remind" Label="@L["cal.f.remind"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="mb-3"
+                   AdornmentIcon="@Icons.Material.Filled.NotificationsActive" Adornment="Adornment.Start">
+            <MudSelectItem T="int" Value="-1">@L["cal.r.none"]</MudSelectItem>
+            <MudSelectItem T="int" Value="0">@L["cal.r.atTime"]</MudSelectItem>
+            <MudSelectItem T="int" Value="15">@string.Format(L["cal.r.minutes"], 15)</MudSelectItem>
+            <MudSelectItem T="int" Value="30">@string.Format(L["cal.r.minutes"], 30)</MudSelectItem>
+            <MudSelectItem T="int" Value="60">@string.Format(L["cal.r.hours"], 1)</MudSelectItem>
+            <MudSelectItem T="int" Value="180">@string.Format(L["cal.r.hours"], 3)</MudSelectItem>
+            <MudSelectItem T="int" Value="1440">@string.Format(L["cal.r.days"], 1)</MudSelectItem>
+            <MudSelectItem T="int" Value="2880">@string.Format(L["cal.r.days"], 2)</MudSelectItem>
+            <MudSelectItem T="int" Value="10080">@string.Format(L["cal.r.days"], 7)</MudSelectItem>
+        </MudSelect>
+
+        <MudTextField @bind-Value="_details" Label="@L["cal.f.details"]" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="3" MaxLength="2000" Class="mb-3" />
+
+        <div class="cal-swatches">
+            @foreach (var c in Swatches)
+            {
+                var color = c;
+                <button type="button" class="@(color == _color ? "on" : "")" style="--c:@color" @onclick="@(() => _color = color)" aria-label="@color"></button>
+            }
+        </div>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_busy" StartIcon="@Icons.Material.Filled.Save">@L["common.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public CalendarEventDto? Existing { get; set; }
+    [Parameter] public DateTime? InitialDate { get; set; }
+
+    private static readonly string[] Swatches = ["#ff7a1a", "#1f7a3a", "#1d4ed8", "#7e22ce", "#b3261e", "#0891b2", "#b45309", "#241f1b"];
+
+    private string _title = "";
+    private string _details = "";
+    private string _color = "#ff7a1a";
+    private DateTime? _date = DateTime.Today;
+    private TimeSpan? _start = new(9, 0, 0);
+    private TimeSpan? _end;
+    private bool _allDay;
+    private int _remind = 60;
+    private bool _busy;
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not null)
+        {
+            _title = Existing.Title; _details = Existing.Details ?? ""; _color = Existing.Color; _allDay = Existing.AllDay;
+            _date = Existing.StartAt.Date; _start = Existing.StartAt.TimeOfDay; _end = Existing.EndAt?.TimeOfDay;
+            _remind = Existing.RemindMinutes ?? -1;
+        }
+        else if (InitialDate is DateTime d)
+        {
+            _date = d.Date;
+            _start = d.TimeOfDay == TimeSpan.Zero ? new TimeSpan(9, 0, 0) : d.TimeOfDay;
+        }
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_title)) { _error = L["cal.e.title"]; return; }
+        var day = (_date ?? DateTime.Today).Date;
+        var start = _allDay ? day : day + (_start ?? new TimeSpan(9, 0, 0));
+        DateTime? end = _allDay || _end is null ? null : day + _end.Value;
+        if (end is DateTime e && e <= start) end = start.AddHours(1);
+
+        _busy = true;
+        try
+        {
+            var req = new SaveCalendarEventRequest(_title.Trim(), _details, _color, start, end, _allDay, _remind < 0 ? null : _remind);
+            var (saved, error) = Existing is null
+                ? await Api.CreateCalendarEventAsync(req)
+                : await Api.UpdateCalendarEventAsync(Existing.Id, req);
+            if (saved is null) { _error = L.ServerError(error) ?? L["common.saveFail"]; return; }
+            Snackbar.Add(L["common.saved"], Severity.Success);
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally { _busy = false; }
+    }
+}

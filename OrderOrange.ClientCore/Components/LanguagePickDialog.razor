@@ -1,0 +1,73 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+
+@* All the OTHER tongues in one dialog: every remaining language gets its input
+   here — fill any you like, save, and they ride back to the form as chips. *@
+
+<MudDialog Class="mf-lang-dialog">
+    <TitleContent>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <div class="mf-lang-badge"><MudIcon Icon="@Icons.Material.Filled.Translate" /></div>
+            <MudText Typo="Typo.h6" Style="font-weight: 800;">@Lang["nf.addLang"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">@Lang["nf.dlgHint"]</MudText>
+        <div class="nm-rows">
+            @foreach (var option in Options)
+            {
+                var language = option;
+                <div class="nm-row">
+                    @if (AddressIcon)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Place" Class="nf-loc" />
+                    }
+                    else
+                    {
+                        <img class="pf-flag" src="https://flagcdn.com/w40/@(FlagOf(language.Code)).png" alt="" />
+                    }
+                    <MudTextField Value="@ValueOf(language.Code)" T="string"
+                                  ValueChanged="@(v => _values[language.Code] = v ?? "")"
+                                  Label="@language.NativeName"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </div>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@Lang["common.cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save"
+                   StartIcon="@Icons.Material.Filled.Check">@Lang["common.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public List<LanguageService.LanguageOption> Options { get; set; } = [];
+    [Parameter] public Dictionary<string, string>? Value { get; set; }
+    [Parameter] public bool AddressIcon { get; set; }
+
+    private readonly Dictionary<string, string> _values = [];
+
+    protected override void OnInitialized()
+    {
+        foreach (var pair in Value ?? []) _values[pair.Key] = pair.Value;
+    }
+
+    private string ValueOf(string code) => _values.GetValueOrDefault(code, "");
+
+    private void Save()
+    {
+        var clean = _values
+            .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
+            .ToDictionary(kv => kv.Key, kv => kv.Value.Trim());
+        Dialog.Close(DialogResult.Ok(clean));
+    }
+
+    private static string FlagOf(string code) => code switch
+    {
+        "en" => "gb", "ar" => "om", "fa" => "ir", "ur" => "pk", "hi" => "in",
+        "tr" => "tr", "fr" => "fr", "es" => "es", "de" => "de", "ru" => "ru",
+        "it" => "it", "pt" => "pt", "zh" => "cn", "ja" => "jp", _ => "un",
+    };
+}

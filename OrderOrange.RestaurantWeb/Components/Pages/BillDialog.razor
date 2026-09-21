@@ -1,0 +1,106 @@
+﻿@inject ApiClient Api
+@inject LanguageService L
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-2">@L["w.category"]</MudText>
+        <div class="bl-cats mb-4">
+            @foreach (var (key, emoji, label) in BillCategories.All)
+            {
+                var k = key;
+                <button type="button" class="bl-cat @(_category == k ? "on" : "")" @onclick="@(() => _category = k)">
+                    <span class="e">@emoji</span><span>@L["bcat." + key]</span>
+                </button>
+            }
+        </div>
+
+        <MudTextField @bind-Value="_title" Label="@L["bill.titleField"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Class="mb-3" Immediate="true" Placeholder="@L["bill.titlePh"]" MaxLength="120" />
+        <div class="d-flex" style="gap: 12px;">
+            <MudTextField @bind-Value="_vendor" Label="@L["w.vendor"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Class="mb-3" Placeholder="@L["bill.vendorPh"]" MaxLength="120" />
+            <MudTextField @bind-Value="_reference" Label="@L["w.reference"]" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" Class="mb-3" MaxLength="60" />
+        </div>
+        <div class="d-flex" style="gap: 12px;">
+            <MudNumericField @bind-Value="_amount" Label="@($"{L["w.amount"]} ({Fmt.Symbol})")" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             Format="0.000" Min="0.001m" Step="1m" Class="mb-3" />
+            <MfDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_dueDate" Label="@L["bill.dueDate"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        </div>
+        <MudTextField @bind-Value="_notes" Label="@L["common.notes"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Lines="2" Class="mb-2" MaxLength="300" />
+
+        <div class="d-flex flex-wrap" style="gap: 18px;">
+            <MudSwitch T="bool" @bind-Value="_isPaid" Color="Color.Success" Label="@L["bill.alreadyPaid"]" />
+            <MudSwitch T="bool" @bind-Value="_recurring" Color="Color.Primary" Label="@L["bill.repeats"]" />
+        </div>
+        @if (_recurring)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">
+                @L["bill.repeatsHint"]
+            </MudText>
+        }
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy">
+            @(Existing is null ? L["bill.addBtn"] : L["bill.saveBtn"])
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public StoreBillDto? Existing { get; set; }
+
+    private string _category = "electricity";
+    private string _title = "";
+    private string _vendor = "";
+    private string _reference = "";
+    private decimal _amount = 10.000m;
+    private DateTime? _dueDate = DateTime.Today.AddDays(7);
+    private string _notes = "";
+    private bool _isPaid;
+    private bool _recurring;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null) return;
+        _category = Existing.Category;
+        _title = Existing.Title;
+        _vendor = Existing.Vendor ?? "";
+        _reference = Existing.Reference ?? "";
+        _amount = Existing.Amount;
+        _dueDate = Existing.DueDate;
+        _notes = Existing.Notes ?? "";
+        _isPaid = Existing.IsPaid;
+        _recurring = Existing.Recurring;
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var request = new SaveStoreBillRequest(_category, _title, _vendor, _reference, _amount,
+                _dueDate ?? DateTime.Today, _isPaid, _recurring, _notes);
+            var (ok, error) = Existing is null
+                ? await Api.CreateBillAsync(request)
+                : await Api.UpdateBillAsync(Existing.Id, request);
+            if (!ok) { _error = error ?? L["common.saveFail"]; return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,344 @@
+@page "/contract/{Code}"
+@layout OrderOrange.ClientWeb.Components.Layout.PublicLayout
+@using OrderOrange.ClientCore.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+@* Where the emailed contract link lands. Public — no sign-in: the signature inside
+   the code is the key. The page IS the letter, wearing the store's own face, and it
+   prints onto one clean A4 — which is also how "download as PDF" works everywhere:
+   the browser's own print-to-PDF, no extra machinery. *@
+
+<PageTitle>@L["ct.docTitle"] · OrderOrange</PageTitle>
+
+<div class="pub-top">
+    <div class="pub-brand">
+        <img src="logo.svg?v=4" alt="OrderOrange" />
+    </div>
+    <LanguageMenu Compact="true" />
+</div>
+
+@if (_loading)
+{
+    <Loader FullPage="true" />
+}
+else if (_doc is null)
+{
+    <div class="pub-wrap">
+        <div class="bill-card bill-bad">
+            <div class="bill-seal bad">✕</div>
+            <h1>@L["ct.notFound"]</h1>
+            <p>@L["ct.notFoundHint"]</p>
+            <div class="bill-code">@Code</div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="pub-wrap">
+        <div class="ct-doc mf-ascii">
+            <div class="hd">
+                <div class="mark">
+                    @if (_doc.StoreLogo is { Length: > 0 } logo) { <img src="@logo" alt="@_doc.StoreName" /> }
+                    else { <span>@(_doc.StoreEmoji is { Length: > 0 } e ? e : "🍽️")</span> }
+                </div>
+                <div class="who">
+                    <b>@StoreText.Name(_doc.StoreName, _doc.StoreNames, L)</b>
+                    <small>@(($"{_doc.StoreArea} {_doc.StoreStreet}").Trim())</small>
+                    @if (_doc.StorePhone is { Length: > 0 })
+                    {
+                        @* Typography, not glyphs — ☎ renders as a cartoon emoji. *@
+                        <small class="ph mf-ltr"><span class="tel">TEL</span> @_doc.StorePhone</small>
+                    }
+                </div>
+            </div>
+
+            <div class="ttl">
+                <span class="eyebrow">@L["ct.docTitle"]</span>
+                <h1>@_doc.CustomerName</h1>
+            </div>
+
+            @* The terms wear the same table dress as the goods below them. *@
+            <table class="goods facts-t">
+                <thead>
+                    <tr><th>@L["ct.starts"]</th><th>@L["ct.months"]</th><th>@L["ct.perMonth"]</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><b>@_doc.StartDate.ToString("dd MMM yyyy")</b></td>
+                        <td><b>@(_doc.Months == 0 ? L["ct.openEnded"] : $"{_doc.Months}")</b></td>
+                        <td><b>@_doc.TimesPerMonth</b></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table class="goods">
+                <thead>
+                    <tr><th>@L["partner.productName"]</th><th>@L["inv.qty"]</th><th>@L["partner.price"]</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in _doc.Lines)
+                    {
+                        <tr><td>@line.Name</td><td>@line.Quantity</td><td>@Fmt.Amount(line.UnitPrice)</td></tr>
+                    }
+                    <tr class="sum"><td colspan="2">@L["ct.perDelivery"]</td><td>@Fmt.Amount(_doc.Lines.Sum(l => l.Quantity * l.UnitPrice))</td></tr>
+                    @* The price the whole agreement turns on — the table's last word,
+                       in the same columns as the goods above it. *@
+                    <tr class="grand"><td colspan="2">@L["ct.monthly"]</td><td>@Fmt.Rial(_doc.MonthlyPrice)</td></tr>
+                </tbody>
+            </table>
+
+            @if (_doc.Note is { Length: > 0 })
+            {
+                <div class="note">@_doc.Note</div>
+            }
+
+            @if (_doc.AcceptedAt is { } accepted)
+            {
+                <div class="stamp">
+                    <span class="mk">✓</span>
+                    <div class="w">
+                        <b>@L["ct.acceptedTitle"]</b>
+                        <small>@(_doc.AcceptedBy is { Length: > 0 } by ? by : _doc.CustomerName) · @accepted.ToString("dd MMM yyyy HH:mm")</small>
+                    </div>
+                </div>
+            }
+
+            <div class="foot">
+                @_doc.StoreName
+                @if (_doc.CrNumber is { Length: > 0 }) { <span> · CR @_doc.CrNumber</span> }
+                @if (_doc.VatNumber is { Length: > 0 }) { <span> · VAT @_doc.VatNumber</span> }
+                @if (_doc.StoreEmail is { Length: > 0 }) { <span> · @_doc.StoreEmail</span> }
+            </div>
+        </div>
+
+        @* Accepting and replying live OUTSIDE the letter: the paper carries the
+           stamp, never the buttons. *@
+        @if (_doc.AcceptedAt is null)
+        {
+            <div class="ct-answer">
+                <button type="button" class="acc" disabled="@_answering" @onclick="Accept">
+                    @if (_answering) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" /> }
+                    else { <span>✓</span> }
+                    @L["ct.accept"]
+                </button>
+            </div>
+        }
+        @* A proper composer: the field and a round send key wearing a paper plane.
+           Always pressable — an empty send is ANSWERED, not silently ignored. *@
+        @* The counter-offer: the receiver adds products or bends the term, and the
+           SAME letter updates for both sides. Only while nothing is accepted yet. *@
+        @if (_doc.AcceptedAt is null)
+        {
+            <div class="ct-suggest">
+                <button type="button" class="hd" @onclick="@(() => _suggestOpen = !_suggestOpen)">
+                    ✎ @L["ct.suggest"] <span class="ar">@(_suggestOpen ? "▴" : "▾")</span>
+                </button>
+                @if (_suggestOpen)
+                {
+                    <div class="bd">
+                        @for (var i = 0; i < _newLines.Count; i++)
+                        {
+                            var idx = i;
+                            <div class="ln">
+                                <input maxlength="80" placeholder="@L["partner.productName"]" @bind="_newLines[idx].Name" />
+                                <input type="number" min="1" max="10000" placeholder="@L["inv.qty"]" @bind="_newLines[idx].Quantity" />
+                                <input type="number" min="0" step="0.1" placeholder="@L["partner.price"]" @bind="_newLines[idx].UnitPrice" />
+                                <button type="button" class="x" @onclick="@(() => _newLines.RemoveAt(idx))">×</button>
+                            </div>
+                        }
+                        <button type="button" class="add" @onclick="@(() => _newLines.Add(new NewLine()))">＋ @L["ct.addLine"]</button>
+                        <div class="mo">
+                            <label>@L["ct.months"]</label>
+                            <input type="number" min="0" max="60" @bind="_newMonths" />
+                            <small>@L["ct.monthsHint"]</small>
+                        </div>
+                        <button type="button" class="go" disabled="@_answering" @onclick="Propose">
+                            @if (_answering) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" /> }
+                            @L["ct.sgSend"]
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="ct-answer reply">
+            <textarea maxlength="500" rows="2" placeholder="@L["ct.replyPh"]" @bind="_reply" @bind:event="oninput"></textarea>
+            <button type="button" class="snd" disabled="@_answering" title="@L["ct.replySend"]"
+                    aria-label="@L["ct.replySend"]" @onclick="Reply">
+                @if (_answering)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" />
+                }
+                else
+                {
+                    <svg viewBox="0 0 24 24" class="plane" aria-hidden="true"><path fill="currentColor" d="M2.01 21 23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+                }
+            </button>
+        </div>
+        @if (_doc.Replies is { Count: > 0 } sentReplies)
+        {
+            <div class="ct-replies">
+                @foreach (var r in sentReplies)
+                {
+                    <div class="r"><span>@r.Text</span><small>@r.At.ToString("dd MMM HH:mm")</small></div>
+                }
+            </div>
+        }
+
+        @* The actions never print — the paper is the letter alone. *@
+        <div class="ct-acts">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_pdfBusy"
+                       StartIcon="@(_pdfBusy ? null : Icons.Material.Filled.PictureAsPdf)"
+                       OnClick="Pdf">
+                @if (_pdfBusy) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" Class="me-2" /> }
+                @L["ct.pdf"]
+            </MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Share"
+                       OnClick="Share">@L["w.share"]</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Primary"
+                       OnClick="@(() => Nav.NavigateTo(_doc.StoreUrl, true))">@StoreText.Name(_doc.StoreName, _doc.StoreNames, L)</MudButton>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+
+    private PublicContractDto? _doc;
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _doc = await Api.GetPublicContractAsync(Code);
+        _newMonths = _doc?.Months ?? 0;
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Opened as "download the PDF" (?print=1) — from the partner list, or a saved
+    /// shortcut — the print dialog comes up by itself as soon as the letter is on
+    /// screen: the reader lands one tap from Save as PDF instead of on a web page
+    /// wondering where the file is.
+    /// </summary>
+    private bool _autoPrinted;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_autoPrinted || _doc is null) return;
+        var uri = new Uri(Nav.Uri);
+        if (!uri.Query.Contains("print=1", StringComparison.OrdinalIgnoreCase)) return;
+        _autoPrinted = true;
+        await Task.Delay(600);   // let the logo image paint before the snapshot
+        await Pdf();
+    }
+
+    private string? _reply;
+    private bool _answering;
+
+    // ---- The counter-offer ----
+    private sealed class NewLine
+    {
+        public string Name = "";
+        public int Quantity = 1;
+        public decimal UnitPrice;
+    }
+
+    private bool _suggestOpen;
+    private List<NewLine> _newLines = [];
+    private int _newMonths;
+
+    private async Task Propose()
+    {
+        var adding = _newLines.Where(l => !string.IsNullOrWhiteSpace(l.Name))
+            .Select(l => new ContractLineDto(l.Name.Trim(), l.Quantity, l.UnitPrice)).ToList();
+        var months = _newMonths != _doc!.Months ? (int?)_newMonths : null;
+        if (adding.Count == 0 && months is null)
+        {
+            Snackbar.Add(L["ct.sgEmpty"], Severity.Error);
+            return;
+        }
+        _answering = true;
+        try
+        {
+            var (updated, error) = await Api.ProposeContractAsync(Code, new ProposeContractRequest(adding, months));
+            if (updated is null) { Snackbar.Add(L.ServerError(error) ?? L["common.wentWrong"], Severity.Error); return; }
+            _doc = updated;
+            _newLines = [];
+            _newMonths = updated.Months;
+            _suggestOpen = false;
+            Snackbar.Add(L["ct.replySent"], Severity.Success);
+        }
+        finally { _answering = false; }
+    }
+
+    /// <summary>The yes. One tap; the letter comes back wearing its stamp.</summary>
+    private async Task Accept()
+    {
+        _answering = true;
+        try
+        {
+            var (updated, error) = await Api.AcceptContractAsync(Code);
+            if (updated is null) { Snackbar.Add(L.ServerError(error) ?? L["common.wentWrong"], Severity.Error); return; }
+            _doc = updated;
+            Snackbar.Add(L["ct.acceptedMsg"], Severity.Success);
+        }
+        finally { _answering = false; }
+    }
+
+    /// <summary>A written answer back to the store.</summary>
+    private async Task Reply()
+    {
+        if (string.IsNullOrWhiteSpace(_reply))
+        {
+            Snackbar.Add(L["ct.replyEmpty"], Severity.Error);
+            return;
+        }
+        _answering = true;
+        try
+        {
+            var (updated, error) = await Api.ReplyContractAsync(Code, _reply!.Trim());
+            if (updated is null) { Snackbar.Add(L.ServerError(error) ?? L["common.wentWrong"], Severity.Error); return; }
+            _doc = updated;
+            _reply = null;
+            Snackbar.Add(L["ct.replySent"], Severity.Success);
+        }
+        finally { _answering = false; }
+    }
+
+    /// <summary>
+    /// The real file when the server offers one; the browser's print-to-PDF otherwise.
+    /// </summary>
+    /// <summary>The first print of a letter takes the server ~15 s — the button says so.</summary>
+    private bool _pdfBusy;
+
+    private async Task Pdf()
+    {
+        if (_doc?.PdfUrl is { Length: > 0 } url)
+        {
+            _pdfBusy = true;   // the spinner holds until the browser actually leaves
+            StateHasChanged();
+            Nav.NavigateTo(url, forceLoad: true);
+            return;
+        }
+        try { await JS.InvokeVoidAsync("window.print"); } catch (JSException) { }
+    }
+
+    /// <summary>The phone's own share sheet when there is one; the clipboard otherwise.</summary>
+    private async Task Share()
+    {
+        var url = Nav.Uri;
+        try
+        {
+            var shared = await JS.InvokeAsync<bool>("eval",
+                $"(async () => {{ if (navigator.share) {{ try {{ await navigator.share({{ url: '{url}' }}); return true; }} catch {{ return true; }} }} return false; }})()");
+            if (shared) return;
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
+            Snackbar.Add(L["qr.copied"], Severity.Success);
+        }
+        catch (JSException) { }
+    }
+}

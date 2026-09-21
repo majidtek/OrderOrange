@@ -1,0 +1,698 @@
+﻿@page "/loyalty"
+@using OrderOrange.Shared
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The regulars. Points arrive on their own whenever an order is paid; this page is for
+   looking a guest up, ringing up a visit by hand, handing out a reward, nudging the ones
+   who are nearly there or have gone quiet, and setting the rules. Numbers count up, the
+   ring fills, a reward throws confetti — all of it from mf-loyalty.js, none of it needed
+   for the page to work. *@
+
+<PageTitle>OrderOrange — @L["ly.title"]</PageTitle>
+
+<PageHeader Title="@L["ly.title"]" Subtitle="@L["ly.sub"]" />
+
+@if (_board is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    var p = _board.Program;
+    var need = Math.Max(1, p.RewardPoints);
+    <div class="ly">
+        @* ---------------- the programme at a glance ---------------- *@
+        <div class="ly-stats">
+            <div class="ly-stat rv" style="--i:0">
+                <span class="k">@L["ly.members"]</span>
+                <span class="v"><span data-count="@_board.Members">0</span></span>
+                <span class="s">@string.Format(L["ly.active30"], _board.ActiveMembers30d)</span>
+                <div class="ly-tiermix" title="@L["ly.tiers"]">
+                    @{
+                        var total = Math.Max(1, _board.Members);
+                    }
+                    <i class="t-bronze" style="width:@(_board.Bronze * 100 / total)%"></i>
+                    <i class="t-silver" style="width:@(_board.Silver * 100 / total)%"></i>
+                    <i class="t-gold" style="width:@(_board.Gold * 100 / total)%"></i>
+                </div>
+                <span class="legend"><b class="t-bronze"></b>@_board.Bronze <b class="t-silver"></b>@_board.Silver <b class="t-gold"></b>@_board.Gold</span>
+            </div>
+            <div class="ly-stat rv" style="--i:1">
+                <span class="k">@L["ly.outstanding"]</span>
+                <span class="v"><span data-count="@_board.PointsOutstanding">0</span> <em>@L["ly.pts"]</em></span>
+                <span class="s">@string.Format(L["ly.worth"], Fmt.Money(_board.Liability))</span>
+            </div>
+            <div class="ly-stat rv" style="--i:2">
+                <span class="k">@L["ly.redeemed"]</span>
+                <span class="v"><span data-count="@_board.RedeemedPoints">0</span> <em>@L["ly.pts"]</em></span>
+                <span class="s">@string.Format(L["ly.worth"], Fmt.Money(_board.RedeemedValue))</span>
+            </div>
+            <div class="ly-stat chart rv" style="--i:3">
+                <span class="k">@L["ly.last30"]</span>
+                <span class="v"><span data-count="@_board.EarnedPoints30d">0</span> <em>@L["ly.earned"]</em></span>
+                <div class="ly-bars">
+                    @{
+                        var max = Math.Max(1, _board.Days.Max(d => Math.Max(d.Earned, d.Redeemed)));
+                    }
+                    @foreach (var (d, i) in _board.Days.Select((d, i) => (d, i)))
+                    {
+                        <span class="b" style="--i:@i;height:@(Math.Max(4, d.Earned * 100 / max))%" title="@d.Day.ToString("dd MMM") · +@d.Earned / −@d.Redeemed">
+                            @if (d.Redeemed > 0)
+                            {
+                                <i style="height:@(Math.Min(100, d.Redeemed * 100 / Math.Max(1, d.Earned)))%"></i>
+                            }
+                        </span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* ---------------- who to nudge ---------------- *@
+        @if (_board.AlmostThere is { Count: > 0 } || _board.Sleeping is { Count: > 0 })
+        {
+            <div class="ly-insights rv" style="--i:5">
+                @if (_board.AlmostThere is { Count: > 0 } almost)
+                {
+                    <div class="ly-insight almost">
+                        <div class="ih">
+                            <MudIcon Icon="@Icons.Material.Filled.Bolt" Size="Size.Small" />
+                            <h4>@L["ly.almostThere"]</h4>
+                            <span class="n">@almost.Count</span>
+                        </div>
+                        <p>@L["ly.almostSub"]</p>
+                        <div class="chips">
+                            @foreach (var m in almost)
+                            {
+                                var mm = m;
+                                <button type="button" class="ly-chip" @onclick="@(() => Pick(mm))">
+                                    <span class="av tier-@m.Tier">@Initials(m.Name)</span>
+                                    <span class="t">@m.Name<small>@string.Format(L["ly.shortBy"], m.ToNextReward)</small></span>
+                                    <span class="wa" title="@L["ly.nudge"]" @onclick="@(() => Nudge(mm, true))" @onclick:stopPropagation="true">
+                                        <MudIcon Icon="@Icons.Custom.Brands.WhatsApp" Size="Size.Small" />
+                                    </span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+                @if (_board.Sleeping is { Count: > 0 } sleeping)
+                {
+                    <div class="ly-insight sleep">
+                        <div class="ih">
+                            <MudIcon Icon="@Icons.Material.Filled.NightsStay" Size="Size.Small" />
+                            <h4>@L["ly.sleeping"]</h4>
+                            <span class="n">@sleeping.Count</span>
+                        </div>
+                        <p>@L["ly.sleepingSub"]</p>
+                        <div class="chips">
+                            @foreach (var m in sleeping)
+                            {
+                                var mm = m;
+                                <button type="button" class="ly-chip" @onclick="@(() => Pick(mm))">
+                                    <span class="av tier-@m.Tier">@Initials(m.Name)</span>
+                                    <span class="t">@m.Name<small>@m.Balance @L["ly.pts"] · @(m.LastAt?.ToString("dd MMM"))</small></span>
+                                    <span class="wa" title="@L["ly.nudge"]" @onclick="@(() => Nudge(mm, false))" @onclick:stopPropagation="true">
+                                        <MudIcon Icon="@Icons.Custom.Brands.WhatsApp" Size="Size.Small" />
+                                    </span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @* ---------------- right now: who is here, what is unpaid ---------------- *@
+        <div class="ly-live rv" style="--i:4">
+            <div class="ly-card ly-online">
+                <div class="ly-head">
+                    <h3><i class="dot"></i> @L["ly.onlineNow"] <span class="n">@(_live?.Online.Count ?? 0)</span></h3>
+                    <span class="tick">@L["ly.autoRefresh"] @(_live is null ? "" : $"· {_liveAt:HH:mm:ss}")</span>
+                </div>
+                @if (_live is null)
+                {
+                    <p class="ly-empty">…</p>
+                }
+                else if (_live.Online.Count == 0)
+                {
+                    <p class="ly-empty">@L["ly.nobodyOnline"]</p>
+                }
+                else
+                {
+                    <div class="ly-people">
+                        @foreach (var g in _live.Online)
+                        {
+                            var gg = g;
+                            <button type="button" class="ly-person @(g.Signed ? "signed" : "") @(g.Doing == "table" ? "seated" : "")"
+                                    disabled="@(g.UserId is null)" @onclick="@(() => PickLive(gg.UserId, gg.Who))">
+                                <span class="av tier-@g.Tier">
+                                    @if (g.Doing == "table")
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.TableRestaurant" Size="Size.Small" />
+                                    }
+                                    else if (g.Signed)
+                                    {
+                                        @Initials(g.Who)
+                                    }
+                                    else
+                                    {
+                                        <text>👤</text>
+                                    }
+                                </span>
+                                <span class="t">
+                                    <b>@(string.IsNullOrWhiteSpace(g.Who) ? L["ly.tableGuest"] : g.Who)</b>
+                                    <small>
+                                        @L[$"ly.doing.{g.Doing}"]
+                                        @(g.Table is not null ? $"· {g.Table}" : "")
+                                        · @Ago(g.LastAt)
+                                        @(g.Views > 1 ? $"· {g.Views}×" : "")
+                                    </small>
+                                </span>
+                                @if (g.Signed)
+                                {
+                                    <span class="pt">@g.Balance <em>@L["ly.pts"]</em></span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="ly-card ly-open">
+                <div class="ly-head">
+                    <h3><MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Size="Size.Small" /> @L["ly.openInvoices"] <span class="n">@(_live?.Open.Count ?? 0)</span></h3>
+                    <span class="tick">@(_live is null ? "" : Fmt.Money(_live.Open.Sum(o => o.Total)))</span>
+                </div>
+                @if (_live is null)
+                {
+                    <p class="ly-empty">…</p>
+                }
+                else if (_live.Open.Count == 0)
+                {
+                    <p class="ly-empty">@L["ly.noOpen"]</p>
+                }
+                else
+                {
+                    <div class="ly-invoices">
+                        @foreach (var o in _live.Open)
+                        {
+                            var oo = o;
+                            <button type="button" class="ly-inv @(o.RewardsReady > 0 ? "gift" : "")" disabled="@(o.UserId is null)"
+                                    @onclick="@(() => PickLive(oo.UserId, oo.Customer))">
+                                <span class="no">@o.Number</span>
+                                <span class="who">
+                                    <b>@(string.IsNullOrEmpty(o.Customer) ? L["ly.walkIn"] : o.Customer)</b>
+                                    <small>@L[$"ly.st.{o.Status}"] · @Ago(o.PlacedAt) @(o.Table is not null ? $"· {o.Table}" : $"· {L[$"ly.kind.{o.Kind}"]}")</small>
+                                </span>
+                                <span class="amt">@Fmt.Money(o.Total)</span>
+                                <span class="pts">
+                                    @if (o.UserId is null) { <em>—</em> }
+                                    else if (o.RewardsReady > 0) { <MudIcon Icon="@Icons.Material.Filled.CardGiftcard" Size="Size.Small" /> <text>@string.Format(L["ly.rewardShort"], o.RewardsReady)</text> }
+                                    else { <text>@o.Balance @L["ly.pts"]</text> }
+                                </span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="ly-grid">
+            <div class="ly-main">
+            @* ---------------- find a guest, ring up, reward ---------------- *@
+            <MudPaper Elevation="0" Class="ly-card rv" Style="--i:5">
+                <h3>@L["ly.findGuest"]</h3>
+                <div class="ly-search @(_hits.Count > 0 && _member is null ? "open" : "")">
+                    <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                    <input value="@_q" placeholder="@L["ly.searchPh"]" @oninput="OnSearch" />
+                    @if (_searching)
+                    {
+                        <span class="spin"></span>
+                    }
+                </div>
+
+                @if (_hits.Count > 0 && _member is null)
+                {
+                    @if (_q.Length == 0)
+                    {
+                        <div class="ly-hint">@L["ly.recentGuests"]</div>
+                    }
+                    <div class="ly-hits">
+                        @foreach (var (h, i) in _hits.Select((h, i) => (h, i)))
+                        {
+                            var m = h;
+                            <button type="button" class="ly-hit rv" style="--i:@i" @onclick="@(() => Pick(m))">
+                                <span class="av tier-@m.Tier">@Initials(m.Name)</span>
+                                <span class="nm">@m.Name <small>@m.Phone</small></span>
+                                <span class="pt">@m.Balance <em>@L["ly.pts"]</em></span>
+                            </button>
+                        }
+                    </div>
+                }
+                else if (_member is null)
+                {
+                    <div class="ly-empty-art">
+                        <div class="orb"><MudIcon Icon="@Icons.Material.Filled.Loyalty" /></div>
+                        <p>@(_q.Length > 0 ? L["ly.noHits"] : L["ly.searchHint"])</p>
+                    </div>
+                }
+
+                @if (_member is { } mem)
+                {
+                    var pct = mem.RewardsReady > 0 ? 100 : Math.Min(100, mem.Balance * 100 / need);
+                    <div class="ly-member tier-@mem.Tier @(mem.RewardsReady > 0 ? "ready" : "") @(_celebrate ? "pop" : "")" @key="mem.UserId">
+                        <div class="glow"></div>
+                        <button type="button" class="back" @onclick="Unpick" title="@L["common.back"]">‹</button>
+                        <div class="ring" style="--p:0" data-p="@pct">
+                            <span class="n" data-count="@mem.Balance">0</span>
+                            <span class="u">@L["ly.pts"]</span>
+                        </div>
+                        <div class="who">
+                            <div class="nm">@mem.Name <em class="tier">@L[$"ly.tier.{mem.Tier}"]</em></div>
+                            <div class="ph">@mem.Phone @if (mem.JoinedAt is { } j) { <span>· @L["ly.since"] @j.ToString("MMM yyyy")</span> }</div>
+                            <div class="facts">
+                                <span><b>@mem.Visits</b> @L["ly.visits"]</span>
+                                <span><b>@mem.Lifetime.ToString("N0")</b> @L["ly.lifetime"]</span>
+                                <span><b>@mem.Redeemed.ToString("N0")</b> @L["ly.redeemedShort"]</span>
+                                @if (mem.LastAt is { } last)
+                                {
+                                    <span>@L["ly.last"] <b>@last.ToString("dd MMM")</b></span>
+                                }
+                            </div>
+                            <div class="next">
+                                @if (mem.RewardsReady > 0)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.CardGiftcard" Size="Size.Small" />
+                                    @string.Format(L["ly.rewardReady"], mem.RewardsReady, Fmt.Money(p.RewardValue * mem.RewardsReady))
+                                }
+                                else
+                                {
+                                    @string.Format(L["ly.toNext"], mem.ToNextReward, Fmt.Money(p.RewardValue))
+                                }
+                            </div>
+                            @{
+                                var nextTier = mem.Tier == LoyaltyTiers.Bronze && p.SilverAt > 0 ? (L["ly.tier.silver"], p.SilverAt)
+                                    : mem.Tier == LoyaltyTiers.Silver && p.GoldAt > 0 ? (L["ly.tier.gold"], p.GoldAt) : ((string?)null, 0);
+                            }
+                            @if (nextTier.Item1 is { } tierName)
+                            {
+                                var tp = Math.Min(100, mem.Lifetime * 100 / Math.Max(1, nextTier.Item2));
+                                <div class="tierbar" title="@string.Format(L["ly.toTier"], nextTier.Item2 - mem.Lifetime, tierName)">
+                                    <i style="width:@tp%"></i>
+                                    <span>@string.Format(L["ly.toTier"], nextTier.Item2 - mem.Lifetime, tierName)</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="ly-actions">
+                        <div class="ly-act">
+                            <div class="ly-hint">@L["ly.ringUp"]</div>
+                            <div class="row">
+                                <input type="number" min="0" step="0.5" placeholder="0.000" value="@_amount"
+                                       @oninput="@(e => _amount = e.Value?.ToString() ?? "")" @onkeydown="@(e => { if (e.Key == "Enter") _ = Earn(); })" />
+                                <span class="sym">@Fmt.Symbol</span>
+                                <button type="button" class="go" disabled="@(!p.Enabled || _busy || PreviewPoints <= 0)" @onclick="Earn">
+                                    <MudIcon Icon="@Icons.Material.Filled.AddCircle" Size="Size.Small" /> +@PreviewPoints @L["ly.pts"]
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ly-act">
+                            <div class="ly-hint">@L["ly.reward"]</div>
+                            <div class="row">
+                                <button type="button" class="go gift @(mem.Balance >= need ? "live" : "")" disabled="@(_busy || mem.Balance < need)" @onclick="@(() => Redeem(0))">
+                                    <MudIcon Icon="@Icons.Material.Filled.Redeem" Size="Size.Small" />
+                                    @string.Format(L["ly.redeemOne"], need, Fmt.Money(p.RewardValue))
+                                </button>
+                            </div>
+                        </div>
+                        <div class="ly-act">
+                            <div class="ly-hint">@L["ly.adjust"]</div>
+                            <div class="row">
+                                <input type="number" step="1" placeholder="±" value="@_adjust"
+                                       @oninput="@(e => _adjust = e.Value?.ToString() ?? "")" />
+                                <input class="why" placeholder="@L["ly.why"]" value="@_why"
+                                       @oninput="@(e => _why = e.Value?.ToString() ?? "")" />
+                                <button type="button" class="go plain" disabled="@(_busy || !int.TryParse(_adjust, out var a) || a == 0 || _why.Trim().Length == 0)" @onclick="Adjust">✓</button>
+                            </div>
+                        </div>
+                        <button type="button" class="ly-walink" @onclick="@(() => Nudge(mem, mem.RewardsReady == 0))">
+                            <MudIcon Icon="@Icons.Custom.Brands.WhatsApp" Size="Size.Small" /> @L["ly.nudge"]
+                        </button>
+                    </div>
+
+                    @if (_error is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_error</MudAlert>
+                    }
+
+                    <div class="ly-hint mt-3">@L["ly.history"]</div>
+                    @if (_history.Count == 0)
+                    {
+                        <p class="ly-empty">@L["ly.noHistory"]</p>
+                    }
+                    else
+                    {
+                        <div class="ly-log">
+                            @foreach (var (e, i) in _history.Select((e, i) => (e, i)))
+                            {
+                                <div class="ly-ev @e.Kind rv" style="--i:@i" @key="e.Id">
+                                    <span class="pts">@(e.Points > 0 ? "+" : "")@e.Points</span>
+                                    <span class="what">
+                                        @L[$"ly.kind.{e.Kind}"]
+                                        @if (e.OrderNumber is not null) { <b>@e.OrderNumber</b> }
+                                        @if (e.Amount is { } amt) { <small>@Fmt.Money(amt)</small> }
+                                        @if (!string.IsNullOrWhiteSpace(e.Note)) { <small>· @e.Note</small> }
+                                    </span>
+                                    <span class="who">@e.By · @e.At.ToString("dd MMM HH:mm")</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </MudPaper>
+
+            @* ---------------- what happened lately ---------------- *@
+            <MudPaper Elevation="0" Class="ly-card rv" Style="--i:8">
+                <h3>@L["ly.recent"]</h3>
+                @if (_board.Recent.Count == 0)
+                {
+                    <p class="ly-empty">@L["ly.noHistory"]</p>
+                }
+                else
+                {
+                    <div class="ly-log wide">
+                        @foreach (var e in _board.Recent)
+                        {
+                            <div class="ly-ev @e.Kind" @key="e.Id">
+                                <span class="pts">@(e.Points > 0 ? "+" : "")@e.Points</span>
+                                <span class="what"><b>@e.Name</b> · @L[$"ly.kind.{e.Kind}"]
+                                    @if (e.OrderNumber is not null) { <b>@e.OrderNumber</b> }
+                                    @if (e.Amount is { } amt) { <small>@Fmt.Money(amt)</small> }
+                                    @if (!string.IsNullOrWhiteSpace(e.Note)) { <small>· @e.Note</small> }
+                                </span>
+                                <span class="who">@e.By · @e.At.ToString("dd MMM HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </MudPaper>
+            </div>
+
+            <div class="ly-side">
+                @* ---------------- the rules ---------------- *@
+                <MudPaper Elevation="0" Class="ly-card rv" Style="--i:6">
+                    <div class="ly-head">
+                        <h3>@L["ly.program"]</h3>
+                        <label class="ly-switch @(_rules.Enabled ? "on" : "")">
+                            <input type="checkbox" checked="@_rules.Enabled" @onchange="@(e => _rules = _rules with { Enabled = (bool)e.Value! })" />
+                            <span></span> @(_rules.Enabled ? L["ly.on"] : L["ly.off"])
+                        </label>
+                    </div>
+
+                    <div class="ly-rule">
+                        <span>@L["ly.rate"]</span>
+                        <div class="in"><input type="number" min="0" step="0.5" value="@_rules.PointsPerUnit" @onchange="@(e => _rules = _rules with { PointsPerUnit = Dec(e, _rules.PointsPerUnit) })" /><em>@L["ly.ptsPer"] 1 @Fmt.Symbol</em></div>
+                    </div>
+                    <div class="ly-rule">
+                        <span>@L["ly.rewardRule"]</span>
+                        <div class="in"><input type="number" min="1" step="10" value="@_rules.RewardPoints" @onchange="@(e => _rules = _rules with { RewardPoints = Int(e, _rules.RewardPoints) })" /><em>@L["ly.pts"] =</em>
+                            <input type="number" min="0" step="0.5" value="@_rules.RewardValue" @onchange="@(e => _rules = _rules with { RewardValue = Dec(e, _rules.RewardValue) })" /><em>@Fmt.Symbol @L["ly.off"]</em></div>
+                    </div>
+                    <div class="ly-rule">
+                        <span>@L["ly.welcome"]</span>
+                        <div class="in"><input type="number" min="0" step="5" value="@_rules.WelcomePoints" @onchange="@(e => _rules = _rules with { WelcomePoints = Int(e, _rules.WelcomePoints) })" /><em>@L["ly.pts"]</em></div>
+                    </div>
+                    <div class="ly-rule">
+                        <span>@L["ly.tiers"]</span>
+                        <div class="in tiers">
+                            <b class="t-silver">@L["ly.tier.silver"]</b><input type="number" min="0" step="50" value="@_rules.SilverAt" @onchange="@(e => _rules = _rules with { SilverAt = Int(e, _rules.SilverAt) })" />
+                            <b class="t-gold">@L["ly.tier.gold"]</b><input type="number" min="0" step="50" value="@_rules.GoldAt" @onchange="@(e => _rules = _rules with { GoldAt = Int(e, _rules.GoldAt) })" />
+                        </div>
+                    </div>
+
+                    <p class="ly-preview">
+                        @string.Format(L["ly.preview"], Fmt.Money(10), (int)Math.Floor(10 * _rules.PointsPerUnit), _rules.RewardPoints, Fmt.Money(_rules.RewardValue))
+                    </p>
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Disabled="@(_busy || _rules == p)" OnClick="SaveRules">
+                        @L["common.save"]
+                    </MudButton>
+                    <p class="ly-auto"><MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" /> @L["ly.autoNote"]</p>
+                </MudPaper>
+
+                @* ---------------- the regulars ---------------- *@
+                <MudPaper Elevation="0" Class="ly-card rv" Style="--i:7">
+                    <h3>@L["ly.top"]</h3>
+                    @if (_board.Top.Count == 0)
+                    {
+                        <p class="ly-empty">@L["ly.noMembers"]</p>
+                    }
+                    else
+                    {
+                        var podium = _board.Top.Take(3).ToList();
+                        <div class="ly-podium">
+                            @foreach (var (m, i) in podium.Select((m, i) => (m, i)))
+                            {
+                                var mm = m;
+                                <button type="button" class="step s@(i + 1) rv" style="--i:@(i + 1)" @onclick="@(() => Pick(mm))">
+                                    <span class="av tier-@m.Tier">@Initials(m.Name)</span>
+                                    <span class="nm">@m.Name</span>
+                                    <span class="pt">@m.Lifetime.ToString("N0")</span>
+                                    <span class="bar"><b>@(i + 1)</b></span>
+                                </button>
+                            }
+                        </div>
+                        <div class="ly-top">
+                            @foreach (var (m, i) in _board.Top.Skip(3).Select((m, i) => (m, i + 3)))
+                            {
+                                var mm = m;
+                                <button type="button" class="ly-hit" @onclick="@(() => Pick(mm))">
+                                    <span class="rank">@(i + 1)</span>
+                                    <span class="av tier-@m.Tier">@Initials(m.Name)</span>
+                                    <span class="nm">@m.Name <small>@m.Visits @L["ly.visits"] · @L[$"ly.tier.{m.Tier}"]</small></span>
+                                    <span class="pt">@m.Lifetime.ToString("N0")</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private LoyaltyBoardDto? _board;
+    private LoyaltyProgramDto _rules = new(false, 1, 100, 5, 10, 500, 1500);
+    private List<LoyaltyMemberDto> _hits = [];
+    private LoyaltyMemberDto? _member;
+    private List<LoyaltyEventDto> _history = [];
+    private string _q = "";
+    private string _amount = "";
+    private string _adjust = "";
+    private string _why = "";
+    private string? _error;
+    private bool _busy, _searching, _celebrate;
+    private CancellationTokenSource? _debounce;
+
+    private int PreviewPoints =>
+        decimal.TryParse(_amount, out var a) && _board is not null ? (int)Math.Floor(a * _board.Program.PointsPerUnit) : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.Changed += OnLang;
+        await Reload();
+        await PollLive();
+        _liveTimer = new Timer(_ => _ = PollLive(), null, 10_000, 10_000);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_board is null) return;
+        // numbers roll to their values; the ring fills to where the balance sits
+        await JS.InvokeVoidAsync("mfLy.countUp", ".ly");
+        await JS.InvokeVoidAsync("mfLy.settle");
+        if (_member is { } m)
+            await JS.InvokeVoidAsync("mfLy.ring", m.RewardsReady > 0 ? 100 : Math.Min(100, m.Balance * 100 / Math.Max(1, _board.Program.RewardPoints)));
+    }
+
+    private async Task Reload()
+    {
+        _board = await Api.LoyaltyBoardAsync() ?? _board;
+        if (_board is not null) _rules = _board.Program;
+        if (_member is not null) await RefreshMember(_member.UserId);
+        // with nothing typed, the most recent guests are one tap away
+        if (_q.Length == 0 && _member is null) _hits = await Api.LoyaltyLookupAsync("") ?? [];
+    }
+
+    private async Task RefreshMember(int userId)
+    {
+        var hits = await Api.LoyaltyLookupAsync(_member?.Phone ?? _q) ?? [];
+        _member = hits.FirstOrDefault(h => h.UserId == userId) ?? _member;
+        _history = await Api.LoyaltyHistoryAsync(userId) ?? [];
+    }
+
+    private void OnSearch(ChangeEventArgs e)
+    {
+        _q = e.Value?.ToString() ?? "";
+        _member = null;
+        _searching = true;
+        _debounce?.Cancel();
+        var cts = _debounce = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(220, cts.Token);
+                var hits = await Api.LoyaltyLookupAsync(_q) ?? [];
+                if (cts.IsCancellationRequested) return;
+                _hits = hits;
+                _searching = false;
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (TaskCanceledException) { }
+        });
+    }
+
+    private async Task Pick(LoyaltyMemberDto m)
+    {
+        _member = m;
+        _error = null;
+        _celebrate = false;
+        _amount = ""; _adjust = ""; _why = "";
+        _history = await Api.LoyaltyHistoryAsync(m.UserId) ?? [];
+    }
+
+    private void Unpick() { _member = null; _history = []; }
+
+    private async Task Earn()
+    {
+        if (_member is null || !decimal.TryParse(_amount, out var amount) || PreviewPoints <= 0) return;
+        await Run(async () =>
+        {
+            var (m, error) = await Api.LoyaltyEarnAsync(new LoyaltyEarnRequest(_member.UserId, amount));
+            if (m is null) return error;
+            _amount = "";
+            Snackbar.Add(string.Format(L["ly.earnedToast"], m.Balance), Severity.Success);
+            return null;
+        });
+    }
+
+    private async Task Redeem(int points)
+    {
+        if (_member is null) return;
+        await Run(async () =>
+        {
+            var (m, error) = await Api.LoyaltyRedeemAsync(new LoyaltyRedeemRequest(_member.UserId, points));
+            if (m is null) return error;
+            _celebrate = true;
+            await JS.InvokeVoidAsync("mfLy.confetti");
+            Snackbar.Add(L["ly.redeemedToast"], Severity.Success);
+            return null;
+        });
+    }
+
+    private async Task Adjust()
+    {
+        if (_member is null || !int.TryParse(_adjust, out var pts)) return;
+        await Run(async () =>
+        {
+            var (m, error) = await Api.LoyaltyAdjustAsync(new LoyaltyAdjustRequest(_member.UserId, pts, _why.Trim()));
+            if (m is null) return error;
+            _adjust = ""; _why = "";
+            return null;
+        });
+    }
+
+    private async Task Run(Func<Task<string?>> action)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            _error = await action();
+            if (_error is null && _member is not null)
+            {
+                var id = _member.UserId;
+                _board = await Api.LoyaltyBoardAsync() ?? _board;
+                await RefreshMember(id);
+            }
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>A WhatsApp message, ready to send: nearly-there guests hear about the reward, quiet ones about their points.</summary>
+    private async Task Nudge(LoyaltyMemberDto m, bool almost)
+    {
+        if (_board is null) return;
+        var text = almost
+            ? string.Format(L["ly.nudgeAlmost"], m.Name, m.ToNextReward, Fmt.Money(_board.Program.RewardValue), _board.StoreName)
+            : string.Format(L["ly.nudgeSleep"], m.Name, m.Balance, _board.StoreName);
+        await JS.InvokeVoidAsync("mfLy.nudge", m.Phone, text);
+    }
+
+    private async Task SaveRules()
+    {
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.SaveLoyaltyProgramAsync(new SaveLoyaltyProgramRequest(
+                _rules.Enabled, _rules.PointsPerUnit, _rules.RewardPoints, _rules.RewardValue,
+                _rules.WelcomePoints, _rules.SilverAt, _rules.GoldAt));
+            if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+            Snackbar.Add(L["common.saved"], Severity.Success);
+            await Reload();
+        }
+        finally { _busy = false; }
+    }
+
+    private static decimal Dec(ChangeEventArgs e, decimal fallback) =>
+        decimal.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : fallback;
+    private static int Int(ChangeEventArgs e, int fallback) => int.TryParse(e.Value?.ToString(), out var v) ? v : fallback;
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 0 ? "?" : string.Concat(parts.Take(2).Select(x => char.ToUpperInvariant(x[0])));
+    }
+
+    // ---- the live strip: polled every 10 seconds while the page is open
+    private LoyaltyLiveDto? _live;
+    private DateTime _liveAt;
+    private DateTime _serverNow, _serverSeenAt;
+    private Timer? _liveTimer;
+
+    private async Task PollLive()
+    {
+        var live = await Api.LoyaltyLiveAsync();
+        if (live is null) return;
+        _live = live;
+        _serverNow = live.ServerNow;
+        _serverSeenAt = DateTime.UtcNow;
+        _liveAt = live.ServerNow;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>"3 min ago" against the SHOP's clock — the browser here has no time zone.</summary>
+    private string Ago(DateTime at)
+    {
+        var now = _serverNow + (DateTime.UtcNow - _serverSeenAt);
+        var m = (int)Math.Max(0, (now - at).TotalMinutes);
+        return m < 1 ? L["ly.justNow"] : m < 60 ? string.Format(L["ly.minAgo"], m) : string.Format(L["ly.hrAgo"], m / 60);
+    }
+
+    private async Task PickLive(int? userId, string name)
+    {
+        if (userId is not { } id) return;
+        var hits = await Api.LoyaltyLookupAsync(name) ?? [];
+        var m = hits.FirstOrDefault(h => h.UserId == id);
+        if (m is not null) await Pick(m);
+    }
+
+    private void OnLang() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() { L.Changed -= OnLang; _debounce?.Cancel(); _liveTimer?.Dispose(); }
+}

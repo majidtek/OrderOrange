@@ -1,0 +1,149 @@
+@page "/support/{Id}"
+@using OrderOrange.ClientCore.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject AppState State
+@implements IDisposable
+
+@* One ticket from the desk's chair: the conversation, and the levers only support
+   holds — take it, move its status, close it. *@
+
+<PageTitle>Admin — Support ticket</PageTitle>
+
+<div class="tk-page">
+@if (_detail is null)
+{
+    @if (_missing)
+    {
+        <EmptyState Emoji="🔍" Title="@L["tk.e.notFound"]" />
+    }
+    else
+    {
+        <Loader FullPage="true" />
+    }
+}
+else
+{
+    var t = _detail.Ticket;
+    <div class="tk-head">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Class="mf-flip-rtl" OnClick="@(() => Nav.NavigateTo("/support"))" />
+        <div class="ttl">
+            <div class="line">
+                <code>@t.Number</code>
+                <span class="pill @SupportUi.StatusCss(t.Status)">@L[$"tk.s.{t.Status}"]</span>
+                <span class="prio" style="--c:@SupportUi.PriorityColor(t.Priority)">● @L[$"tk.p.{t.Priority}"]</span>
+            </div>
+            <h2>@t.Subject</h2>
+            <small>@SupportUi.CategoryEmoji(t.Category) @L[$"tk.c.{t.Category}"] · @string.Format(L["tk.created"], t.CreatedAt.ToString("yyyy-MM-dd HH:mm"))</small>
+        </div>
+    </div>
+
+    <div class="tk-admin-grid">
+        <div>
+            <SupportThread Detail="_detail" Side="support" CanReply="true" OnReply="Reply" FetchFile="FetchFile" />
+        </div>
+        <aside class="tk-side">
+            <div class="card">
+                <small>@L["tk.a.store"]</small>
+                <b>@t.RestaurantName</b>
+                <span class="mf-ascii">#@t.RestaurantId</span>
+            </div>
+            <div class="card">
+                <small>@L["tk.a.openedBy"]</small>
+                <b>@t.OpenedByName</b>
+                <span>@t.CreatedAt.ToString("yyyy-MM-dd HH:mm")</span>
+            </div>
+            <div class="card">
+                <small>@L["tk.a.assignedCol"]</small>
+                <b>@(t.AssignedTo ?? L["tk.a.unassigned"])</b>
+                @if (t.AssignedTo != State.FullName)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.PersonPin" OnClick="AssignMe">@L["tk.a.assignMe"]</MudButton>
+                }
+            </div>
+            @if (t.Rating is int r)
+            {
+                <div class="card">
+                    <small>@L["tk.act.rate"]</small>
+                    <b class="stars-static">@(new string('★', r))<span>@(new string('★', 5 - r))</span></b>
+                </div>
+            }
+            <div class="card">
+                <small>@L["common.status"]</small>
+                <MudTextField T="string" @bind-Value="_note" Placeholder="@L["tk.a.note"]" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Class="mb-2" />
+                <div class="tk-status-acts">
+                    @if (t.Status is "open" or "waiting")
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Info" OnClick="@(() => SetStatus("in_progress"))">@L["tk.a.start"]</MudButton>
+                    }
+                    @if (t.Status is "open" or "in_progress")
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" OnClick="@(() => SetStatus("waiting"))">@L["tk.a.wait"]</MudButton>
+                    }
+                    @if (t.Status is not ("resolved" or "closed"))
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => SetStatus("resolved"))">@L["tk.a.resolve"]</MudButton>
+                    }
+                    @if (t.Status != "closed")
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Dark" OnClick="@(() => SetStatus("closed"))">@L["tk.a.close"]</MudButton>
+                    }
+                    @if (t.Status is "resolved" or "closed")
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => SetStatus("open"))">@L["tk.a.reopen"]</MudButton>
+                    }
+                </div>
+            </div>
+        </aside>
+    </div>
+}
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private SupportTicketDetailDto? _detail;
+    private bool _missing;
+    private string _note = "";
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        _timer = new System.Threading.Timer(async _ => await InvokeAsync(async () => { await Load(silent: true); StateHasChanged(); }), null, 20000, 20000);
+    }
+
+    private async Task Load(bool silent = false)
+    {
+        var d = await Api.AdminSupportTicketAsync(Id);
+        if (d is null) { if (!silent) _missing = true; return; }
+        _detail = d;
+    }
+
+    private async Task Reply(TicketReplyRequest req)
+    {
+        var (d, error) = await Api.AdminReplySupportAsync(Id, req);
+        if (d is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        _detail = d;
+    }
+
+    private async Task SetStatus(string status)
+    {
+        var (d, error) = await Api.AdminSetSupportStatusAsync(Id, new TicketStatusRequest(status, string.IsNullOrWhiteSpace(_note) ? null : _note.Trim()));
+        if (d is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        _detail = d; _note = "";
+    }
+
+    private async Task AssignMe()
+    {
+        var (d, error) = await Api.AdminAssignSupportAsync(Id, new TicketAssignRequest(State.FullName));
+        if (d is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        _detail = d;
+    }
+
+    private Task<SupportFileDto?> FetchFile(string fileId) => Api.AdminSupportFileAsync(Id, fileId);
+
+    public void Dispose() => _timer?.Dispose();
+}

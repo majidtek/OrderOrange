@@ -1,0 +1,333 @@
+@page "/invoices"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject AppState State
+@inject IDialogService Dialogs
+
+<PageTitle>Partner — Invoices</PageTitle>
+<PageHeader Title="@L["inv.title"]" Subtitle="@L["inv.sub"]" />
+
+@* Three faces of one paper trail: manage today's invoices, read what was removed, and
+   read the full story of every correction. Editing never touches an invoice in place —
+   the original is cancelled and a corrected copy written, so the trail cannot lie. *@
+<MudTabs Elevation="0" Rounded="true" Class="mb-4" ActivePanelIndexChanged="OnTab">
+    <MudTabPanel Text="@L["inv.tabManage"]" Icon="@Icons.Material.Filled.ReceiptLong" />
+    <MudTabPanel Text="@L["inv.tabCancelled"]" Icon="@Icons.Material.Filled.Cancel" />
+    <MudTabPanel Text="@L["inv.tabEdits"]" Icon="@Icons.Material.Filled.History" />
+</MudTabs>
+
+@if (_tab == 0)
+{
+    <div class="d-flex align-center mb-3" style="gap: 10px; flex-wrap: wrap;">
+        <MudTextField T="string" Value="_search" ValueChanged="OnSearch" Immediate="true"
+                      Placeholder="@L["inv.search"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Style="max-width: 260px;" Class="mf-ltr" />
+        <MudSelect T="int" Value="_days" ValueChanged="OnDays" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 160px;">
+            <MudSelectItem T="int" Value="1">@L["inv.today"]</MudSelectItem>
+            <MudSelectItem T="int" Value="7">@string.Format(L["inv.lastDays"], 7)</MudSelectItem>
+            <MudSelectItem T="int" Value="30">@string.Format(L["inv.lastDays"], 30)</MudSelectItem>
+        </MudSelect>
+    </div>
+
+    @if (_rows is null)
+    {
+        <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+    }
+    else if (_rows.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="my-8" Align="Align.Center">@L["inv.none"]</MudText>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow-x: auto;">
+            <MudTable T="InvoiceRowDto" Items="_rows" Hover="true" Dense="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>@L["inv.number"]</MudTh>
+                    <MudTh>@L["inv.when"]</MudTh>
+                    <MudTh>@L["inv.customer"]</MudTh>
+                    <MudTh>@L["inv.items"]</MudTh>
+                    <MudTh>@L["inv.total"]</MudTh>
+                    <MudTh>@L["inv.status"]</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Class="mf-ascii">
+                        @context.Number
+                        @if (context.ReplacesOrderId is not null)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">@L["inv.correction"]</MudChip>
+                        }
+                    </MudTd>
+                    <MudTd>@context.PlacedAt.ToString("MM-dd HH:mm")</MudTd>
+                    <MudTd>@context.CustomerName</MudTd>
+                    <MudTd>@context.ItemCount</MudTd>
+                    <MudTd>@Fmt.Rial(context.Total)</MudTd>
+                    <MudTd>
+                        @if (context.Status == "Cancelled")
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">
+                                @L["inv.cancelled"]@(context.ReplacedByNumber is not null ? $" → {context.ReplacedByNumber}" : "")
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">@context.Status</MudChip>
+                        }
+                    </MudTd>
+                    <MudTd Style="white-space: nowrap;">
+                        @if (context.Status != "Cancelled")
+                        {
+                            @if (CanEdit)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary"
+                                               title="@L["inv.edit"]" OnClick="@(() => OpenEdit(context))" />
+                            }
+                            @if (CanCancel)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" Color="Color.Error"
+                                               title="@L["inv.cancel"]" OnClick="@(() => OpenCancel(context))" />
+                            }
+                        }
+                    </MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+        <Pager Page="_page" HasMore="_hasMore" PageChanged="GoPage" />
+    }
+}
+else if (_tab == 1)
+{
+    @* ---------- Report: removed invoices ----------
+       ReportExport is the export TOOLBAR (Excel + print), self-closing with its own
+       columns and fetch — wrapping it around the table handed it child content it has no
+       parameter for, and the whole circuit died the moment this tab rendered. *@
+    <div class="d-flex align-center mb-3" style="gap: 10px;">
+        <span style="flex: 1;"></span>
+        <ReportExport Title="@L["inv.tabCancelled"]" Columns="@CancelledColumns" Fetch="CancelledRows" />
+    </div>
+    @if (_cancelled is null)
+    {
+        <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+    }
+    else if (_cancelled.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="my-8" Align="Align.Center">@L["inv.none"]</MudText>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow-x: auto;">
+            <MudTable T="CancelledInvoiceDto" Items="_cancelled" Hover="true" Dense="true" Elevation="0">
+                <HeaderContent>
+                    <MudTh>@L["inv.number"]</MudTh>
+                    <MudTh>@L["inv.addedBy"]</MudTh>
+                    <MudTh>@L["inv.addedAt"]</MudTh>
+                    <MudTh>@L["inv.cancelledBy"]</MudTh>
+                    <MudTh>@L["inv.cancelledAt"]</MudTh>
+                    <MudTh>@L["inv.total"]</MudTh>
+                    <MudTh>@L["inv.reason"]</MudTh>
+                    <MudTh>@L["inv.replacedBy"]</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd Class="mf-ascii">@context.Number</MudTd>
+                    <MudTd>@context.PlacedBy</MudTd>
+                    <MudTd>@context.PlacedAt.ToString("MM-dd HH:mm")</MudTd>
+                    <MudTd>@context.CancelledBy</MudTd>
+                    <MudTd>@context.CancelledAt.ToString("MM-dd HH:mm")</MudTd>
+                    <MudTd>@Fmt.Rial(context.Total)</MudTd>
+                    <MudTd>@(context.Reason ?? "—")</MudTd>
+                    <MudTd Class="mf-ascii">@(context.ReplacedByNumber ?? "—")</MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+        <Pager Page="_cancPage" HasMore="_cancHasMore" PageChanged="GoCancPage" />
+    }
+}
+else
+{
+    @* ---------- Report: the full story of every edit ---------- *@
+    @if (_edits is null)
+    {
+        <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+    }
+    else if (_edits.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="my-8" Align="Align.Center">@L["inv.none"]</MudText>
+    }
+    else
+    {
+        @foreach (var edit in _edits)
+        {
+            var e = edit;
+            <MudPaper Elevation="0" Outlined="true" Class="rounded-xl pa-4 mb-4">
+                <div class="d-flex align-center mb-2" style="gap: 10px; flex-wrap: wrap;">
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text" Class="mf-ascii">@e.OriginalNumber</MudChip>
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Class="mf-flip-rtl" />
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text" Class="mf-ascii">@e.ReplacementNumber</MudChip>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @string.Format(L["inv.editLine"], e.EditedBy, e.EditedAt.ToString("yyyy-MM-dd HH:mm"))
+                    </MudText>
+                    @if (e.Reason is not null)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text">💬 @e.Reason</MudChip>
+                    }
+                </div>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                    @string.Format(L["inv.addLine"], e.Before.By, e.Before.At.ToString("yyyy-MM-dd HH:mm"))
+                </MudText>
+
+                <div class="inv-diff">
+                    <div class="side was">
+                        <b>@L["inv.was"] — @Fmt.Rial(e.Before.Total)</b>
+                        @foreach (var line in DiffLines(e.Before, e.After, forBefore: true))
+                        {
+                            <div class="ln @line.Css">@line.Text</div>
+                        }
+                    </div>
+                    <div class="side now">
+                        <b>@L["inv.now"] — @Fmt.Rial(e.After.Total)</b>
+                        @foreach (var line in DiffLines(e.Before, e.After, forBefore: false))
+                        {
+                            <div class="ln @line.Css">@line.Text</div>
+                        }
+                    </div>
+                </div>
+            </MudPaper>
+        }
+        <Pager Page="_editsPage" HasMore="_editsHasMore" PageChanged="GoEditsPage" />
+    }
+}
+
+@code {
+    private const int PageSize = 10;   // Majed 2026-09-04: "10 rows just" — one screen per page, like the other pagers
+
+    private int _tab;
+    private int _days = 7;
+    private string _search = "";
+    private List<InvoiceRowDto>? _rows;
+    private List<CancelledInvoiceDto>? _cancelled;
+    private List<InvoiceEditDto>? _edits;
+
+    // One page in memory per tab, never the whole trail. A full page means "there is
+    // probably more" — the same test the orders history uses.
+    private int _page;
+    private bool _hasMore;
+    private int _cancPage;
+    private bool _cancHasMore;
+    private int _editsPage;
+    private bool _editsHasMore;
+
+    private bool CanCancel => Perm.Allows(State.StoreRole, State.Perms, Perm.InvoiceCancel);
+    private bool CanEdit => Perm.Allows(State.StoreRole, State.Perms, Perm.InvoiceEdit);
+
+    // ---------- Excel / print export of the removed-invoices report ----------
+    private List<ExportColumnDto> CancelledColumns =>
+    [
+        new(L["inv.number"]),
+        new(L["inv.addedBy"]),
+        new(L["inv.addedAt"]),
+        new(L["inv.cancelledBy"]),
+        new(L["inv.cancelledAt"]),
+        new(L["inv.total"], Numeric: true),
+        new(L["inv.reason"]),
+        new(L["inv.replacedBy"]),
+    ];
+
+    private async Task<List<List<string>>> CancelledRows()
+    {
+        // The EXPORT wants the whole 30-day report, not the page on screen.
+        var all = await Api.GetCancelledInvoicesAsync(
+            DateTime.Today.AddDays(-30), DateTime.Today, 0, 500) ?? [];
+        return all.Select(c => new List<string>
+        {
+            c.Number, c.PlacedBy, c.PlacedAt.ToString("yyyy-MM-dd HH:mm"),
+            c.CancelledBy, c.CancelledAt.ToString("yyyy-MM-dd HH:mm"),
+            c.Total.ToString("0.000"), c.Reason ?? "", c.ReplacedByNumber ?? "",
+        }).ToList();
+    }
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _rows = await Api.GetInvoicesAsync(_days, _search, _page * PageSize, PageSize) ?? [];
+        _hasMore = _rows.Count == PageSize;
+    }
+
+    private async Task LoadCancelled()
+    {
+        _cancelled = await Api.GetCancelledInvoicesAsync(
+            DateTime.Today.AddDays(-30), DateTime.Today, _cancPage * PageSize, PageSize) ?? [];
+        _cancHasMore = _cancelled.Count == PageSize;
+    }
+
+    private async Task LoadEdits()
+    {
+        _edits = await Api.GetInvoiceEditsAsync(
+            DateTime.Today.AddDays(-30), DateTime.Today, _editsPage * PageSize, PageSize) ?? [];
+        _editsHasMore = _edits.Count == PageSize;
+    }
+
+    private async Task OnTab(int tab)
+    {
+        _tab = tab;
+        if (tab == 1 && _cancelled is null) await LoadCancelled();
+        if (tab == 2 && _edits is null) await LoadEdits();
+    }
+
+    private async Task GoPage(int page) { _page = Math.Max(0, page); await Load(); }
+    private async Task GoCancPage(int page) { _cancPage = Math.Max(0, page); await LoadCancelled(); }
+    private async Task GoEditsPage(int page) { _editsPage = Math.Max(0, page); await LoadEdits(); }
+
+    private async Task OnSearch(string value) { _search = value; _page = 0; await Load(); }
+    private async Task OnDays(int value) { _days = value; _page = 0; await Load(); }
+
+    private async Task OpenCancel(InvoiceRowDto row)
+    {
+        var parameters = new DialogParameters { ["Row"] = row };
+        var dialog = await Dialogs.ShowAsync<CancelInvoiceDialog>(L["inv.cancel"], parameters);
+        if ((await dialog.Result)?.Canceled == false)
+        {
+            Snackbar.Add(L["inv.cancelDone"], Severity.Success);
+            _cancelled = null;                 // the report is stale now
+            await Load();
+        }
+    }
+
+    private async Task OpenEdit(InvoiceRowDto row)
+    {
+        var parameters = new DialogParameters { ["Row"] = row };
+        var dialog = await Dialogs.ShowAsync<EditInvoiceDialog>(L["inv.edit"], parameters,
+            new DialogOptions { FullScreen = true, CloseButton = true });
+        if ((await dialog.Result)?.Canceled == false)
+        {
+            Snackbar.Add(L["inv.editDone"], Severity.Success);
+            _cancelled = null;
+            _edits = null;
+            await Load();
+        }
+    }
+
+    /// <summary>
+    /// One side of the before/after panel, with each line marked by what happened to it:
+    /// removed (only in before), added (only in after), changed (same item, different
+    /// price/qty), or kept. Matching is by MenuItemId, falling back to the name.
+    /// </summary>
+    private static List<(string Text, string Css)> DiffLines(InvoiceSnapshotDto before, InvoiceSnapshotDto after, bool forBefore)
+    {
+        var mine = forBefore ? before.Lines : after.Lines;
+        var theirs = forBefore ? after.Lines : before.Lines;
+        var result = new List<(string, string)>();
+        foreach (var l in mine)
+        {
+            var match = theirs.FirstOrDefault(t => t.MenuItemId == l.MenuItemId && t.MenuItemId != 0)
+                        ?? theirs.FirstOrDefault(t => t.Name == l.Name);
+            var css = match is null
+                ? (forBefore ? "removed" : "added")
+                : match.Quantity != l.Quantity || match.UnitPrice != l.UnitPrice ? "changed" : "kept";
+            result.Add(($"{l.Quantity} × {l.Name} — {l.UnitPrice:0.000}", css));
+        }
+        return result;
+    }
+}

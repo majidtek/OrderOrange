@@ -1,0 +1,237 @@
+﻿@page "/labels"
+@using OrderOrange.RestaurantWeb.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+
+@* Barcode labels for shelf and box: pick products or materials, choose copies,
+   print. The sheet is plain white on purpose — it is made for paper, not screens. *@
+
+<PageTitle>Partner — Labels</PageTitle>
+
+<div class="lb-chrome">
+    <PageHeader Title="@L["lbl.title"]" Subtitle="@L["lbl.sub"]" />
+
+    @if (_menu is null || _materials is null)
+    {
+        <Loader FullPage="true" />
+    }
+    else
+    {
+        @* The sheet below IS the page — these tools only shape it. *@
+        <div class="lb-tools">
+            <div class="lb-tabs">
+                <button type="button" class="@(_tab == "products" ? "on" : "")" @onclick="@(() => _tab = "products")">
+                    🍽️ @L["nav.products"]
+                </button>
+                <button type="button" class="@(_tab == "materials" ? "on" : "")" @onclick="@(() => _tab = "materials")">
+                    📦 @L["mat.title"]
+                </button>
+            </div>
+            <div class="lb-search">
+                <MudIcon Icon="@Icons.Material.Filled.Search" />
+                <input placeholder="@L["rcp.search"]" @bind="_search" @bind:event="oninput" />
+            </div>
+            <div class="lb-copies">
+                @L["lbl.copies"]
+                <select @bind="_copies">
+                    @foreach (var n in new[] { 1, 2, 3, 4, 6, 8, 12 })
+                    {
+                        <option value="@n">@n</option>
+                    }
+                </select>
+            </div>
+            @* What accompanies the bars is the owner's call, label by label run. *@
+            <label class="lb-opt"><input type="checkbox" @bind="_showName" /> @L["lbl.showName"]</label>
+            <label class="lb-opt"><input type="checkbox" @bind="_showPrice" /> @L["lbl.showPrice"]</label>
+            <button type="button" class="lb-print" disabled="@(TotalLabels == 0)"
+                    @onclick="@(async () => await JS.InvokeVoidAsync("mfBarcode.print"))">
+                <MudIcon Icon="@Icons.Material.Filled.Print" /> @L["lbl.print"] (@TotalLabels)
+            </button>
+        </div>
+
+        @* Which of them actually print. Everything starts ticked — the usual run is
+           "the whole shelf", and unticking three is less work than ticking forty. *@
+        <div class="lb-pickbar">
+            <label class="lb-opt">
+                <input type="checkbox" checked="@AllListedPicked" @onchange="ToggleListed" />
+                @L["lbl.selectAll"]
+            </label>
+            <span class="lb-count mf-ltr">@PrintKeys().Count / @TabKeys().Count</span>
+            <button type="button" class="lb-sel" disabled="@(PrintKeys().Count == 0)"
+                    @onclick="ClearTab">
+                @L["lbl.clear"]
+            </button>
+        </div>
+
+        <div class="lb-pick">
+            @foreach (var key in ListedKeys())
+            {
+                var label = LabelFor(key);
+                if (label is null) { continue; }
+                var on = _picked.Contains(key);
+                <button type="button" class="lb-item @(on ? "on" : "")" @onclick="@(() => Toggle(key))">
+                    <span class="tk">@(on ? "✓" : "")</span>
+                    <span class="tx">
+                        <b>@label.Name</b>
+                        <small class="mf-ltr">@label.Barcode · @label.Detail</small>
+                    </span>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@* ---------- The printable sheet: every label of the open tab, as filtered ---------- *@
+@if (_materials is not null && _menu is not null)
+{
+    <div class="lb-sheet" id="lb-sheet">
+        @if (PrintKeys().Count == 0)
+        {
+            <div class="lb-none">@L["lbl.selectAll"]</div>
+        }
+        @foreach (var label in BuildLabels())
+        {
+            @for (var copy = 0; copy < _copies; copy++)
+            {
+                <div class="lb-label @(_showName ? "" : "bare")">
+                    @if (_showName)
+                    {
+                        <div class="nm">@label.Name</div>
+                    }
+                    <div class="bc" data-barcode="@label.Barcode" data-height="@(_showName ? 42 : 48)" data-narrow="2"></div>
+                    <div class="ft">
+                        <span class="cd mf-ltr mf-ascii">@label.Barcode</span>
+                        @if (_showPrice)
+                        {
+                            <span class="pr mf-ltr">@label.Detail</span>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    private List<MenuCategoryDto>? _menu;
+    private StoreMaterialsDto? _materials;
+
+    private string _tab = "products";
+    private string _search = "";
+    private int _copies = 1;
+
+    // Both on by default — a label usually carries everything; unticking trims it.
+    private bool _showName = true;
+    private bool _showPrice = true;
+
+    private sealed record Label(string Name, string Barcode, string Detail);
+
+    /// <summary>The keys the owner has ticked. Seeded full, so the default is "print everything".</summary>
+    private readonly HashSet<string> _picked = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _menu = await Api.GetMyMenuBasicAsync() ?? [];
+        _materials = await Api.GetMaterialsAsync();
+
+        foreach (var item in _menu.SelectMany(c => c.Items)) _picked.Add($"P{item.Id}");
+        foreach (var material in _materials?.Items ?? []) _picked.Add($"M{material.Id}");
+    }
+
+    /// <summary>The sheet re-renders on every change — the barcodes redraw after it.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try { await JS.InvokeVoidAsync("mfBarcode.renderAll", "#lb-sheet"); } catch { }
+    }
+
+    private List<MenuItemDto> FilteredProducts
+    {
+        get
+        {
+            var all = (_menu ?? []).SelectMany(c => c.Items);
+            if (_search.Trim().Length == 0) return all.ToList();
+            var folded = PosBotNlu.Fold(_search);
+            return all.Where(i => PosBotNlu.Fold(i.NameFor(L.Locale)).Contains(folded)
+                               || PosBotNlu.Fold(i.Name).Contains(folded)).ToList();
+        }
+    }
+
+    private bool MatchesMaterial(StoreMaterialDto material) =>
+        _search.Trim().Length == 0
+        || PosBotNlu.Fold(material.Name).Contains(PosBotNlu.Fold(_search));
+
+    private int TotalLabels => PrintKeys().Count * _copies;
+
+    /// <summary>Everything on the open tab, search ignored — the denominator of the counter.</summary>
+    private List<string> TabKeys() =>
+        _tab == "products"
+            ? _menu!.SelectMany(c => c.Items).Select(i => $"P{i.Id}").ToList()
+            : _materials!.Items.Select(m => $"M{m.Id}").ToList();
+
+    /// <summary>What the picker shows. Search narrows the list to tick through, nothing else.</summary>
+    private List<string> ListedKeys() =>
+        _tab == "products"
+            ? FilteredProducts.Select(i => $"P{i.Id}").ToList()
+            : _materials!.Items.Where(MatchesMaterial).Select(m => $"M{m.Id}").ToList();
+
+    /// <summary>What the sheet prints: the ticked ones, in menu order.</summary>
+    private List<string> PrintKeys() => TabKeys().Where(_picked.Contains).ToList();
+
+    private bool AllListedPicked => ListedKeys() is { Count: > 0 } listed && listed.All(_picked.Contains);
+
+    private void Toggle(string key)
+    {
+        if (!_picked.Add(key)) _picked.Remove(key);
+    }
+
+    /// <summary>The master tick works on what is listed, so a search plus one click picks a group.</summary>
+    private void ToggleListed(ChangeEventArgs e)
+    {
+        var on = e.Value is true;
+        foreach (var key in ListedKeys())
+        {
+            if (on) _picked.Add(key);
+            else _picked.Remove(key);
+        }
+    }
+
+    private void ClearTab()
+    {
+        foreach (var key in TabKeys()) _picked.Remove(key);
+    }
+
+    /// <summary>The same numbering the POS resolves: available items ordered by Id, from 1.</summary>
+    private Dictionary<int, int> Sequence() =>
+        _menu!.SelectMany(c => c.Items).Where(i => i.IsAvailable)
+            .OrderBy(i => i.Id).Select((item, index) => (item.Id, Seq: index + 1))
+            .ToDictionary(x => x.Id, x => x.Seq);
+
+    private Label? LabelFor(string key) => LabelFor(key, Sequence());
+
+    private Label? LabelFor(string key, IReadOnlyDictionary<int, int> sequence)
+    {
+        if (key[0] == 'P')
+        {
+            var item = _menu!.SelectMany(c => c.Items).FirstOrDefault(i => $"P{i.Id}" == key);
+            return item is null
+                ? null
+                : new Label(item.NameFor(L.Locale),
+                    sequence.TryGetValue(item.Id, out var seq) ? seq.ToString() : $"P{item.Id}",
+                    Fmt.Money(item.FinalPrice));
+        }
+
+        var material = _materials!.Items.FirstOrDefault(m => $"M{m.Id}" == key);
+        return material is null
+            ? null
+            : new Label(material.Name,
+                string.IsNullOrWhiteSpace(material.Barcode) ? material.LabelCode : material.Barcode!,
+                $"{Fmt.Money(material.UnitCost)}/{L[$"mat.unit.{material.Unit}"]}");
+    }
+
+    private List<Label> BuildLabels()
+    {
+        var sequence = Sequence();
+        return PrintKeys().Select(k => LabelFor(k, sequence)).OfType<Label>().ToList();
+    }
+}

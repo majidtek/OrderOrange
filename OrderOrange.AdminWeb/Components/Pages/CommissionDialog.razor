@@ -1,0 +1,21 @@
+@inject LanguageService L
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            Platform commission for <b>@RestaurantName</b>, as a percentage of each order's subtotal.
+        </MudText>
+        <MudNumericField Margin="Margin.Dense" @bind-Value="Percent" Label="@L["admin.commissionPct"]" Variant="Variant.Outlined"
+                         Min="0m" Max="50m" Step="0.5m" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="@(() => Dialog.Close(DialogResult.Ok(Percent)))">@L["common.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string RestaurantName { get; set; } = "";
+    [Parameter] public decimal Percent { get; set; }
+}

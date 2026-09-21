@@ -1,0 +1,158 @@
+@page "/staff"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Partner — Team</PageTitle>
+
+<PageHeader Title="@L["staff.title"]" Subtitle="@L["staff.sub"]">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="@(() => Edit(null))">@L["staff.add"]</MudButton>
+    </Actions>
+</PageHeader>
+
+<div class="rp">
+    <MudGrid Spacing="3" Class="mb-1">
+        <MudItem xs="6" md="4">
+            <StatCard Label="@L["staff.members"]" Value="@(_page?.ActiveCount.ToString("N0") ?? "…")" Icon="@Icons.Material.Filled.Groups" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="6" md="4">
+            <StatCard Label="@L["staff.payrollCard"]" Value="@(_page is null ? "…" : Fmt.RialShort(_page.MonthlyPayroll).Value)" Icon="@Icons.Material.Filled.Payments" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <StatCard Label="@L["staff.paidThisMonth"]" Value="@PaidLabel" Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+        </MudItem>
+    </MudGrid>
+
+    <div class="bl-toolbar my-4">
+        <div class="dlv-filter">
+            <span class="dlv-fchip @(_status == "active" ? "on" : "")" @onclick="@(() => SetStatus("active"))">@L["staff.working"]</span>
+            <span class="dlv-fchip @(_status == "inactive" ? "on" : "")" @onclick="@(() => SetStatus("inactive"))">@L["staff.former"]</span>
+            <span class="dlv-fchip @(_status == "all" ? "on" : "")" @onclick="@(() => SetStatus("all"))">@L["w.all"]</span>
+        </div>
+        <MudTextField T="string" Value="_search" ValueChanged="SetSearch" Placeholder="@L["staff.searchPh"]"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" DebounceInterval="400"
+                      Clearable="true" Class="rp-search" Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" />
+    </div>
+
+    @if (_page is null)
+    {
+        <Loader />
+    }
+    else if (_page.Rows.Count == 0)
+    {
+        <EmptyState Emoji="👥" Title="@L["staff.empty"]"
+                    Subtitle="@L["staff.emptySub"]" />
+    }
+    else
+    {
+        <div class="st-grid">
+            @foreach (var member in _page.Rows)
+            {
+                var m = member;
+                <MudPaper Elevation="0" Outlined="true" Class="@(m.IsActive ? "st-card" : "st-card off")">
+                    <div class="st-top">
+                        <div class="st-av">
+                            @if (m.Photo is not null)
+                            {
+                                <img src="@m.Photo" alt="@m.FullName" />
+                            }
+                            else
+                            {
+                                <span>@StaffRoles.Emoji(m.Role)</span>
+                            }
+                        </div>
+                        <div class="st-id">
+                            <div class="nm">@m.FullName</div>
+                            <div class="rl">@StaffRoles.Emoji(m.Role) @L["srole." + m.Role]</div>
+                        </div>
+                        @if (m.PaidThisPeriod)
+                        {
+                            <span class="st-paid">✔ @L["w.paid"]</span>
+                        }
+                        else if (m.IsActive)
+                        {
+                            <span class="st-due">◷ @L["w.due"]</span>
+                        }
+                        else
+                        {
+                            <span class="st-former">@L["staff.formerBadge"]</span>
+                        }
+                    </div>
+                    <div class="st-rows">
+                        <div><span class="k">@L["w.salary"]</span><span class="v">@Fmt.RialShort(m.MonthlySalary)</span></div>
+                        <div><span class="k">@L["staff.hired"]</span><span class="v">@m.HiredOn.ToString("d MMM yyyy")</span></div>
+                        @if (!string.IsNullOrWhiteSpace(m.Phone))
+                        {
+                            <div><span class="k">@L["common.phone"]</span><span class="v"><PhoneMask Phone="@m.Phone" Hint="@L["ph.tapShow"]" /></span></div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(m.NationalId))
+                        {
+                            <div><span class="k">@L["staff.idNo"]</span><span class="v">@m.NationalId</span></div>
+                        }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(m.Notes))
+                    {
+                        <div class="st-note">@m.Notes</div>
+                    }
+                    <div class="st-actions">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => Edit(m))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => Remove(m))" />
+                    </div>
+                </MudPaper>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private StaffPageDto? _page;
+    private string _status = "active";
+    private string _search = "";
+
+    private string PaidLabel => _page is null
+        ? "…"
+        : $"{_page.Rows.Count(r => r.PaidThisPeriod)} / {_page.ActiveCount}";
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        _page = null;
+        _page = await Api.GetStaffAsync(_status, _search);
+    }
+
+    private async Task SetStatus(string status)
+    {
+        _status = status;
+        await Reload();
+    }
+
+    private async Task SetSearch(string value)
+    {
+        _search = value ?? "";
+        await Reload();
+    }
+
+    private async Task Edit(StaffDto? member)
+    {
+        var parameters = new DialogParameters<StaffDialog> { { d => d.Existing, member } };
+        var dialog = await Dialogs.ShowAsync<StaffDialog>(member is null ? L["staff.newMember"] : L["staff.editMember"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled == false) await Reload();
+    }
+
+    private async Task Remove(StaffDto member)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["staff.removeTitle"],
+            string.Format(L["staff.removeMsg"], member.FullName),
+            yesText: L["common.delete"], cancelText: L["common.keep"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.DeleteStaffAsync(member.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.removeFail"], Severity.Error);
+        await Reload();
+    }
+}

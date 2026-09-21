@@ -1,0 +1,170 @@
+﻿@page "/reports"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Partner — Reports</PageTitle>
+
+@* ---------- Clean business-report header (deliberately NOT the Visits dark hero) ---------- *@
+<PageHeader Title="@L["rep.title"]" Subtitle="@L["rep.sub"]" />
+
+<div class="rp">
+<div class="d-flex align-center flex-wrap mb-4" style="gap: 10px;">
+    <div class="dlv-filter">
+        <span class="dlv-fchip @(_range is null && _period == "day" ? "on" : "")" @onclick="@(() => SetPeriod("day"))">@L["vis.today"]</span>
+        <span class="dlv-fchip @(_range is null && _period == "week" ? "on" : "")" @onclick="@(() => SetPeriod("week"))">@L["vis.days7"]</span>
+        <span class="dlv-fchip @(_range is null && _period == "month" ? "on" : "")" @onclick="@(() => SetPeriod("month"))">@L["vis.days30"]</span>
+        <span class="dlv-fchip @(_range is null && _period == "year" ? "on" : "")" @onclick="@(() => SetPeriod("year"))">@L["vis.year"]</span>
+    </div>
+    <MfDateRangePicker DateFormat="yyyy-MM-dd" DateRange="_range" DateRangeChanged="OnRangeChanged"
+                        Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                        Class="rp-range" PlaceholderStart="@L["w.date"]" PlaceholderEnd="@L["w.date"]"
+                        MaxDate="DateTime.Today" />
+    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">@RangeLabel · @L["rep.maxMonth"]</MudChip>
+    <span style="flex: 1;"></span>
+    <ReportExport Title="@L["rep.revenue"]" Subtitle="@L["rep.sub"]" RangeLabel="@RangeLabel"
+                  Columns="@ExportColumns" Fetch="ExportRows" FetchTotals="ExportTotals" />
+</div>
+
+<MudGrid Spacing="3" Class="mb-1">
+    <MudItem xs="6" md="3">
+        <StatCard Label="@L["w.orders"]" Value="@(_sales?.Orders.ToString("N0") ?? "…")" Icon="@Icons.Material.Filled.ReceiptLong" Color="Color.Info" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <StatCard Label="@L["w.revenue"]" Value="@(_sales is null ? "…" : Fmt.RialShort(_sales.Revenue).Value)" Icon="@Icons.Material.Filled.Payments" Color="Color.Success" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <StatCard Label="@L["w.avgOrder"]" Value="@(_sales is null ? "…" : Fmt.RialShort(_sales.AvgOrder).Value)" Icon="@Icons.Material.Filled.Calculate" Color="Color.Primary" />
+    </MudItem>
+    <MudItem xs="6" md="3">
+        <StatCard Label="@L["status.Cancelled"]" Value="@(_sales?.Cancelled.ToString("N0") ?? "…")" Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" />
+    </MudItem>
+</MudGrid>
+
+<div class="my-4"></div>
+
+@* ---------- Sales report: table of periods ---------- *@
+<MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+    <div class="d-flex align-center mb-4" style="gap: 8px;">
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["rep.revenue"]</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">@RangeLabel</MudChip>
+    </div>
+    @if (_sales is null)
+    {
+        <Loader />
+    }
+    else if (_sales.Buckets.All(b => b.Orders == 0))
+    {
+        <div class="pv-empty">
+            <span class="em">🌱</span>
+            <MudText Typo="Typo.body1" Style="font-weight: 700;">@L["rep.noSales"]</MudText>
+        </div>
+    }
+    else
+    {
+        var best = _sales.Buckets.Max(b => b.Amount);
+        <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+            <thead>
+                <tr>
+                    <th>@(_period == "day" ? L["w.hour"] : _period == "year" ? L["w.month"] : L["w.date"])</th>
+                    <th class="num">@L["w.orders"]</th>
+                    <th class="num">@L["w.revenue"] (@((MarkupString)Fmt.RialSvg))</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var bucket in _sales.Buckets.Where(b => b.Orders > 0))
+                {
+                    <tr class="@(bucket.Amount == best ? "best" : "")">
+                        <td>@bucket.Label @(bucket.Amount == best ? "🏆" : "")</td>
+                        <td class="num">@bucket.Orders</td>
+                        <td class="num strong">@Fmt.RialShort(bucket.Amount)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr class="total">
+                    <td>@L["common.total"]</td>
+                    <td class="num">@_sales.Orders</td>
+                    <td class="num strong">@Fmt.RialShort(_sales.Revenue)</td>
+                </tr>
+            </tfoot>
+        </MudSimpleTable>
+    }
+</MudPaper>
+</div>
+@code {
+    private string _period = "week";
+    private DateRange? _range;
+    private bool _initialized;
+
+    private DateTime? RangeFrom => _range?.Start;
+    private DateTime? RangeTo => _range?.End;
+
+    private SalesSummaryDto? _sales;
+
+    private string RangeLabel => _range is { Start: not null, End: not null }
+        ? $"{_range.Start:d MMM} – {_range.End:d MMM yyyy}"
+        : _period switch
+        {
+            "day" => L["vis.todayHour"],
+            "month" => L["vis.last30"],
+            "year" => L["vis.last12m"],
+            _ => L["vis.last7"]
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_initialized) return;
+        _initialized = true;
+        await SetPeriod(_period);
+    }
+
+    private async Task SetPeriod(string period)
+    {
+        _period = period;
+        _range = null;
+        await Load();
+    }
+
+    /// <summary>Custom range from the picker — clamped to one month, like the admin reports.</summary>
+    private async Task OnRangeChanged(DateRange? range)
+    {
+        if (range?.Start is null || range.End is null)
+        {
+            _range = null;
+            await Load();
+            return;
+        }
+        var start = range.Start.Value.Date;
+        var end = range.End.Value.Date;
+        if ((end - start).TotalDays > 30) end = start.AddDays(30);
+        _range = new DateRange(start, end);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _sales = null;
+        _sales = await Api.GetMySalesReportAsync(_period, RangeFrom, RangeTo);
+    }
+
+    // ---------- Export ----------
+
+    private List<ExportColumnDto> ExportColumns =>
+    [
+        new(_period == "day" ? L["w.hour"] : _period == "year" ? L["w.month"] : L["w.date"]),
+        new(L["w.orders"], Numeric: true),
+        new($"{L["w.revenue"]} ({Fmt.Symbol})", Numeric: true),
+    ];
+
+    /// <summary>Every bucket that saw a sale — the same rows the table shows, with no
+    /// paging to lose: the sales report is already whole on screen.</summary>
+    private Task<List<List<string>>> ExportRows() =>
+        Task.FromResult((_sales?.Buckets ?? [])
+            .Where(b => b.Orders > 0)
+            .Select(b => new List<string> { b.Label, b.Orders.ToString("N0"), b.Amount.ToString("0.000") })
+            .ToList());
+
+    private Task<List<string>?> ExportTotals() =>
+        Task.FromResult<List<string>?>(_sales is null ? null :
+            [L["common.total"], _sales.Orders.ToString("N0"), _sales.Revenue.ToString("0.000")]);
+}

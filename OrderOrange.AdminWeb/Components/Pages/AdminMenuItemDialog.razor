@@ -1,0 +1,84 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+<MudDialog>
+    <DialogContent>
+        <MudSelect Margin="Margin.Dense" T="int" @bind-Value="_categoryId" Label="@L["partner.category"]" Variant="Variant.Outlined" Class="mb-3">
+            @foreach (var category in Categories)
+            {
+                <MudSelectItem T="int" Value="@category.Id">@category.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField Margin="Margin.Dense" @bind-Value="_name" Label="@L["common.name"]" Variant="Variant.Outlined" Class="mb-3" Immediate="true" />
+        <MudTextField Margin="Margin.Dense" @bind-Value="_description" Label="@L["partner.description"]" Variant="Variant.Outlined" Lines="2" Class="mb-3" />
+        <div class="d-flex" style="gap: 12px;">
+            <MudNumericField Margin="Margin.Dense" @bind-Value="_price" Label="@L["partner.price"]" Variant="Variant.Outlined" Format="0.000"
+                             Min="0.05m" Step="0.100m" Class="mb-3" />
+            <MudTextField Margin="Margin.Dense" @bind-Value="_emoji" Label="@L["admin.emoji"]" Variant="Variant.Outlined" Class="mb-3" />
+        </div>
+        <div class="d-flex" style="gap: 20px;">
+            <MudSwitch T="bool" @bind-Value="_isPopular" Label="@L["rest.popular"]" Color="Color.Warning" />
+            <MudSwitch T="bool" @bind-Value="_isAvailable" Label="@L["partner.available"]" Color="Color.Success" />
+        </div>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy">@L["common.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public int RestaurantId { get; set; }
+    [Parameter] public MenuItemDto? Existing { get; set; }
+    [Parameter, EditorRequired] public List<MenuCategoryDto> Categories { get; set; } = [];
+
+    private int _categoryId;
+    private string _name = "";
+    private string _description = "";
+    private decimal _price = 1.000m;
+    private string _emoji = "🍽️";
+    private bool _isPopular;
+    private bool _isAvailable = true;
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null)
+        {
+            _categoryId = Categories.FirstOrDefault()?.Id ?? 0;
+            return;
+        }
+        _categoryId = Existing.CategoryId;
+        _name = Existing.Name;
+        _description = Existing.Description;
+        _price = Existing.Price;
+        _emoji = Existing.ImageEmoji;
+        _isPopular = Existing.IsPopular;
+        _isAvailable = Existing.IsAvailable;
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var request = new SaveMenuItemRequest(_categoryId, _name, _description, _price, _emoji, _isPopular, _isAvailable);
+            var (ok, error) = Existing is null
+                ? await Api.AdminCreateMenuItemAsync(RestaurantId, request)
+                : await Api.AdminUpdateMenuItemAsync(Existing.Id, request);
+            if (!ok) { _error = error; return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,175 @@
+@inherits LayoutComponentBase
+@inject AppState State
+@inject NavigationManager Nav
+@inject LanguageService Lang
+@inject ApiClient Api
+@inject IHttpContextAccessor Http
+@implements IDisposable
+
+<MudThemeProvider Theme="Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    @* These three render OUTSIDE the page tree — dialogs, menus, toasts. They must sit
+       inside the RTL provider or none of what they draw ever flips for Arabic/Persian/
+       Urdu, which is exactly the bug this fixed. *@
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    @* First visit: the customer picks a language before anything else happens. *@
+    <LanguageGate />
+<SessionGate>
+    <SignedOut>
+        <LoginView AppName="OrderOrange Delivery"
+                   Tagline="@Lang["login.dlvTagline"]"
+                   LogoUrl="_content/OrderOrange.ClientCore/logo.svg?v=4"
+                   DriverRegister="true"
+                   PasswordOnly="true"
+                   AllowedRoles="new[] { UserRole.Driver }"
+                   WrongRoleMessage="@Lang["login.dlvWrong"]"
+                   DemoHint="@Lang["login.dlvDemo"]" />
+    </SignedOut>
+    <SignedIn>
+        <MudLayout>
+            <MudAppBar Elevation="0" Class="mf-appbar">
+                <div class="mf-brand">
+                    <div class="mf-brand-mark">🛵</div>
+                    <span class="mf-brand-name">Delivery</span>
+                </div>
+                <MudSpacer />
+                <MudButton Href="/" StartIcon="@Icons.Material.Filled.DeliveryDining" Color="Color.Inherit"
+                           Class="mf-nav-pill d-none d-sm-flex">@Lang["nav.deliveries"]</MudButton>
+                <MudButton Href="/earnings" StartIcon="@Icons.Material.Filled.Payments" Color="Color.Inherit"
+                           Class="mf-nav-pill d-none d-sm-flex">@Lang["nav.earnings"]</MudButton>
+                <MudButton Href="/verification" StartIcon="@Icons.Material.Filled.Badge" Color="Color.Inherit"
+                           Class="mf-nav-pill d-none d-sm-flex">@Lang["drv.verify"]</MudButton>
+                <LanguageMenu Compact="true" />
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" Class="ml-2">
+                    <ActivatorContent>
+                        <MudAvatar Color="Color.Primary">
+                            @if (Avatars.Url(State.Avatar) is string avatarUrl)
+                            {
+                                <MudImage Src="@avatarUrl" Alt="Profile" Style="width: 100%; height: 100%; object-fit: cover;" />
+                            }
+                            else
+                            {
+                                @Initial
+                            }
+                        </MudAvatar>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <div class="px-4 py-2">
+                            <MudText Typo="Typo.subtitle2">@State.FullName</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mf-ltr">@State.Email</MudText>
+                        </div>
+                        <MudDivider />
+                        <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="SignOut">@Lang["common.signout"]</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+            </MudAppBar>
+            <MudMainContent Class="pb-12 mf-mobile-pad">
+                <MudContainer MaxWidth="MaxWidth.False" Class="pt-6" Style="max-width: 900px;">
+                    @Body
+                </MudContainer>
+            </MudMainContent>
+
+            <nav class="mf-bottom-nav">
+                <div class="mf-nav-item @Active("/")" @onclick="@(() => Nav.NavigateTo("/"))">
+                    <MudIcon Icon="@Icons.Material.Filled.DeliveryDining" Size="Size.Small" />
+                    <span class="lb">@Lang["nav.deliveries"]</span>
+                </div>
+                <div class="mf-nav-item @Active("/earnings")" @onclick="@(() => Nav.NavigateTo("/earnings"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Small" />
+                    <span class="lb">@Lang["nav.earnings"]</span>
+                </div>
+                <div class="mf-nav-item @Active("/verification")" @onclick="@(() => Nav.NavigateTo("/verification"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Badge" Size="Size.Small" />
+                    <span class="lb">@Lang["drv.verify"]</span>
+                </div>
+            </nav>
+        </MudLayout>
+    </SignedIn>
+</SessionGate>
+</MudRTLProvider>
+
+@code {
+    private static readonly MudTheme Theme = FoodTheme.Build();
+
+    private string Initial => string.IsNullOrEmpty(State.FullName) ? "?" : State.FullName[..1].ToUpper();
+
+    private string Active(string href)
+    {
+        var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+        var match = href == "/" ? path == "/" : path.StartsWith(href, StringComparison.OrdinalIgnoreCase);
+        return match ? "active" : "";
+    }
+
+    /// <summary>
+    /// The visitor own address, read once while a real HTTP request still exists. After
+    /// the circuit opens there is nothing to read it from, and the API sees only this
+    /// server — which logged every person here as 127.0.0.1.
+    /// </summary>
+    private string? _visitorIp;
+
+    private void CaptureVisitorIp()
+    {
+        if (Http.HttpContext is not { } context) return;
+        // Behind IIS the caller is the proxy; the visitor is the FIRST hop listed.
+        var forwarded = context.Request.Headers["X-Forwarded-For"].ToString();
+        _visitorIp = forwarded.Split(',', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim();
+        if (string.IsNullOrWhiteSpace(_visitorIp))
+            _visitorIp = context.Connection.RemoteIpAddress?.ToString();
+    }
+
+    protected override void OnInitialized()
+    {
+        CaptureVisitorIp();
+        Lang.Changed += OnLangChanged;
+        Nav.LocationChanged += OnLocationChanged;
+        State.Changed += OnStateChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Lang.EnsureLoadedAsync();
+
+        // "Open as rider" from the admin panel: a single-use code in the query string,
+        // traded for a session and then stripped so a copied URL carries nothing live.
+        var code = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query).Get("impersonate");
+        if (string.IsNullOrWhiteSpace(code)) return;
+
+        var (user, _) = await Api.RedeemImpersonationAsync(code);
+        if (user is not null && user.Role == UserRole.Driver)
+            State.SignIn(user);
+        Nav.NavigateTo("/", replace: true);
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => TrackVisit();
+
+    private void OnStateChanged() => _ = InvokeAsync(() =>
+    {
+        TrackVisit();
+        StateHasChanged();
+    });
+
+    private void TrackVisit()
+    {
+        if (!State.IsAuthenticated) return;
+        var page = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+        _ = Api.TrackVisitAsync("Delivery", page, _visitorIp);
+    }
+
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void SignOut()
+    {
+        State.SignOut();
+        Nav.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        Lang.Changed -= OnLangChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+        State.Changed -= OnStateChanged;
+    }
+}

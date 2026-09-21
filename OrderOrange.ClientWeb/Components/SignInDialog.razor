@@ -1,0 +1,49 @@
+@namespace OrderOrange.ClientWeb.Components
+@inject LanguageService L
+@inject NavigationManager Nav
+
+@* Sign-in / registration shown at the moment it is needed — placing an order, or
+   opening something personal — instead of a wall in front of the whole shop.
+
+   Full screen on purpose: this is the real login screen, not a card squeezed inside
+   another card. The reason we're asking sits where the tagline normally goes. *@
+
+<MudDialog Class="mf-signin-dialog" ContentClass="pa-0">
+    <DialogContent>
+        @* No register tab: signing in with a new address IS registering. Both Google and
+           the email code create the account on the spot when it does not exist yet. *@
+        <LoginView AppName="OrderOrange"
+                   LogoUrl="logo.svg?v=4"
+                   Tagline="@(Reason ?? L["auth.signInToContinue"])"
+                   AllowedRoles="new[] { UserRole.Customer, UserRole.RestaurantOwner, UserRole.Driver }"
+                   WrongRoleMessage="@L["login.clientWrong"]"
+                   EmailCodeHref="@EmailCodeHref"
+                   PasswordHref="@PasswordHref"
+                   OnSignedIn="Done"
+                   OnClose="Cancel" />
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    /// <summary>Why we're asking — e.g. "Sign in to place your order".</summary>
+    [Parameter] public string? Reason { get; set; }
+
+    /// <summary>
+    /// The email-code page, told where to come back to. This dialog opens over whatever
+    /// the customer was doing — a dish, a basket, checkout — and leaving them on the home
+    /// page afterwards would throw that away.
+    /// </summary>
+    private string EmailCodeHref =>
+        $"/signin/email?return={ReturnParam}";
+
+    private string PasswordHref =>
+        $"/signin/password?return={ReturnParam}";
+
+    private string ReturnParam =>
+        Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri) is var p && p.Length > 0 ? "/" + p : "/");
+
+    private void Done() => Dialog.Close(DialogResult.Ok(true));
+    private void Cancel() => Dialog.Cancel();
+}

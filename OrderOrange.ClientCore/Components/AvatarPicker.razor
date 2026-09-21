@@ -1,0 +1,113 @@
+@namespace OrderOrange.ClientCore.Components
+@inject ApiClient Api
+@inject AppState State
+@inject IJSRuntime JS
+@inject LanguageService L
+
+@* A profile picture, chosen and shrunk in the browser. The file never travels at
+   its camera size: it is cropped to its centre square, scaled to 256px and squeezed
+   to a few KB before the first byte leaves the device. *@
+
+<div class="av-pick">
+    <input type="file" id="@_inputId" accept="image/png,image/jpeg,image/webp" hidden />
+
+    <button type="button" class="face" @onclick="Choose" disabled="@_busy" title="@L["ua.changePhoto"]">
+        @if (_photo is { Length: > 0 })
+        {
+            <img src="@_photo" alt="" />
+        }
+        else if (State.Avatar is { Length: > 0 })
+        {
+            <span class="emo">@State.Avatar</span>
+        }
+        else
+        {
+            <span class="emo">@Initial</span>
+        }
+        <span class="cam"><MudIcon Icon="@Icons.Material.Filled.PhotoCamera" /></span>
+        @if (_busy)
+        {
+            <span class="spin"></span>
+        }
+    </button>
+
+    <div class="side">
+        <button type="button" class="lnk" @onclick="Choose" disabled="@_busy">@L["ua.changePhoto"]</button>
+        @if (_photo is { Length: > 0 })
+        {
+            <button type="button" class="lnk danger" @onclick="Remove" disabled="@_busy">@L["ua.removePhoto"]</button>
+        }
+        @if (_note is { Length: > 0 })
+        {
+            <small class="note">@_note</small>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Raised after a successful save, so a parent can repaint its own avatars.</summary>
+    [Parameter] public EventCallback<string?> OnChanged { get; set; }
+
+    private readonly string _inputId = $"av-{Guid.NewGuid():N}";
+    private string? _photo;
+    private bool _busy;
+    private string? _note;
+
+    private string Initial =>
+        string.IsNullOrWhiteSpace(State.FullName) ? "?" : State.FullName.Trim()[..1].ToUpperInvariant();
+
+    protected override void OnInitialized() => _photo = State.AvatarPhoto;
+
+    private async Task Choose()
+    {
+        _note = null;
+        PickResult? picked;
+        try { picked = await JS.InvokeAsync<PickResult?>("mfAvatar.pick", _inputId, 256, 60); }
+        catch { return; }
+
+        if (picked is null) return;                       // the dialog was dismissed
+        if (picked.Error is { Length: > 0 } || string.IsNullOrWhiteSpace(picked.DataUrl))
+        {
+            _note = L["common.wentWrong"];
+            return;
+        }
+
+        _busy = true;
+        var (ok, error) = await Api.UpdateAvatarPhotoAsync(picked.DataUrl);
+        _busy = false;
+
+        if (!ok) { _note = L.ServerError(error) ?? L["common.wentWrong"]; return; }
+
+        _photo = picked.DataUrl;
+        State.UpdateAvatarPhoto(_photo);
+        // Say what the squeeze actually achieved — it is a big number, and reassuring.
+        _note = picked.Original > 0
+            ? $"{Kb(picked.Original)} → {Kb(picked.Bytes)}"
+            : null;
+        await OnChanged.InvokeAsync(_photo);
+    }
+
+    private async Task Remove()
+    {
+        _busy = true;
+        var (ok, _) = await Api.UpdateAvatarPhotoAsync(null);
+        _busy = false;
+        if (!ok) return;
+        _photo = null;
+        _note = null;
+        State.UpdateAvatarPhoto(null);
+        await OnChanged.InvokeAsync(null);
+    }
+
+    private static string Kb(int bytes) =>
+        bytes >= 1_000_000 ? $"{bytes / 1_048_576.0:0.#} MB" : $"{Math.Max(1, bytes / 1024)} KB";
+
+    /// <summary>What mfAvatar.pick hands back.</summary>
+    private sealed class PickResult
+    {
+        public string? DataUrl { get; set; }
+        public string? Error { get; set; }
+        public int Bytes { get; set; }
+        public int Original { get; set; }
+    }
+}

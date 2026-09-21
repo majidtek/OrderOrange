@@ -1,0 +1,195 @@
+@using OrderOrange.RestaurantWeb.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snack
+
+@* One dish's recipe in two steps: first CHOOSE the materials, then GIVE each its
+   amount per portion. The stepper won't move forward with nothing selected, and
+   won't save while any amount is missing. *@
+
+<MudDialog>
+    <DialogContent>
+        @* The dish's name is already the dialog's title — only the hint lives here. *@
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">@L["rcp.editHint"]</MudText>
+
+        <MudStepper @bind-ActiveIndex="_step" NonLinear="false" Class="rd-stepper">
+            <ChildContent>
+                @* ---------- Step 1: which materials does this dish use? ---------- *@
+                <MudStep Title="@L["rcp.step1"]" SecondaryText="@($"{_selected.Count} ✓")" Completed="@(_selected.Count > 0)">
+                    <div class="rd-search">
+                        <MudIcon Icon="@Icons.Material.Filled.Search" />
+                        <input placeholder="@L["mat.search"]" @bind="_filter" @bind:event="oninput" />
+                    </div>
+                    <div class="rd-list">
+                        @foreach (var material in Filtered)
+                        {
+                            var on = _selected.Contains(material.Id);
+                            <label class="rd-row @(on ? "on" : "")">
+                                <span class="pick">
+                                    <input type="checkbox" checked="@on"
+                                           @onchange="@(e => Toggle(material.Id, e.Value is true))" />
+                                    <span class="ic">@CategoryIcon(material.Category)</span>
+                                    <span class="nm">
+                                        <b>@material.Name</b>
+                                        <small class="mf-ltr">@Fmt.Rial(material.UnitCost)/@L[$"mat.unit.{material.Unit}"]</small>
+                                    </span>
+                                </span>
+                                @if (on)
+                                {
+                                    <span class="cs">✓</span>
+                                }
+                            </label>
+                        }
+                    </div>
+                </MudStep>
+
+                @* ---------- Step 2: how much of each, per ONE portion? ---------- *@
+                <MudStep Title="@L["rcp.step2"]" SecondaryText="@L["rcp.amountPer"]">
+                    <div class="rd-list">
+                        @foreach (var material in SelectedMaterials)
+                        {
+                            var amount = _amounts.GetValueOrDefault(material.Id);
+                            <div class="rd-row on @(amount is null or <= 0 ? "needs" : "")">
+                                <span class="pick">
+                                    <span class="ic">@CategoryIcon(material.Category)</span>
+                                    <span class="nm">
+                                        <b>@material.Name</b>
+                                        <small class="mf-ltr">@Fmt.Rial(material.UnitCost)/@L[$"mat.unit.{material.Unit}"]</small>
+                                    </span>
+                                </span>
+                                <input class="amt mf-ltr" type="number" step="0.01" min="0.01"
+                                       placeholder="@L["rcp.amountPer"]"
+                                       value="@(amount?.ToString("0.##"))"
+                                       @onchange="@(e => SetAmount(material.Id, e.Value?.ToString()))" />
+                                <span class="un">@L[$"mat.unit.{material.Unit}"]</span>
+                                <span class="cs mf-ltr">@(amount is { } a and > 0 ? Fmt.Rial(a * material.UnitCost) : (MarkupString)"—")</span>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="rd-cost">
+                        <div>
+                            <small>@L["rcp.portionCost"]</small>
+                            <b class="mf-ltr">@Fmt.Rial(PortionCost)</b>
+                        </div>
+                        @if (Item.FinalPrice > 0)
+                        {
+                            var margin = (Item.FinalPrice - PortionCost) * 100 / Item.FinalPrice;
+                            <div class="end">
+                                <small>@L["rcp.price"] <span class="mf-ltr">@Fmt.Rial(Item.FinalPrice)</span></small>
+                                <b class="mf-ltr @(margin < 40 ? "bad" : margin < 60 ? "mid" : "good")">@margin.ToString("0")%</b>
+                            </div>
+                        }
+                    </div>
+                </MudStep>
+            </ChildContent>
+
+            @* One action bar for both steps — the stepper's own brain stays out of it. *@
+            <ActionContent Context="stepper">
+                <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+                <MudSpacer />
+                @if (_step == 0)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Dark"
+                               EndIcon="@Icons.Material.Filled.ArrowForward"
+                               Disabled="@(_selected.Count == 0)"
+                               OnClick="@(() => _step = 1)">
+                        @L["rcp.toAmounts"] (@_selected.Count)
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => _step = 0)">
+                        @L["rcp.backToPick"]
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="SaveAsync" Disabled="_busy">
+                        @(_busy ? L["common.saving"] : L["common.save"])
+                    </MudButton>
+                }
+            </ActionContent>
+        </MudStepper>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public MenuItemDto Item { get; set; } = null!;
+    [Parameter] public StoreMaterialsDto Materials { get; set; } = null!;
+    [Parameter] public List<SaveRecipeLineRequest> Existing { get; set; } = [];
+
+    private int _step;
+    private string _filter = "";
+    private bool _busy;
+
+    private readonly HashSet<int> _selected = [];
+    private readonly Dictionary<int, decimal?> _amounts = [];
+
+    private IEnumerable<StoreMaterialDto> Filtered
+    {
+        get
+        {
+            var all = Materials.Items
+                .OrderByDescending(m => _selected.Contains(m.Id))
+                .ThenBy(m => m.Category).ThenBy(m => m.Name);
+            if (_filter.Trim().Length == 0) return all;
+            var folded = PosBotNlu.Fold(_filter);
+            return all.Where(m => PosBotNlu.Fold(m.Name).Contains(folded));
+        }
+    }
+
+    private List<StoreMaterialDto> SelectedMaterials =>
+        Materials.Items.Where(m => _selected.Contains(m.Id))
+            .OrderBy(m => m.Category).ThenBy(m => m.Name).ToList();
+
+    private decimal PortionCost =>
+        SelectedMaterials.Sum(m => (_amounts.GetValueOrDefault(m.Id) ?? 0) * m.UnitCost);
+
+    protected override void OnInitialized()
+    {
+        foreach (var line in Existing)
+        {
+            _selected.Add(line.MaterialId);
+            _amounts[line.MaterialId] = line.Amount;
+        }
+    }
+
+    private void Toggle(int id, bool on)
+    {
+        if (on) { _selected.Add(id); }
+        else { _selected.Remove(id); _amounts.Remove(id); }
+    }
+
+    private void SetAmount(int id, string? raw) =>
+        _amounts[id] = decimal.TryParse(raw, out var amount) && amount > 0 ? amount : null;
+
+    private async Task SaveAsync()
+    {
+        if (_busy) return;
+
+        // A selection without an amount is a question, not an answer — refuse to guess.
+        if (_selected.Any(id => _amounts.GetValueOrDefault(id) is null or <= 0))
+        {
+            Snack.Add(L["rcp.amountNeeded"], Severity.Warning);
+            return;
+        }
+
+        var lines = _selected
+            .Select(id => new SaveRecipeLineRequest(id, _amounts[id]!.Value))
+            .ToList();
+
+        _busy = true;
+        var (ok, error) = await Api.SaveRecipeAsync(Item.Id, new SaveRecipeRequest(lines));
+        _busy = false;
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(L["rcp.saved"], Severity.Success);
+        Dialog.Close(DialogResult.Ok(true));
+    }
+
+    private static string CategoryIcon(string category) => category switch
+    {
+        "grain" => "🌾", "oil" => "🫒", "meat" => "🥩", "dairy" => "🧀",
+        "vegetable" => "🥬", "spice" => "🧂", "drink" => "🥤", "packaging" => "📦",
+        _ => "🧺",
+    };
+}

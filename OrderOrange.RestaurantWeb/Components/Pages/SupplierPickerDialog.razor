@@ -1,0 +1,89 @@
+@using OrderOrange.RestaurantWeb.Services
+@inject LanguageService L
+@inject IJSRuntime JS
+
+@* Search and select — nothing else. Type a number, a name, or a phone; Enter takes
+   the first match. Tapping a row does the same with a finger. *@
+
+<MudDialog>
+    <DialogContent>
+        <div class="rd-search">
+            <MudIcon Icon="@Icons.Material.Filled.Search" />
+            <input id="sup-pick-q" placeholder="@L["sup.pickHint"]" autocomplete="off"
+                   @bind="_filter" @bind:event="oninput" @onkeydown="OnKeyAsync" />
+        </div>
+
+        @if (Suppliers.Count == 0)
+        {
+            <div class="sb-empty">🚚 @L["sup.none"]</div>
+        }
+        else
+        {
+            <div class="tp-list">
+                @foreach (var (supplier, number) in Filtered)
+                {
+                    <div class="tp-row">
+                        <button type="button" class="pick" @onclick="@(() => Dialog.Close(DialogResult.Ok(supplier.Name)))">
+                            <div class="top">
+                                <span class="num mf-ltr">@number</span>
+                                <b>@supplier.Name</b>
+                                @if (supplier.Phone is { Length: > 0 } phone)
+                                {
+                                    <span class="sup mf-ltr">📞 @phone</span>
+                                }
+                            </div>
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    [Parameter] public List<SupplierDto> Suppliers { get; set; } = [];
+
+    private string _filter = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) { try { await JS.InvokeVoidAsync("mfPos.focus", "#sup-pick-q"); } catch { } }
+    }
+
+    /// <summary>
+    /// Filtered rows KEEP their original numbers — searching must never make
+    /// "3⏎" mean a different supplier than the dialog taught.
+    /// </summary>
+    private List<(SupplierDto Supplier, int Number)> Filtered
+    {
+        get
+        {
+            var numbered = Suppliers.Select((s, i) => (Supplier: s, Number: i + 1));
+            var raw = PosBotNlu.AsciiDigits(_filter.Trim());
+            if (raw.Length == 0) return numbered.ToList();
+
+            // A bare number is the CODE first, a phone fragment second.
+            if (int.TryParse(raw, out var code) && raw.Length <= 2)
+                return numbered.Where(x => x.Number == code
+                    || (x.Supplier.Phone is not null && PosBotNlu.AsciiDigits(x.Supplier.Phone).Contains(raw))).ToList();
+
+            var folded = PosBotNlu.Fold(_filter);
+            return numbered.Where(x =>
+                PosBotNlu.Fold(x.Supplier.Name).Contains(folded)
+                || (x.Supplier.Phone is not null && PosBotNlu.AsciiDigits(x.Supplier.Phone).Contains(raw))
+                || (x.Supplier.ContactName is not null && PosBotNlu.Fold(x.Supplier.ContactName).Contains(folded)))
+                .ToList();
+        }
+    }
+
+    /// <summary>Enter = take the first match — code, name, or phone, whatever narrowed it.</summary>
+    private Task OnKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return Task.CompletedTask;
+        var hit = Filtered.FirstOrDefault();
+        if (hit.Supplier is not null) Dialog.Close(DialogResult.Ok(hit.Supplier.Name));
+        return Task.CompletedTask;
+    }
+}

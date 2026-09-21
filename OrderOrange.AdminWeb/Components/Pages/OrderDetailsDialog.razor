@@ -1,0 +1,15 @@
+@inject LanguageService L
+
+<MudDialog>
+    <DialogContent>
+        <OrderView Order="Order" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Close())">@L["common.close"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public OrderDto Order { get; set; } = default!;
+}

@@ -1,0 +1,139 @@
+﻿@page "/food-delivery"
+@page "/cuisines/{Slug}"
+@page "/areas/{Slug}"
+@using OrderOrange.ClientWeb.Seo
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* Search landing pages: "Iranian restaurants in Muscat", "Restaurants in Al Khuwair",
+   "Food delivery app in Oman". Plain HTML with real links, so a crawler (which gets the
+   prerender) and a person (who gets the app) both see the same list and can open a shop. *@
+
+<PageTitle>@PageTitle</PageTitle>
+
+<div class="mf-browse">
+    <nav class="mf-crumbs" aria-label="Breadcrumb"><a href="/">OrderOrange</a> › <a href="@SeoSlugs.Hub">@L["browse.hubH1"]</a>@if (Kind != "hub") { <span> › @Heading</span> }</nav>
+    <h1>@Heading</h1>
+    <p class="mf-browse-intro">@Intro</p>
+
+    @if (_stores is null)
+    {
+        <p class="mf-browse-muted">…</p>
+    }
+    else if (_stores.Count == 0)
+    {
+        <p class="mf-browse-muted">@L["browse.none"]</p>
+    }
+    else
+    {
+        <p class="mf-browse-count">@string.Format(L["browse.count"], _stores.Count)</p>
+        <div class="mf-browse-grid">
+            @foreach (var s in _stores)
+            {
+                var slides = s.HasPhotos ? new List<string> { $"/og/{s.Id}.jpg" } : FoodPhoto.SlidesForRestaurant(s.Cuisine, s.Id).Take(1).ToList();
+                <a class="mf-browse-card @(s.IsOpen ? "" : "shut")" href="@((s.Slug.Length > 0 ? "/" + s.Slug : StorePath.For(s.Id)) + LangSuffix)">
+                    <span class="pic" style="background:@s.BannerColor">@if (slides.Count > 0) { <img src="@slides[0]" alt="@StoreText.Name(s.Name, s.Names, L)" loading="lazy" /> }</span>
+                    <span class="body">
+                        <b>@StoreText.Name(s.Name, s.Names, L)</b>
+                        <span class="meta">@StoreText.Cuisines(s.Cuisine, s.Cuisines, L) · @StoreText.Area(s.Area, L)</span>
+                        <span class="meta">@(s.IsOpen ? L["home.open"] : L["home.closed"]) · @(s.DeliveryFee == 0 ? L["home.freeDelivery"] : $"{L["home.delivery"]} {s.DeliveryFee:0.000}") · ⏱ @(s.AvgPrepMinutes + 15) min</span>
+                    </span>
+                </a>
+            }
+        </div>
+    }
+
+    @if (Kind == "hub")
+    {
+        <section class="mf-browse-faq">
+            <h2>@L["browse.faqTitle"]</h2>
+            @for (var i = 1; i <= 4; i++)
+            {
+                <details @open="@(i == 1)"><summary>@L[$"browse.q{i}"]</summary><p>@L[$"browse.a{i}"]</p></details>
+            }
+        </section>
+    }
+
+    @if (_cuisines is { Count: > 0 })
+    {
+        <h2 class="mf-browse-h2">@L["browse.otherCuisines"]</h2>
+        <div class="mf-browse-links">
+            @foreach (var c in _cuisines)
+            {
+                <a href="@(SeoSlugs.CuisinePath(c) + LangSuffix)">@CuisineText(c)</a>
+            }
+        </div>
+    }
+    @if (_areas is { Count: > 0 })
+    {
+        <h2 class="mf-browse-h2">@L["browse.otherAreas"]</h2>
+        <div class="mf-browse-links">
+            @foreach (var a in _areas)
+            {
+                <a href="@(SeoSlugs.AreaPath(a) + LangSuffix)">@StoreText.Area(a, L)</a>
+            }
+        </div>
+    }
+    <p class="mf-browse-cta"><a href="https://orderorange.com/guide">@L["home.partnerCta"]</a></p>
+</div>
+
+@code {
+    [Parameter] public string? Slug { get; set; }
+
+    private List<RestaurantCardDto>? _stores;
+    private List<string> _cuisines = [];
+    private List<string> _areas = [];
+    private string _name = "";
+
+    private string Kind => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("cuisines/", StringComparison.OrdinalIgnoreCase) ? "cuisine"
+                         : Nav.ToBaseRelativePath(Nav.Uri).StartsWith("areas/", StringComparison.OrdinalIgnoreCase) ? "area" : "hub";
+    private string LangSuffix => L.Locale == "en" ? "" : $"?lang={L.Locale}";
+    private string CuisineText(string c) { var t = L[$"cuisine.{c}"]; return t == $"cuisine.{c}" ? c : t; }
+
+    private string Heading => Kind switch
+    {
+        "cuisine" => string.Format(L["browse.cuisineH1"], CuisineText(_name)),
+        "area" => string.Format(L["browse.areaH1"], StoreText.Area(_name, L)),
+        _ => L["browse.hubH1"],
+    };
+    private string PageTitle => Kind switch
+    {
+        "cuisine" => string.Format(L["seo.cuisineTitle"], CuisineText(_name)),
+        "area" => string.Format(L["seo.areaTitle"], StoreText.Area(_name, L)),
+        _ => L["seo.hubTitle"],
+    };
+    private string Intro => Kind switch
+    {
+        "cuisine" => string.Format(L["browse.cuisineIntro"], CuisineText(_name)),
+        "area" => string.Format(L["browse.areaIntro"], StoreText.Area(_name, L)),
+        _ => L["browse.hubIntro"],
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.Changed += OnLang;
+        List<RestaurantCardDto> all = [];
+        try { all = await Api.BrowsePageAsync(null, take: 60) ?? []; } catch { }
+        all = all.Where(s => s.Id >= 5_000_200).ToList();   // real, hand-onboarded shops only — same floor as the sitemap
+        var cuisinesOf = all.SelectMany(s => (s.Cuisines is { Count: > 0 } ? s.Cuisines : [s.Cuisine])).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c).ToList();
+        var areasOf = SeoSlugs.Areas(all.Select(s => s.Area)).ToList();
+        if (Kind == "cuisine")
+        {
+            _name = cuisinesOf.FirstOrDefault(c => SeoSlugs.Slug(c) == Slug) ?? Slug ?? "";
+            _stores = all.Where(s => (s.Cuisines is { Count: > 0 } ? s.Cuisines : [s.Cuisine]).Any(c => SeoSlugs.Slug(c) == Slug)).ToList();
+        }
+        else if (Kind == "area")
+        {
+            _name = areasOf.FirstOrDefault(a => SeoSlugs.Slug(a) == Slug) ?? Slug ?? "";
+            _stores = all.Where(s => SeoSlugs.Slug(s.Area) == Slug).ToList();
+        }
+        else _stores = all;
+        _cuisines = cuisinesOf.Where(c => SeoSlugs.Slug(c) != Slug).ToList();
+        _areas = areasOf.Where(a => SeoSlugs.Slug(a) != Slug).ToList();
+    }
+
+    private void OnLang() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => L.Changed -= OnLang;
+}

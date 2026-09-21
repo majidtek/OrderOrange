@@ -1,0 +1,152 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snack
+
+@* Two jobs in one sheet: describe a material, or just log a delivery against one. *@
+
+<MudDialog>
+    <DialogContent>
+        @if (RestockOnly && Material is not null)
+        {
+            <MudText Typo="Typo.body2" Class="mb-3">
+                @string.Format(L["mat.restockAsk"], Material.Name, L[$"mat.unit.{Material.Unit}"])
+            </MudText>
+            <MudNumericField Margin="Margin.Dense" T="decimal" @bind-Value="_delta" Label="@L["mat.arrived"]" Min="0" Step="1"
+                             Variant="Variant.Outlined" Immediate="true" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                @string.Format(L["mat.afterRestock"], Trim(Material.Quantity + _delta), L[$"mat.unit.{Material.Unit}"])
+            </MudText>
+        }
+        else
+        {
+            <MudTextField Margin="Margin.Dense" @bind-Value="_name" Label="@L["mat.name"]" Variant="Variant.Outlined"
+                          Immediate="true" Class="mb-3" MaxLength="120" />
+
+            <div class="d-flex gap-3 mb-3">
+                <MudSelect Margin="Margin.Dense" T="string" @bind-Value="_category" Label="@L["mat.category"]" Variant="Variant.Outlined">
+                    @foreach (var category in Categories)
+                    {
+                        <MudSelectItem Value="@category">@L[$"mat.cat.{category}"]</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect Margin="Margin.Dense" T="string" @bind-Value="_unit" Label="@L["mat.unitLabel"]" Variant="Variant.Outlined">
+                    @foreach (var unit in Units)
+                    {
+                        <MudSelectItem Value="@unit">@L[$"mat.unit.{unit}"]</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+
+            <div class="d-flex gap-3 mb-3">
+                @* Opening balance is typed ONCE, at creation. After that the number
+                   belongs to the invoices and the orders — not to this form. *@
+                <MudNumericField Margin="Margin.Dense" T="decimal" @bind-Value="_quantity" Label="@L["mat.inStock"]" Min="0" Step="1"
+                                 Variant="Variant.Outlined" Disabled="@(Material is not null)"
+                                 HelperText="@(Material is null ? null : L["mat.qtyLocked"])" />
+                <MudNumericField Margin="Margin.Dense" T="decimal" @bind-Value="_minQuantity" Label="@L["mat.minLevel"]" Min="0" Step="1"
+                                 Variant="Variant.Outlined" HelperText="@L["mat.minHint"]" />
+            </div>
+
+            <MudNumericField Margin="Margin.Dense" T="decimal" @bind-Value="_unitCost" Label="@L["mat.unitCost"]" Min="0" Step="0.1m"
+                             Variant="Variant.Outlined" Class="mb-3"
+                             HelperText="@string.Format(L["mat.costHint"], L[$"mat.unit.{_unit}"])" />
+
+            <MudTextField Margin="Margin.Dense" @bind-Value="_supplier" Label="@L["mat.supplier"]" Variant="Variant.Outlined" Class="mb-3" />
+
+            <div class="d-flex gap-3 mb-3">
+                <MudTextField Margin="Margin.Dense" @bind-Value="_code" Label="@L["lbl.code"]" Variant="Variant.Outlined"
+                              MaxLength="64" HelperText="@L["lbl.codeHint"]" />
+                <MudTextField Margin="Margin.Dense" @bind-Value="_barcode" Label="@L["lbl.barcode"]" Variant="Variant.Outlined"
+                              MaxLength="64" HelperText="@L["lbl.barcodeHint"]" Class="mf-ltr" />
+            </div>
+
+            <MudTextField Margin="Margin.Dense" @bind-Value="_notes" Label="@L["mat.notes"]" Variant="Variant.Outlined"
+                          Lines="2" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy">
+            @(_busy ? L["common.saving"] : L["common.save"])
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    /// <summary>Null when adding something new.</summary>
+    [Parameter] public StoreMaterialDto? Material { get; set; }
+
+    /// <summary>Show only the "a delivery arrived" field instead of the full form.</summary>
+    [Parameter] public bool RestockOnly { get; set; }
+
+    private static readonly string[] Categories =
+        ["grain", "oil", "meat", "dairy", "vegetable", "spice", "drink", "packaging", "other"];
+    private static readonly string[] Units = ["kg", "g", "l", "ml", "pcs", "box", "bag"];
+
+    private string _name = "";
+    private string _category = "grain";
+    private string _unit = "kg";
+    private decimal _quantity;
+    private decimal _minQuantity;
+    private decimal _unitCost;
+    private string? _supplier;
+    private string? _notes;
+    private string? _code;
+    private string? _barcode;
+    private decimal _delta;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (Material is not { } m) return;
+        _name = m.Name;
+        _category = m.Category;
+        _unit = m.Unit;
+        _quantity = m.Quantity;
+        _minQuantity = m.MinQuantity;
+        _unitCost = m.UnitCost;
+        _supplier = m.Supplier;
+        _notes = m.Notes;
+        _code = m.Code;
+        _barcode = m.Barcode;
+    }
+
+    private static string Trim(decimal value) =>
+        value == Math.Floor(value) ? ((long)value).ToString("N0") : value.ToString("0.##");
+
+    private async Task SaveAsync()
+    {
+        if (_busy) return;
+
+        if (RestockOnly && Material is not null)
+        {
+            if (_delta <= 0) { Snack.Add(L["mat.arrivedZero"], Severity.Warning); return; }
+            _busy = true;
+            var (added, addError) = await Api.AdjustMaterialAsync(Material.Id, _delta);
+            _busy = false;
+            if (!added) { Snack.Add(addError ?? L["common.wentWrong"], Severity.Error); return; }
+            Snack.Add(L["mat.restocked"], Severity.Success);
+            Dialog.Close(DialogResult.Ok(true));
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_name)) { Snack.Add(L["mat.nameNeeded"], Severity.Warning); return; }
+
+        var request = new SaveStoreMaterialRequest(
+            _name, _category, _unit, _quantity, _minQuantity, _unitCost, _supplier, _notes, _code, _barcode);
+
+        _busy = true;
+        var (ok, error) = Material is null
+            ? await Api.CreateMaterialAsync(request)
+            : await Api.UpdateMaterialAsync(Material.Id, request);
+        _busy = false;
+
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(Material is null ? L["mat.added"] : L["mat.saved"], Severity.Success);
+        Dialog.Close(DialogResult.Ok(true));
+    }
+
+    private void Cancel() => Dialog.Cancel();
+}

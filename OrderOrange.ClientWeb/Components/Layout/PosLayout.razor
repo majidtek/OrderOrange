@@ -1,0 +1,20 @@
+﻿@inherits LayoutComponentBase
+@inject LanguageService Lang
+
+@* The POS product site: no food-app bar, no session gate, no language gate — the page
+   carries its own navigation and footer. MudBlazor's providers stay so a dialog or toast
+   could still be drawn if a component ever needs one. *@
+
+<MudThemeProvider Theme="Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    <div class="mf-pos-site">
+        @Body
+    </div>
+</MudRTLProvider>
+
+@code {
+    private static readonly MudTheme Theme = FoodTheme.Build();
+}

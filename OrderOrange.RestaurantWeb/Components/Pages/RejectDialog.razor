@@ -1,0 +1,50 @@
+@inject LanguageService L
+
+@* Turning an order away. A reason is worth having — the customer is left waiting on a
+   notification either way — but it is NOT required: a kitchen mid-rush should be able
+   to clear the board in one tap. So the reason is optional, and the four everyday ones
+   are chips, which is faster than typing and still tells the customer something. *@
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+            @string.Format(L["partner.rejectWhy"], OrderNumber)
+        </MudText>
+
+        <div class="rj-picks">
+            @foreach (var preset in Presets)
+            {
+                var text = L[preset];
+                <button type="button" class="rj-pick @(_reason == text ? "on" : "")"
+                        @onclick="@(() => Pick(text))">
+                    @text
+                </button>
+            }
+        </div>
+
+        <MudTextField @bind-Value="_reason" Label="@L["partner.reason"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Lines="2" Immediate="true"
+                      HelperText="@L["partner.rjOptional"]"
+                      Placeholder="@L["partner.rejectPh"]" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled"
+                   OnClick="@(() => Dialog.Close(DialogResult.Ok(_reason)))">
+            @(string.IsNullOrWhiteSpace(_reason) ? L["partner.rjNone"] : L["partner.rejectOrder"])
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string OrderNumber { get; set; } = "";
+
+    private static readonly string[] Presets =
+        ["partner.rjBusy", "partner.rjStock", "partner.rjClosing", "partner.rjFar"];
+
+    private string _reason = "";
+
+    /// <summary>Tapping the chosen chip again clears it — that is how you get back to no reason.</summary>
+    private void Pick(string text) => _reason = _reason == text ? "" : text;
+}

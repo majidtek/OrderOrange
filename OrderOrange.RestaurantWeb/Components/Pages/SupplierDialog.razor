@@ -1,0 +1,60 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snack
+
+<MudDialog>
+    <DialogContent>
+        <MudTextField Margin="Margin.Dense" @bind-Value="_name" Label="@L["sup.name"]" Variant="Variant.Outlined"
+                      Immediate="true" Class="mb-3" MaxLength="200" />
+        <MudTextField Margin="Margin.Dense" @bind-Value="_phone" Label="@L["sup.phone"]" Variant="Variant.Outlined"
+                      Class="mb-3 mf-ltr" MaxLength="40" />
+        <MudTextField Margin="Margin.Dense" @bind-Value="_contact" Label="@L["sup.contact"]" Variant="Variant.Outlined"
+                      Class="mb-3" MaxLength="120" />
+        <MudTextField Margin="Margin.Dense" @bind-Value="_notes" Label="@L["mat.notes"]" Variant="Variant.Outlined" Lines="2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SaveAsync" Disabled="_busy">
+            @(_busy ? L["common.saving"] : L["common.save"])
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    /// <summary>Null when adding a new supplier.</summary>
+    [Parameter] public SupplierDto? Supplier { get; set; }
+
+    private string _name = "";
+    private string? _phone;
+    private string? _contact;
+    private string? _notes;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (Supplier is not { } s) return;
+        _name = s.Name;
+        _phone = s.Phone;
+        _contact = s.ContactName;
+        _notes = s.Notes;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy) return;
+        if (string.IsNullOrWhiteSpace(_name)) { Snack.Add(L["sup.nameNeeded"], Severity.Warning); return; }
+
+        var request = new SaveSupplierRequest(_name, _phone, _contact, _notes);
+        _busy = true;
+        var (ok, error) = Supplier is null
+            ? await Api.CreateSupplierAsync(request)
+            : await Api.UpdateSupplierAsync(Supplier.Id, request);
+        _busy = false;
+
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(Supplier is null ? L["sup.added"] : L["mat.saved"], Severity.Success);
+        Dialog.Close(DialogResult.Ok(true));
+    }
+}

@@ -1,0 +1,73 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+
+@* The calendar behind every date field, shown through the app's top-level dialog
+   layer. MudBlazor's own "Dialog" picker draws its overlay inside the page, where any
+   transformed ancestor can box it in; this one lives in MudDialogProvider, a sibling of
+   the layout, so the dim layer always spans the whole screen. Picking a day (or both
+   ends of a range) closes it with the value; Cancel closes it with nothing. *@
+<MudDialog Class="mf-cal-dialog">
+    <DialogContent>
+        @if (Time)
+        {
+            <MudTimePicker PickerVariant="PickerVariant.Static" ShowToolbar="false" AmPm="false"
+                           Time="_time" TimeChanged="OnTime" Elevation="0" />
+        }
+        else if (Range)
+        {
+            <MudDateRangePicker PickerVariant="PickerVariant.Static" ShowToolbar="false" DisplayMonths="1"
+                                DateRange="_range" DateRangeChanged="OnRange"
+                                MinDate="MinDate" MaxDate="MaxDate" Elevation="0" />
+        }
+        else
+        {
+            <MudDatePicker PickerVariant="PickerVariant.Static" ShowToolbar="false"
+                           Date="_date" DateChanged="OnDate"
+                           MinDate="MinDate" MaxDate="MaxDate" Elevation="0" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())" Size="Size.Small">@Lang["common.cancel"]</MudButton>
+        @if (Time)
+        {
+            @* A clock needs an explicit OK: the minute hand fires on every drag. *@
+            <MudButton OnClick="@(() => Dialog.Close(DialogResult.Ok(_time)))" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small" Disabled="@(_time is null)">OK</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    [Parameter] public bool Range { get; set; }
+    [Parameter] public bool Time { get; set; }
+    [Parameter] public TimeSpan? TimeValue { get; set; }
+    private TimeSpan? _time;
+    private void OnTime(TimeSpan? t) => _time = t;
+    [Parameter] public DateTime? Date { get; set; }
+    [Parameter] public DateRange? DateRange { get; set; }
+    [Parameter] public DateTime? MinDate { get; set; }
+    [Parameter] public DateTime? MaxDate { get; set; }
+
+    private DateTime? _date;
+    private DateRange? _range;
+
+    protected override void OnInitialized()
+    {
+        _date = Date;
+        _range = DateRange;
+        _time = TimeValue;
+    }
+
+    private void OnDate(DateTime? d)
+    {
+        _date = d;
+        if (d is not null) Dialog.Close(DialogResult.Ok(d));
+    }
+
+    private void OnRange(DateRange? r)
+    {
+        _range = r;
+        if (r?.Start is not null && r.End is not null) Dialog.Close(DialogResult.Ok(r));
+    }
+}

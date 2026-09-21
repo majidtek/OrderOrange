@@ -1,0 +1,128 @@
+@page "/reservations"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+
+@* What the table QRs bring in: who is coming, when, how many. Confirm it, cancel it,
+   or — when they walk through the door — seat them, which occupies the table and
+   opens its invoice in one move. *@
+
+<PageTitle>Partner — Reservations</PageTitle>
+
+<div class="d-flex align-center mb-4" style="gap: 12px;">
+    <div style="flex: 1;">
+        <MudText Typo="Typo.h5" Style="font-weight: 800;">@L["rsv.partnerTitle"]</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@L["rsv.partnerSub"]</MudText>
+    </div>
+    <MudSwitch T="bool" Value="_history" ValueChanged="ToggleHistory" Color="Color.Primary" Label="@L["rsv.history"]" />
+</div>
+
+@if (!_history)
+{
+    @* A new online booking should appear while the page is simply left open. *@
+    <AutoRefresh OnRefresh="Load" Seconds="15" />
+}
+
+@if (_list is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+}
+else if (_list.Count == 0)
+{
+    <MudPaper Elevation="0" Outlined="true" Class="pa-8 rounded-xl text-center">
+        <div style="font-size: 44px;">📅</div>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;" Class="mt-2">@L["rsv.empty"]</MudText>
+    </MudPaper>
+}
+else
+{
+    <div class="rsv-list">
+        @foreach (var r in _list.Skip(ClampedPage * ListPageSize).Take(ListPageSize))
+        {
+            var res = r;
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl rsv-row">
+                @* The hour they arrive AND the hour the table frees up again — the
+                   guest said how long they mean to stay, so the floor can plan. *@
+                <div class="when">
+                    <b>@res.At.ToString("HH:mm")</b>
+                    <small>→ @res.Until.ToString("HH:mm")</small>
+                    <small>@res.At.ToString("dd/MM")</small>
+                </div>
+                <div class="who">
+                    <b>@res.Name</b>
+                    <small><PhoneMask Phone="@res.Phone" Hint="@L["ph.tapShow"]" /></small>
+                    @if (!string.IsNullOrWhiteSpace(res.Note))
+                    {
+                        <small class="note">💬 @res.Note</small>
+                    }
+                </div>
+                <div class="meta">
+                    @if (res.Price > 0)
+                    {
+                        @* Only shown by a house that charges for the booking. *@
+                        <span class="rsv-price">💳 @Fmt.Rial(res.Price)</span>
+                    }
+                    🍽️ @(string.IsNullOrWhiteSpace(res.TableName) ? L["rsv.anyTable"] : res.TableName) · @res.Guests
+                    <MudIcon Icon="@Icons.Material.Filled.EventSeat" Style="width:12px;height:12px;vertical-align:-2px;" />
+                </div>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="@StatusColor(res.Status)">
+                    @L[$"rsv.st.{res.Status}"]
+                </MudChip>
+                @if (res.Status is "pending" or "confirmed")
+                {
+                    <div class="acts">
+                        @if (res.Status == "pending")
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                       OnClick="@(() => SetStatus(res, "confirmed"))">@L["rsv.confirm"]</MudButton>
+                        }
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                   OnClick="@(() => SetStatus(res, "seated"))">@L["rsv.seat"]</MudButton>
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => SetStatus(res, "cancelled"))" />
+                    </div>
+                }
+            </MudPaper>
+        }
+    </div>
+    @if (_list.Count > ListPageSize)
+    {
+        <Pager Page="ClampedPage" Pages="@(((_list.Count - 1) / ListPageSize) + 1)" PageChanged="@(p => _listPage = p)" />
+    }
+}
+
+@code {
+    private List<ReservationDto>? _list;
+    private bool _history;
+
+    private const int ListPageSize = 24;
+    private int _listPage;
+    private int ClampedPage => Math.Clamp(_listPage, 0, Math.Max(0, ((_list?.Count ?? 1) - 1) / ListPageSize));
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load() => _list = await Api.GetReservationsAsync(_history) ?? [];
+
+    private async Task ToggleHistory(bool value)
+    {
+        _history = value;
+        _listPage = 0;
+        await Load();
+    }
+
+    private static Color StatusColor(string status) => status switch
+    {
+        "confirmed" => Color.Success,
+        "seated" => Color.Info,
+        "cancelled" => Color.Error,
+        _ => Color.Warning,
+    };
+
+    private async Task SetStatus(ReservationDto reservation, string status)
+    {
+        var (updated, error) = await Api.SetReservationStatusAsync(reservation.Id, status);
+        if (updated is null) { Snackbar.Add(error ?? L["common.updateFail"], Severity.Error); return; }
+        if (status == "seated") Snackbar.Add(string.Format(L["rsv.seatedMsg"], updated.TableName), Severity.Success);
+        await Load();
+    }
+}

@@ -1,0 +1,77 @@
+@page "/addresses"
+@inject ApiClient Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject LanguageService L
+
+<PageTitle>OrderOrange — Addresses</PageTitle>
+
+<PageHeader Title="@L["addr.title"]" Subtitle="@L["addr.subtitle"]">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => Edit(null))">@L["addr.add"]</MudButton>
+    </Actions>
+</PageHeader>
+
+@if (_addresses is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_addresses.Count == 0)
+{
+    <EmptyState Emoji="📍" Title="@L["addr.none"]" Subtitle="@L["addr.noneHint"]" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        @foreach (var address in _addresses)
+        {
+            var a = address;
+            <MudItem xs="12" sm="6" md="4">
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl" Style="height: 100%;">
+                    <div class="d-flex align-center mb-1" style="gap: 8px;">
+                        <MudIcon Icon="@(a.Label.Contains("Office", StringComparison.OrdinalIgnoreCase) ? Icons.Material.Filled.Work : Icons.Material.Filled.Home)"
+                                 Color="Color.Primary" />
+                        <MudText Typo="Typo.subtitle1" Class="flex-grow-1">@a.Label</MudText>
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => Edit(a))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                       OnClick="@(() => Delete(a))" />
+                    </div>
+                    <MudText Typo="Typo.body2">@a.Building, @a.Street</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@a.Area</MudText>
+                    @if (a.Notes is not null)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">“@a.Notes”</MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<AddressDto>? _addresses;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload() => _addresses = await Api.GetAddressesAsync();
+
+    private async Task Edit(AddressDto? address)
+    {
+        var parameters = new DialogParameters<AddressDialog> { { d => d.Existing, address } };
+        var dialog = await Dialogs.ShowAsync<AddressDialog>(address is null ? L["addr.new"] : L["addr.edit"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled == false) await Reload();
+    }
+
+    private async Task Delete(AddressDto address)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["addr.deleteTitle"],
+            string.Format(L["addr.deleteAsk"], address.Label),
+            yesText: L["common.delete"], cancelText: L["common.keep"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.DeleteAddressAsync(address.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error);
+        await Reload();
+    }
+}

@@ -1,0 +1,80 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+
+@* The business name in every tongue the platform speaks — a REAL MudDialog, the
+   same family as the language picker. Arabic is the one that MUST be filled. *@
+
+<MudDialog Class="mf-lang-dialog">
+    <TitleContent>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <div class="mf-lang-badge"><MudIcon Icon="@Icons.Material.Filled.Translate" /></div>
+            <MudText Typo="Typo.h6" Style="font-weight: 800;">@Lang["nm.title"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">@Lang["nm.hint"]</MudText>
+        <div class="nm-rows">
+            @foreach (var language in Ordered)
+            {
+                var lang = language;
+                <div class="nm-row @(lang.Code == "ar" ? "req" : "")">
+                    <img class="pf-flag" src="https://flagcdn.com/w40/@(FlagOf(lang.Code)).png" alt="" />
+                    <MudTextField Value="@ValueOf(lang.Code)" T="string"
+                                  ValueChanged="@(v => _values[lang.Code] = v)"
+                                  Label="@(lang.NativeName + (lang.Code == "ar" ? " *" : $" — {Lang["nm.optional"]}"))"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </div>
+            }
+        </div>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@Lang["common.cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save"
+                   StartIcon="@Icons.Material.Filled.Check">@Lang["common.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public Dictionary<string, string>? Value { get; set; }
+
+    private readonly Dictionary<string, string> _values = [];
+    private string? _error;
+
+    /// <summary>Arabic and English lead the queue; the rest follow in their usual order.</summary>
+    private IEnumerable<LanguageService.LanguageOption> Ordered =>
+        LanguageService.SupportedLanguages
+            .OrderBy(l => l.Code switch { "ar" => 0, "en" => 1, _ => 2 });
+
+    private string ValueOf(string code) => _values.GetValueOrDefault(code, "");
+
+    /// <summary>Each tongue borrows its best-known flag for the row icon.</summary>
+    private static string FlagOf(string code) => code switch
+    {
+        "en" => "gb", "ar" => "om", "fa" => "ir", "ur" => "pk", "hi" => "in",
+        "tr" => "tr", "fr" => "fr", "es" => "es", "de" => "de", "ru" => "ru",
+        "it" => "it", "pt" => "pt", "zh" => "cn", "ja" => "jp", _ => "un",
+    };
+
+    protected override void OnInitialized()
+    {
+        foreach (var pair in Value ?? []) _values[pair.Key] = pair.Value;
+    }
+
+    private void Save()
+    {
+        var clean = _values
+            .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
+            .ToDictionary(kv => kv.Key, kv => kv.Value.Trim());
+        if (!clean.ContainsKey("ar"))
+        {
+            _error = Lang["nm.needAr"];
+            return;
+        }
+        Dialog.Close(DialogResult.Ok(clean));
+    }
+}

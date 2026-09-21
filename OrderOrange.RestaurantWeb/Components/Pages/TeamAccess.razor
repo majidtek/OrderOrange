@@ -1,0 +1,473 @@
+@page "/team-users"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject AppState State
+@inject IDialogService Dialogs
+
+@* The key ring: who can open this store's portal, and which rooms their key
+   fits. The owner's key opens everything and cannot be taken here. *@
+
+<PageTitle>Partner — Users & roles</PageTitle>
+
+@if (_members is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="tm">
+        @* ---------- The band: title, live counts, the one big action ---------- *@
+        <div class="tm-hero">
+            <div class="tx">
+                <b>@L["tm.title"]</b>
+                <small>@L["tm.sub"]</small>
+                <div class="counts">
+                    <span class="ct all">👥 @_members.Count</span>
+                    @foreach (var role in Enum.GetValues<StoreRole>())
+                    {
+                        var count = _members.Count(m => !m.IsOwner && m.RoleDefId is null && m.Role == role);
+                        if (count > 0)
+                        {
+                            <span class="ct r-@role.ToString().ToLowerInvariant()">@RoleName(role) · @count</span>
+                        }
+                    }
+                    @* Roles this shop wrote itself get their own tally. *@
+                    @foreach (var def in _customRoles)
+                    {
+                        var held = _members.Count(m => m.RoleDefId == def.Id);
+                        if (held > 0)
+                        {
+                            <span class="ct r-own">@def.Icon @def.Name · @held</span>
+                        }
+                    }
+                </div>
+            </div>
+            <div class="tm-hero-acts">
+                @* What each role actually opens, spelled out. *@
+                <MudButton Variant="Variant.Text" Class="tm-hero-link" StartIcon="@Icons.Material.Filled.Key"
+                           Href="/team-roles">@L["roles.title"]</MudButton>
+                <MudButton Variant="Variant.Filled" Class="tm-hero-btn" StartIcon="@Icons.Material.Filled.PersonAddAlt1"
+                           OnClick="BeginAdd">@L["tm.add"]</MudButton>
+            </div>
+        </div>
+
+        @* ---------- Finding people: search + role lens ---------- *@
+        <div class="tm-tools">
+            <div class="find">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Style="width:17px;height:17px;" />
+                <input @bind="_search" @bind:event="oninput" placeholder="@L["cust.search"]" />
+            </div>
+            <div class="lens">
+                <button type="button" class="@(_filter is null ? "on" : "")" @onclick="@(() => _filter = null)">✦</button>
+                @foreach (var role in Enum.GetValues<StoreRole>())
+                {
+                    var r = role;
+                    <button type="button" class="r-@r.ToString().ToLowerInvariant() @(_filter == r ? "on" : "")"
+                            @onclick="@(() => _filter = _filter == r ? null : r)">@RoleName(r)</button>
+                }
+            </div>
+        </div>
+
+        @* ---------- The people ---------- *@
+        <div class="tm-grid">
+            @foreach (var m in Filtered)
+            {
+                var member = m;
+                <div class="tm-card r-@RoleKey(member) @(member.IsActive ? "" : "off")">
+                    <div class="band">
+                        @if (member.IsOwner)
+                        {
+                            <span class="crown">👑</span>
+                            @* Only the owner themself may rewrite the owner's sign-in —
+                               a manager with team access must never reach this menu. *@
+                            @if (member.UserId == State.UserId)
+                            {
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Class="dots">
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => BeginOwnerEdit(member))">@L["common.edit"]</MudMenuItem>
+                                </MudMenu>
+                            }
+                        }
+                        else
+                        {
+                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" Class="dots">
+                                <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => BeginEdit(member))">@L["common.edit"]</MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.Key" OnClick="@(() => BeginEdit(member))">@L["tm.password"]</MudMenuItem>
+                                <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" OnClick="@(() => Remove(member))">@L["common.delete"]</MudMenuItem>
+                            </MudMenu>
+                        }
+                    </div>
+                    <span class="ava">@Initials(member.FullName)</span>
+                    <b class="nm">@member.FullName</b>
+                    <span class="chip">@MemberRole(member)</span>
+                    <div class="rows">
+                        <small><MudIcon Icon="@Icons.Material.Filled.AccountCircle" /><span class="mf-ltr">@member.Email</span></small>
+                        @if (!string.IsNullOrWhiteSpace(member.Phone))
+                        {
+                            <small><MudIcon Icon="@Icons.Material.Filled.Phone" /><PhoneMask Phone="@member.Phone" Hint="@L["ph.tapShow"]" /></small>
+                        }
+                        <small><MudIcon Icon="@Icons.Material.Filled.Event" /><span>@member.CreatedAt.ToString("dd MMM yyyy")</span></small>
+                    </div>
+                    <div class="foot">
+                        @if (member.IsOwner)
+                        {
+                            <span class="state on">● @L["tm.active"]</span>
+                        }
+                        else
+                        {
+                            <MudSwitch T="bool" Value="member.IsActive" Color="Color.Success" Size="Size.Small"
+                                       ValueChanged="@(v => ToggleActive(member, v))"
+                                       Label="@(member.IsActive ? L["tm.active"] : L["tm.inactive"])" />
+                        }
+                    </div>
+                </div>
+            }
+            <button type="button" class="tm-card add" @onclick="BeginAdd">
+                <span class="plus"><MudIcon Icon="@Icons.Material.Filled.PersonAddAlt1" Style="width:26px;height:26px;" /></span>
+                <b>@L["tm.add"]</b>
+            </button>
+        </div>
+    </div>
+
+    @if (_editorOpen)
+    {
+        @* A dialog backdrop, not the photo lightbox: this form sits over the page,
+           it does not replace it, so the page stays readable behind it. *@
+        <div class="oo-modal" @onclick="CloseEditor">
+            <div class="tm-sheet" @onclick:stopPropagation="true">
+                <div class="head">
+                    <span class="ic"><MudIcon Icon="@(_editing is null ? Icons.Material.Filled.PersonAddAlt1 : Icons.Material.Filled.ManageAccounts)" /></span>
+                    <b>@(_editing is null ? L["tm.add"] : _editing.FullName)</b>
+                </div>
+
+                <div class="two">
+                    <MudTextField @bind-Value="_name" Label="@L["common.name"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  UserAttributes="@NoFill" />
+                    @* Plain text, not InputType.Telephone: the tel input keeps the label
+                       floating over the outline instead of notching into it.
+                       An existing number stays covered until it is asked for — the
+                       same courtesy the list gives it. *@
+                    <MudTextField @bind-Value="_phone" Label="@L["common.phone"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Class="mf-ltr"
+                                  InputType="@(_showPhone ? InputType.Text : InputType.Password)"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@(_showPhone ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                  AdornmentAriaLabel="@L["ph.tapShow"]"
+                                  OnAdornmentClick="@(() => _showPhone = !_showPhone)"
+                                  UserAttributes="@NoFill" />
+                </div>
+                @* autocomplete off everywhere in this form: the browser was helpfully
+                   filling the OWNER's saved login into a form that creates SOMEONE
+                   ELSE's account, so a new teammate arrived pre-named "farid". *@
+                <MudTextField @bind-Value="_email" Label="@L["tm.username"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Disabled="@(_editing is not null)"
+                              UserAttributes="@NoFill" />
+                @* The dice sits level with the input box; the helper text below it is
+                   lifted out of the flow so it cannot drag the row off-centre. *@
+                <div class="tm-pwrow">
+                    <MudTextField @bind-Value="_password" Label="@L["tm.password"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                                  HelperText="@(_editing is null ? null : L["tm.pwHint"])" Style="flex: 1;"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                  OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                                  UserAttributes="@NoFillPw" />
+                    <MudTooltip Text="@L["tm.password"]">
+                        <MudIconButton Icon="@Icons.Material.Filled.Casino" Color="Color.Primary" Variant="Variant.Outlined"
+                                       Size="Size.Small" OnClick="GeneratePassword" />
+                    </MudTooltip>
+                </div>
+
+                <small class="lbl">@L["tm.role"]</small>
+                <div class="tm-roles">
+                    @foreach (var role in Enum.GetValues<StoreRole>())
+                    {
+                        var r = role;
+                        <button type="button" class="tm-role r-@r.ToString().ToLowerInvariant() @(_roleDefId is null && _role == r ? "on" : "")"
+                                @onclick="@(() => { _role = r; _roleDefId = null; })">
+                            <span class="tick">✓</span>
+                            <MudIcon Icon="@RoleIcon(r)" Style="width:20px;height:20px;" />
+                            <b>@RoleName(r)</b>
+                            <small>@RoleDesc(r)</small>
+                        </button>
+                    }
+                    @* Roles this shop wrote for itself sit beside the presets. *@
+                    @foreach (var c in _customRoles)
+                    {
+                        var def = c;
+                        <button type="button" class="tm-role r-own @(_roleDefId == def.Id ? "on" : "")"
+                                @onclick="@(() => _roleDefId = def.Id)">
+                            <span class="tick">✓</span>
+                            <span class="emo">@def.Icon</span>
+                            <b>@def.Name</b>
+                            <small>@string.Format(L["roles.nOf"], def.Perms.Count, Perm.All.Length)</small>
+                        </button>
+                    }
+                </div>
+
+                <div class="acts">
+                    <MudButton OnClick="CloseEditor">@L["common.cancel"]</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save" Disabled="_busy"
+                               StartIcon="@Icons.Material.Filled.Save">@L["common.save"]</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_ownerOpen)
+    {
+        @* The owner's OWN card, in full: name and phone, the email they sign in
+           with, and — if they type one — a new password. *@
+        <div class="oo-modal" @onclick="@(() => _ownerOpen = false)">
+            <div class="tm-sheet" @onclick:stopPropagation="true">
+                <div class="head">
+                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.ManageAccounts" /></span>
+                    <b>@(_ownerName.Length > 0 ? _ownerName : L["common.edit"])</b>
+                </div>
+
+                <div class="two">
+                    <MudTextField @bind-Value="_ownerName" Label="@L["common.name"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  UserAttributes="@NoFill" />
+                    <MudTextField @bind-Value="_ownerPhone" Label="@L["common.phone"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Class="mf-ltr" UserAttributes="@NoFill" />
+                </div>
+                <MudTextField @bind-Value="_ownerEmail" Label="@L["tm.username"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Class="mf-ltr" HelperText="@L["admin.emailIsLogin"]"
+                              UserAttributes="@NoFill" />
+                <div class="tm-pwrow">
+                    <MudTextField @bind-Value="_ownerPw" Label="@L["tm.password"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  InputType="@(_showOwnerPw ? InputType.Text : InputType.Password)"
+                                  HelperText="@L["tm.pwHint"]" Style="flex: 1;"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@(_showOwnerPw ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                                  OnAdornmentClick="@(() => _showOwnerPw = !_showOwnerPw)"
+                                  UserAttributes="@NoFillPw" />
+                    <MudTooltip Text="@L["tm.password"]">
+                        <MudIconButton Icon="@Icons.Material.Filled.Casino" Color="Color.Primary" Variant="Variant.Outlined"
+                                       Size="Size.Small" OnClick="GenerateOwnerPassword" />
+                    </MudTooltip>
+                </div>
+
+                <div class="acts">
+                    <MudButton OnClick="@(() => _ownerOpen = false)">@L["common.cancel"]</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveOwner" Disabled="_ownerBusy"
+                               StartIcon="@Icons.Material.Filled.Save">@L["common.save"]</MudButton>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<StoreMemberDto>? _members;
+    private bool _editorOpen;
+    private StoreMemberDto? _editing;
+    private bool _busy;
+    private bool _showPassword;
+    private bool _showPhone;
+    private string _search = "";
+
+    // This form creates SOMEONE ELSE's account, so the browser's saved credentials
+    // have no business here. "new-password" is the only value Chrome reliably obeys
+    // for a field it would otherwise treat as a login it already knows.
+    private static readonly Dictionary<string, object?> NoFill = new()
+    {
+        ["autocomplete"] = "off",
+        ["autocorrect"] = "off",
+        ["autocapitalize"] = "off",
+        ["spellcheck"] = "false",
+    };
+    private static readonly Dictionary<string, object?> NoFillPw = new()
+    {
+        ["autocomplete"] = "new-password",
+        ["autocorrect"] = "off",
+        ["autocapitalize"] = "off",
+        ["spellcheck"] = "false",
+    };
+    private StoreRole? _filter;
+
+    private string _name = "";
+    private string _email = "";
+    private string _phone = "";
+    private string _password = "";
+    private StoreRole _role = StoreRole.Cashier;
+    private int? _roleDefId;
+    private List<StoreRoleDefDto> _customRoles = [];
+    private bool _active = true;
+
+    private IEnumerable<StoreMemberDto> Filtered =>
+        (_members ?? []).Where(m =>
+            (_filter is null || (!m.IsOwner && m.RoleDefId is null && m.Role == _filter)) &&
+            (string.IsNullOrWhiteSpace(_search) ||
+             m.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+             m.Email.Contains(_search, StringComparison.OrdinalIgnoreCase)));
+
+    private static string Initials(string s) =>
+        string.IsNullOrWhiteSpace(s) ? "•" : s.Trim().Length <= 2 ? s.Trim() : s.Trim()[..2];
+
+    private static string RoleKey(StoreMemberDto m) =>
+        m.IsOwner ? "owner"
+        : m.RoleDefId is not null ? "own"      // a role this shop wrote itself
+        : m.Role.ToString().ToLowerInvariant();
+
+    /// <summary>What this person's key is CALLED — their custom role wins over the preset.</summary>
+    private string MemberRole(StoreMemberDto m) =>
+        m.IsOwner ? L["tm.owner"]
+        : m.RoleDefName is { Length: > 0 } custom ? $"{m.RoleDefIcon} {custom}"
+        : RoleName(m.Role);
+
+    private string RoleName(StoreRole r) => L[$"tm.role{r}"];
+    private string RoleDesc(StoreRole r) => L[$"tm.role{r}D"];
+
+    private static string RoleIcon(StoreRole r) => r switch
+    {
+        StoreRole.Manager => Icons.Material.Filled.WorkspacePremium,
+        StoreRole.Cashier => Icons.Material.Filled.PointOfSale,
+        StoreRole.Kitchen => Icons.Material.Filled.SoupKitchen,
+        _ => Icons.Material.Filled.RoomService,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _members = await Api.GetTeamAsync() ?? [];
+        _customRoles = await Api.GetCustomRolesAsync() ?? [];
+    }
+
+    private void BeginAdd()
+    {
+        _editing = null;
+        _name = _email = _phone = _password = "";
+        _role = StoreRole.Cashier;
+        _active = true;
+        _showPhone = true;
+        _roleDefId = null;      // nothing to hide on a blank form
+        _editorOpen = true;
+    }
+
+    private void BeginEdit(StoreMemberDto m)
+    {
+        _editing = m;
+        _name = m.FullName;
+        _email = m.Email;
+        _phone = m.Phone;
+        _password = "";
+        _role = m.Role;
+        _active = m.IsActive;
+        _roleDefId = m.RoleDefId;
+        _showPhone = string.IsNullOrWhiteSpace(m.Phone);   // a saved number waits to be asked for
+        _editorOpen = true;
+    }
+
+    private void CloseEditor() => _editorOpen = false;
+
+    // ---- the owner's own sign-in ----
+    private bool _ownerOpen;
+    private bool _ownerBusy;
+    private bool _showOwnerPw;
+    private string _ownerEmail = "";
+    private string _ownerPw = "";
+
+    private string _ownerName = "";
+    private string _ownerPhone = "";
+
+    private void BeginOwnerEdit(StoreMemberDto m)
+    {
+        _ownerName = m.FullName;
+        _ownerPhone = m.Phone;
+        _ownerEmail = m.Email;
+        _ownerPw = "";
+        _showOwnerPw = false;
+        _ownerOpen = true;
+    }
+
+    private void GenerateOwnerPassword()
+    {
+        _ownerPw = $"Oo{Random.Shared.Next(10, 99)}-{Guid.NewGuid().ToString("N")[..6]}";
+        _showOwnerPw = true; // a rolled password must be READ to be handed over
+    }
+
+    private async Task SaveOwner()
+    {
+        _ownerBusy = true;
+        try
+        {
+            // Who they are first, then how they sign in — two self-service calls,
+            // and the first refusal stops the save with the sheet still open.
+            var (pOk, pError) = await Api.UpdateProfileAsync(
+                new UpdateProfileRequest(_ownerName.Trim(), _ownerPhone.Trim()));
+            if (!pOk)
+            {
+                await Dialogs.ShowMessageBox(L["common.wentWrong"],
+                    L.ServerError(pError) ?? L["common.saveFail"], yesText: L["common.close"]);
+                return;
+            }
+
+            var (ok, error) = await Api.UpdateMyCredentialsAsync(
+                _ownerEmail.Trim(),
+                string.IsNullOrWhiteSpace(_ownerPw) ? null : _ownerPw);
+            if (!ok)
+            {
+                // Its own dialog, not a snackbar: this sheet sits over the page, and a
+                // toast behind it is a refusal nobody sees.
+                await Dialogs.ShowMessageBox(L["common.wentWrong"],
+                    L.ServerError(error) ?? L["common.saveFail"], yesText: L["common.close"]);
+                return;
+            }
+            _ownerOpen = false;
+            Snackbar.Add(L["tm.ownerSaved"], Severity.Success);
+            _members = await Api.GetTeamAsync() ?? [];
+        }
+        finally { _ownerBusy = false; }
+    }
+
+    /// <summary>A pronounceable-enough key nobody has to invent: Oo7-xxxx style.</summary>
+    private void GeneratePassword()
+    {
+        _password = $"Oo{Random.Shared.Next(10, 99)}-{Guid.NewGuid().ToString("N")[..6]}";
+        _showPassword = true; // a rolled password must be READ to be handed over
+    }
+
+    /// <summary>The switch on the card is the fastest lock in the shop.</summary>
+    private async Task ToggleActive(StoreMemberDto m, bool active)
+    {
+        var (saved, error) = await Api.UpdateTeamMemberAsync(m.Id,
+            new SaveStoreMemberRequest(m.FullName, m.Email, m.Role, null, m.Phone, active));
+        if (saved is null) { Snackbar.Add(error ?? L["common.updateFail"], Severity.Error); return; }
+        _members = await Api.GetTeamAsync() ?? [];
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        try
+        {
+            var req = new SaveStoreMemberRequest(_name, _email, _role,
+                string.IsNullOrWhiteSpace(_password) ? null : _password, _phone, _active, _roleDefId);
+            var (saved, error) = _editing is null
+                ? await Api.AddTeamMemberAsync(req)
+                : await Api.UpdateTeamMemberAsync(_editing.Id, req);
+            if (saved is null)
+            {
+                // Same rule as the owner sheet: over a modal, refusals get a dialog.
+                await Dialogs.ShowMessageBox(L["common.wentWrong"],
+                    L.ServerError(error) ?? L["common.saveFail"], yesText: L["common.close"]);
+                return;
+            }
+            Snackbar.Add(L["tm.saved"], Severity.Success);
+            _editorOpen = false;
+            _members = await Api.GetTeamAsync() ?? [];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Remove(StoreMemberDto m)
+    {
+        var (ok, error) = await Api.RemoveTeamMemberAsync(m.Id);
+        if (!ok) { Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error); return; }
+        Snackbar.Add(L["tm.removed"], Severity.Success);
+        _members = await Api.GetTeamAsync() ?? [];
+    }
+}

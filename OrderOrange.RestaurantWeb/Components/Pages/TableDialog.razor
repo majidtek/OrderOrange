@@ -1,0 +1,93 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* Add or rename a table: name, what kind, how many seats. Three fields, nothing
+   more — the salon it belongs to came in with the button that opened this. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">
+            @(Existing is null ? L["tables.add"] : L["tables.edit"])
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_name" Label="@L["tables.name"]" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Class="mb-3" Placeholder="1" MaxLength="40" Immediate="true" />
+        <MudSelect T="string" @bind-Value="_type" Label="@L["tables.typeLabel"]" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" Class="mb-3">
+            @foreach (var type in new[] { "indoor", "outdoor", "vip", "family", "counter", "other" })
+            {
+                var t = type;
+                <MudSelectItem T="string" Value="@t">
+                    <MudIcon Icon="@Tables.TypeIcon(t)" Size="Size.Small"
+                             Style="@($"color:{Tables.TypeColor(t)};vertical-align:-4px;")" /> @L[$"tables.type.{t}"]
+                </MudSelectItem>
+            }
+        </MudSelect>
+        <MudNumericField @bind-Value="_seats" Label="@L["tables.seats"]" Variant="Variant.Outlined"
+                         Margin="Margin.Dense" Min="1" Max="50" Class="mb-3" />
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy">@L["common.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public StoreTableDto? Existing { get; set; }
+    /// <summary>The salon this table belongs to (null = open floor).</summary>
+    [Parameter] public int? RoomId { get; set; }
+    /// <summary>The next free number, offered as the default name for a new table.</summary>
+    [Parameter] public string? SuggestedName { get; set; }
+
+    private string _name = "";
+    private string _type = "indoor";
+    private int _seats = 4;
+    private string _shape = "square";
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is null)
+        {
+            _name = SuggestedName ?? "";
+            return;
+        }
+        _name = Existing.Name;
+        _type = Existing.Type;
+        _seats = Existing.Seats;
+        _shape = Existing.Shape;
+    }
+
+    private async Task Save()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var req = new SaveStoreTableRequest(_name, _type, _seats, Existing?.Floor ?? "", _shape, RoomId);
+            if (Existing is null)
+            {
+                var (created, error) = await Api.CreateTableAsync(req);
+                if (created is null) { _error = error ?? L["common.saveFail"]; return; }
+            }
+            else
+            {
+                var (ok, error) = await Api.UpdateTableAsync(Existing.Id, req);
+                if (!ok) { _error = error ?? L["common.saveFail"]; return; }
+            }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,28 @@
+@namespace OrderOrange.ClientCore.Components
+@implements IDisposable
+
+@* Renders nothing. Drop into any page and point OnRefresh at its reload method;
+   the page then re-fetches on a steady tick so order boards stay live. *@
+
+@code {
+    [Parameter, EditorRequired] public EventCallback OnRefresh { get; set; }
+
+    /// <summary>Seconds between refreshes. Order boards want 5; quieter pages can use 15+.</summary>
+    [Parameter] public int Seconds { get; set; } = 5;
+
+    private Timer? _timer;
+
+    protected override void OnInitialized()
+    {
+        var period = TimeSpan.FromSeconds(Math.Max(2, Seconds));
+        // The tick lands on a thread-pool thread; InvokeAsync hops onto the renderer's
+        // dispatcher, which is what makes the page actually re-render.
+        _timer = new Timer(_ => _ = InvokeAsync(async () =>
+        {
+            try { await OnRefresh.InvokeAsync(); }
+            catch { /* a failed poll must never crash the circuit */ }
+        }), null, period, period);
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

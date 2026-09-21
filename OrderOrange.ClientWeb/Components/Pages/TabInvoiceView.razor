@@ -1,0 +1,143 @@
+@page "/tab-invoice/{Code}/{TabId:int}"
+@layout OrderOrange.ClientWeb.Components.Layout.PublicLayout
+@inject ApiClient Api
+@inject LanguageService L
+
+@* The guest's copy of the table invoice, wearing the SAME slip the POS prints:
+   identical classes, identical design options, read from the store's own invoice
+   designer. The PDF endpoint feeds this page to a headless Chrome. *@
+
+<PageTitle>@L["tiv.title"] · OrderOrange</PageTitle>
+
+@if (_inv is null)
+{
+    <Loader FullPage="true" HideBrand="true" />
+}
+else
+{
+    var d = _inv.Design ?? ReceiptDesignDto.Default;
+    <div class="tiv-slip">
+    <div class="rcpt mf-ascii f-@d.Font s-@d.FontSize sp-@d.Spacing hs-@d.HeaderStyle fr-@d.Frame ink-@d.Ink ls-@d.LogoSize @(d.PaperWidth == 58 ? "p58" : "")">
+        @* The store's mark leads the slip: the designer's upload first, else the
+           store logo itself — the guest's copy always wears the brand. *@
+        @if ((d.Logo is { Length: > 0 } ? d.Logo : _inv.LogoData) is { Length: > 0 } receiptLogo)
+        {
+            <div class="c"><img class="rlogo" src="@receiptLogo" alt="@_inv.StoreName" /></div>
+        }
+        <div class="c nm">@_inv.StoreName</div>
+        @if (!string.IsNullOrWhiteSpace(d.HeaderMessage))
+        {
+            <div class="c sm tag">@d.HeaderMessage</div>
+        }
+        @if (d.ShowAddress)
+        {
+            <div class="c sm">@_inv.Area · @_inv.Street</div>
+            <div class="c sm">Tel: <span class="mf-ltr">@_inv.Phone</span> · Muscat, Oman</div>
+        }
+        @if (d.ShowVat && (_inv.CrNumber.Length > 0 || _inv.VatNumber.Length > 0))
+        {
+            <div class="c xs">
+                @(_inv.CrNumber.Length > 0 ? $"CR No: {_inv.CrNumber}" : "")@(_inv.CrNumber.Length > 0 && _inv.VatNumber.Length > 0 ? " · " : "")@(_inv.VatNumber.Length > 0 ? $"VAT No: {_inv.VatNumber}" : "")
+            </div>
+        }
+        @Sep(d)
+
+        <div class="c ttl">@(d.LabelStyle == "bilingual" ? "TAX INVOICE — فاتورة" : "TAX INVOICE")</div>
+        <div class="row"><span>@Lb(d, "Receipt #", "رقم الإيصال")</span><span>@TabId.ToString("D6")</span></div>
+        <div class="row"><span>@Lb(d, "Date", "التاريخ")</span><span>@_inv.OpenedAt.ToString("dd/MM/yyyy HH:mm")</span></div>
+        <div class="row"><span>@Lb(d, "Type", "النوع")</span><span>@Lb(d, "DINE-IN", "محلي") 🍽️</span></div>
+        <div class="row"><span>@Lb(d, "Table", "الطاولة")</span><b>@_inv.TableName</b></div>
+        @Sep(d)
+
+        @if (d.ItemStyle == "table")
+        {
+            <table class="ritems">
+                <thead>
+                    <tr><th>@Lb(d, "ITEM", "الصنف")</th><th class="tq">@Lb(d, "QTY", "كمية")</th><th class="tp">@Lb(d, "PRICE", "السعر")</th><th class="tp">@Lb(d, "AMT", "المبلغ")</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var line in _inv.Lines)
+                    {
+                        <tr>
+                            <td>@line.Name</td>
+                            <td class="tq">@line.Quantity</td>
+                            <td class="tp">@line.UnitPrice.ToString("0.000")</td>
+                            <td class="tp">@((line.UnitPrice * line.Quantity).ToString("0.000"))</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            @foreach (var line in _inv.Lines)
+            {
+                <div class="item">
+                    <span class="q">@(line.Quantity)x</span>
+                    <span class="n">@line.Name</span>
+                    <span class="p">@Fmt.Rial(line.UnitPrice * line.Quantity)</span>
+                </div>
+            }
+        }
+        @Sep(d)
+
+        <div class="row"><span>@Lb(d, "Items", "العناصر")</span><span>@_inv.Lines.Sum(l => l.Quantity)</span></div>
+        <div class="row"><span>@Lb(d, "Subtotal", "المجموع")</span><span>@Fmt.Rial(_inv.Subtotal)</span></div>
+        @if (_inv.Tax > 0)
+        {
+            <div class="row"><span>@Lb(d, $"VAT {_inv.TaxPercent:0.#}%", $"الضريبة {_inv.TaxPercent:0.#}٪")</span><span>@Fmt.Rial(_inv.Tax)</span></div>
+        }
+        @Sep(d)
+        <div class="row total @(d.TotalStyle == "invert" ? "inv-total" : "")">
+            <span>@Lb(d, "TOTAL", "الإجمالي")</span><span>@Fmt.Rial(_inv.Total)</span>
+        </div>
+        @* An OPEN table bill: nothing is paid yet — the paper says so plainly. *@
+        <div class="c pay">*** TO PAY — @Fmt.Money(_inv.Total) ***</div>
+        @if (!string.IsNullOrEmpty(_inv.QrDataUrl))
+        {
+            @Sep(d)
+            <div class="c"><img class="qrimg qr-medium" src="@_inv.QrDataUrl" alt="QR" /></div>
+            <div class="c xs">@Lb(d, "Scan to order again", "امسح للطلب مرة أخرى")</div>
+        }
+        @Sep(d)
+        <div class="c sm">@(string.IsNullOrWhiteSpace(d.FooterMessage) ? "Thank you — see you soon!" : d.FooterMessage)</div>
+        @if (!string.IsNullOrWhiteSpace(d.Promo))
+        {
+            <div class="c sm promo">@d.Promo</div>
+        }
+        <div class="c xs">Printed @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+    </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+    [Parameter] public int TabId { get; set; }
+
+    private PublicTabInvoiceDto? _inv;
+
+    protected override async Task OnInitializedAsync() =>
+        _inv = await Api.GetPublicTabInvoiceAsync(Code, TabId);
+
+    /// <summary>Receipt labels stay English (or bilingual) exactly like the printed slip.</summary>
+    private static string Lb(ReceiptDesignDto d, string en, string ar) =>
+        d.LabelStyle == "bilingual" ? $"{en} / {ar}" : en;
+
+    /// <summary>Section separator in the store's chosen style — same as the till's.</summary>
+    private static RenderFragment Sep(ReceiptDesignDto d) => builder =>
+    {
+        if (d.Separator == "stars")
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "sepstars");
+            builder.AddContent(2, "✱ ✱ ✱ ✱ ✱ ✱ ✱ ✱");
+            builder.CloseElement();
+        }
+        else
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", $"dash sep-{d.Separator}");
+            builder.CloseElement();
+        }
+    };
+}

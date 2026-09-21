@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OrderOrange.Shared\OrderOrange.Shared.csproj" />
+  </ItemGroup>
+
+  <!-- Browser-neutral on purpose: the partner portal runs this in WebAssembly, the other
+       apps on the server. Anything that needs the ASP.NET Core server framework lives in
+       OrderOrange.ClientCore.Server instead. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
+    <PackageReference Include="MudBlazor" Version="8.15.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Language files flow into every referencing app's build and publish output. -->
+    <Content Update="Localization\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,101 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* The till's table picker: the same salons the Tables page shows, one section
+   each, one tap on a table moves the sale onto it. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6" Style="font-weight: 800;">🍽️ @L["tables.title"]</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_tables is null)
+        {
+            <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-6" />
+        }
+        else
+        {
+            @foreach (var group in Groups)
+            {
+                <div class="sal pick">
+                    <div class="sal-head slim">
+                        <b class="sal-name">@group.Name</b>
+                        <span class="sal-meta">@group.Tables.Count 🍽️</span>
+                    </div>
+                    <div class="sal-grid">
+                        @foreach (var t in group.Tables)
+                        {
+                            var table = t;
+                            <button type="button" class="sal-tbl @(table.IsOccupied ? "busy" : "free")"
+                                    @onclick="@(() => Dialog.Close(DialogResult.Ok(table)))">
+                                <span class="tic" style="@($"color:{Tables.TypeColor(table.Type)}")">
+                                    <MudIcon Icon="@Tables.TypeIcon(table.Type)" Style="width:16px;height:16px;" />
+                                </span>
+                                <b class="tnm">@table.Name</b>
+                                <span class="tst">@table.Seats <MudIcon Icon="@Icons.Material.Filled.EventSeat" Style="width:11px;height:11px;vertical-align:-1.5px;" /></span>
+                                @if (table.IsOccupied)
+                                {
+                                    <span class="twho">👤 @(table.CustomerName ?? table.GuestName)</span>
+                                    @if (table.OccupiedAt is { } at)
+                                    {
+                                        <span class="tdur">⏱ @Tables.Duration(at, L)</span>
+                                    }
+                                }
+                            </button>
+                        }
+                    </div>
+                </div>
+            }
+            @if (_tables.Count == 0)
+            {
+                <div class="oo-fp-hint">
+                    <div class="plate">🍽️</div>
+                    <b>@L["tables.emptyTitle"]</b>
+                </div>
+            }
+
+            <div class="oo-fp-legend mt-2">
+                <span><i class="dot free"></i> @L["tables.free"]</span>
+                <span><i class="dot busy"></i> @L["tables.busy"]</span>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private List<StoreTableDto>? _tables;
+    private List<StoreRoomDto> _rooms = [];
+
+    private static long NameOrder(string name) => long.TryParse(name.TrimStart('T', 't'), out var n) ? n : long.MaxValue;
+
+    private List<(string Name, List<StoreTableDto> Tables)> Groups
+    {
+        get
+        {
+            var groups = new List<(string, List<StoreTableDto>)>();
+            foreach (var room in _rooms)
+            {
+                var members = _tables!.Where(t => t.RoomId == room.Id)
+                    .OrderBy(t => NameOrder(t.Name)).ThenBy(t => t.Name).ToList();
+                if (members.Count > 0) groups.Add((room.Name, members));
+            }
+            var loose = _tables!.Where(t => t.RoomId is null || _rooms.All(r => r.Id != t.RoomId))
+                .OrderBy(t => NameOrder(t.Name)).ThenBy(t => t.Name).ToList();
+            if (loose.Count > 0) groups.Add((L["tables.noSalon"], loose));
+            return groups;
+        }
+    }
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _tables = await Api.GetTablesAsync() ?? [];
+        _rooms = await Api.GetRoomsAsync() ?? [];
+    }
+}

@@ -1,0 +1,516 @@
+@page "/reserve/{Code}/chat"
+@layout OrderOrange.ClientWeb.Components.Layout.PublicLayout
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The table's chat as its own full page. The ⋮ on a bubble opens reply / edit /
+   delete; ticks turn warm when the restaurant has seen your words. *@
+
+<PageTitle>@L["tc.title"] · OrderOrange</PageTitle>
+
+@if (_loading)
+{
+    <Loader FullPage="true" />
+}
+else if (_info is null)
+{
+    <div class="pub-wrap">
+        <div class="bill-card bill-bad">
+            <div class="bill-seal bad">✕</div>
+            <h1>@L["rsv.notFound"]</h1>
+            <p>@L["rsv.notFoundHint"]</p>
+        </div>
+    </div>
+}
+else
+{
+    <div class="wa-screen qc-bare">
+        <div class="wa-pane">
+            <div class="wa-head">
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                               OnClick="@(() => Nav.NavigateTo($"/reserve/{Uri.EscapeDataString(Code)}"))" />
+                <span class="ava">@_info.LogoEmoji</span>
+                <div class="who">
+                    <b>@_info.NameFor(L.Locale)</b>
+                    <small>🍽️ @string.Format(L["rsv.tableChip"], _info.TableName)</small>
+                </div>
+            </div>
+
+            <div class="wa-msgs" id="qc-msgs">
+                @if (_messages.Count == 0)
+                {
+                    <div class="qc-empty">@L["qc.empty"]</div>
+                }
+                @{
+                    DateTime? lastDay = null;
+                    var lastSeenOwnId = _messages.LastOrDefault(x => x.From == "guest" && x.Id <= _otherReadId)?.Id ?? 0;
+                }
+                @foreach (var m in _messages)
+                {
+                    var msg = m;
+                    var own = msg.From == "guest";
+                    @if (lastDay != msg.At.Date)
+                    {
+                        lastDay = msg.At.Date;
+                        <div class="wa-date"><span>@DayLabel(msg.At)</span></div>
+                    }
+                    <div class="qc-bubble @(own ? "me" : "them") @(msg.Deleted ? "gone" : "")">
+                        @if (!msg.Deleted)
+                        {
+                            <button type="button" class="qc-dots" @onclick="@(() => ToggleActions(msg))"
+                                    @onclick:stopPropagation="true">⋮</button>
+                        }
+                        @if (msg.Deleted)
+                        {
+                            <span class="delstub">🚫 @L["qc.deleted"]</span>
+                        }
+                        else
+                        {
+                            @if (msg.ReplyPreview is not null)
+                            {
+                                <span class="qc-quote">@msg.ReplyPreview</span>
+                            }
+                            @if (msg.Image is not null)
+                            {
+                                <img class="qc-img" src="@msg.Image" alt="" loading="lazy"
+                                     @onclick="@(() => _viewImage = msg.Image)" @onclick:stopPropagation="true" />
+                            }
+                            @if (msg.Audio is not null)
+                            {
+                                <audio controls preload="metadata" src="@msg.Audio"></audio>
+                            }
+                            @if (msg.File is not null)
+                            {
+                                <a class="qc-file" href="@msg.File" download="@msg.FileName" target="_blank"
+                                   @onclick:stopPropagation="true">📄 <span>@msg.FileName</span></a>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(msg.Text))
+                            {
+                                <span>@msg.Text</span>
+                            }
+                        }
+                        <small>
+                            @if (msg.EditedAt is not null && !msg.Deleted)
+                            {
+                                <i class="ed">@L["qc.edited"] · </i>
+                            }
+                            @msg.At.ToString("HH:mm")
+                            @if (own && !msg.Deleted)
+                            {
+                                <i class="tick @(msg.Id <= _otherReadId ? "seen" : "")">✓✓</i>
+                            }
+                        </small>
+                        @if (_actionsFor == msg.Id && !msg.Deleted)
+                        {
+                            <div class="qc-actions" @onclick:stopPropagation="true">
+                                @if (!own)
+                                {
+                                    <button type="button" @onclick="@(() => BeginReply(msg))"><MudIcon Icon="@Icons.Material.Filled.Reply" Style="width:16px;height:16px;" /> @L["qc.reply"]</button>
+                                }
+                                @if (own && msg.Audio is null && msg.Image is null && msg.File is null)
+                                {
+                                    <button type="button" @onclick="@(() => BeginEdit(msg))"><MudIcon Icon="@Icons.Material.Filled.Edit" Style="width:16px;height:16px;" /> @L["qc.edit"]</button>
+                                }
+                                @if (own)
+                                {
+                                    <button type="button" class="danger" @onclick="@(() => DeleteMessage(msg))"><MudIcon Icon="@Icons.Material.Filled.DeleteOutline" Style="width:16px;height:16px;" /> @L["qc.delete"]</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                    @if (own && msg.Id == lastSeenOwnId && _otherReadAt is not null && lastSeenOwnId > 0)
+                    {
+                        <div class="qc-seenline">@string.Format(L["qc.seen"], _otherReadAt.Value.ToString("HH:mm"))</div>
+                    }
+                }
+            </div>
+
+            @if (_editingId is not null)
+            {
+                <div class="qc-replybar">
+                    <div class="q"><b>✏️ @L["qc.edit"]</b></div>
+                    <button type="button" @onclick="CancelEdit">✕</button>
+                </div>
+            }
+            else if (_replyTo is not null)
+            {
+                <div class="qc-replybar">
+                    <div class="q"><b>@L["qc.reply"]</b><span>@PreviewOf(_replyTo)</span></div>
+                    <button type="button" @onclick="CancelReply">✕</button>
+                </div>
+            }
+
+            @if (_uploadPct >= 0)
+    {
+        <div class="qc-upload">
+            <span class="ic"><MudIcon Icon="@Icons.Material.Filled.CloudUpload" Style="width:17px;height:17px;" /></span>
+            <span class="meta">
+                <small>@L["qc.uploading"]</small>
+                <span class="bar"><span class="fill" style="width:@(_uploadPct)%"></span></span>
+            </span>
+            <b class="pct">@_uploadPct%</b>
+        </div>
+    }
+    <div class="wa-input">
+                @if (_recording)
+                {
+                    <div class="qc-rec">
+                        <span class="dot"></span> @L["qc.recording"]
+                        <button type="button" class="x" @onclick="CancelVoice">✕</button>
+                    </div>
+                    <button type="button" class="qc-mic on" @onclick="StopVoice"><MudIcon Icon="@Icons.Material.Filled.Send" Class="qc-send-ico" Style="width:20px;height:20px;" /></button>
+                }
+                else
+                {
+                    @if (_editingId is null)
+                    {
+                        <div class="qc-attachwrap">
+                            <button type="button" class="qc-mic cam" @onclick="@(() => _attachOpen = !_attachOpen)">
+                                <MudIcon Icon="@(_attachOpen ? Icons.Material.Filled.Close : Icons.Material.Filled.Add)" Style="width:18px;height:18px;" />
+                            </button>
+                            @if (_attachOpen)
+                            {
+                                <div class="qc-attach">
+                                    <button type="button" @onclick="@(() => PickImage(true))">
+                                        <MudIcon Icon="@Icons.Material.Filled.PhotoCamera" Style="width:16px;height:16px;" /> @L["qc.camera"]
+                                    </button>
+                                    <button type="button" @onclick="@(() => PickImage(false))">
+                                        <MudIcon Icon="@Icons.Material.Filled.Image" Style="width:16px;height:16px;" /> @L["qc.gallery"]
+                                    </button>
+                                    <button type="button" @onclick="PickFile">
+                                        <MudIcon Icon="@Icons.Material.Filled.AttachFile" Style="width:16px;height:16px;" /> @L["qc.file"]
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                    <div class="qc-attachwrap">
+                        <button type="button" class="qc-mic emo" @onclick="@(() => _emojiOpen = !_emojiOpen)"><MudIcon Icon="@Icons.Material.Filled.EmojiEmotions" Style="width:20px;height:20px;" /></button>
+                        @if (_emojiOpen)
+                        {
+                            <div class="qc-attach qc-emoji">
+                                @foreach (var e in _emojis)
+                                {
+                                    var em = e;
+                                    <button type="button" @onclick="@(() => AddEmoji(em))">@em</button>
+                                }
+                            </div>
+                        }
+                    </div>
+                    <input id="qc-in" @bind="_text" @bind:event="oninput" maxlength="500" placeholder="@L["qc.placeholder"]"
+                           @onkeydown="@(e => { if (e.Key == "Enter") _ = Send(); })" />
+                    @if (string.IsNullOrWhiteSpace(_text) && _editingId is null)
+                    {
+                        <button type="button" class="qc-mic" @onclick="StartVoice"><MudIcon Icon="@Icons.Material.Filled.Mic" Style="width:20px;height:20px;" /></button>
+                    }
+                    else
+                    {
+                        <button type="button" class="qc-mic on" @onclick="Send"><MudIcon Icon="@(_editingId is null ? Icons.Material.Filled.Send : Icons.Material.Filled.Check)" Class="qc-send-ico" Style="width:20px;height:20px;" /></button>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    @if (_viewImage is not null)
+    {
+        <div class="qc-lightbox" @onclick="@(() => _viewImage = null)">
+            <img src="@_viewImage" alt="" />
+            <button type="button" class="x">✕</button>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+
+    private TableReserveInfoDto? _info;
+    private readonly List<TableChatMessageDto> _messages = [];
+    private int _lastId;
+    private long _stamp;
+    private int _otherReadId;
+    private DateTime? _otherReadAt;
+    private int? _actionsFor;
+    private int? _editingId;
+    private TableChatMessageDto? _replyTo;
+    private string? _viewImage;
+    private bool _attachOpen;
+    private bool _pendingChecked;
+    private int _uploadPct = -1;
+    private bool _emojiOpen;
+    private static readonly string[] _emojis =
+    [
+        "😀","😁","😂","🤣","😊","😍","😘","😉","😎","🤩","🥳","😋",
+        "🤤","😅","🙃","🤔","😴","😢","😭","😡","👍","👌","🙏","👏",
+        "💪","🤝","🙌","❤️","🧡","💛","💚","💙","💯","🔥","🎉","⭐",
+        "🍕","🍔","🍟","🌮","🥗","🍰","🍩","🍦","☕","🍹","🥤","🍽️"
+    ];
+
+    private void AddEmoji(string emoji) => _text += emoji;
+    private string _text = "";
+    private bool _recording;
+    private bool _loading = true;
+    private System.Threading.Timer? _poll;
+
+    private string DayLabel(DateTime at) =>
+        at.Date == DateTime.Today ? L["qc.today"]
+        : at.Date == DateTime.Today.AddDays(-1) ? L["qc.yesterday"]
+        : at.ToString("dd/MM/yyyy");
+
+    private string PreviewOf(TableChatMessageDto msg) =>
+        !string.IsNullOrWhiteSpace(msg.Text)
+            ? (msg.Text.Length > 60 ? msg.Text[..60] + "…" : msg.Text)
+            : msg.Audio is not null ? "🎤"
+            : msg.Image is not null ? "📷"
+            : msg.File is not null ? $"📄 {msg.FileName}"
+            : "…";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _info = await Api.GetReserveInfoAsync(Code);
+        if (_info is not null)
+        {
+            await Sync();
+            _poll = new System.Threading.Timer(async _ => await Sync(), null, 4000, 4000);
+        }
+        _loading = false;
+        await Scroll();
+    }
+
+    private async Task Sync()
+    {
+        try
+        {
+            var firstSync = _stamp == 0;
+            var sync = await Api.SyncTableChatAsync(Code, _lastId, _stamp);
+            if (sync is null) return;
+
+            var dirty = sync.New.Count > 0 || sync.Changed.Count > 0 || sync.OtherReadId != _otherReadId;
+            _stamp = sync.Stamp;
+            _otherReadId = sync.OtherReadId;
+            _otherReadAt = sync.OtherReadAt;
+
+            foreach (var changed in sync.Changed)
+            {
+                var i = _messages.FindIndex(x => x.Id == changed.Id);
+                if (i >= 0) _messages[i] = changed;
+            }
+            var gotForeign = false;
+            foreach (var m in sync.New)
+            {
+                _messages.Add(m);
+                _lastId = Math.Max(_lastId, m.Id);
+                if (m.From != "guest") gotForeign = true;
+            }
+
+            if (dirty) await InvokeAsync(StateHasChanged);
+            if (sync.New.Count > 0) await Scroll();
+            if (_lastId > 0 && (gotForeign || firstSync))
+            {
+                await Api.MarkGuestChatReadAsync(Code, _lastId);
+            }
+        }
+        catch { }
+    }
+
+    private void ToggleActions(TableChatMessageDto msg)
+    {
+        if (msg.Deleted) { _actionsFor = null; return; }
+        _actionsFor = _actionsFor == msg.Id ? null : msg.Id;
+    }
+
+    private async Task BeginReply(TableChatMessageDto msg)
+    {
+        _replyTo = msg;
+        _editingId = null;
+        _actionsFor = null;
+        await FocusInput();
+    }
+
+    private void CancelReply() => _replyTo = null;
+
+    private async Task BeginEdit(TableChatMessageDto msg)
+    {
+        _editingId = msg.Id;
+        _replyTo = null;
+        _text = msg.Text;
+        _actionsFor = null;
+        await FocusInput();
+    }
+
+    /// <summary>Reply or edit begins with the keyboard already up — thumb saved a tap.</summary>
+    private async Task FocusInput()
+    {
+        try { await JS.InvokeVoidAsync("eval", "setTimeout(function(){var e=document.getElementById('qc-in'); if(e) e.focus();}, 60)"); }
+        catch { }
+    }
+
+    private void CancelEdit()
+    {
+        _editingId = null;
+        _text = "";
+    }
+
+    private async Task DeleteMessage(TableChatMessageDto msg)
+    {
+        _actionsFor = null;
+        var (updated, _) = await Api.DeleteTableChatAsync(Code, msg.Id);
+        if (updated is not null)
+        {
+            var i = _messages.FindIndex(x => x.Id == msg.Id);
+            if (i >= 0) _messages[i] = updated;
+        }
+    }
+
+    private async Task Scroll()
+    {
+        try { await JS.InvokeVoidAsync("eval", "var e=document.getElementById('qc-msgs'); if(e) e.scrollTop=e.scrollHeight;"); }
+        catch { }
+    }
+
+    private async Task Send()
+    {
+        if (string.IsNullOrWhiteSpace(_text)) return;
+        _emojiOpen = false;
+        var text = _text.Trim();
+        _text = "";
+
+        if (_editingId is { } editId)
+        {
+            _editingId = null;
+            var (updated, _) = await Api.EditTableChatAsync(Code, editId, text);
+            if (updated is not null)
+            {
+                var i = _messages.FindIndex(x => x.Id == editId);
+                if (i >= 0) _messages[i] = updated;
+            }
+            return;
+        }
+
+        var replyId = _replyTo?.Id;
+        _replyTo = null;
+        var (message, _) = await Api.SendTableChatAsync(Code, new SendTableChatRequest(text, null, null, replyId));
+        if (message is not null) { _messages.Add(message); _lastId = Math.Max(_lastId, message.Id); await Scroll(); }
+    }
+
+    private async Task PickImage(bool fromCamera)
+    {
+        _attachOpen = false;
+        string? meta;
+        if (fromCamera)
+        {
+            // In-page camera first: the browser keeps the page, nothing reloads.
+            meta = await JS.InvokeAsync<string?>("mfCam.open");
+            if (meta == "no-cam") meta = await JS.InvokeAsync<string?>("mfImage.pick", true);
+        }
+        else
+        {
+            meta = await JS.InvokeAsync<string?>("mfImage.pick", false);
+        }
+        if (string.IsNullOrEmpty(meta) || meta == "too-big") return;
+        _uploadPct = 0;
+        try
+        {
+            var parked = System.Text.Json.JsonDocument.Parse(meta);
+            var data = await PullChunks(parked.RootElement.GetProperty("id").GetString()!,
+                                        parked.RootElement.GetProperty("size").GetInt32());
+            if (string.IsNullOrEmpty(data)) return;
+            var (message, _) = await Api.SendTableChatAsync(Code, new SendTableChatRequest("", null, data));
+            if (message is not null) { _messages.Add(message); _lastId = Math.Max(_lastId, message.Id); await Scroll(); }
+            await JS.InvokeVoidAsync("mfImage.clearPending");
+        }
+        finally { _uploadPct = -1; }
+    }
+
+    /// <summary>
+    /// The camera app sometimes kills the page on low-memory phones. The photo
+    /// survives in sessionStorage — the reloaded page picks it up and sends it.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingChecked || _loading || _info is null) return;
+        _pendingChecked = true;
+        try
+        {
+            var meta = await JS.InvokeAsync<string?>("mfImage.takePending");
+            if (string.IsNullOrEmpty(meta)) return;
+            _uploadPct = 0;
+            var parked = System.Text.Json.JsonDocument.Parse(meta);
+            var data = await PullChunks(parked.RootElement.GetProperty("id").GetString()!,
+                                        parked.RootElement.GetProperty("size").GetInt32());
+            if (string.IsNullOrEmpty(data)) return;
+            var (message, _) = await Api.SendTableChatAsync(Code, new SendTableChatRequest("", null, data));
+            if (message is not null)
+            {
+                _messages.Add(message);
+                _lastId = Math.Max(_lastId, message.Id);
+                StateHasChanged();
+                await Scroll();
+            }
+        }
+        catch { }
+        finally { _uploadPct = -1; StateHasChanged(); }
+    }
+
+    private async Task PickFile()
+    {
+        _attachOpen = false;
+        var raw = await JS.InvokeAsync<string?>("mfFile.pick");
+        if (string.IsNullOrEmpty(raw) || raw == "too-big") return;
+        _uploadPct = 0;
+        try
+        {
+            var doc = System.Text.Json.JsonDocument.Parse(raw);
+            var name = doc.RootElement.GetProperty("name").GetString();
+            var data = await PullChunks(doc.RootElement.GetProperty("id").GetString()!,
+                                        doc.RootElement.GetProperty("size").GetInt32());
+            if (string.IsNullOrEmpty(data)) return;
+            var (message, _) = await Api.SendTableChatAsync(Code,
+            new SendTableChatRequest("", null, null, null, data, name));
+            if (message is not null) { _messages.Add(message); _lastId = Math.Max(_lastId, message.Id); await Scroll(); }
+        }
+        finally { _uploadPct = -1; }
+    }
+
+    /// <summary>
+    /// Reassembles a parked data URL 50KB at a time — big files cross the SignalR
+    /// bridge as many small hops, never one oversized message.
+    /// </summary>
+    private async Task<string?> PullChunks(string id, int size)
+    {
+        var sb = new System.Text.StringBuilder(size);
+        for (var offset = 0; offset < size; offset += 50000)
+        {
+            sb.Append(await JS.InvokeAsync<string>("mfBlob.chunk", id, offset, 50000));
+            _uploadPct = (int)Math.Min(99, (offset + 50000) * 100L / size);
+            StateHasChanged();
+        }
+        await JS.InvokeVoidAsync("mfBlob.end", id);
+        return sb.Length == size ? sb.ToString() : null;
+    }
+
+    private async Task StartVoice()
+    {
+        if (await JS.InvokeAsync<bool>("mfVoice.start")) _recording = true;
+    }
+
+    private async Task CancelVoice()
+    {
+        await JS.InvokeVoidAsync("mfVoice.cancel");
+        _recording = false;
+    }
+
+    private async Task StopVoice()
+    {
+        _recording = false;
+        var data = await JS.InvokeAsync<string?>("mfVoice.stop");
+        if (data is null or "too-big") return;
+        var (message, _) = await Api.SendTableChatAsync(Code, new SendTableChatRequest("", data));
+        if (message is not null) { _messages.Add(message); _lastId = Math.Max(_lastId, message.Id); await Scroll(); }
+    }
+
+    public void Dispose() => _poll?.Dispose();
+}

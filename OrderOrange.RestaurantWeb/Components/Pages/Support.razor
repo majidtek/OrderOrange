@@ -1,0 +1,167 @@
+@page "/support"
+@using OrderOrange.ClientCore.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@* The partner's support center: what is open, what is waiting for them, and the door
+   to a new ticket. Each row opens the conversation. *@
+
+<PageTitle>Partner — Support</PageTitle>
+
+@* Same width as the top menu bar (1536px toolbar − its 48px gutters), not the 1920px container. *@
+<div class="tk-page">
+
+<PageHeader Title="@L["tk.title"]" Subtitle="@L["tk.sub"]">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => _newOpen = true)">@L["tk.new"]</MudButton>
+    </Actions>
+</PageHeader>
+
+@if (_page is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    var s = _page.Summary;
+    <div class="tk-stats">
+        <div class="tk-stat open"><b>@(s.Open + s.InProgress + s.Waiting)</b><span>@L["tk.stat.open"]</span></div>
+        <div class="tk-stat wait"><b>@s.Waiting</b><span>@L["tk.stat.waiting"]</span></div>
+        <div class="tk-stat done"><b>@s.Resolved</b><span>@L["tk.stat.resolved"]</span></div>
+        <div class="tk-stat closed"><b>@s.Closed</b><span>@L["tk.stat.closed"]</span></div>
+    </div>
+
+    @* The app's own tab bar — same control the invoices page uses. The arrows are ours:
+       MudBlazor's scroll the bar with a physical transform that breaks in RTL. *@
+    <div class="tk-tabbar">
+        <button type="button" class="tk-arrow" @onclick="@(() => Scroll(-1))" aria-label="◂">‹</button>
+        <MudTabs Elevation="0" Rounded="true" Class="mb-3 tk-tabs" ActivePanelIndexChanged="OnTab">
+            <MudTabPanel Text="@L["tk.tab.all"]" Icon="@Icons.Material.Filled.Inbox" />
+            <MudTabPanel Text="@L["tk.stat.open"]" Icon="@Icons.Material.Filled.MarkEmailUnread" />
+            <MudTabPanel Text="@L["tk.stat.waiting"]" Icon="@Icons.Material.Filled.HourglassBottom" />
+            <MudTabPanel Text="@L["tk.stat.resolved"]" Icon="@Icons.Material.Filled.TaskAlt" />
+            <MudTabPanel Text="@L["tk.stat.closed"]" Icon="@Icons.Material.Filled.DoneAll" />
+        </MudTabs>
+        <button type="button" class="tk-arrow" @onclick="@(() => Scroll(1))" aria-label="▸">›</button>
+    </div>
+
+    @if (Visible.Count == 0)
+    {
+        <EmptyState Emoji="🎧" Title="@L["tk.none"]" Subtitle="@L["tk.noneSub"]" />
+    }
+    else
+    {
+        <div class="tk-list">
+            @foreach (var t in Visible)
+            {
+                var row = t;
+                <button type="button" class="tk-row @SupportUi.StatusCss(row.Status) @(row.PartnerUnread ? "unread" : "")" @onclick="@(() => Nav.NavigateTo($"/support/{row.Id}"))">
+                    <span class="cat" title="@L[$"tk.c.{row.Category}"]">@SupportUi.CategoryEmoji(row.Category)</span>
+                    <span class="main">
+                        <span class="top">
+                            <code>@row.Number</code>
+                            <b>@row.Subject</b>
+                            @if (row.PartnerUnread)
+                            {
+                                <i class="new"></i>
+                            }
+                        </span>
+                        <small class="prev">@(row.LastFrom == "support" ? "🎧 " : "")@row.LastPreview</small>
+                    </span>
+                    <span class="meta">
+                        <span class="pill @SupportUi.StatusCss(row.Status)">@L[$"tk.s.{row.Status}"]</span>
+                        <span class="prio" style="--c:@SupportUi.PriorityColor(row.Priority)">● @L[$"tk.p.{row.Priority}"]</span>
+                        <small>@Fmt.TimeAgo(row.LastMessageAt, L) · @string.Format(L["tk.messages"], row.MessageCount)</small>
+                    </span>
+                </button>
+            }
+        </div>
+    }
+}
+
+</div>
+
+@* ---------- New ticket ---------- *@
+@if (_newOpen)
+{
+    <div class="oo-modal" @onclick="@(() => _newOpen = false)">
+        <div class="tm-sheet tk-sheet" @onclick:stopPropagation="true">
+            <div class="head">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.SupportAgent" /></span>
+                <b>@L["tk.new"]</b>
+            </div>
+
+            <MudTextField @bind-Value="_subject" Label="@L["tk.f.subject"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="140" Class="mb-3" />
+            <div class="d-flex flex-wrap" style="gap: 10px;">
+                <MudSelect T="string" @bind-Value="_category" Label="@L["tk.f.category"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="mb-3 flex-grow-1" Style="min-width: 220px;">
+                    @foreach (var c in SupportCatalog.Categories)
+                    {
+                        <MudSelectItem T="string" Value="@c">@SupportUi.CategoryEmoji(c) @L[$"tk.c.{c}"]</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="string" @bind-Value="_priority" Label="@L["tk.f.priority"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="mb-3" Style="min-width: 170px;">
+                    @foreach (var p in SupportCatalog.Priorities)
+                    {
+                        <MudSelectItem T="string" Value="@p"><span class="prio" style="--c:@SupportUi.PriorityColor(p)">●</span> @L[$"tk.p.{p}"]</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <small class="tk-hint">@L["tk.f.descHint"]</small>
+            <SupportComposer Placeholder="@L["tk.f.desc"]" SendText="@L["tk.f.submit"]" Lines="5" RequireText="true" OnSend="Create" />
+        </div>
+    </div>
+}
+
+@code {
+    private SupportPageDto? _page;
+    private string _status = "all";
+    private bool _newOpen;
+    private string _subject = "";
+    private string _category = "technical";
+    private string _priority = "normal";
+
+    protected override Task OnInitializedAsync() => Load();
+
+    /// <summary>The arrows show only while the bar has somewhere left to scroll.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try { await JS.InvokeVoidAsync("mfSupport.watchTabs"); } catch { }
+    }
+
+    private async Task Scroll(int dir)
+    {
+        try { await JS.InvokeVoidAsync("mfSupport.scrollTabs", dir); } catch { }
+    }
+
+    /// <summary>Every ticket in one trip — the tabs then filter what is already here, instantly.</summary>
+    private async Task Load() => _page = await Api.GetSupportTicketsAsync("all", 0, 200) ?? new([], 0, new(0, 0, 0, 0, 0, 0));
+
+    private static readonly string[] Tabs = ["all", "open", "waiting", "resolved", "closed"];
+
+    /// <summary>Same rule the server uses for its own status filter.</summary>
+    private List<SupportTicketDto> Visible =>
+        (_page?.Items ?? []).Where(t => _status switch
+        {
+            "open" => t.Status is "open" or "in_progress" or "waiting",
+            "waiting" => t.Status == "waiting",
+            "resolved" => t.Status == "resolved",
+            "closed" => t.Status == "closed",
+            _ => true,
+        }).ToList();
+
+    private void OnTab(int index) => _status = Tabs[Math.Clamp(index, 0, Tabs.Length - 1)];
+
+    private async Task Create(TicketReplyRequest reply)
+    {
+        if (string.IsNullOrWhiteSpace(_subject)) { Snackbar.Add(L["tk.e.subject"], Severity.Warning); return; }
+        var (ticket, error) = await Api.CreateSupportTicketAsync(new CreateTicketRequest(_subject.Trim(), _category, _priority, reply.Text, reply.Attachments));
+        if (ticket is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        _newOpen = false; _subject = "";
+        Snackbar.Add(L["tk.created.ok"], Severity.Success);
+        Nav.NavigateTo($"/support/{ticket.Ticket.Id}");
+    }
+}

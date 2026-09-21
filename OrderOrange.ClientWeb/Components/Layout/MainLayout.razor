@@ -1,0 +1,535 @@
+﻿@inherits LayoutComponentBase
+@using System.Text.Json
+@inject AppState State
+@inject CartState Cart
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using Microsoft.AspNetCore.Components.Sections
+@inject IDialogService Dialogs
+@inject LanguageService Lang
+@inject ApiClient Api
+@inject OrderBot Bot
+@inject TableBrandState TableBrand
+@inject IHttpContextAccessor Http
+@implements IDisposable
+
+<MudThemeProvider Theme="Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    @* These three render OUTSIDE the page tree — dialogs, menus, toasts. They must sit
+       inside the RTL provider or none of what they draw ever flips for Arabic/Persian/
+       Urdu, which is exactly the bug this fixed. *@
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    @* First visit: ONLY the language picker renders — the shop itself waits, so the
+       heavy first load happens ONCE, already in the chosen language. *@
+    <LanguageGate />
+@if (!_gateOnly)
+{
+@* Guests get the whole shop. Signing in is only asked for at the moment it is
+   actually needed — placing the order, or opening something personal. *@
+<SessionGate AllowAnonymous="true">
+    <SignedIn>
+        <MudLayout>
+            <MudAppBar Elevation="0" Class="mf-appbar mf-appbar-client">
+                @* A table-QR guest is standing INSIDE a restaurant: the bar wears that
+                   store's own logo and name, centred — no OrderOrange mark, and no back
+                   button out into a platform they didn't come for. *@
+                @if (StoreBranded)
+                {
+                    @* The store's mark sits dead-centre (absolute, so the language button on
+                       the end never pushes it off), and the guest can still switch language —
+                       a QR guest is the one reader most likely to need another tongue. *@
+                    @if (TableBrand.IsSet)
+                    {
+                        <div class="mf-brand mf-storebrand v2">
+                            @if (TableBrand.Logo is { Length: > 0 } storeLogo)
+                            {
+                                <span class="mf-storebrand-tile"><img src="@storeLogo" alt="@TableBrand.Name" class="mf-brand-logo store" /></span>
+                            }
+                            else if (TableBrand.Emoji is { Length: > 0 } storeEmoji)
+                            {
+                                <span class="mf-storebrand-emoji">@storeEmoji</span>
+                            }
+                            <span class="mf-brand-name">@TableBrand.Name</span>
+                        </div>
+                    }
+                    <MudSpacer />
+                    <LanguageMenu Compact="true" />
+                }
+                else if (!IsHome)
+                {
+                    @* Away from home the bar is QUIET: the back button (wearing its word)
+                       and the language, nothing else. The mark belongs on the home page —
+                       inside a page the reader is already here, and what they may still
+                       need is to read it in their own language. *@
+                    <MudButton StartIcon="@Icons.Material.Filled.ArrowBack" Color="Color.Inherit"
+                               Class="mf-backbtn" OnClick="BackAction">
+                        @Lang["common.back"]
+                    </MudButton>
+                    <MudSpacer />
+                    <LanguageMenu Compact="true" />
+                }
+                else
+                {
+                @* The mark alone. The logo IS the name — spelling it out beside itself
+                   only spends the bar's width, which the search field and the basket
+                   both want more than the wordmark does. *@
+                <div class="mf-brand mr-6" @onclick="GoHome">
+                    <img src="logo.svg?v=4" alt="OrderOrange" class="mf-brand-logo" />
+                </div>
+                <MudButton StartIcon="@Icons.Material.Filled.Storefront" Color="Color.Inherit"
+                           Class="mf-nav-pill d-none d-sm-flex" OnClick="GoRestaurants">@Lang["nav.restaurants"]</MudButton>
+                <MudButton StartIcon="@Icons.Material.Filled.ReceiptLong" Color="Color.Inherit"
+                           Class="mf-nav-pill d-none d-sm-flex"
+                           OnClick="@(() => GoProtected("/orders", Lang["auth.reasonOrders"]))">@Lang["nav.orders"]</MudButton>
+                <MudSpacer />
+
+                <div class="mf-topsearch d-none d-sm-flex" @onclick="OpenSearch">
+                    <span>✨</span>
+                    <span class="flex-grow-1">@Lang["home.searchPlaceholder"]</span>
+                    <MudIcon Icon="@Icons.Material.Filled.Search" Color="Color.Primary" />
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Search" Class="mf-cart-btn d-flex d-sm-none mr-1"
+                               OnClick="OpenSearch" />
+
+                <LanguageMenu Compact="true" />
+
+                <MudBadge Content="@Cart.Count" Color="Color.Primary" Overlap="true" Visible="@(Cart.Count > 0)"
+                          Class="mr-2 d-none d-sm-flex">
+                    <MudIconButton Icon="@Icons.Material.Filled.ShoppingCart" Class="mf-cart-btn"
+                                   OnClick="@(() => Nav.NavigateTo("/checkout"))" />
+                </MudBadge>
+                @if (!State.IsAuthenticated)
+                {
+                    @* The label collapses on a narrow phone so the bar doesn't crowd. *@
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mf-signin-btn"
+                               StartIcon="@Icons.Material.Filled.Login" OnClick="@(() => AskSignIn())">
+                        <span class="lb">@Lang["auth.signIn"]</span>
+                    </MudButton>
+                }
+                else
+                {
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <ActivatorContent>
+                        <MudAvatar Color="Color.Primary" Variant="Variant.Filled">
+                            @if (Avatars.Url(State.Avatar) is string avatarUrl)
+                            {
+                                <MudImage Src="@avatarUrl" Alt="Profile" Style="width: 100%; height: 100%; object-fit: cover;" />
+                            }
+                            else if (State.Avatar is not null)
+                            {
+                                <span style="font-size: 22px; line-height: 1;">@State.Avatar</span>
+                            }
+                            else
+                            {
+                                @Initial
+                            }
+                        </MudAvatar>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <div class="px-4 py-2">
+                            <MudText Typo="Typo.subtitle2">@State.FullName</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mf-ltr">@State.Email</MudText>
+                        </div>
+                        <MudDivider />
+                        <MudMenuItem Icon="@Icons.Material.Filled.Person" OnClick="@(() => Nav.NavigateTo("/profile"))">@Lang["nav.profile"]</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.Home" OnClick="@(() => GoProtected("/addresses", Lang["auth.reasonAddresses"]))">@Lang["nav.addresses"]</MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="SignOut">@Lang["common.signout"]</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+                }
+                }
+            </MudAppBar>
+            <MudMainContent Class="pb-12 mf-mobile-pad">
+                <MudContainer MaxWidth="MaxWidth.False" Class="pt-6" Style="max-width: 900px;">
+                    @Body
+                </MudContainer>
+            </MudMainContent>
+            @* Fixed bars teleport here: no animated ancestor can bend their positioning. *@
+            <SectionOutlet SectionName="oo-fixedbar" />
+
+            @* Phone-only bottom navigation — the HOME page's alone. Everywhere else the
+               top bar's back arrow is the way around, and the freed strip goes to the
+               page's own bars (basket, pay). *@
+            @if (IsHome)
+            {
+            <nav class="mf-bottom-nav">
+                <div class="mf-nav-item @Active("/")" @onclick="@(() => Nav.NavigateTo("/"))">
+                    <MudIcon Icon="@Icons.Material.Filled.Home" Size="Size.Small" />
+                    <span class="lb">@Lang["nav.home"]</span>
+                </div>
+                <div class="mf-nav-item @Active("/orders")" @onclick="@(() => GoProtected("/orders", Lang["auth.reasonOrders"]))">
+                    <MudIcon Icon="@Icons.Material.Filled.ReceiptLong" Size="Size.Small" />
+                    <span class="lb">@Lang["nav.orders"]</span>
+                </div>
+                <div class="mf-nav-item @Active("/checkout")" @onclick="@(() => Nav.NavigateTo("/checkout"))">
+                    <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Size="Size.Small" />
+                    <span class="lb">@Lang["nav.basket"]</span>
+                    @if (Cart.Count > 0)
+                    {
+                        <span class="mf-nav-badge">@Cart.Count</span>
+                    }
+                </div>
+                <div class="mf-nav-item @Active("/profile")" @onclick="@(() => GoProtected("/profile", Lang["auth.reasonProfile"]))">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" />
+                    <span class="lb">@Lang["nav.profile"]</span>
+                </div>
+            </nav>
+            }
+
+            @* Floating partner door — for shop owners browsing around. It leaves the
+               moment ordering begins: a basket or a checkout page means the customer
+               is BUYING, and nothing may distract from that. *@
+            @* The partner door stands at the FRONT door only — on every other page it
+               crowded the basket and pay bars. *@
+            @if (IsHome && Cart.Count == 0)
+            {
+                <a class="mf-partner-fab" href="https://orderorange.com/guide" target="_blank" rel="noopener">
+                    <span class="ico">🏪</span>
+                    <span class="tx">@Lang["home.partnerFab"]</span>
+                </a>
+            }
+
+            @* Offline AI ordering assistant — floating chat bubble. *@
+            @* The assistant stays off the checkout: the customer is paying, and a floating
+               chat bubble over the place-order button is a distraction, not a help. *@
+            @if (!OnOrderFlow)
+            {
+                <AssistantWidget />
+            }
+        </MudLayout>
+    </SignedIn>
+</SessionGate>
+}
+</MudRTLProvider>
+
+@code {
+    private static readonly MudTheme Theme = FoodTheme.Build();
+    private const string CartKey = "majidfood.cart";
+    private static readonly JsonSerializerOptions CartJson = new(JsonSerializerDefaults.Web);
+
+    private string Initial => string.IsNullOrEmpty(State.FullName) ? "?" : State.FullName[..1].ToUpper();
+
+    /// <summary>True on the pages where an order is being made or tracked.</summary>
+    private bool OnOrderFlow
+    {
+        get
+        {
+            var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+            return path.StartsWith("/checkout", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/track", StringComparison.OrdinalIgnoreCase)
+                // Booking a table is a form with one button at the bottom; a floating
+                // chat bubble sits over exactly that button and helps nobody.
+                || path.StartsWith("/reserve-table", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>The home page — the only one wearing the bottom menu.</summary>
+    private bool IsHome => "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0] == "/";
+
+    /// <summary>The table-QR pages: /reserve/{code} and everything under it.</summary>
+    private bool OnTablePage =>
+        Nav.ToBaseRelativePath(Nav.Uri).StartsWith("reserve/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The bar wears the STORE's face: on table-QR pages always, and on the shop's own
+    /// pages whenever the visit arrived through the shop's QR (Home set the brand).
+    /// </summary>
+    private bool StoreBranded
+    {
+        get
+        {
+            if (OnTablePage) return true;
+            if (!TableBrand.IsSet) return false;
+            var path = Nav.ToBaseRelativePath(Nav.Uri);
+            return path.StartsWith("p/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("store/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("restaurant/", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("reserve-table/", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    // ---------- Web Push: the shop's status moves ring the customer's phone ----------
+    private bool _pushTried;
+
+    private async Task TrySubscribePushAsync()
+    {
+        if (_pushTried || !State.IsAuthenticated) return;
+        _pushTried = true;
+        try
+        {
+            if (await JS.InvokeAsync<string>("mfNotify.init") != "granted") return;
+            if (await Api.GetPushVapidAsync() is not { } vapid) return;
+            var sub = await JS.InvokeAsync<PushSubscribeRequest?>("mfNotify.subscribePush", vapid.PublicKey);
+            if (sub is not null) await Api.SubscribePushAsync(sub);
+        }
+        catch { /* push is a bonus channel */ }
+    }
+
+    /// <summary>Checkout goes back to its store; everywhere else, plain history back.</summary>
+    private Task BackAction()
+    {
+        // A full-screen sign-in sheet covers the page: Back must dismiss THAT first,
+        // otherwise the history step happens behind it and nothing appears to change.
+        if (_signInDialog is { } sheet)
+        {
+            sheet.Close();
+            _signInDialog = null;
+            return Task.CompletedTask;
+        }
+        if (OnOrderFlow && Cart.Groups.Count > 0)
+        {
+            Nav.NavigateTo(StorePath.For(Cart.Groups[0].Restaurant.Id));
+            return Task.CompletedTask;
+        }
+        return GoBack();
+    }
+
+    /// <summary>
+    /// Where the visitor has actually been in THIS app, newest last. The browser's own
+    /// history is not enough: a link opened fresh (QR, a share, a new tab) has none, and
+    /// "back" then threw everyone to the home page even after browsing five shops.
+    /// </summary>
+    private readonly List<string> _trail = [];
+
+    private void RememberVisited(string uri)
+    {
+        var path = "/" + Nav.ToBaseRelativePath(uri);
+        if (_trail.Count > 0 && _trail[^1] == path) return;   // a refresh is not a step
+        _trail.Add(path);
+        if (_trail.Count > 30) _trail.RemoveAt(0);
+    }
+
+    /// <summary>Back = the previous page of this visit; with none, the home page.</summary>
+    private async Task GoBack()
+    {
+        // Drop the page we are on, then go to the one before it.
+        if (_trail.Count > 0) _trail.RemoveAt(_trail.Count - 1);
+        if (_trail.Count > 0)
+        {
+            var target = _trail[^1];
+            _trail.RemoveAt(_trail.Count - 1);   // arriving will push it back
+            Nav.NavigateTo(target);
+            return;
+        }
+        try { await JS.InvokeVoidAsync("eval", "history.length > 1 ? history.back() : location.assign('/')"); }
+        catch { Nav.NavigateTo("/"); }
+    }
+
+    private string Active(string href)
+    {
+        var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+        var match = href == "/" ? path == "/" : path.StartsWith(href, StringComparison.OrdinalIgnoreCase);
+        return match ? "active" : "";
+    }
+
+    /// <summary>
+    /// The visitor's address, read once while a real HTTP request still exists. After the
+    /// circuit opens there is nothing to read it from, and the API sees only this server.
+    /// </summary>
+    private string? _visitorIp;
+
+    protected override void OnInitialized()
+    {
+        Cart.Changed += OnCartChanged;
+        Lang.Changed += OnLangChanged;
+        Nav.LocationChanged += OnLocationChanged;
+        State.Changed += OnStateChanged;
+        TableBrand.Changed += OnCartChanged;
+
+        if (Http.HttpContext is { } context)
+        {
+            // Behind IIS the caller is the proxy; the visitor is the FIRST hop listed.
+            var forwarded = context.Request.Headers["X-Forwarded-For"].ToString();
+            _visitorIp = forwarded.Split(',', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim()
+                         ?? context.Connection.RemoteIpAddress?.ToString();
+            if (string.IsNullOrWhiteSpace(_visitorIp))
+                _visitorIp = context.Connection.RemoteIpAddress?.ToString();
+        }
+    }
+
+    // The gate no longer blocks: the page renders in English while the small
+    // language card floats above it. Always false, kept so the markup stays simple.
+    private bool _gateOnly;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Lang.EnsureLoadedAsync();
+        await ApplyUrlLanguageAsync();
+        _ = TrySubscribePushAsync();
+        // The page they ARRIVED on. Only later navigations raise LocationChanged, so
+        // without this a visitor who opens the home page and leaves is never counted —
+        // and that is the commonest visit there is.
+        TrackVisit();
+        RememberVisited(Nav.Uri);   // the trail starts where the visit started
+        await TryImpersonateFromUrlAsync();
+        // The form pass: the address map's place-search and link endpoints demand it.
+        try { await JS.InvokeVoidAsync("eval", $"window.ooFT='{OrderOrange.Shared.FormToken.Create()}'"); } catch { }
+        try
+        {
+            var json = await JS.InvokeAsync<string?>("sessionStorage.getItem", CartKey);
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                var snapshot = JsonSerializer.Deserialize<CartState.Snapshot>(json, CartJson);
+                if (snapshot is not null) Cart.RestoreFrom(snapshot);
+            }
+        }
+        catch { /* a corrupt stored cart must never brick the app */ }
+    }
+
+    /// <summary>
+    /// "Open as customer" from the admin panel arrives as ?impersonate=CODE — single-use,
+    /// minutes old, minted by an administrator. The query string is stripped afterwards
+    /// so a copied URL carries nothing live.
+    /// </summary>
+    private async Task TryImpersonateFromUrlAsync()
+    {
+        var code = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query).Get("impersonate");
+        if (string.IsNullOrWhiteSpace(code)) return;
+
+        var (user, _) = await Api.RedeemImpersonationAsync(code);
+        if (user is not null && user.Role == UserRole.Customer)
+            State.SignIn(user);
+        Nav.NavigateTo("/", replace: true);
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        TrackVisit();
+        RememberVisited(e.Location);
+        // Leaving the page closes the sign-in sheet: a browser Back (or any other
+        // navigation) must never leave a modal floating over the new page.
+        if (_signInDialog is { } sheet)
+        {
+            sheet.Close();
+            _signInDialog = null;
+        }
+        // The partner fab shows/hides by route — repaint the layout's own bits too.
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnStateChanged() => _ = InvokeAsync(() =>
+    {
+        TrackVisit();
+        _ = TrySubscribePushAsync();   // a fresh sign-in registers this phone for status pushes
+        StateHasChanged();
+    });
+
+    /// <summary>
+    /// Best-effort page-visit ping for the admin activity and visitor boards. Guests are
+    /// reported too — almost nobody browsing the shop list has signed in yet, and those
+    /// are precisely the visits worth seeing. The query string is dropped: it carries
+    /// addresses, coupon codes and search terms that have no business in a page log.
+    /// </summary>
+    private void TrackVisit()
+    {
+        var page = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+        _ = Api.TrackVisitAsync("Customer", page, _visitorIp);
+    }
+
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+
+    /// <summary>
+    /// Back to the full list of restaurants. On another page that is a plain navigation;
+    /// on the home page itself Blazor would do nothing at all, so the page is asked to
+    /// drop its filters and scroll back to the top instead.
+    /// </summary>
+    private Task GoHome() => GoHome(false);
+
+    /// <summary>The Restaurants pill opens the restaurants page. Re-filtering the home list in
+    /// place (the earlier behaviour) changed almost nothing on screen, so it looked broken.</summary>
+    private async Task GoRestaurants()
+    {
+        var path = Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].Trim('/');
+        if (path == OrderOrange.ClientWeb.Seo.SeoSlugs.Hub.Trim('/')) { await JS.InvokeVoidAsync("window.scrollTo", 0, 0); return; }
+        Nav.NavigateTo(OrderOrange.ClientWeb.Seo.SeoSlugs.Hub);
+    }
+
+    /// <summary>The Restaurants pill shows food places only; the logo shows everything.</summary>
+    private async Task GoHome(bool restaurantsOnly)
+    {
+        var onHome = string.IsNullOrEmpty(Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0].Trim('/'));
+        if (!onHome) { Nav.NavigateTo(restaurantsOnly ? "/?v=food" : "/"); return; }
+        State.AskHomeReset(restaurantsOnly);
+        await JS.InvokeVoidAsync("window.scrollTo", 0, 0);
+    }
+
+    private Task OpenSearch() =>
+        Dialogs.ShowAsync<SearchDialog>("", new DialogOptions
+        {
+            FullScreen = true,
+            NoHeader = true
+        });
+
+    private void OnCartChanged() => _ = InvokeAsync(async () =>
+    {
+        // Paint FIRST. Saving the basket is a browser round-trip, and awaiting it
+        // before repainting made every +/- tap feel like two trips instead of one.
+        StateHasChanged();
+        try
+        {
+            await JS.InvokeVoidAsync("sessionStorage.setItem", CartKey,
+                JsonSerializer.Serialize(Cart.ToSnapshot(), CartJson));
+        }
+        catch { /* storage is a convenience, never a hard failure */ }
+    });
+
+    private void SignOut()
+    {
+        Cart.Clear();
+        Bot.Reset();   // the circuit survives sign-out — the chat must not
+        State.SignOut();
+        Nav.NavigateTo("/");
+    }
+
+    /// <summary>
+    /// Asks a guest to sign in, at the moment something actually needs an account.
+    /// Returns true once they are signed in, false if they dismissed it.
+    /// </summary>
+    /// <summary>The sign-in sheet while it is open — so Back can dismiss it.</summary>
+    private IDialogReference? _signInDialog;
+
+    private async Task<bool> AskSignIn(string? reason = null)
+    {
+        if (State.IsAuthenticated) return true;
+        var parameters = new DialogParameters<SignInDialog> { { d => d.Reason, reason } };
+        var dialog = await Dialogs.ShowAsync<SignInDialog>("", parameters, new DialogOptions { FullScreen = true, NoHeader = true });
+        _signInDialog = dialog;
+        try { await dialog.Result; }
+        finally { _signInDialog = null; }
+        return State.IsAuthenticated;
+    }
+
+    /// <summary>Navigates to a page that needs an account, asking to sign in first.</summary>
+    private async Task GoProtected(string url, string reason)
+    {
+        if (await AskSignIn(reason)) Nav.NavigateTo(url);
+    }
+
+    public void Dispose()
+    {
+        Cart.Changed -= OnCartChanged;
+        Lang.Changed -= OnLangChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+        State.Changed -= OnStateChanged;
+        TableBrand.Changed -= OnCartChanged;
+    }
+
+    /// <summary>
+    /// Search results and shared links carry the language in the address (?lang=ar);
+    /// arriving through one of them switches the app to that language and remembers it.
+    /// </summary>
+    private async Task ApplyUrlLanguageAsync()
+    {
+        try
+        {
+            var q = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["lang"];
+            if (!string.IsNullOrWhiteSpace(q) && q != Lang.Locale && LanguageService.SupportedLanguages.Any(l => l.Code == q))
+                await Lang.SetLocaleAsync(q.Trim().ToLowerInvariant());
+        }
+        catch { /* a bad query string is not worth a broken page */ }
+    }
+}

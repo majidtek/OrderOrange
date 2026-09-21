@@ -1,0 +1,12 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+
+<MudChip T="string" Size="@Size" Color="@Fmt.StatusColor(Status)" Variant="Variant.Text"
+         Icon="@Fmt.StatusIcon(Status)">
+    @Lang[$"status.{Status}"]
+</MudChip>
+
+@code {
+    [Parameter] public OrderStatus Status { get; set; }
+    [Parameter] public Size Size { get; set; } = Size.Small;
+}

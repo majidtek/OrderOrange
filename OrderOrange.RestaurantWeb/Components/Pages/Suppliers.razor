@@ -1,0 +1,122 @@
+@page "/materials/suppliers"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snack
+
+@* The store's supplier book: who to call, and what the relationship costs. The
+   figures come live from the purchase invoices carrying each supplier's name. *@
+
+<PageTitle>Partner — Suppliers</PageTitle>
+
+<PageHeader Title="@L["sup.title"]" Subtitle="@L["sup.sub"]" />
+
+@if (_suppliers is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="sp-top">
+        <div class="pu-sum">
+            <span class="ic">🚚</span>
+            <div><b>@_suppliers.Count</b><small>@L["sup.count"]</small></div>
+        </div>
+        <div class="pu-sum @(_suppliers.Sum(s => s.UnpaidTotal) > 0 ? "warn" : "")">
+            <span class="ic">💳</span>
+            <div><b class="mf-ltr">@Fmt.Rial(_suppliers.Sum(s => s.UnpaidTotal))</b><small>@L["pur.unpaid"]</small></div>
+        </div>
+        <button type="button" class="mt-add" @onclick="@(() => EditAsync(null))">
+            <MudIcon Icon="@Icons.Material.Filled.Add" /> @L["sup.add"]
+        </button>
+    </div>
+
+    @if (_suppliers.Count == 0)
+    {
+        <EmptyState Emoji="🚚" Title="@L["sup.none"]" Subtitle="@L["sup.noneSub"]" />
+    }
+    else
+    {
+        <div class="sp-grid">
+            @foreach (var supplier in _suppliers.Skip(_page * PageSize).Take(PageSize))
+            {
+                <article class="sp-card @(supplier.UnpaidTotal > 0 ? "owe" : "")">
+                    <div class="hd">
+                        <span class="ava">@Initial(supplier.Name)</span>
+                        <div class="who">
+                            <b>@supplier.Name</b>
+                            @if (supplier.ContactName is { Length: > 0 } contact)
+                            {
+                                <small>👤 @contact</small>
+                            }
+                        </div>
+                        <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight">
+                            <MudMenuItem OnClick="@(() => EditAsync(supplier))">@L["common.edit"]</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => DeleteAsync(supplier))">@L["common.delete"]</MudMenuItem>
+                        </MudMenu>
+                    </div>
+
+                    @if (supplier.Phone is { Length: > 0 } phone)
+                    {
+                        <span class="tel"><PhoneMask Phone="@phone" Tel="true" Hint="@L["ph.tapShow"]" /></span>
+                    }
+
+                    <div class="facts">
+                        <div><small>@L["sup.spend"]</small><b class="mf-ltr">@Fmt.Rial(supplier.TotalSpend)</b></div>
+                        <div><small>@L["pur.unpaid"]</small><b class="mf-ltr @(supplier.UnpaidTotal > 0 ? "bad" : "")">@Fmt.Rial(supplier.UnpaidTotal)</b></div>
+                        <div><small>@L["sup.invoices"]</small><b>@supplier.InvoiceCount</b></div>
+                    </div>
+
+                    @if (supplier.LastPurchase is { } last)
+                    {
+                        <small class="last">🕓 @L["sup.last"] @Fmt.TimeAgo(last, L)</small>
+                    }
+                    @if (supplier.Notes is { Length: > 0 } notes)
+                    {
+                        <small class="nt">📝 @notes</small>
+                    }
+                </article>
+            }
+        </div>
+        @if (_suppliers.Count > PageSize)
+        {
+            <Pager Page="_page" Pages="@(((_suppliers.Count - 1) / PageSize) + 1)" PageChanged="@(p => _page = p)" />
+        }
+    }
+}
+
+@code {
+    private List<SupplierDto>? _suppliers;
+
+    private const int PageSize = 24;
+    private int _page;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync() => _suppliers = await Api.GetSuppliersAsync();
+
+    private static string Initial(string name) =>
+        string.IsNullOrWhiteSpace(name) ? "•" : name.Trim()[..1].ToUpperInvariant();
+
+    private async Task EditAsync(SupplierDto? supplier)
+    {
+        var parameters = new DialogParameters { ["Supplier"] = supplier };
+        var dialog = await Dialogs.ShowAsync<SupplierDialog>(
+            supplier is null ? L["sup.add"] : L["common.edit"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseOnEscapeKey = true });
+        if ((await dialog.Result) is { Canceled: false }) await LoadAsync();
+    }
+
+    private async Task DeleteAsync(SupplierDto supplier)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(
+            L["common.areYouSure"], string.Format(L["sup.deleteAsk"], supplier.Name),
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (confirmed != true) return;
+
+        var (ok, error) = await Api.DeleteSupplierAsync(supplier.Id);
+        if (!ok) { Snack.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        Snack.Add(L["sup.deleted"], Severity.Success);
+        await LoadAsync();
+    }
+}

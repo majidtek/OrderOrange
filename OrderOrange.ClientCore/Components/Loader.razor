@@ -1,0 +1,180 @@
+@namespace OrderOrange.ClientCore.Components
+@using OrderOrange.ClientCore.Services
+@inject LanguageService L
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* Branded loading screen: light animated backdrop, floating food, spinning ring.
+   Company mark sits small in the footer — the splash stays clean.
+
+   A loader that never ends is a bug the customer can't see — so after a while this
+   one stops pretending and says something is wrong, with a way to try again. *@
+
+@if (FullPage)
+{
+    <div class="mf-loader-page">
+        <div class="mf-loader-blob mf-loader-blob-1"></div>
+        <div class="mf-loader-blob mf-loader-blob-2"></div>
+        <div class="mf-loader-blob mf-loader-blob-3"></div>
+
+        @if (_slow)
+        {
+            <div class="mf-loader-err">
+                <div class="mf-loader-err-emoji">📡</div>
+                <div class="mf-loader-err-title">@L["common.slowTitle"]</div>
+                <div class="mf-loader-err-sub">@L["common.slowSub"]</div>
+                <button type="button" class="mf-loader-retry" @onclick="Retry">🔄 @L["common.retry"]</button>
+            </div>
+        }
+        else
+        {
+            @* One piece of food hopping in place: it squashes when it lands and
+               becomes the next dish at the top of the arc. Layered on purpose —
+               height, squash, tumble and morph each own one transform. *@
+            <div class="mf-hop-stage" aria-hidden="true">
+                <div class="mf-hop-shadow"></div>
+                <div class="mf-hop-y">
+                    <div class="mf-hop-squash">
+                        <div class="mf-hop-tumble">
+                            @for (var h = 0; h < _hoppers.Length; h++)
+                            {
+                                <div class="mf-hop-item" style="animation-delay: @($"-{h * 1.2:0.0}s")">@_hoppers[h]</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @* A QR guest is inside a STORE: the splash carries that store's mark when it
+               is known, and no platform mark at all when it isn't — never "OrderOrange". *@
+            @if (BrandName is { Length: > 0 })
+            {
+                <div class="mf-loader-brand mf-loader-store">
+                    @if (BrandLogo is { Length: > 0 })
+                    {
+                        <img src="@BrandLogo" alt="@BrandName" />
+                    }
+                    else if (BrandEmoji is { Length: > 0 })
+                    {
+                        @* A shop with no photo still has a face: its emoji, at the same size. *@
+                        <span class="em">@BrandEmoji</span>
+                    }
+                    <span class="nm">@BrandName</span>
+                </div>
+            }
+            <div class="mf-loader-bar"><i></i></div>
+            <div class="mf-loader-dots"><span></span><span></span><span></span></div>
+            @if (Label is not null)
+            {
+                <div class="mf-loader-label">@Label</div>
+            }
+        }
+
+        @* Who built this. Stays put whether the splash is loading or has given up,
+           so the mark is on screen for the whole wait. *@
+        <div class="mf-loader-footer">
+            <div class="mk"><span class="a">Majid</span><span class="b">Tek</span></div>
+            <div class="cr">© @DateTime.Now.Year MajidTek · @L["loader.rights"]</div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="d-flex flex-column align-center justify-center pa-6" style="gap: 10px;">
+        @if (_slow)
+        {
+            <div class="mf-loader-err inline">
+                <div class="mf-loader-err-emoji">📡</div>
+                <div class="mf-loader-err-sub">@L["common.slowSub"]</div>
+                <button type="button" class="mf-loader-retry" @onclick="Retry">🔄 @L["common.retry"]</button>
+            </div>
+        }
+        else
+        {
+            <div class="mf-loader-ring mf-loader-ring-sm">
+                <div class="mf-loader-core">
+                    <img class="lph" src="_content/OrderOrange.ClientCore/logo.svg?v=4" alt="OrderOrange" />
+                </div>
+            </div>
+            <div class="mf-loader-bar mf-loader-bar-sm"><i></i></div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public bool FullPage { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string Emoji { get; set; } = "🍔";
+
+    /// <summary>Wear a STORE's mark on the splash instead of the platform's.</summary>
+    [Parameter] public string? BrandName { get; set; }
+    [Parameter] public string? BrandLogo { get; set; }
+    /// <summary>The shop.s emoji, worn when it has no logo photo.</summary>
+    [Parameter] public string? BrandEmoji { get; set; }
+
+    /// <summary>
+    /// Kept for callers that ask for no mark at all. No page loader carries the
+    /// PLATFORM.s name any more — only a shop.s own, and only when it is known — so
+    /// this now only documents the intent at the call site.
+    /// </summary>
+    [Parameter] public bool HideBrand { get; set; }
+
+    /// <summary>What the hopper can turn into, kept in courses. One is drawn from
+    /// each course, so a single loader always spans the menu — a grill, something
+    /// from the sea, a drink — instead of a random five that could all be salad.</summary>
+    private static readonly string[][] HopperCourses =
+    [
+        ["🥦", "🥕", "🍅", "🌽", "🥗", "🍄", "🥑", "🍎", "🍇", "🍒"],   // garden
+        ["🍗", "🍖", "🥩", "🍔", "🌮", "🌯", "🥙", "🍕", "🍜", "🍝"],   // grill & mains
+        ["🐟", "🍣", "🍤", "🦐", "🦑", "🐠", "🍥", "🍚"],               // from the sea
+        ["🥤", "☕", "🧃", "🍹", "🥛", "🍵", "🧋", "🍺"],               // drinks
+        ["🍩", "🧁", "🍦", "🍰", "🍪", "🍫", "🍯", "🥐"],               // sweets
+    ];
+
+    /// <summary>The five this loader actually shows, drawn fresh each time. A page
+    /// rarely stays loading long enough to reach the fifth dish, so a fixed order
+    /// would mean forever watching the same two — the draw is what keeps it alive.
+    /// Five is not arbitrary: it is the 6s cycle in .mf-hop-item at 1.2s a bounce.</summary>
+    private string[] _hoppers = [.. HopperCourses.Select(c => c[0])];
+
+    /// <summary>Seconds of spinning before the loader admits something is wrong.</summary>
+    [Parameter] public int TimeoutSeconds { get; set; } = 12;
+
+    private bool _slow;
+    private CancellationTokenSource? _watchdog;
+
+    protected override void OnInitialized()
+    {
+        // One dish per course, then shuffle so the course order changes too — the
+        // first bounce is as likely to be a drink as a carrot.
+        _hoppers = [.. HopperCourses
+            .Select(course => course[Random.Shared.Next(course.Length)])
+            .OrderBy(_ => Random.Shared.Next())];
+
+        // When the page's data arrives, this component leaves the render tree and
+        // Dispose cancels the watchdog — the message only ever shows while STILL stuck.
+        _watchdog = new CancellationTokenSource();
+        var token = _watchdog.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(Math.Max(4, TimeoutSeconds)), token);
+                _slow = true;
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (OperationCanceledException) { /* data arrived in time */ }
+        }, token);
+    }
+
+    private async Task Retry()
+    {
+        try { await JS.InvokeVoidAsync("location.reload"); }
+        catch { /* prerender */ }
+    }
+
+    public void Dispose()
+    {
+        _watchdog?.Cancel();
+        _watchdog?.Dispose();
+    }
+}

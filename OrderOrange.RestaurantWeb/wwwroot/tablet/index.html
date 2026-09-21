@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex">
+<title>OrderOrange — Tablet</title>
+<link rel="stylesheet" href="tablet.css?v=28">
+</head>
+<body>
+
+<!-- ============ sign in ============ -->
+<div id="scr-login" class="scr">
+  <div class="login-wrap">
+    <div class="login-box">
+      <div class="brand-mark">🍊</div>
+      <div class="brand"><span class="brand-o">Order</span><span class="brand-r">Orange</span></div>
+      <div class="login-sub" data-t="loginSub">Tablet for the floor</div>
+      <form id="login-form" autocomplete="off">
+        <label data-t="user">Username or email</label>
+        <input type="text" id="login-user" autocapitalize="off" autocorrect="off">
+        <label data-t="pass">Password</label>
+        <input type="password" id="login-pass">
+        <div id="login-err" class="err"></div>
+        <button type="submit" class="btn btn-big btn-primary" id="login-btn" data-t="signIn">Sign in</button>
+      </form>
+      <div class="login-foot">
+        <a href="#" class="lang-open"><span class="lang-globe">🌐</span> <span class="lang-cur">English</span> ▾</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ pick a business (owners with more than one) ============ -->
+<div id="scr-stores" class="scr">
+  <div class="login-wrap">
+    <div class="pick-box">
+      <div class="brand-mark">🍊</div>
+      <div class="pick-title" data-t="pickStore">Which business?</div>
+      <div class="pick-sub" data-t="pickSub">Choose where this tablet works today</div>
+      <div id="store-list" class="pick-list"></div>
+      <a href="#" class="pick-out lang-open"><span class="lang-globe">🌐</span> <span class="lang-cur">English</span></a><span class="pick-dot">·</span><a href="#" class="pick-out" id="pick-logout" data-t="logout">Sign out</a>
+    </div>
+  </div>
+</div>
+
+<!-- ============ pick a table (optional) ============ -->
+<!-- ============ language ============ -->
+<div id="lang-dlg" class="dlg">
+  <div class="dlg-box dlg-lang">
+    <div class="dlg-head"><span data-t="lang">Language</span><a href="#" class="dlg-close" id="lang-close">×</a></div>
+    <div class="dlg-body"><div id="lang-list" class="lang-list"></div></div>
+  </div>
+</div>
+
+<div id="table-dlg" class="dlg">
+  <div class="dlg-box">
+    <div class="dlg-head"><span data-t="whereIs">Where is this order?</span><a href="#" class="dlg-close" id="table-close">×</a></div>
+    <div class="dlg-body">
+      <div class="tile-list">
+        <a href="#" class="tile tile-walkin" data-table="0"><span class="tile-ic">🛍️</span><span class="tile-nm" data-t="walkIn">Walk-in / Takeaway</span></a>
+      </div>
+      <div class="section-title" data-t="tables">Tables</div>
+      <div id="table-list" class="tile-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ pick a customer (optional) ============ -->
+<div id="cust-dlg" class="dlg">
+  <div class="dlg-box">
+    <div class="dlg-head"><span data-t="customer">Customer</span><a href="#" class="dlg-close" id="cust-close">×</a></div>
+    <div class="dlg-body">
+      <input type="text" id="cust-search" class="cust-search" placeholder="Name or phone…" data-tp="searchCust" autocapitalize="off">
+      <a href="#" class="cust-row cust-none" id="cust-none"><span class="cr-av">👤</span><span class="cr-nm" data-t="noCustomer">Walk-in</span><span class="cr-sub" data-t="noCustomerSub">No customer on this order</span></a>
+      <div id="cust-list"></div>
+      <div class="cust-form">
+        <div class="section-title" data-t="addCustomer">Add a new customer</div>
+        <input type="text" id="cust-new-name" placeholder="Name" data-tp="name">
+        <input type="tel" id="cust-new-phone" placeholder="Phone" data-tp="phone">
+        <div id="cust-err" class="err"></div>
+        <button class="btn btn-primary" id="cust-save" data-t="save">Save and use</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ the order ============ -->
+<div id="scr-pos" class="scr">
+  <div class="topbar">
+    <span class="avatar" id="pos-avatar">S</span>
+    <span class="topbar-title" id="pos-store"></span>
+    <a href="#" class="tb-btn tb-table" id="pos-table">🪑 <span id="pos-where"></span></a>
+    <a href="#" class="tb-btn tb-cust" id="pos-customer">👤 <span id="pos-who" data-t="noCustomer">Walk-in</span></a>
+    <a href="#" class="tb-btn tb-open" id="pos-open">🧾 <span data-t="open">Open</span><span class="tb-count" id="open-count"></span></a>
+    <div class="topbar-right">
+      <span class="search-wrap"><span class="search-ic">⌕</span><input type="text" id="pos-search" class="search" placeholder="Search dishes…" data-tp="search" autocapitalize="off" autocorrect="off"><a href="#" id="search-clear" class="search-x">×</a></span>
+      <a href="#" class="tb-btn tb-icon lang-open"><span class="lang-code">EN</span></a>
+      <a href="#" class="tb-btn tb-icon" id="logout" title="Sign out">⏻</a>
+    </div>
+  </div>
+
+  <div class="pos">
+    <div class="pos-left">
+      <div id="cat-strip" class="cat-strip"></div>
+      <div id="item-grid" class="item-grid"></div>
+    </div>
+    <a href="#" id="cart-bar" class="cart-bar"><span class="cb-count" id="cb-count">0</span><span class="cb-label" data-t="viewOrder">View order</span><span class="cb-total" id="cb-total">0.000</span></a>
+  </div>
+</div>
+
+<!-- ============ open invoices ============ -->
+<div id="inv-dlg" class="dlg">
+  <div class="dlg-box">
+    <div class="dlg-head"><span data-t="openInvoices">Open invoices</span><a href="#" class="dlg-close" id="inv-close">×</a></div>
+    <div class="dlg-body"><div id="inv-list"></div></div>
+  </div>
+</div>
+
+<!-- ============ the order, as a dialog ============ -->
+<div id="cart-dlg" class="dlg">
+  <div class="dlg-box">
+    <div class="dlg-head"><span id="cart-title" data-t="order">Order</span> <span id="cart-count" class="badge">0</span><span class="dlg-sum" id="cart-sum"></span><a href="#" class="dlg-close" id="cart-close">×</a></div>
+    <div class="edit-strip" id="edit-strip"><span class="es-tx" id="edit-tx"></span><a href="#" class="es-stop" id="edit-stop" data-t="stopEdit">Stop editing</a></div>
+    <div id="cart-lines" class="cart-lines"></div>
+    <div class="cart-empty" id="cart-empty" data-t="tapDish">Tap a dish to add it.</div>
+    <div class="cart-foot">
+      <textarea id="order-note" rows="2" placeholder="Note for the kitchen (optional)" data-tp="orderNote"></textarea>
+      <div class="total-row"><span data-t="total">Total</span><b id="cart-total">0.000</b></div>
+      <div id="send-err" class="err"></div>
+      <button class="btn btn-big btn-primary" id="btn-send" data-t="sendKitchen">Send to kitchen</button>
+      <div class="pay-row">
+        <button class="btn btn-pay" id="btn-cash">💵 <span data-t="paidCash">Paid · cash</span></button>
+        <button class="btn btn-pay" id="btn-card">💳 <span data-t="paidCard">Paid · card</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ done ============ -->
+<div id="scr-done" class="scr">
+  <div class="login-wrap">
+    <div class="done-box">
+      <div class="done-ic">✓</div>
+      <div class="done-title" data-t="sent">Sent</div>
+      <div class="done-no" id="done-no"></div>
+      <div class="done-sub" id="done-sub"></div>
+      <button class="btn btn-big btn-primary" id="btn-again" data-t="newOrder">New order</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ a photo, full screen ============ -->
+<div id="lightbox" class="lightbox">
+  <a href="#" class="lb-close" id="lb-close">×</a>
+  <div class="lb-stage" id="lb-stage"><img id="lb-img" alt=""></div>
+  <a href="#" class="lb-nav lb-prev" id="lb-prev">‹</a><a href="#" class="lb-nav lb-next" id="lb-next">›</a>
+  <div class="lb-dots" id="lb-dots"></div>
+  <div class="lb-bar">
+    <a href="#" class="lb-add" id="lb-add">＋ <span data-t="addToOrder">Add to order</span></a>
+    <div class="lb-top"><span class="lb-nm" id="lb-nm"></span><span class="lb-pr" id="lb-pr"></span><span class="lb-was" id="lb-was"></span></div>
+    <div class="lb-meta" id="lb-meta"></div>
+    <div class="lb-desc" id="lb-desc"></div>
+    <div class="lb-ing" id="lb-ing"><b data-t="ingredients">Ingredients</b>: <span id="lb-ing-tx"></span></div>
+    <span class="lb-hint" data-t="zoomHint">Tap the picture to zoom</span>
+  </div>
+</div>
+
+<div id="busy" class="busy"><div class="busy-in"><span class="spin"></span><span data-t="wait">Please wait…</span></div></div>
+
+<script src="jquery-1.12.4.min.js"></script>
+<script src="i18n.js?v=2"></script>
+<script src="tablet.js?v=21"></script>
+</body>
+</html>

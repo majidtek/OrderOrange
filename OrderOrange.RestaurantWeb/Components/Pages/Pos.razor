@@ -1,0 +1,1257 @@
+﻿@page "/pos"
+@page "/pos/{TableId:int}"
+@page "/pos-tablet"
+@page "/pos-tablet/{TableId:int}"
+@using OrderOrange.RestaurantWeb.Services
+@inject ApiClient Api
+@inject AppState State
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+@inject ReceiptPrinter Printer
+@implements IDisposable
+
+@* The till. A full POS screen: product tiles on one side, the live ticket on the
+   other. Works two ways — bound to a table (the table's open invoice) or with no
+   table at all (a counter sale: tap, pay, next customer). *@
+
+<PageTitle>OrderOrange — POS</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+}
+else if (_menu is not null)
+{
+    <div class="pos @(Tablet ? "tablet" : "")">
+        <div class="pos-left">
+            <div class="pos-top">
+                <div class="pos-mode top">
+                    <button type="button" class="@(_table is null ? "on" : "")" @onclick="@(() => SwitchTo(null))">
+                        🥡 @L["pos.counter"]
+                    </button>
+                    <button type="button" class="@(_table is not null ? "on" : "")" @onclick="PickTable">
+                        🍽️ @(_table?.Name ?? L["pos.pickTable"]) ▾
+                    </button>
+                </div>
+                <button type="button" class="pos-custbtn top" disabled="@(TabMode && _table is null)" @onclick="PickCustomer">
+                    👤 @CustomerLabel <span class="chev">▾</span>
+                </button>
+                @if (TabMode)
+                {
+                    @* The open invoice's running number — quote it, find it in the list. *@
+                    <span class="pos-invno">@L["tables.invoice"] <b>@_tab!.Id</b></span>
+                }
+                @if (_openTabCount > 0)
+                {
+                    <button type="button" class="pos-custbtn hot top" @onclick="ShowOpenTabs">
+                        🧾 <span class="badge-n">@_openTabCount</span> <span class="chev">▾</span>
+                    </button>
+                }
+                <MudSpacer />
+                @* Scan-and-type: a product code (or barcode wand) + Enter drops it on the
+                   ticket. Tapping the box also opens a touch numpad — a tablet till has
+                   no keys of its own. *@
+                <div class="pos-code mf-ltr">
+                    <span class="ic">⌨</span>
+                    <input id="pos-code" placeholder="@L["pos.codeHint"]" @bind="_codeEntry" @bind:event="oninput"
+                           @onkeydown="OnCodeKeyAsync" @onfocus="@(() => _padOpen = true)" autocomplete="off" />
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Keyboard" Size="Size.Medium"
+                               OnClick="@(() => _hkOpen = !_hkOpen)" title="@L["pos.hk.title"]" />
+                <MudIconButton Icon="@Icons.Material.Filled.HelpOutline" Size="Size.Medium" OnClick="@(() => StartTour())" />
+                <MudIconButton Icon="@Icons.Material.Filled.Search" Size="Size.Medium" OnClick="OpenSearch" />
+            </div>
+
+            <div class="pos-cats-row">
+                <button type="button" class="pos-cat-arrow"
+                        @onclick="@(() => JS.InvokeVoidAsync("mfPos.slideCats", ".pos-cats", -1))">‹</button>
+                <div class="pos-cats">
+                    @foreach (var c in _menu)
+                    {
+                        var cat = c;
+                        <button type="button" class="@(_categoryId == cat.Id ? "on" : "")" @onclick="@(() => SetCategory(cat.Id))">
+                            @cat.NameFor(L.Locale)
+                        </button>
+                    }
+                </div>
+                <button type="button" class="pos-cat-arrow"
+                        @onclick="@(() => JS.InvokeVoidAsync("mfPos.slideCats", ".pos-cats", 1))">›</button>
+            </div>
+
+            <div class="pos-grid @(_catLoading ? "loading" : "")" @key="_categoryId">
+                @foreach (var item in VisibleItems)
+                {
+                    var dish = item;
+                    var pendingQty = _pending.GetValueOrDefault(dish.Id);
+                    // What is already on THIS open invoice, so reopening a table shows the counts.
+                    var savedQty = DraftLines.Where(l => l.MenuItemId == dish.Id).Sum(l => l.Quantity);
+                    var qty = pendingQty + savedQty;
+                    <button type="button" class="pos-tile @(qty > 0 ? "on" : "")" @onclick="@(() => Bump(dish, 1))">
+                        @if (qty > 0)
+                        {
+                            <span class="pt-badge">@qty</span>
+                            <span class="pt-minus" @onclick="@(() => Bump(dish, -1))" @onclick:stopPropagation="true">−</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(dish.Photo))
+                        {
+                            <img class="pt-img" src="@dish.Photo" alt="" loading="lazy" />
+                        }
+                        else if (FoodPhoto.ForDish(dish.Name, _stockPhotos) is string stockPhoto)
+                        {
+                            <img class="pt-img" src="@stockPhoto" alt="" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="pt-emoji">@(string.IsNullOrWhiteSpace(dish.ImageEmoji) ? "🍽️" : dish.ImageEmoji)</span>
+                        }
+                        <span class="pt-name">@dish.NameFor(L.Locale)</span>
+                        <span class="pt-price mf-ltr">@Fmt.Rial(dish.FinalPrice)</span>
+                        @if (_capacity.TryGetValue(dish.Id, out var canMake))
+                        {
+                            @* The shelf speaks on the tile: how many are still makeable,
+                               live — what's already rung on this ticket counts against it. *@
+                            var left = canMake - _pending.GetValueOrDefault(dish.Id);
+                            <span class="pt-cap mf-ltr @(left <= 0 ? "out" : left < 10 ? "low" : "")">
+                                @(left <= 0 ? "0" : $"×{left}")
+                            </span>
+                        }
+                    </button>
+                }
+                @if (string.IsNullOrWhiteSpace(_search) && PosPages > 1)
+                {
+                    @* Six tiles a page. The bar lives INSIDE the grid as a full-width
+                       row, so it sits right under the last tile — not at the bottom
+                       of a stretched column with a gulf of nothing above it. *@
+                    <div class="pg-bar pos-pg">
+                        <button type="button" disabled="@(PosPage == 0)" @onclick="@(() => _posPage = PosPage - 1)">‹</button>
+                        <span class="pg-info">@(PosPage + 1) / @PosPages</span>
+                        <button type="button" disabled="@(PosPage + 1 >= PosPages)" @onclick="@(() => _posPage = PosPage + 1)">›</button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <aside class="pos-ticket @(Tablet ? "sheet" : "") @(Tablet && _ticketOpen ? "open" : "")">
+            @if (Tablet)
+            {
+                <button type="button" class="pos-tkt-x" @onclick="@(() => _ticketOpen = false)">✕</button>
+            }
+            <div class="pos-lines">
+                @if (SavedLines.Count == 0 && _pending.Count == 0)
+                {
+                    <div class="pos-empty">@L["tab.noLines"]</div>
+                }
+                @foreach (var line in DraftLines)
+                {
+                    var saved = line;
+                    <div class="pos-line">
+                        <span class="step">
+                            @* At quantity 1 the minus turns into a bin — one tap strikes the line. *@
+                            <button type="button" class="pm @(saved.Quantity == 1 ? "del" : "")"
+                                    @onclick="@(() => NudgeLine(saved, -1))">
+                                @if (saved.Quantity == 1)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.DeleteOutline" Style="width:14px;height:14px;" />
+                                }
+                                else
+                                {
+                                    <text>−</text>
+                                }
+                            </button>
+                            <span class="q">@saved.Quantity</span>
+                            <button type="button" class="pm" @onclick="@(() => NudgeLine(saved, 1))">+</button>
+                        </span>
+                        <span class="nm">@saved.Name</span>
+                        <span class="pr mf-ltr">@Fmt.Rial(saved.UnitPrice * saved.Quantity)</span>
+                        @* Pencil opens a note box for the kitchen; lit when the line carries one. *@
+                        <button type="button" class="pm note @(NoteShown("s" + saved.Id, saved.Notes) ? "on" : "")"
+                                title="@L["pos.kitchenNote"]" @onclick="@(() => ToggleNote("s" + saved.Id))">
+                            <MudIcon Icon="@Icons.Material.Filled.EditNote" Style="width:16px;height:16px;" />
+                        </button>
+                    </div>
+                    @if (NoteShown("s" + saved.Id, saved.Notes))
+                    {
+                        @* A note for the kitchen on a line already on the invoice — saved on the spot. *@
+                        <input type="text" class="pos-line-note" maxlength="200" placeholder="@L["pos.kitchenNote"]"
+                               value="@saved.Notes" @onchange="@(e => SetSavedNote(saved, e.Value as string))" />
+                    }
+                }
+                @foreach (var entry in _pending)
+                {
+                    var dish = ItemById(entry.Key);
+                    if (dish is null) { continue; }
+                    var qty = entry.Value;
+                    <div class="pos-line fresh">
+                        <span class="step">
+                            <button type="button" class="pm @(qty == 1 ? "del" : "")" @onclick="@(() => Bump(dish, -1))">
+                                @if (qty == 1)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.DeleteOutline" Style="width:14px;height:14px;" />
+                                }
+                                else
+                                {
+                                    <text>−</text>
+                                }
+                            </button>
+                            <span class="q">@qty</span>
+                            <button type="button" class="pm" @onclick="@(() => Bump(dish, 1))">+</button>
+                        </span>
+                        <span class="nm">@dish.NameFor(L.Locale)</span>
+                        <span class="pr mf-ltr">@Fmt.Rial(dish.FinalPrice * qty)</span>
+                        <button type="button" class="pm note @(NoteShown("p" + entry.Key, NoteFor(entry.Key)) ? "on" : "")"
+                                title="@L["pos.kitchenNote"]" @onclick="@(() => ToggleNote("p" + entry.Key))">
+                            <MudIcon Icon="@Icons.Material.Filled.EditNote" Style="width:16px;height:16px;" />
+                        </button>
+                    </div>
+                    @if (NoteShown("p" + entry.Key, NoteFor(entry.Key)))
+                    {
+                        @* Per-product note for the kitchen — same idea as the customer app's per-dish note. *@
+                        <input type="text" class="pos-line-note" maxlength="200" placeholder="@L["pos.kitchenNote"]"
+                               value="@_notes.GetValueOrDefault(entry.Key)"
+                               @onchange="@(e => SetLineNote(entry.Key, e.Value as string))" />
+                    }
+                }
+            </div>
+
+            <div class="pos-totals">
+                <div><span>@L["cust.itemsTotal"]</span><b class="mf-ltr">@Fmt.Rial(PreviewSubtotal)</b></div>
+                @if (PreviewSubtotal > 0)
+                {
+                    @if (ServiceFee > 0)
+                    {
+                        <div><span>@L["common.serviceFee"]</span><b class="mf-ltr">@Fmt.Rial(ServiceFee)</b></div>
+                    }
+                    @if (TaxPercent > 0)
+                    {
+                        <div><span>@L["common.tax"] (@TaxPercent.ToString("0.#")%)</span><b class="mf-ltr">@Fmt.Rial(PreviewTax)</b></div>
+                    }
+                }
+                <div class="grand"><span>@L["tab.total"]</span><b class="mf-ltr">@Fmt.Rial(PreviewTotal)</b></div>
+            </div>
+
+            <div class="pos-pay-mode">
+                <button type="button" class="@(_payment == PaymentMethod.CashOnDelivery ? "on" : "")"
+                        @onclick="@(() => _payment = PaymentMethod.CashOnDelivery)">💵 @L["pos.cash"]</button>
+                <button type="button" class="@(_payment == PaymentMethod.CardOnDelivery ? "on" : "")"
+                        @onclick="@(() => _payment = PaymentMethod.CardOnDelivery)">💳 @L["pos.card"]</button>
+            </div>
+
+            @* Card payment: hand the amount to the till app so the cashier reads it off
+               a big screen at the card terminal instead of retyping it from here. *@
+            @if (_payment == PaymentMethod.CardOnDelivery && PreviewTotal > 0)
+            {
+                <button type="button" class="pos-till @(_tillSent ? "sent" : "")" disabled="@_tillSent" @onclick="SendToTill">
+                    <MudIcon Icon="@(_tillSent ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.PointOfSale)" />
+                    <span>@(_tillSent ? L["pos.tillSentMsg"] : L["pos.sendTill"])</span>
+                </button>
+            }
+
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">@_error</MudAlert>
+            }
+
+            @if (TabMode)
+            {
+                @* A table's bill has two endings: parked open for later rounds, or settled now. *@
+                @if (SavedLines.Count > 0 || _pending.Count > 0)
+                {
+                    <div class="pos-endings">
+                        <button type="button" class="pos-end keep @(Dirty ? "dirty" : "")" disabled="@_busy" @onclick="@(() => SaveTicket(true))">
+                            <MudIcon Icon="@Icons.Material.Filled.Save" />
+                            <span><b>@L["pos.saveOpen"]</b></span>
+                        </button>
+                        <button type="button" class="pos-end pay" disabled="@_busy" @onclick="@(() => SaveTicket(false))">
+                            <MudIcon Icon="@Icons.Material.Filled.Paid" />
+                            @* The total already stands above in the bill; repeating it on
+                               the button only crowds it. *@
+                            <span><b>@L["pos.saveClose"]</b></span>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Error" FullWidth="true" Disabled="_busy" OnClick="CancelTab">
+                        @L["tab.cancelTab"]
+                    </MudButton>
+                }
+            }
+            else if (_pending.Count > 0)
+            {
+                @* Park the bill open (paid later, no table needed), or take the money now. *@
+                <div class="pos-endings">
+                    <button type="button" class="pos-end keep @(Dirty ? "dirty" : "")" disabled="@_busy" @onclick="@(() => SaveTicket(true))">
+                        <MudIcon Icon="@Icons.Material.Filled.Save" />
+                        <span><b>@L["pos.saveOpen"]</b></span>
+                    </button>
+                    <button type="button" class="pos-end pay" disabled="@_busy" @onclick="@(() => SaveTicket(false))">
+                        <MudIcon Icon="@Icons.Material.Filled.Paid" />
+                        <span><b>@L["tab.closePay"]</b></span>
+                    </button>
+                </div>
+            }
+        </aside>
+
+        @if (Tablet)
+        {
+            @* The bill lives in a dialog on the tablet: the food wall gets the whole
+               screen, and this floating basket opens the sheet. *@
+            <div class="pos-tkt-veil @(_ticketOpen ? "show" : "")" @onclick="@(() => _ticketOpen = false)"></div>
+            @* The basket only exists once something is in it — an empty bill has nothing to show. *@
+            @if (TicketCount > 0)
+            {
+                <button type="button" class="pos-tkt-fab @(_ticketOpen ? "hide" : "")" @onclick="@(() => _ticketOpen = true)">
+                    <span class="ic">🧾</span>
+                    <span class="c" @key="TicketCount">@TicketCount</span>
+                    <b class="mf-ltr">@Fmt.Rial(PreviewTotal)</b>
+                </button>
+            }
+        }
+    </div>
+
+    @* ---------- Guided tour: a spotlight walks a new cashier through the register ---------- *@
+    <GuidedTour @ref="_tour" Steps="@(Tablet ? TabletTourSteps : PosTourSteps)" OnStep="OnTourStep" OnEnded="OnTourEnded" />
+
+    @* ---------- The touch numpad — at page root so no header stacking context
+       can pull it under the product tiles; JS pins it below the code box. ---------- *@
+    @if (_padOpen)
+    {
+        <div class="pos-pad" @onmousedown:preventDefault>
+            <div class="val mf-ltr">@(_codeEntry.Length == 0 ? " " : _codeEntry)</div>
+            <div class="keys">
+                @foreach (var k in new[] { "1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "⌫" })
+                {
+                    <button type="button" class="@(k is "⌫" or "*" ? "alt" : "")"
+                            @onclick="@(() => PadPress(k))">@k</button>
+                }
+            </div>
+            <div class="row">
+                <button type="button" class="x" @onclick="@(() => { _codeEntry = ""; _padOpen = false; })">✕</button>
+                <button type="button" class="go" @onclick="PadApplyAsync">⏎ @L["common.add"]</button>
+            </div>
+        </div>
+    }
+
+    @* ---------- The cheat sheet: every key the till listens for ---------- *@
+    @if (_hkOpen)
+    {
+        <div class="hk-veil" @onclick="@(() => _hkOpen = false)"></div>
+        <div class="hk-card">
+            <div class="hd">⌨️ @L["pos.hk.title"] <button type="button" @onclick="@(() => _hkOpen = false)">✕</button></div>
+            <div class="grid">
+                <div><kbd>@L["pos.hk.codeKeys"]</kbd><span>@L["pos.hk.code"]</span></div>
+                <div><kbd>K</kbd><span>@L["pos.hk.focusCode"]</span></div>
+                <div><kbd>S</kbd> <kbd>F3</kbd><span>@L["pos.hk.search"]</span></div>
+                <div><kbd>T</kbd> <kbd>F6</kbd><span>@L["pos.hk.table"]</span></div>
+                <div><kbd>C</kbd> <kbd>F7</kbd><span>@L["pos.hk.customer"]</span></div>
+                <div><kbd>O</kbd> <kbd>F8</kbd><span>@L["pos.hk.tabs"]</span></div>
+                <div><kbd>F2</kbd><span>@L["pos.hk.save"]</span></div>
+                <div><kbd>P</kbd><span>@L["pos.hk.pay"]</span></div>
+                <div><kbd>F9</kbd> / <kbd>F10</kbd><span>@L["pos.hk.payKind"]</span></div>
+                <div><kbd>B</kbd><span>@L["pos.hk.till"]</span></div>
+                <div><kbd>+</kbd> / <kbd>−</kbd><span>@L["pos.hk.qty"]</span></div>
+                <div><kbd>N</kbd><span>@L["pos.hk.counter"]</span></div>
+                <div><kbd>F</kbd><span>@L["pos.hk.fullscreen"]</span></div>
+                <div><kbd>F1</kbd> <kbd>?</kbd><span>@L["pos.hk.title"]</span></div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int? TableId { get; set; }
+
+    /// <summary>A parked bill with no table, reached as /pos?tab=123.</summary>
+    [SupplyParameterFromQuery(Name = "tab")] public int? TabQueryId { get; set; }
+
+    private StoreTableDto? _table;
+    private StoreTabDto? _tab;
+    private List<StoreTableDto> _allTables = [];
+    private List<MenuCategoryDto>? _menu;
+    private Dictionary<int, int> _pending => State.PosPending;
+    private string _search = "";
+    private int _categoryId;
+
+    // Twenty tiles a page, every tab — the ‹ › bar under the grid turns the shelf.
+    // A hundred photo tiles at once is what made the till heavy.
+    private const int PosSlice = 20;
+    private int _posPage;
+
+    // Groups whose photos have arrived. The till opens with the menu OUTLINE only (names,
+    // prices, codes — light), and pulls a group's pictures the moment the cashier taps it.
+    private readonly HashSet<int> _loadedCats = [];
+    private bool _catLoading;
+
+    private async Task SetCategory(int id)
+    {
+        _categoryId = id;
+        _posPage = 0;
+        await EnsureCategoryLoadedAsync(id);
+    }
+
+    /// <summary>Fetches one group's items with photos, once, and swaps them into the outline.</summary>
+    private async Task EnsureCategoryLoadedAsync(int id)
+    {
+        if (id == 0 || _menu is null || _loadedCats.Contains(id)) return;
+        var index = _menu.FindIndex(c => c.Id == id);
+        if (index < 0) return;
+        _catLoading = true;
+        try
+        {
+            var items = await Api.GetMyCategoryItemsAsync(id);
+            if (items is not null) _menu[index] = _menu[index] with { Items = items };
+            _loadedCats.Add(id);
+        }
+        finally { _catLoading = false; }
+    }
+
+    /// <summary>The chosen group's whole shelf, before the page is cut from it.
+    /// Falls back to the first group if the chosen one was deleted mid-shift.</summary>
+    private List<MenuItemDto> PosPool =>
+        (_menu!.FirstOrDefault(c => c.Id == _categoryId) ?? _menu!.FirstOrDefault())
+            ?.Items.ToList() ?? [];
+
+    private int PosPages => Math.Max(1, (PosPool.Count + PosSlice - 1) / PosSlice);
+    private int PosPage => Math.Clamp(_posPage, 0, PosPages - 1);
+    private decimal _storeTaxPercent;
+    private bool _stockPhotos = true;
+    private PaymentMethod _payment = PaymentMethod.CashOnDelivery;
+
+    /// <summary>Product id → the cashier's kitchen note for that pending line.</summary>
+    private Dictionary<int, string> _notes => State.PosNotes;
+
+    /// <summary>Saves (or clears) a pending line's kitchen note.</summary>
+    private void SetLineNote(int productId, string? note)
+    {
+        note = note?.Trim() ?? "";
+        if (note.Length == 0) _notes.Remove(productId);
+        else _notes[productId] = note;
+    }
+
+    /// <summary>The note for a product, trimmed to null — the shape PlaceOrderItem wants.</summary>
+    // Which lines have their note box open — a line with a note is always open.
+    private readonly HashSet<string> _noteOpen = [];
+    private void ToggleNote(string key) { if (!_noteOpen.Remove(key)) _noteOpen.Add(key); }
+    private bool NoteShown(string key, string? note) => _noteOpen.Contains(key) || !string.IsNullOrWhiteSpace(note);
+
+    private string? NoteFor(int productId) =>
+        _notes.TryGetValue(productId, out var n) && !string.IsNullOrWhiteSpace(n) ? n : null;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    /// <summary>Briefly true after the amount was handed to the till, so the button confirms.</summary>
+    private bool _tillSent;
+
+    /// <summary>Tablet only: the bill sheet is open.</summary>
+    private bool _ticketOpen;
+
+    private int TicketCount => DraftLines.Sum(l => l.Quantity) + _pending.Values.Sum();
+
+    // ───────────── Guided tour (a fake first order, step by step) ─────────────
+
+    private GuidedTour? _tour;
+
+    /// <summary>The counter/table switch step — tappable, so the learner opens the floor themselves.</summary>
+    private int TourSwitchStep => Tablet ? 4 : 3;
+
+    /// <summary>The step that shows the REAL table list.</summary>
+    private int TourTableStep => Tablet ? 5 : 4;
+
+    private static readonly GuidedTour.Step[] PosTourSteps =
+    [
+        // Interactive steps: the spotlighted control really works — try the register.
+        new(".pos-tile", "🍔", "pos.tour1t", "pos.tour1d", Interactive: true),
+        new(".pos-ticket", "🧾", "pos.tour2t", "pos.tour2d", Interactive: true),
+        new(".pos-pay-mode", "💵", "pos.tour3t", "pos.tour3d", Interactive: true),
+        new(".pos-mode.top", "🍽️", "pos.tour4t", "pos.tour4d", Interactive: true),
+        new(".mud-dialog", "🪑", "pos.tour6t", "pos.tour6d", Interactive: true),
+        new(".pos-endings,.pos-pay,.pos-totals", "✅", "pos.tour5t", "pos.tour5d"),
+    ];
+
+    /// <summary>
+    /// The tablet register is laid out differently — categories ride a top rail and the
+    /// bill lives in a sheet — so its walkthrough visits different furniture. The bill,
+    /// payment and finish steps stage the sheet open themselves.
+    /// </summary>
+    private static readonly GuidedTour.Step[] TabletTourSteps =
+    [
+        new(".pos-tile", "🍔", "pos.tour1t", "pos.tour1d", Interactive: true),
+        new(".pos-cats-row", "🗂️", "pos.tour7t", "pos.tour7d", Interactive: true),
+        new(".pos-ticket", "🧾", "pos.tour2t", "pos.tour2d", Interactive: true),
+        new(".pos-pay-mode", "💵", "pos.tour3t", "pos.tour3d", Interactive: true),
+        new(".pos-mode.top", "🍽️", "pos.tour4t", "pos.tour4d", Interactive: true),
+        new(".mud-dialog", "🪑", "pos.tour6t", "pos.tour6d", Interactive: true),
+        new(".pos-endings,.pos-pay,.pos-totals", "✅", "pos.tour5t", "pos.tour5d"),
+    ];
+
+    /// <summary>Tablet steps that need the bill sheet on screen.</summary>
+    private static readonly int[] TabletSheetSteps = [2, 3, 6];
+
+    private Task StartTour() => _tour?.StartAsync() ?? Task.CompletedTask;
+
+    /// <summary>The floor plan the tour shows on the table step — closed again on leave.</summary>
+    private IDialogReference? _tourTableDialog;
+
+    private async Task OnTourStep(int step)
+    {
+        // Tablet: the bill/payment/finish steps happen inside the sheet — open it for them.
+        if (Tablet) _ticketOpen = TabletSheetSteps.Contains(step);
+
+        if (step == TourTableStep && _tourTableDialog is null)
+        {
+            // The real picker, live: the shield frames the dialog, so the cashier can
+            // actually tap a table — picking one loads its bill like in real use.
+            _tourTableDialog = await Dialogs.ShowAsync<PosTableDialog>("", new DialogOptions
+            {
+                FullScreen = true,
+                CloseButton = true,
+            });
+            _ = WatchTourTableAsync(_tourTableDialog);
+        }
+        else if (step != TourTableStep && _tourTableDialog is not null)
+        {
+            _tourTableDialog.Close();
+            _tourTableDialog = null;
+        }
+    }
+
+    /// <summary>A table picked DURING the tour behaves like the real thing.</summary>
+    private async Task WatchTourTableAsync(IDialogReference dialog)
+    {
+        var result = await dialog.Result;
+        if (_tourTableDialog == dialog) _tourTableDialog = null;
+        if (result?.Canceled == false && result.Data is StoreTableDto picked)
+        {
+            // The learner just DID this step. The navigation rebuilds the page, so the
+            // tour's next position is parked in session state and resumed after it.
+            State.PosTourResume = TourTableStep + 1;
+            SwitchTo(picked.Id);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    /// <summary>Picks the tour back up after a table switch rebuilt the page.</summary>
+    private async Task TryResumeTourAsync()
+    {
+        if (State.PosTourResume < 0 || _tour is null) return;
+        var step = State.PosTourResume;
+        State.PosTourResume = -1;
+        await _tour.StartAtAsync(step);
+    }
+
+    private void OnTourEnded()
+    {
+        _tourTableDialog?.Close();
+        _tourTableDialog = null;
+        if (Tablet) _ticketOpen = false;
+    }
+
+    private async Task SendToTill()
+    {
+        var reference = TabMode ? _tab?.TableName : null;
+        var (ok, error) = await Api.SendTillChargeAsync(PreviewTotal, reference);
+        if (!ok) { Snackbar.Add(error ?? L["common.wentWrong"], Severity.Error); return; }
+        _tillSent = true;
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(4000);
+            _tillSent = false;
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+    private string _loadedKey = "?";
+
+    private DotNetObjectReference<Pos>? _keysRef;
+
+    /// <summary>
+    /// The keyboard IS the till: F2 settles, F4 parks, F6 seats, F7 names,
+    /// F8 opens the parked bills, F9/F10 choose the money.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnHotkey(string key)
+    {
+        await InvokeAsync(async () =>
+        {
+            switch (key)
+            {
+                case "F1" or "?":
+                    _hkOpen = !_hkOpen;
+                    break;
+                case "k":
+                    await JS.InvokeVoidAsync("mfPos.focus", "#pos-code");
+                    break;
+                case "F2":
+                    if (!_busy && (SavedLines.Count > 0 || _pending.Count > 0)) await SaveTicket();
+                    break;
+                case "F4":
+                    _keepOpen = !_keepOpen;
+                    break;
+                case "F3" or "s" or "/":
+                    await OpenSearch();
+                    break;
+                case "F6" or "t":
+                    await PickTable();
+                    break;
+                case "F7" or "c":
+                    await PickCustomer();
+                    break;
+                case "F8" or "o":
+                    await ShowOpenTabs();
+                    break;
+                case "F9":
+                    _payment = PaymentMethod.CashOnDelivery;
+                    break;
+                case "F10":
+                    _payment = PaymentMethod.CardOnDelivery;
+                    break;
+                case "p":
+                    if (!_busy && (SavedLines.Count > 0 || _pending.Count > 0)) await Pay();
+                    break;
+                case "b":
+                    if (PreviewTotal > 0) await SendToTill();
+                    break;
+                case "n":
+                    SwitchTo(null);
+                    break;
+                case "f":
+                    await JS.InvokeVoidAsync("mfPos.toggleFullscreen");
+                    break;
+                case "+" or "-":
+                {
+                    // Nudge the newest ticket line — the one the cashier just rang.
+                    var line = DraftLines.LastOrDefault();
+                    if (line is not null) await NudgeLine(line, key == "+" ? 1 : -1);
+                    break;
+                }
+                case "Escape":
+                    _hkOpen = false;
+                    break;
+                default:
+                    // A bare digit anywhere on the POS starts a code entry: the digit
+                    // lands in the box and the cursor follows it. Scanners profit too.
+                    if (key.Length == 1 && char.IsDigit(key[0]))
+                    {
+                        _codeEntry += PosBotNlu.AsciiDigits(key);
+                        await JS.InvokeVoidAsync("mfPos.focus", "#pos-code");
+                    }
+                    break;
+            }
+            StateHasChanged();
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The numpad is fixed-position — it must be measured onto its anchor
+        // after every render while open, or scrolling strands it.
+        if (_padOpen)
+        {
+            try { await JS.InvokeVoidAsync("mfPos.placePad", "#pos-code", ".pos-pad"); } catch { }
+            if (!_padHooked && _keysRef is not null)
+            {
+                _padHooked = true;
+                try { await JS.InvokeVoidAsync("mfPos.padAutoClose", _keysRef); } catch { }
+            }
+        }
+        else if (_padHooked)
+        {
+            _padHooked = false;
+            try { await JS.InvokeVoidAsync("mfPos.padAutoCloseOff"); } catch { }
+        }
+        if (!firstRender)
+        {
+            await TryResumeTourAsync();
+            return;
+        }
+        _keysRef = DotNetObjectReference.Create(this);
+        // The till was fullscreen before a reload? First tap takes it back.
+        try { await JS.InvokeVoidAsync("mfPos.restoreFullscreen"); } catch { }
+        try
+        {
+            await JS.InvokeVoidAsync("mfKeys.bind", _keysRef,
+                new[] { "F1", "F2", "F3", "F4", "F6", "F7", "F8", "F9", "F10",
+                        "s", "t", "c", "o", "p", "b", "n", "f", "k", "+", "-", "?", "/", "Escape",
+                        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+                        "۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹" });
+        }
+        catch { }
+
+        await TryResumeTourAsync();
+    }
+
+    public void Dispose()
+    {
+        try { _ = JS.InvokeVoidAsync("mfKeys.unbind"); } catch { }
+        _keysRef?.Dispose();
+    }
+
+    private bool TabMode => _tab is not null;
+    private List<TabLineDto> SavedLines => _tab?.Lines ?? [];
+
+    // What the screen shows: the saved lines with the cashier's UNSAVED edits laid over
+    // them. Nothing reaches the server — and so nothing reaches the kitchen printer —
+    // until Save as open / Save & close. A line edited down to 0 disappears from view
+    // and is struck on save.
+    private readonly Dictionary<int, (int Qty, string? Notes)> _edits = [];
+    private int _editsTabId;
+    private List<TabLineDto> DraftLines => _tab is null ? [] : _tab.Lines
+        .Select(l => _editsTabId == _tab.Id && _edits.TryGetValue(l.Id, out var e) ? l with { Quantity = e.Qty, Notes = e.Notes } : l)
+        .Where(l => l.Quantity > 0).ToList();
+    private bool HasEdits => _tab is not null && _editsTabId == _tab.Id && _edits.Count > 0;
+    private bool Dirty => HasEdits || _pending.Count > 0;
+
+    private void Draft(TabLineDto line, int qty, string? notes)
+    {
+        if (_tab is null) return;
+        if (_editsTabId != _tab.Id) { _edits.Clear(); _editsTabId = _tab.Id; }
+        var server = _tab.Lines.FirstOrDefault(l => l.Id == line.Id);
+        if (server is not null && server.Quantity == qty && string.Equals(server.Notes ?? "", notes ?? ""))
+            _edits.Remove(line.Id);   // back to what the invoice already says
+        else
+            _edits[line.Id] = (qty, notes);
+    }
+
+    // ─────────────── fast code entry: "10064⏎", "P10064⏎", "3*10064⏎" ───────────────
+
+    private string _codeEntry = "";
+    private bool _hkOpen;
+
+    private bool _padOpen;
+    private bool _padHooked;
+
+    /// <summary>Product id → portions the shelf can still make (recipes × stock).
+    /// Only products WITH a recipe appear here — the rest show no number.</summary>
+    private Dictionary<int, int> _capacity = [];
+
+    private async Task LoadCapacityAsync()
+    {
+        // The counters come from recipes and stock — inventory doors. A cashier
+        // without that key simply rings up without them; don't even knock.
+        if (!Perm.Allows(State.StoreRole, State.Perms, Perm.InventoryView)) return;
+        try
+        {
+            var recipes = await Api.GetRecipesAsync();
+            var materials = await Api.GetMaterialsAsync();
+            if (recipes is null || materials is null) return;
+
+            var stock = materials.Items.ToDictionary(m => m.Id, m => m.Quantity);
+            var map = new Dictionary<int, int>();
+            foreach (var (menuItemId, recipe) in recipes.ByMenuItem)
+            {
+                var possible = int.MaxValue;
+                foreach (var line in recipe.Lines)
+                {
+                    if (line.Amount <= 0 || !stock.TryGetValue(line.MaterialId, out var have)) continue;
+                    possible = Math.Min(possible, (int)Math.Floor(have / line.Amount));
+                }
+                if (possible != int.MaxValue) map[menuItemId] = possible;
+            }
+            _capacity = map;
+            StateHasChanged();
+        }
+        catch { /* the till must never stumble over an analytics nicety */ }
+    }
+
+    /// <summary>Called from JS when a tap lands outside the pad and its code box.</summary>
+    [JSInvokable]
+    public async Task ClosePad()
+    {
+        _padOpen = false;
+        _padHooked = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnCodeKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key != "Enter") return;
+        await ApplyCodeAsync();
+    }
+
+    private void PadPress(string key)
+    {
+        if (key == "⌫") { if (_codeEntry.Length > 0) _codeEntry = _codeEntry[..^1]; return; }
+        _codeEntry += key;
+    }
+
+    /// <summary>The pad's ⏎: ring it up and stay open for the next code.</summary>
+    private Task PadApplyAsync() => ApplyCodeAsync();
+
+    /// <summary>
+    /// A barcode wand is a keyboard that types fast and presses Enter — this box
+    /// serves both the wand and a cashier who knows the codes by heart.
+    /// </summary>
+    private async Task ApplyCodeAsync()
+    {
+        // Persian keyboards type ۵ — the parser must read it as 5.
+        var raw = PosBotNlu.AsciiDigits(_codeEntry.Trim());
+        if (raw.Length == 0) return;
+
+        // CODE first, then how many: "5*3" rings product 5 three times.
+        var qty = 1;
+        var code = raw;
+        var split = raw.Split('*', 'x', 'X', '×');
+        if (split.Length == 2 && int.TryParse(split[1].Trim(), out var q) && q is > 0 and <= 99)
+        {
+            qty = q;
+            code = split[0].Trim();
+        }
+
+        if (code.StartsWith("P", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(code[1..], out _)) code = code[1..];
+
+        var available = _menu!.SelectMany(c => c.Items).Where(i => i.IsAvailable).OrderBy(i => i.Id).ToList();
+
+        MenuItemDto? hit = null;
+        if (int.TryParse(code, out var number))
+        {
+            // Plain numbers are the SEQUENCE the labels print: 1 is the first product.
+            if (number >= 1 && number <= available.Count) hit = available[number - 1];
+            hit ??= available.FirstOrDefault(i => i.Id == number);
+        }
+        else
+        {
+            // Words work too — "پیتزا⏎" rings it up when exactly one dish matches.
+            var folded = PosBotNlu.Fold(code);
+            var named = available.Where(i =>
+                PosBotNlu.Fold(i.NameFor(L.Locale)).Contains(folded) ||
+                PosBotNlu.Fold(i.Name).Contains(folded)).ToList();
+            if (named.Count == 1) hit = named[0];
+        }
+
+        if (hit is null)
+        {
+            Snackbar.Add(string.Format(L["pos.codeNotFound"], raw), Severity.Warning);
+            _codeEntry = "";
+            return;
+        }
+
+        await Bump(hit, qty);
+        _codeEntry = "";
+        Snackbar.Add($"➕ {qty} × {hit.NameFor(L.Locale)}", Severity.Success);
+        // The next scan should land here without a tap.
+        try { await JS.InvokeVoidAsync("mfPos.focus", "#pos-code"); } catch { }
+    }
+
+    private StoreCustomerDto? _customer;
+    private int _openTabCount;
+
+    private string CustomerLabel => TabMode
+        ? _tab!.CustomerName ?? _tab.GuestName ?? L["pos.walkin"]
+        : _customer?.Name ?? L["pos.walkin"];
+
+    private IEnumerable<MenuItemDto> VisibleItems
+    {
+        get
+        {
+            // Typing sweeps the WHOLE menu — with no All tab, search is how the
+            // cashier reaches a dish without knowing its shelf.
+            if (!string.IsNullOrWhiteSpace(_search))
+                return _menu!.SelectMany(c => c.Items)
+                    .Where(i => i.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase));
+            return PosPool.Skip(PosPage * PosSlice).Take(PosSlice);
+        }
+    }
+
+    private MenuItemDto? ItemById(int id) =>
+        _menu?.SelectMany(c => c.Items).FirstOrDefault(i => i.Id == id);
+
+    private const decimal PlatformFee = 0m; // mirrors Pricing.ServiceFee server-side (zero since 2026-08-28)
+
+    private decimal PendingSum =>
+        _pending.Sum(p => (ItemById(p.Key)?.FinalPrice ?? 0m) * p.Value);
+
+    // The ticket previews EXACTLY what paying will bill: saved lines (in table mode)
+    // plus the round on screen, the service fee, and VAT at the store's rate.
+    private decimal TaxPercent => _tab?.TaxPercent ?? _storeTaxPercent;
+    private decimal PreviewSubtotal => DraftLines.Sum(l => l.UnitPrice * l.Quantity) + PendingSum;
+    private decimal ServiceFee => PreviewSubtotal > 0 ? PlatformFee : 0m;
+    private decimal PreviewTax => Math.Round(PreviewSubtotal * TaxPercent / 100m, 3);
+    private decimal PreviewTotal => PreviewSubtotal + ServiceFee + PreviewTax;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Crossing between /pos and /pos-tablet starts a clean round: the unsent
+        // ring-up is dropped and the shelf turns back to its first page — the other
+        // face of the till must not inherit a half-typed ticket. The last face is
+        // remembered on the SESSION: a route change re-creates this component.
+        if (State.PosLastTablet is { } wasTablet && wasTablet != Tablet)
+        {
+            _pending.Clear();
+            _notes.Clear();
+            _posPage = 0;
+            _ticketOpen = false;
+            _search = "";
+        }
+        State.PosLastTablet = Tablet;
+
+        var key = $"{TableId ?? 0}:{TabQueryId ?? 0}";
+        if (_loadedKey == key) return;
+        _loadedKey = key;
+        // Only the very first load gets a spinner — switching modes must not blank
+        // the screen; the bar staying put is what makes the till feel solid.
+        _loading = _menu is null;
+        _error = null;
+        _table = null;
+        _tab = null;
+
+        // The outline first (every group and item, no photos — a few KB), then only the
+        // opening group's photos. Other groups load when tapped; a big menu no longer
+        // drags a hundred pictures through the circuit before the first ring-up.
+        // Everything the till needs is asked for AT ONCE — one round trip's worth of
+        // waiting instead of five in a row — and the shelf is painted as soon as the
+        // menu is in; store preferences, tables and open bills settle in behind it.
+        var outlineTask = _menu is null ? Api.GetMyMenuOutlineAsync() : Task.FromResult<List<MenuCategoryDto>?>(_menu);
+        var mineTask = _prefsLoaded ? null : Api.GetMyRestaurantAsync();
+        var tablesTask = Api.GetTablesAsync();
+        var tabsTask = Api.GetTabsAsync();
+
+        _menu ??= await outlineTask ?? [];
+        // No "All" tab any more: the till opens on the first group.
+        if (_categoryId == 0) _categoryId = _menu.FirstOrDefault()?.Id ?? 0;
+        await EnsureCategoryLoadedAsync(_categoryId);
+        var counterMode = TabQueryId is not > 0 && TableId is not > 0;
+        if (counterMode && _loading)
+        {
+            _loading = false;   // tiles first; the rest arrives while the cashier is already looking
+            StateHasChanged();
+        }
+        if (mineTask is not null)
+        {
+            var mine = await mineTask;
+            _storeTaxPercent = mine?.TaxPercent ?? 0m;
+            _stockPhotos = mine?.DishStockPhotos ?? true;
+            // The shop chose in Settings which ending its save button offers first.
+            _defaultKeepOpen = mine?.PosDefaultOpen ?? true;
+            _directPrint = mine?.DirectPrint ?? false;
+            _keepOpen = _defaultKeepOpen;
+            _prefsLoaded = true;
+        }
+        _allTables = await tablesTask ?? [];
+        var openTabs = await tabsTask;
+        _openTabCount = openTabs?.Count ?? 0;
+
+        if (TabQueryId is { } tabId and > 0)
+        {
+            // A parked bill: no table, just the invoice itself.
+            _tab = openTabs?.FirstOrDefault(t => t.Id == tabId);
+            if (_tab is null) Nav.NavigateTo(Base);
+        }
+        else if (TableId is { } tableId and > 0)
+        {
+            _table = _allTables.FirstOrDefault(t => t.Id == tableId);
+            if (_table is null)
+            {
+                Nav.NavigateTo(Base);
+            }
+            else
+            {
+                // The till never stops to ask questions: a free table is seated as a
+                // walk-in on the spot, an occupied one hands over its running invoice.
+                _tab = await Api.GetTabForTableAsync(_table.Id);
+                if (_tab is null)
+                {
+                    var (tab, error) = await Api.OpenTabAsync(new OpenTabRequest(
+                        _table.Id,
+                        _table.StoreCustomerId,
+                        _table.StoreCustomerId is null ? (_table.GuestName ?? "Walk-in") : null));
+                    if (tab is null) { _error = error ?? L["common.saveFail"]; }
+                    _tab = tab;
+                }
+            }
+        }
+        _loading = false;
+
+        // Capacity numbers arrive after the till is usable — never before it.
+        _ = LoadCapacityAsync();
+    }
+
+    /// <summary>The same till, sized for a tablet, lives under its own route.</summary>
+    private bool Tablet => new Uri(Nav.Uri).AbsolutePath.StartsWith("/pos-tablet", StringComparison.OrdinalIgnoreCase);
+    private string Base => Tablet ? "/pos-tablet" : "/pos";
+
+    /// <summary>Move the sale: onto a table's invoice, or back to a plain counter sale.</summary>
+    private void SwitchTo(int? tableId) =>
+        Nav.NavigateTo(tableId is { } id ? $"{Base}/{id}" : Base);
+
+    /// <summary>All running invoices in one list; picking one moves the till onto it.</summary>
+    private async Task ShowOpenTabs()
+    {
+        var dialog = await Dialogs.ShowAsync<PosOpenTabsDialog>("", new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseButton = true,
+        });
+        var result = await dialog.Result;
+
+        // Bills may have been settled inside the dialog — the count and, if the till
+        // is sitting on an invoice, that very invoice must both be re-checked.
+        var freshTabs = await Api.GetTabsAsync() ?? [];
+        _openTabCount = freshTabs.Count;
+        if (TabMode)
+        {
+            _tab = _table is not null
+                ? await Api.GetTabForTableAsync(_table.Id)
+                : freshTabs.FirstOrDefault(t => t.Id == _tab!.Id);
+            if (_tab is null) { Nav.NavigateTo(Base); return; }
+        }
+
+        if (result?.Canceled != false) return;
+        if (result.Data is StoreTabDto tab)
+        {
+            if (tab.TableId > 0) SwitchTo(tab.TableId);
+            else Nav.NavigateTo($"{Base}?tab={tab.Id}");
+        }
+    }
+
+    /// <summary>Attach the sale to a book customer — or back to an anonymous walk-up.</summary>
+    private async Task PickCustomer()
+    {
+        var dialog = await Dialogs.ShowAsync<PosCustomerDialog>("", new DialogOptions
+        {
+            MaxWidth = MaxWidth.ExtraSmall,
+            FullWidth = true,
+            CloseButton = true,
+        });
+        var result = await dialog.Result;
+        if (result?.Canceled != false) return;
+
+        if (TabMode)
+        {
+            // Re-seat the table's party: the running invoice keeps its lines.
+            var (tab, error) = result.Data is StoreCustomerDto picked
+                ? await Api.OpenTabAsync(new OpenTabRequest(_table!.Id, picked.Id))
+                : await Api.OpenTabAsync(new OpenTabRequest(_table!.Id, GuestName: L["pos.walkin"]));
+            if (tab is null) { Snackbar.Add(error ?? L["common.updateFail"], Severity.Error); return; }
+            _tab = tab;
+        }
+        else
+        {
+            _customer = result.Data as StoreCustomerDto; // sentinel → null → walk-up
+        }
+    }
+
+    /// <summary>The floor in a dialog: pick the table for this sale, or manage tables.</summary>
+    private async Task PickTable()
+    {
+        // Full screen: the floor plan deserves the whole display, like the till itself.
+        var dialog = await Dialogs.ShowAsync<PosTableDialog>("", new DialogOptions
+        {
+            FullScreen = true,
+            CloseButton = true,
+        });
+
+        // Opened from the tour's counter/table step? Then this IS the next step:
+        // hand the dialog to the tour and slide the spotlight onto it.
+        if (_tour?.CurrentStep == TourSwitchStep)
+        {
+            _tourTableDialog = dialog;
+            await _tour.NextAsync();
+        }
+
+        var result = await dialog.Result;
+        if (_tourTableDialog == dialog) _tourTableDialog = null;
+        if (result?.Canceled != false) { _allTables = await Api.GetTablesAsync() ?? []; return; }
+        if (result.Data is StoreTableDto picked)
+        {
+            // Picked during the tour? The navigation rebuilds this page, so the tour's
+            // next position is parked in session state and picked up after the switch.
+            if (_tour?.CurrentStep == TourTableStep) State.PosTourResume = TourTableStep + 1;
+            SwitchTo(picked.Id);
+        }
+    }
+
+    private async Task Bump(MenuItemDto item, int delta)
+    {
+        // On an open invoice a dish that is already on it grows in place — tapping the
+        // tile again must not start a second line for the same dish. A dish that is
+        // still only pending keeps collecting in the pending line.
+        if (_tab is not null && !_pending.ContainsKey(item.Id))
+        {
+            var saved = DraftLines.LastOrDefault(l => l.MenuItemId == item.Id);
+            if (saved is not null) { await NudgeLine(saved, delta); return; }
+        }
+        var next = _pending.GetValueOrDefault(item.Id) + delta;
+        if (next <= 0) _pending.Remove(item.Id);
+        else _pending[item.Id] = next;
+    }
+
+    private async Task<bool> SendRound()
+    {
+        if (_tab is null || !Dirty) return true;
+        _busy = true;
+        _error = null;
+        try
+        {
+            // Edits to saved lines and the new items travel in ONE request, so the till
+            // sees one change and the kitchen gets one ticket per save.
+            var items = _pending.Select(p => new PlaceOrderItem(p.Key, p.Value, NoteFor(p.Key))).ToList();
+            var edits = HasEdits
+                ? _edits.Select(e => new TabLineEditRequest(e.Key, e.Value.Qty, e.Value.Notes ?? "")).ToList()
+                : null;
+            var (tab, error) = await Api.AddTabLinesAsync(_tab.Id, new AddTabLinesRequest(items, edits));
+            if (tab is null) { _error = error ?? L["common.saveFail"]; return false; }
+            _tab = tab;
+            _edits.Clear();
+            _pending.Clear();
+            _notes.Clear();
+            return true;
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>+/− on a saved ticket line. Stepping down to zero strikes it.</summary>
+    /// <summary>Writes the kitchen note onto a line that is already on the open invoice.</summary>
+    private void SetSavedNote(TabLineDto line, string? note) =>
+        Draft(line, line.Quantity, string.IsNullOrWhiteSpace(note) ? null : note.Trim());
+
+    private Task NudgeLine(TabLineDto line, int delta)
+    {
+        Draft(line, Math.Max(0, line.Quantity + delta), line.Notes);
+        return Task.CompletedTask;
+    }
+
+    private bool _prefsLoaded;
+    private bool _defaultKeepOpen = true;
+    private bool _keepOpen = true;
+
+    /// <summary>Search lives in its own dialog; whatever it picks lands on the ticket.</summary>
+    private async Task OpenSearch()
+    {
+        var parameters = new DialogParameters<PosSearchDialog> { { d => d.Menu, _menu ?? [] } };
+        var dialog = await Dialogs.ShowAsync<PosSearchDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result?.Canceled != false || result.Data is not Dictionary<int, int> picked) return;
+        foreach (var (id, qty) in picked)
+        {
+            _pending[id] = _pending.GetValueOrDefault(id) + qty;
+        }
+    }
+
+    /// <summary>
+    /// The two endings of a ticket, each with its own button. A hidden checkbox used
+    /// to steer one green button, so the cashier could not tell whether pressing it
+    /// would keep the table running or settle the bill.
+    /// </summary>
+    private Task SaveTicket(bool keepOpen)
+    {
+        _keepOpen = keepOpen;
+        return SaveTicket();
+    }
+
+    private async Task SaveTicket()
+    {
+        if (_keepOpen)
+        {
+            if (TabMode) await SaveOpen();
+            else await SaveOpenCounter();
+        }
+        else
+        {
+            await Pay();
+        }
+        // Back to the shop's chosen default for the next ticket.
+        _keepOpen = _defaultKeepOpen;
+    }
+
+    private bool _directPrint;
+
+    /// <summary>Direct printing lives in the layout now — one door for every page.</summary>
+    private Task PrintDirect(OrderDto order) => Printer.PrintAsync(order);
+
+    private Task Pay() => TabMode ? CloseTable() : PayCounter();
+
+    /// <summary>Park the bill: commit the round on screen, keep the invoice open, next customer.</summary>
+    private async Task SaveOpen()
+    {
+        if (!await SendRound()) return;
+        Snackbar.Add(string.Format(L["pos.savedOpen"],
+            _table?.Name ?? _tab!.CustomerName ?? _tab.GuestName ?? ""), Severity.Success);
+        Nav.NavigateTo(Base);
+    }
+
+    /// <summary>Walk-up "save as open": a fresh parked bill, no table behind it.</summary>
+    private async Task SaveOpenCounter()
+    {
+        if (_pending.Count == 0) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (tab, error) = await Api.OpenTabAsync(new OpenTabRequest(
+                0, _customer?.Id, _customer is null ? L["pos.walkin"].ToString() : null));
+            if (tab is null) { _error = error ?? L["common.saveFail"]; return; }
+
+            var items = _pending.Select(p => new PlaceOrderItem(p.Key, p.Value, NoteFor(p.Key))).ToList();
+            var (filled, addError) = await Api.AddTabLinesAsync(tab.Id, new AddTabLinesRequest(items));
+            if (filled is null) { _error = addError ?? L["common.saveFail"]; return; }
+
+            Snackbar.Add(string.Format(L["pos.savedOpen"],
+                filled.CustomerName ?? filled.GuestName ?? ""), Severity.Success);
+            _pending.Clear();
+            _notes.Clear();
+            _customer = null;
+            _openTabCount = (await Api.GetTabsAsync())?.Count ?? 0;
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>Table mode: commit what's on screen, settle the invoice, back to the floor.</summary>
+    private async Task CloseTable()
+    {
+        if (!await SendRound()) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (order, error) = await Api.CloseTabAsync(_tab!.Id, new CloseTabRequest(_payment, MarkPaid: true));
+            if (order is null) { _error = error ?? L["common.saveFail"]; return; }
+            _notes.Clear();
+            Snackbar.Add(string.Format(L["tab.closed"], order.Number), Severity.Success);
+            if (_directPrint) await PrintDirect(order);
+            // The bill is settled — the till stays open, back in walk-up mode for the next sale.
+            Nav.NavigateTo(Base);
+        }
+        finally { _busy = false; }
+    }
+
+    /// <summary>Counter mode: one anonymous sale over the counter — paid, printed, next!</summary>
+    private async Task PayCounter()
+    {
+        if (_pending.Count == 0) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var items = _pending.Select(p => new PlaceOrderItem(p.Key, p.Value, NoteFor(p.Key))).ToList();
+            var (order, error) = await Api.PlaceCounterOrderAsync(new PlaceCounterOrderRequest(
+                _customer?.Id ?? 0, _payment, items, MarkPaid: true, CounterSale: true));
+            if (order is null) { _error = error ?? L["common.saveFail"]; return; }
+            _notes.Clear();
+            Snackbar.Add(string.Format(L["tab.closed"], order.Number), Severity.Success);
+            if (_directPrint) await PrintDirect(order);
+            _pending.Clear();
+            _notes.Clear();
+            _customer = null; // the till stays open — next customer, fresh bill
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelTab()
+    {
+        if (_tab is null) return;
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.CancelTabAsync(_tab.Id);
+            if (!ok) { _error = error ?? L["common.updateFail"]; return; }
+            Nav.NavigateTo(Base);
+        }
+        finally { _busy = false; }
+    }
+}

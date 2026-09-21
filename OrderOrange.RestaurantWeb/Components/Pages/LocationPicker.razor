@@ -1,0 +1,74 @@
+﻿@inject LanguageService L
+@inject IJSRuntime JS
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+
+@* Where the store stands: drop a pin on a real map, or paste any Google Maps
+   link and let the server dig the coordinates out of it. *@
+
+<div class="loc-pick mb-3">
+    @if (Lat is null || Lng is null)
+    {
+        @* Before the pin: a faded map beckons, the whole card is the button. *@
+        <button type="button" class="loc-open-full" @onclick="OpenMap">
+            <MudIcon Icon="@Icons.Material.Filled.Map" Style="width:20px;height:20px;" />
+            @L["loc.pick"]
+        </button>
+    }
+    else
+    {
+        <div class="loc-wrap">
+            <div class="loc-prev" id="@_previewId" @onclick="OpenMap" title="@L["loc.pick"]"></div>
+            <button type="button" class="loc-change" @onclick="OpenMap">
+                <MudIcon Icon="@Icons.Material.Filled.EditLocationAlt" Style="width:15px;height:15px;" />
+                @L["loc.pick"]
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public double? Lat { get; set; }
+    [Parameter] public double? Lng { get; set; }
+    [Parameter] public EventCallback<double?> LatChanged { get; set; }
+    [Parameter] public EventCallback<double?> LngChanged { get; set; }
+
+    private readonly string _previewId = $"locprev-{Guid.NewGuid():N}";
+    private double? _shownLat;
+    private double? _shownLng;
+
+    /// <summary>The mini-map redraws only when the pin actually moved.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Lat is null || Lng is null || (Lat == _shownLat && Lng == _shownLng)) return;
+        _shownLat = Lat;
+        _shownLng = Lng;
+        try { await JS.InvokeVoidAsync("mfMap.preview", _previewId, Lat, Lng); } catch { }
+    }
+
+    private async Task Set(double? lat, double? lng)
+    {
+        Lat = lat;
+        Lng = lng;
+        await LatChanged.InvokeAsync(lat);
+        await LngChanged.InvokeAsync(lng);
+    }
+
+    private Task Clear() => Set(null, null);
+
+    private async Task OpenMap()
+    {
+        var picked = await JS.InvokeAsync<string?>("mfMap.open", Lat, Lng, L["loc.confirm"], L["loc.searchPh"], L["loc.link"]);
+        if (string.IsNullOrEmpty(picked)) return;
+        var parts = picked.Split(',');
+        if (parts.Length == 2 &&
+            double.TryParse(parts[0], System.Globalization.CultureInfo.InvariantCulture, out var lat) &&
+            double.TryParse(parts[1], System.Globalization.CultureInfo.InvariantCulture, out var lng))
+        {
+            await Set(lat, lng);
+            Snackbar.Add(L["loc.saved"], Severity.Success);
+        }
+    }
+
+
+}

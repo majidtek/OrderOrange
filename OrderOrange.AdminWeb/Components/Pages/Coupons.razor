@@ -1,0 +1,93 @@
+@page "/coupons"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Admin — Coupons</PageTitle>
+
+<PageHeader Title="@L["nav.coupons"]" Subtitle="@L["admin.couponsSub"]">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => Edit(null))">@L["admin.newCoupon"]</MudButton>
+    </Actions>
+</PageHeader>
+
+@if (_coupons is null)
+{
+    <Loader FullPage="true" />
+}
+else if (_coupons.Count == 0)
+{
+    <EmptyState Emoji="🏷️" Title="@L["admin.noCoupons"]" />
+}
+else
+{
+    <MudTable Items="_coupons" Hover="true" Dense="true" Elevation="0" Outlined="true" Class="rounded-xl" RowsPerPage="25">
+        <HeaderContent>
+            <MudTh>@L["admin.code"]</MudTh>
+            <MudTh>@L["admin.discount"]</MudTh>
+            <MudTh>@L["admin.minOrder"]</MudTh>
+            <MudTh>@L["admin.expires"]</MudTh>
+            <MudTh>@L["admin.usage"]</MudTh>
+            <MudTh>@L["common.status"]</MudTh>
+            <MudTh />
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd><MudChip T="string" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.LocalOffer">@context.Code</MudChip></MudTd>
+            <MudTd><b>@context.Percent.ToString("0.#")%</b></MudTd>
+            <MudTd>@Fmt.Rial(context.MinOrder)</MudTd>
+            <MudTd>@(context.ExpiresAt?.ToString("dd MMM yyyy") ?? "Never")</MudTd>
+            <MudTd>
+                @context.Uses / @context.MaxUses
+                <MudProgressLinear Value="@(context.MaxUses == 0 ? 0 : context.Uses * 100.0 / context.MaxUses)"
+                                   Color="Color.Primary" Rounded="true" Style="width: 90px;" />
+            </MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                         Color="@(IsLive(context) ? Color.Success : Color.Error)">
+                    @(IsLive(context) ? "Live" : "Inactive")
+                </MudChip>
+            </MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => Edit(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => Delete(context))" />
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager RowsPerPageOptions="new[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    private List<CouponDto>? _coupons;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload() => _coupons = await Api.GetCouponsAsync();
+
+    private static bool IsLive(CouponDto coupon) =>
+        coupon.IsActive && coupon.Uses < coupon.MaxUses &&
+        (coupon.ExpiresAt is null || coupon.ExpiresAt > DateTime.Now);
+
+    private async Task Edit(CouponDto? coupon)
+    {
+        var parameters = new DialogParameters<CouponDialog> { { d => d.Existing, coupon } };
+        var dialog = await Dialogs.ShowAsync<CouponDialog>(coupon is null ? L["admin.newCoupon"] : L["admin.editCoupon"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled == false) await Reload();
+    }
+
+    private async Task Delete(CouponDto coupon)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["admin.deleteCoupon"],
+            $"Delete “{coupon.Code}”? Past orders that used it keep their discount.",
+            yesText: "Delete", cancelText: "Keep");
+        if (confirmed != true) return;
+        var (ok, error) = await Api.DeleteCouponAsync(coupon.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error);
+        await Reload();
+    }
+}

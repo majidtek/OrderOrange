@@ -1,0 +1,721 @@
+@page "/restaurant/{Id:int}"
+@page "/store/{Id:int}"
+@page "/p/{Id:int}"
+@inject ApiClient Api
+@inject LanguageService L
+@inject CartState Cart
+@inject TableBrandState TableBrand
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* A shop's page is the one thing here worth ranking for, so it carries the shop's own
+   title and description rather than the site-wide fallback. Written in the reader's
+   language: an Arabic result should read in Arabic. *@
+<PageTitle>@PageHeading</PageTitle>
+
+@if (_detail is not null)
+{
+    <HeadContent>
+        <meta name="description" content="@MetaDescription" />
+        <meta property="og:title" content="@PageHeading" />
+        <meta property="og:description" content="@MetaDescription" />
+        @if (_detail.Info.LogoPhoto is { Length: > 0 })
+        {
+            <meta property="og:image" content="@_detail.Info.LogoPhoto" />
+        }
+    </HeadContent>
+}
+
+@if (_detail is null)
+{
+    @* A QR arrival's splash never says OrderOrange: the store's own mark when a
+       previous page already knows it, nothing branded otherwise. *@
+    <Loader FullPage="true" Label="@L["common.loadingMenu"]"
+            HideBrand="@FromQr" BrandName="@(FromQr ? TableBrand.Name : null)"
+            BrandLogo="@(FromQr ? TableBrand.Logo : null)" />
+}
+else
+{
+    var info = _detail.Info;
+    // Banner slideshow: partner-uploaded gallery when present, on-theme stock
+    // variants otherwise — every store page animates.
+    var slides = _photos is { Count: > 0 }
+        ? _photos.Select(p => p.Data).ToList()
+        : FoodPhoto.SlidesForRestaurant(info.Cuisine, info.Id);
+    @* ---------- Store hero: photo wall, a plate that rides over it, and three
+       facts a hungry customer actually decides on: wait, delivery, minimum. ---------- *@
+    <section class="oo-hero mb-6">
+        <div class="oo-hero-shot mf-rest-banner @(slides.Count > 1 ? $"slides n{slides.Count}" : "")"
+             style="background: @info.BannerColor;">
+            @for (var i = 0; i < slides.Count; i++)
+            {
+                <img class="bp gal" style="animation-delay: @(i * SlideSeconds)s" src="@slides[i]" alt="@info.Name" loading="@(i == 0 ? "eager" : "lazy")" />
+            }
+            <span class="scrim"></span>
+            <span class="oo-hero-state @(info.IsOpen ? "on" : "off")">
+                <i></i>@(info.IsOpen ? L["partner.open"] : L["partner.closed"])
+            </span>
+        </div>
+
+        <div class="oo-hero-plate">
+            @* The shop's own logo when it has uploaded one; the emoji stands in until then. *@
+            <div class="mark @(string.IsNullOrEmpty(info.LogoPhoto) ? "" : "has-logo")">
+                @if (info.LogoPhoto is { Length: > 0 } logo)
+                {
+                    <img src="@logo" alt="@info.Name" />
+                }
+                else
+                {
+                    @(string.IsNullOrWhiteSpace(info.LogoEmoji) ? "🍽️" : info.LogoEmoji)
+                }
+            </div>
+            <div class="who">
+                <h1 class="nm">@StoreText.Name(info.Name, info.Names, L)</h1>
+                <div class="tags">
+                    @* Scanned from a table card: the QR carries ?t=N, so the guest sees
+                       which table they are at without the card itself saying so. *@
+                    @if (TableNo is > 0 and < 100)
+                    {
+                        <span class="tag" style="background: #C6A15B; color: #2B2723; font-weight: 700;">
+                            🪑 @string.Format(L["rest.tableChip"], TableNo)
+                        </span>
+                    }
+                    <span class="tag">@StoreText.Cuisines(info.Cuisine, info.Cuisines, L)</span>
+                    @if (StoreText.Area(info.Area, L) is { Length: > 0 } area)
+                    {
+                        @* ONE button carries both: the area name, dressed unmistakably
+                           as the door to the map. *@
+                        <a class="tag map-btn" href="@MapUrl(info, area)" target="_blank" rel="noopener"
+                           title="@L["rest.showMap"]">
+                            <MudIcon Icon="@Icons.Material.Filled.Place" /> @area · @L["rest.showMap"]
+                        </a>
+                    }
+                    @foreach (var phone in Phones(info.Phone))
+                    {
+                        var tel = phone;
+                        <a class="tag mf-ltr" href="tel:@tel"><MudIcon Icon="@Icons.Material.Filled.Call" /> @tel</a>
+                    }
+                    @if (InstaHandle(info.Instagram) is { } insta)
+                    {
+                        <a class="tag mf-ltr" href="@($"https://instagram.com/{insta}")" target="_blank" rel="noopener">
+                            <MudIcon Icon="@Icons.Material.Filled.PhotoCamera" /> @@@insta
+                        </a>
+                    }
+                    @if (_hasSurvey)
+                    {
+                        @* The store is asking its guests something — one tap to answer. *@
+                        <a class="tag" href="@($"/survey/{info.Id}")">
+                            <MudIcon Icon="@Icons.Material.Filled.Poll" /> @L["sv.take"]
+                        </a>
+                    }
+                    @* The store's own offers: tap a code to copy it for checkout. *@
+                    @foreach (var promo in _promos ?? [])
+                    {
+                        var pr = promo;
+                        <button type="button" class="tag dc-tag @(_copiedCode == pr.Code ? "copied" : "")" @onclick="@(() => CopyPromo(pr.Code))">
+                            🏷️ <b>@pr.Code</b> · @PromoLabel(pr)
+                        </button>
+                    }
+                </div>
+            </div>
+            @if (info.RatingCount > 0)
+            {
+                <div class="score" title="@info.RatingCount @L["rest.reviews"]">
+                    <b>@info.Rating.ToString("0.0")</b>
+                    <span>★ @info.RatingCount</span>
+                </div>
+            }
+        </div>
+
+        @if (StoreText.Description(info.Description, L) is { Length: > 0 } about)
+        {
+            <p class="oo-hero-about">@about</p>
+        }
+
+        <div class="oo-hero-facts">
+            <div class="fact">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Schedule" /></span>
+                <b>~@(info.AvgPrepMinutes + 15) @L["common.min"]</b>
+                <small>@L["checkout.estimated"]</small>
+            </div>
+            <div class="fact @(info.DeliveryFee == 0 ? "free" : "")">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.DeliveryDining" /></span>
+                @* Both arms must be MarkupString. Mixing a plain string with Fmt.Rial's
+                   markup collapses the whole expression to string, and Razor then escapes
+                   the rial glyph — the customer sees the raw <svg …> path as text. *@
+                <b>@(info.DeliveryFee == 0 ? (MarkupString)L["checkout.noFee"] : Fmt.Rial(info.DeliveryFee))</b>
+                <small>@L["rest.delivery"]</small>
+            </div>
+            @* "OMR 0.000" is not a minimum — it is the absence of one, and it should say so. *@
+            <div class="fact @(info.MinOrder == 0 ? "free" : "")">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.ShoppingBasket" /></span>
+                <b>@(info.MinOrder == 0 ? (MarkupString)L["rest.noMin"] : Fmt.Rial(info.MinOrder))</b>
+                <small>@L["home.minOrder"]</small>
+            </div>
+        </div>
+
+        @if (info.OnlineReservations)
+        {
+            @* The owner switched online booking on in Settings — the page grows a door
+               to the booking page. A real card, not a washed-out bar: icon plate,
+               two lines, and a chevron that flips with the writing direction. *@
+            <a class="oo-reserve-btn" href="@($"/reserve-table/{Id}")">
+                <span class="plate"><MudIcon Icon="@Icons.Material.Filled.TableRestaurant" /></span>
+                <span class="txt">
+                    <b>@L["rsv.title"]</b>
+                    <small>@L["rsv.reserveHint"]</small>
+                </span>
+                <span class="go"><MudIcon Icon="@Icons.Material.Filled.ArrowForwardIos" /></span>
+            </a>
+        }
+
+        @if (!info.IsOpen)
+        {
+            @* Closed is a state, not a wall: browse freely, order later. *@
+            <div class="oo-hero-closed">
+                <MudIcon Icon="@Icons.Material.Filled.Schedule" /> @L["rest.closedBrowse"]
+            </div>
+        }
+    </section>
+
+    <MudGrid Spacing="4">
+        <MudItem xs="12" md="8">
+            <MudTabs Elevation="0" ApplyEffectsToContainer="true" PanelClass="pt-4">
+                <MudTabPanel Text="@L["rest.menu"]" Icon="@Icons.Material.Filled.MenuBook">
+                    @foreach (var category in _detail.Categories)
+                    {
+                        <MudText Typo="Typo.h6" Class="mt-4 mb-3">@(category.Names is { Count: > 0 } ? category.NameFor(L.Locale) : L.Data("category", category.Name))</MudText>
+                        <MudGrid Spacing="2">
+                            @foreach (var item in OrderableFirst(category.Items))
+                            {
+                                var dish = item;
+                                @* One dish per row, always: two columns squeezed long names
+                                   and left the cards fighting for width. *@
+                                <MudItem xs="12">
+                                    @* The ROW no longer opens the sheet — only the photo and the arrow do.
+                                       Tapping the middle of a row while reaching for + was opening a dialog
+                                       nobody asked for. *@
+                                    <div class="mf-menu-item" style="@(dish.IsAvailable ? "" : "opacity: .55;")">
+                                        <div class="mf-menu-emoji @(dish.HasDiscount ? "onsale" : "")"
+                                             style="cursor: pointer;" @onclick="@(() => OpenDish(dish))">
+                                            @if ((dish.Photo ?? FoodPhoto.ForDish(dish.Name, _detail.Info.DishStockPhotos)) is string dishPhoto)
+                                            {
+                                                <img class="ph" src="@dishPhoto" alt="@dish.Name" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <Emoji Glyph="@dish.ImageEmoji" />
+                                            }
+                                            @if (dish.HasDiscount)
+                                            {
+                                                <span class="mf-sale-tag">-@dish.DiscountPercent.ToString("0.#")%</span>
+                                            }
+                                            @* Says "this photo opens" — a phone has no hover to discover it with. *@
+                                            <span class="oo-peek"><MudIcon Icon="@Icons.Material.Filled.ZoomIn" /></span>
+                                        </div>
+                                        <div class="flex-grow-1" style="min-width: 0;">
+                                            @* The name owns its row. Sharing it with the ★ chip squeezed long
+                                               names down to a single letter on narrow cards — the chip now
+                                               travels with the price, where there is room. *@
+                                            <MudText Typo="Typo.subtitle2" Class="mf-dish-nm">@(dish.Names is { Count: > 0 } ? dish.NameFor(L.Locale) : L.Product(dish.Name))</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary"
+                                                     Style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                                @dish.DescriptionFor(L.Locale)
+                                            </MudText>
+                                            @if (dish.HasDiscount)
+                                            {
+                                                <div class="mf-price mt-1">
+                                                    <span class="now">@Fmt.Rial(dish.FinalPrice)</span>
+                                                    <span class="was">@Fmt.Rial(dish.Price)</span>
+                                                    <span class="save">@((MarkupString)string.Format(L["home.dealSave"], Fmt.Rial(dish.Price - dish.FinalPrice)))</span>
+                                                    @if (dish.IsPopular)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Class="ma-0">★ @L["rest.popular"]</MudChip>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="d-flex align-center flex-wrap mt-1" style="gap: 6px;">
+                                                    <MudText Typo="Typo.body2" Color="Color.Primary" Class="mf-dish-price">@Fmt.Rial(dish.Price)</MudText>
+                                                    @if (dish.IsPopular)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Class="ma-0">★ @L["rest.popular"]</MudChip>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                        @if (!dish.IsAvailable)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@L["rest.soldOut"]</MudChip>
+                                        }
+                                        else if (!dish.OrderableAt(DateTime.Now))
+                                        {
+                                            @* Outside its serving window — say WHEN instead of a bare "no". *@
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning">
+                                                🕐 @(ItemAvailability.TimeLabel(dish.AvailableFromMinutes, dish.AvailableToMinutes) is { Length: > 0 } tl ? tl : L["rest.notToday"])
+                                            </MudChip>
+                                        }
+                                        else if (Cart.QuantityOf(Id, dish.Id) == 0)
+                                        {
+                                            @* onpointerdown is NATIVE js: it acknowledges the tap in the same
+                                               frame, without waiting for the server round-trip. *@
+                                            <span class="mf-qty-inline" onpointerdown="mfQty.pending(this)"
+                                                  onclick="mfQty.busy(this,event)" @onclick:stopPropagation="true">
+                                                <MudIconButton Icon="@Icons.Material.Filled.AddCircle" Color="Color.Primary"
+                                                               OnClick="@(() => Add(dish))" />
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            @* Full stepper: reduce, see count, add — right on the row. The
+                                               native onpointerdown moves the number in the SAME frame; the
+                                               server's render confirms it a moment later.
+
+                                               Both "less" icons are rendered and CSS picks one by data-qty:
+                                               at 1 the minus becomes a BIN, because one more tap empties the
+                                               line rather than reducing it. At 0 the whole stepper collapses
+                                               to the plain + — a stepper showing "0" is nonsense. *@
+                                            @* pointerdown only ACKNOWLEDGES (progress bar) — the visual state
+                                               switch runs on click, or hiding the pressed button would cancel
+                                               its own click before Blazor ever heard it. *@
+                                            <span class="mf-qty-inline" data-qty="@Cart.QuantityOf(Id, dish.Id)" @onclick:stopPropagation="true">
+                                                <span onpointerdown="mfQty.pending(this)" onclick="mfQty.tap(this,-1,event)">
+                                                    <MudIconButton Icon="@Icons.Material.Filled.RemoveCircle" Size="Size.Small" Color="Color.Primary"
+                                                                   Class="qty-less"
+                                                                   OnClick="@(() => Cart.Decrement(Cart.FindLine(Id, dish.Id)!))" />
+                                                    <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
+                                                                   Class="qty-bin" title="@L["common.delete"]"
+                                                                   OnClick="@(() => Cart.Decrement(Cart.FindLine(Id, dish.Id)!))" />
+                                                </span>
+                                                <b>@Cart.QuantityOf(Id, dish.Id)</b>
+                                                <span onpointerdown="mfQty.pending(this)" onclick="mfQty.tap(this,1,event)">
+                                                    <MudIconButton Icon="@Icons.Material.Filled.AddCircle" Size="Size.Small" Color="Color.Primary"
+                                                                   OnClick="@(() => Add(dish))" />
+                                                </span>
+                                            </span>
+                                        }
+                                        @* The arrow is the door to the dish sheet, alongside the photo.
+                                           It mirrors itself in Arabic/Persian, where "forward" points left. *@
+                                        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small"
+                                                       Class="mf-dish-go" title="@L["common.details"]"
+                                                       OnClick="@(() => OpenDish(dish))" />
+                                    </div>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    }
+                </MudTabPanel>
+                <MudTabPanel Text="@L["rest.reviews"]" Icon="@Icons.Material.Filled.Star">
+                    @if (_reviews is null)
+                    {
+                        <Loader />
+                    }
+                    else if (_reviews.Count == 0)
+                    {
+                        <EmptyState Emoji="⭐" Title="@L["rest.noReviews"]" Subtitle="@L["rest.noReviewsHint"]" />
+                    }
+                    else
+                    {
+                        @foreach (var review in _reviews)
+                        {
+                            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-lg mb-3">
+                                <div class="d-flex align-center" style="gap: 10px;">
+                                    <MudAvatar Color="Color.Secondary" Size="Size.Small">@review.CustomerName[..1]</MudAvatar>
+                                    <MudText Typo="Typo.subtitle2" Class="flex-grow-1">@review.CustomerName</MudText>
+                                    <MudRating SelectedValue="@review.RestaurantRating" ReadOnly="true" Size="Size.Small" />
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(review.Comment))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mt-2">“@review.Comment”</MudText>
+                                }
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">
+                                    @review.CreatedAt.ToString("dd MMM yyyy")
+                                </MudText>
+                            </MudPaper>
+                        }
+                    }
+                </MudTabPanel>
+            </MudTabs>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="2" Class="pa-4 rounded-xl mf-cart-panel">
+                <MudText Typo="Typo.h6" Class="mb-3">
+                    <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" Style="vertical-align: -4px;" /> @L["rest.basket"]
+                </MudText>
+                @* Only this restaurant's share — the basket may hold other kitchens too. *@
+                @{ var here = Cart.Groups.FirstOrDefault(g => g.Restaurant.Id == Id); }
+                @if (here is null)
+                {
+                    <EmptyState Emoji="🧺" Title="@L["rest.emptyBasket"]" Subtitle="@L["rest.emptyBasketHint"]" />
+                }
+                else
+                {
+                    @foreach (var line in here.Lines)
+                    {
+                        var l = line;
+                        <div class="d-flex align-center py-1" style="gap: 8px;">
+                            <div class="flex-grow-1" style="min-width: 0;">
+                                @* The basket must speak the same language as the menu it was filled from. *@
+                                <MudText Typo="Typo.body2">@(l.Item.Names is { Count: > 0 } ? l.Item.NameFor(L.Locale) : L.Product(l.Item.Name))</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@Fmt.Rial(l.Item.Price)</MudText>
+                            </div>
+                            @* Same language as the card: at one, "less" means REMOVE — and the
+                               whole control steps aside for a spinner while the server confirms. *@
+                            <span class="mf-qty-inline" data-qty="@l.Quantity" onclick="mfQty.busy(this,event)">
+                                <MudIconButton Icon="@(l.Quantity == 1 ? Icons.Material.Filled.DeleteOutline : Icons.Material.Filled.RemoveCircleOutline)"
+                                               Color="@(l.Quantity == 1 ? Color.Error : Color.Default)"
+                                               Size="Size.Small" OnClick="@(() => Cart.Decrement(l))" />
+                                <b>@l.Quantity</b>
+                                <MudIconButton Icon="@Icons.Material.Filled.AddCircleOutline" Size="Size.Small" Color="Color.Primary"
+                                               OnClick="@(() => Cart.Increment(l))" />
+                            </span>
+                        </div>
+                    }
+                    <MudDivider Class="my-3" />
+                    <div class="d-flex justify-space-between mb-1">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@L["common.subtotal"]</MudText>
+                        <MudText Typo="Typo.body2">@Fmt.Rial(here.Subtotal)</MudText>
+                    </div>
+                    @if (Cart.IsMultiStore)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            🧺 @string.Format(L["cart.alsoElsewhere"], Cart.Groups.Count - 1)
+                        </MudText>
+                    }
+                    @if (!here.MeetsMinimum)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="my-2">
+                            @((MarkupString)string.Format(L["rest.minWarn"], Fmt.Rial(_detail.Info.MinOrder), Fmt.Rial(here.Missing)))
+                        </MudAlert>
+                    }
+                    @* Green, not brand orange: on an all-orange page the PAY action must
+                       be the one thing that looks different. *@
+                    <MudButton Variant="Variant.Filled" Color="Color.Success" FullWidth="true" Size="Size.Large"
+                               Class="mt-2" Disabled="@(!Cart.MeetsMinimum || _going)"
+                               EndIcon="@(_going ? null : Icons.Material.Filled.ArrowForward)"
+                               OnClick="GoCheckout">
+                        @if (_going) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" Class="me-2" /> }
+                        @L["rest.checkout"]
+                    </MudButton>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @* Phone-only floating basket bar — the side panel is out of reach on mobile. *@
+    @if (Cart.Lines.Count > 0)
+    {
+        <div class="mf-basket-bar @(_going ? "going" : "")" @onclick="GoCheckout">
+            @if (_going)
+            {
+                @* The tap answered INSTANTLY — checkout takes a breath to open, and a
+                   bar that sits silent for that breath reads as a dead button. *@
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Inherit" />
+                <span class="flex-grow-1">@L["common.loading"]</span>
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Filled.ShoppingCart" />
+                <span class="flex-grow-1">@Cart.Count @L["common.items"] · @Fmt.Rial(Cart.Subtotal)</span>
+            }
+            @if (!_going && Cart.MeetsMinimum)
+            {
+                <span class="go">@L["rest.checkout"] ➜</span>
+            }
+            else
+            {
+                <span style="font-size: 12px; opacity: .9;">@L["home.minOrder"] @Fmt.Rial(_detail!.Info.MinOrder)</span>
+            }
+        </div>
+    }
+}
+
+@code {
+    /// <summary>The map link: the shop's own pin when one is set, a search for its
+    /// name and area when not — either way, the address always opens somewhere real.</summary>
+    private static string MapUrl(RestaurantCardDto i, string area) =>
+        i.MapLat is { } la && i.MapLng is { } ln
+            ? $"https://www.google.com/maps/search/?api=1&query={la.ToString(System.Globalization.CultureInfo.InvariantCulture)},{ln.ToString(System.Globalization.CultureInfo.InvariantCulture)}"
+            : $"https://www.google.com/maps/search/?api=1&query={Uri.EscapeDataString($"{i.Name} {area} Muscat")}";
+
+    /// <summary>The store's numbers, one chip each — owners write them ;-joined.</summary>
+    private static IEnumerable<string> Phones(string? raw) =>
+        (raw ?? "").Split(';', ',').Select(p => p.Trim()).Where(p => p.Length > 3).Take(3);
+
+    /// <summary>A bare handle out of whatever the owner typed: @name, a URL, or plain text.</summary>
+    private static string? InstaHandle(string? raw)
+    {
+        var s = (raw ?? "").Trim().TrimStart('@').TrimEnd('/');
+        var slash = s.LastIndexOf('/');
+        if (slash >= 0) s = s[(slash + 1)..];
+        return s.Length == 0 ? null : s;
+    }
+
+    [Parameter] public int Id { get; set; }
+
+    private RestaurantDetailDto? _detail;
+    private List<ReviewDto>? _reviews;
+    private List<RestaurantPhotoDto>? _photos;
+    private bool _hasSurvey;
+    private List<PublicPromotionDto>? _promos;
+    private string? _copiedCode;
+
+    /// <summary>"10% off · first order" — the offer and its one condition, no limits.</summary>
+    private string PromoLabel(PublicPromotionDto p)
+    {
+        var value = p.Type == "amount" ? $"−{p.Value:0.###} OMR" : $"{p.Value:0.#}% {L["dc.pub.off"]}";
+        var rule = p.Rule switch
+        {
+            "orders_month" or "orders_total" or "min_items" => string.Format(L[$"dc.r.{p.Rule}"], p.RuleValue),
+            "spent_total" => string.Format(L["dc.r.spent_total"], p.RuleAmount.ToString("0.###")),
+            "first_order" => L["dc.r.first_order"],
+            _ => null,
+        };
+        return rule is null ? value : $"{value} · {rule}";
+    }
+
+    private async Task CopyPromo(string code)
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", code); } catch { }
+        _copiedCode = code;
+        Snackbar.Add(string.Format(L["dc.pub.copied"], code), Severity.Success);
+    }
+
+    /// <summary>Seconds each gallery photo stays on screen before crossfading.</summary>
+    private const int SlideSeconds = 4;
+
+    /// <summary>
+    /// "Amiran Cafe &amp; Restaurant — Iranian in Al Ghubrah | OrderOrange". The shop's
+    /// own name in the reader's language, then what it cooks and where it is, because
+    /// that is what somebody actually types into a search box.
+    /// </summary>
+    private string PageHeading
+    {
+        get
+        {
+            if (_detail is null) return "OrderOrange";
+            var info = _detail.Info;
+            var name = StoreText.Name(info.Name, info.Names, L);
+            var cuisine = StoreText.Cuisines(info.Cuisine, info.Cuisines, L);
+            var area = StoreText.Area(info.Area, L);
+            var where = area.Length > 0 ? $"{cuisine} · {area}" : cuisine;
+            return $"{name} — {where} | OrderOrange";
+        }
+    }
+
+    /// <summary>The line under the title in a search result, and on a shared link.</summary>
+    private string MetaDescription
+    {
+        get
+        {
+            if (_detail is null) return "";
+            var info = _detail.Info;
+            var name = StoreText.Name(info.Name, info.Names, L);
+            var blurb = StoreText.Description(info.Description, L);
+            if (blurb.Length > 0) return Trim($"{name} — {blurb}");
+
+            // No blurb of their own: say what they cook and name a few dishes, which is
+            // more use to a reader than a generic sentence about ordering food.
+            var dishes = _detail.Categories.SelectMany(c => c.Items)
+                .Where(i => i.IsAvailable).Take(4)
+                .Select(i => L.Product(i.Name));
+            var list = string.Join(", ", dishes);
+            var cuisine = StoreText.Cuisines(info.Cuisine, info.Cuisines, L);
+            return Trim(list.Length > 0 ? $"{name} — {cuisine}. {list}." : $"{name} — {cuisine}.");
+        }
+    }
+
+    /// <summary>
+    /// What a guest can have NOW leads the group; today's closed doors — wrong weekday,
+    /// outside the hours, switched off — sink to the bottom. A stable sort, so each half
+    /// keeps the owner's own order (Majed 2026-09-06: "order by available, not available last").
+    /// </summary>
+    private static IEnumerable<MenuItemDto> OrderableFirst(IEnumerable<MenuItemDto> items)
+    {
+        var now = DateTime.Now;
+        return items.OrderBy(i => i.IsAvailable && i.OrderableAt(now) ? 0 : 1);
+    }
+
+    /// <summary>Search engines show roughly 160 characters; cut on a word, not mid-word.</summary>
+    private static string Trim(string text)
+    {
+        if (text.Length <= 160) return text;
+        var cut = text[..160];
+        var space = cut.LastIndexOf(' ');
+        return (space > 100 ? cut[..space] : cut).TrimEnd(',', '.', ' ') + "…";
+    }
+
+    protected override void OnInitialized() => Cart.Changed += OnCartChanged;
+
+    /// <summary>Set when arriving from an offer card — that dish opens straight away.</summary>
+    [SupplyParameterFromQuery(Name = "dish")]
+    public int? DishId { get; set; }
+
+    /// <summary>The table a scanned card belongs to — shown as a chip in the header.</summary>
+    [SupplyParameterFromQuery(Name = "t")]
+    public int? TableNo { get; set; }
+
+    /// <summary>
+    /// Checkout, table-aware. A guest who scanned the table card orders from the seat
+    /// without an account — the sign-in wall between "hungry" and "ordered" is where a
+    /// scan gets abandoned — so their order goes straight to the kitchen from a small
+    /// dialog. Everyone else takes the normal checkout.
+    /// </summary>
+    /// <summary>Checkout is on its way — the bar shows a spinner instead of sitting mute.</summary>
+    private bool _going;
+
+    private async Task GoCheckout()
+    {
+        if (_going) return;   // a second tap while the first is working changes nothing
+        if (TableNo is > 0 and < 100)
+        {
+            var parameters = new DialogParameters
+            {
+                ["RestaurantId"] = Id,
+                ["Table"] = TableNo.Value,
+                ["StoreName"] = _detail?.Info is { } inf ? StoreText.Name(inf.Name, inf.Names, L) : "",
+            };
+            await Dialogs.ShowAsync<TableOrderDialog>("", parameters,
+                new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+            return;
+        }
+        _going = true;   // paint the spinner before the page changes under us
+        StateHasChanged();
+        Nav.NavigateTo("/checkout");
+    }
+
+    private int? _openedDish;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // A table guest belongs on the table page — this store, its menu, its chat —
+        // not on the open platform. Older printed cards linked here with ?t=; honour
+        // them by forwarding to where a fresh scan lands.
+        if (TableNo is > 0 and < 100 && await Api.ResolveTableAsync(Id, TableNo.Value) is { } table)
+        {
+            Nav.NavigateTo($"/reserve/{table.Code}", replace: true);
+            return;
+        }
+
+        // Fired together: three sequential awaits made the visitor pay each call's
+        // latency in full, twice over (prerender AND the live circuit run this).
+        var detail = Api.GetRestaurantAsync(Id);
+        var reviews = Api.GetRestaurantReviewsAsync(Id);
+        var photos = Api.GetStorePhotosAsync(Id);
+        var survey = Api.GetPublicSurveyAsync(Id);   // is the store asking its guests anything?
+        var promos = Api.GetStorePromotionsAsync(Id); // and what is it offering?
+        await Task.WhenAll(detail, reviews, photos, survey, promos);
+        _detail = detail.Result;
+        _reviews = reviews.Result;
+        _photos = photos.Result;
+        _hasSurvey = survey.Result is not null;
+        _promos = promos.Result;
+
+        // Arrived through the shop's own QR (?qr=1): the bar wears the shop's face for
+        // the rest of the visit — its logo, its name, no back button to the platform.
+        if (_detail?.Info is { } info &&
+            System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["qr"] == "1")
+            TableBrand.Set(StoreText.Name(info.Name, info.Names, L), info.LogoPhoto, info.LogoEmoji);
+        _ = Api.TrackStoreVisitAsync(Id); // anonymous count for the partner's analytics
+    }
+
+    /// <summary>
+    /// Opens the dish a customer arrived for from an offer card. It has to happen after
+    /// a render, never inside OnParametersSetAsync: OpenDish awaits the dialog's result,
+    /// so awaiting it from a lifecycle method stalls the render the dialog needs in order
+    /// to appear.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The optimistic stepper painted a working bar; this render IS the answer.
+        try { await JS.InvokeVoidAsync("mfQty.settled"); } catch { }
+
+        if (_detail is null || DishId is not { } wanted || wanted == _openedDish) return;
+        _openedDish = wanted;   // only once per arrival, not on every re-render
+
+        var dish = _detail.Categories.SelectMany(c => c.Items).FirstOrDefault(i => i.Id == wanted);
+        if (dish is not null) await OpenDish(dish);
+    }
+
+    private async Task Add(MenuItemDto dish)
+    {
+        if (_detail is null || !dish.OrderableAt(DateTime.Now)) return;
+        if (!await EnsureSameStoreAsync()) return;
+        Cart.Add(_detail.Info, dish);
+    }
+
+    private string StoreName(RestaurantCardDto r) => StoreText.Name(r.Name, r.Names, L);
+
+    /// <summary>
+    /// One store per basket. If the basket already holds another store's food the customer
+    /// chooses: clear it and start here, go and finish that order, or leave things as they are.
+    /// </summary>
+    private async Task<bool> EnsureSameStoreAsync()
+    {
+        var other = Cart.OtherStore(Id);
+        if (other is null || _detail is null) return true;
+        var here = StoreText.Name(_detail.Info.Name, _detail.Info.Names, L);
+        var choice = await Dialogs.ShowMessageBox(
+            L["cart.otherStore.title"],
+            string.Format(L["cart.otherStore.body"], Cart.Count, StoreName(other), here),
+            yesText: L["cart.otherStore.clear"], noText: L["cart.otherStore.goBasket"], cancelText: L["common.cancel"]);
+        if (choice == true) { Cart.Clear(); return true; }
+        if (choice == false) Nav.NavigateTo("/checkout");
+        return false;
+    }
+
+    /// <summary>Tapping the dish itself opens the Talabat-style sheet with quantity + notes.</summary>
+    /// <summary>Guards against fast double-taps stacking several dish sheets.</summary>
+    private bool _dishOpen;
+
+    private async Task OpenDish(MenuItemDto dish)
+    {
+        if (_detail is null || !dish.IsAvailable || _dishOpen) return;
+        // The sheet writes straight into the basket, so the one-store rule is settled first.
+        if (!await EnsureSameStoreAsync()) return;
+        // Outside its window the sheet still opens (people read the details), but the
+        // add path is closed there too.
+        _dishOpen = true;
+        _ = Api.TrackStoreVisitAsync(Id, dish.Id, dish.Name);
+
+        // The sheet writes to the basket as the customer taps, so all that is left here is
+        // to say what changed over the whole visit — one toast, not one per tap.
+        var had = Cart.QuantityOf(Id, dish.Id);
+        try
+        {
+            var parameters = new DialogParameters<DishDialog>
+            {
+                { d => d.Dish, dish },
+                { d => d.Restaurant, _detail.Info },   // opens on what's already in the basket
+            };
+            var dialog = await Dialogs.ShowAsync<DishDialog>("", parameters,
+                new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+            await dialog.Result;
+        }
+        finally { _dishOpen = false; }
+
+        var now = Cart.QuantityOf(Id, dish.Id);
+        if (now == had) return;
+
+        var name = dish.Names is { Count: > 0 } ? dish.NameFor(L.Locale) : L.Product(dish.Name);
+        Snackbar.Add(
+            now == 0 ? string.Format(L["dish.removedToast"], name)
+            : had > 0 ? string.Format(L["dish.updatedToast"], name, now)
+            : string.Format(L["dish.addedToast"], now, name),
+            now == 0 ? Severity.Normal : Severity.Success);
+    }
+
+    /// <summary>Arrived through a shop's QR — either this page's ?qr marker or a brand already set.</summary>
+    private bool FromQr =>
+        TableBrand.IsSet ||
+        System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["qr"] == "1";
+
+    private void OnCartChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Cart.Changed -= OnCartChanged;
+}

@@ -1,0 +1,916 @@
+﻿@namespace OrderOrange.ClientWeb.Components
+@inject OrderBot Bot
+@inject CartState Cart
+@inject LanguageService Lang
+@inject NavigationManager Nav
+@inject IHttpContextAccessor Http
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The offline AI ordering assistant — a floating bubble that opens a chat panel.
+   All understanding happens in-process (BotNlu/OrderBot); no external AI service. *@
+
+@if (!_open)
+{
+    <button type="button" class="mf-bot-fab @LiftClass" title="@Lang["bot.open"]" @onclick="Open">
+        @Spark
+        <span class="mf-bot-fab-badge">💬</span>
+        <span class="mf-bot-fab-ring"></span>
+    </button>
+}
+else
+{
+    <div class="mf-bot-panel">
+        <div class="mf-bot-head">
+            <div class="mf-bot-head-avatar">@Spark</div>
+            <div class="mf-bot-head-text">
+                <div class="mf-bot-head-title">@Lang["bot.title"]</div>
+            </div>
+            <button type="button" class="mf-bot-close" @onclick="Close">✕</button>
+        </div>
+
+        <div class="mf-bot-scroll" id="mf-bot-scroll">
+            @foreach (var message in Bot.Messages)
+            {
+                var isLast = message == Bot.Messages[^1];
+                var asCartCard = RenderAsCartCard(message);
+                <div class="mf-bot-row @(message.FromBot ? "" : "mine")">
+                    @if (message.FromBot)
+                    {
+                        <div class="mf-bot-msg-avatar">@Spark</div>
+                    }
+                    <div class="mf-bot-bubble @(asCartCard || message.Bill is not null ? "wide" : "")">
+                        @if (asCartCard)
+                        {
+                            @* Live modern basket — bound directly to the cart. *@
+                            <div class="mf-bot-cart">
+                                @foreach (var group in Cart.Groups)
+                                {
+                                <div class="mf-bot-cart-head" style="--vh: @OrderBot.HueOf(group.Restaurant.Name)">
+                                    <span class="em">@group.Restaurant.LogoEmoji</span>
+                                    <div class="tx">
+                                        <b>@group.Restaurant.Name</b>
+                                        <span>@group.Count @Lang["common.items"] · @Fmt.Rial(group.Subtotal)</span>
+                                    </div>
+                                </div>
+                                @foreach (var line in group.Lines.ToList())
+                                {
+                                    var l = line;
+                                    <div class="mf-bot-cart-row">
+                                        @if ((l.Item.Photo ?? FoodPhoto.ForDish(l.Item.Name)
+                                              ?? FoodPhoto.ForRestaurant(l.Restaurant.Cuisine, l.Item.Id)) is string photo)
+                                        {
+                                            <img class="ph" src="@photo" alt="" loading="lazy" />
+                                        }
+                                        else
+                                        {
+                                            <span class="ph em">@l.Item.ImageEmoji</span>
+                                        }
+                                        <div class="inf">
+                                            <div class="nm">@Lang.Product(l.Item.Name)</div>
+                                            <div class="pr mf-money">@Fmt.Rial(l.Item.FinalPrice)</div>
+                                        </div>
+                                        <div class="stp">
+                                            <button type="button" @onclick="() => Cart.Decrement(l)">−</button>
+                                            <span>@l.Quantity</span>
+                                            <button type="button" class="plus" @onclick="() => Cart.Increment(l)">+</button>
+                                        </div>
+                                        @* The currency is stated once in the subtotal — repeating it on every
+                                           row cost the width the product name needed. *@
+                                        <div class="tot mf-money">@Fmt.Amount(l.LineTotal)</div>
+                                    </div>
+                                }
+                                @if (!group.MeetsMinimum)
+                                {
+                                    <div class="mf-bot-cart-min">
+                                        ⚠️ @((MarkupString)string.Format(Lang["rest.minWarn"], Fmt.Rial(group.Restaurant.MinOrder), Fmt.Rial(group.Missing)))
+                                    </div>
+                                }
+                                }
+                                @if (Cart.IsMultiStore)
+                                {
+                                    <div class="mf-bot-cart-note">
+                                        🧾 @string.Format(Lang["cart.separateOrders"], Cart.Groups.Count)
+                                    </div>
+                                }
+                                <div class="mf-bot-cart-total">
+                                    <span>@Lang["common.subtotal"]</span>
+                                    <b class="mf-money">@Fmt.Rial(Cart.Subtotal)</b>
+                                </div>
+                                <div class="mf-bot-cart-actions">
+                                    <button type="button" class="go" @onclick='() => OnChip(new OrderBot.BotChip(Lang["bot.chipCheckout"], "act:checkout"))'>@Lang["bot.chipCheckout"]</button>
+                                    <button type="button" class="alt" @onclick='() => OnChip(new OrderBot.BotChip(Lang["bot.chipMore"], "act:more"))'>@Lang["bot.chipMore"]</button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            @if (message.Banner is { } banner)
+                            {
+                                <div class="mf-bot-banner" style="--vh: @banner.Hue">
+                                    <span class="no">🧾 @banner.Title</span>
+                                    <span class="ven"><span class="e">@banner.VenueEmoji</span>@banner.Venue</span>
+                                    @if (banner.BadgeText is not null)
+                                    {
+                                        <span class="bdg @banner.BadgeTone">@banner.BadgeText</span>
+                                    }
+                                </div>
+                            }
+                            <div class="mf-bot-text">@message.Text</div>
+                            @if (message.Bill is { } bill)
+                            {
+                                @* The confirmation receipt — a real bill, not a wall of text. *@
+                                <div class="mf-bot-bill">
+                                    <div class="mf-bot-bill-head" style="--vh: @bill.Hue">
+                                        <span class="em">@bill.VenueEmoji</span>
+                                        <b>@bill.Venue</b>
+                                    </div>
+                                    <div class="mf-bot-bill-items">
+                                        @foreach (var line in bill.Items)
+                                        {
+                                            <div class="ln"><span class="tx">@line.Text</span><span class="am mf-money">@line.Amount</span></div>
+                                        }
+                                    </div>
+                                    <div class="mf-bot-bill-charges">
+                                        @foreach (var line in bill.Charges)
+                                        {
+                                            <div class="ln @line.Tone"><span class="tx">@line.Text</span><span class="am mf-money">@line.Amount</span></div>
+                                        }
+                                    </div>
+                                    <div class="mf-bot-bill-total">
+                                        <span>@bill.TotalLabel</span>
+                                        <b class="mf-money">@bill.Total</b>
+                                    </div>
+                                    <div class="mf-bot-bill-row">
+                                        <span class="em">@bill.AddressEmoji</span>
+                                        <span class="tx">
+                                            <b>@bill.AddressLabel</b>
+                                            @if (bill.Address.Length > 0)
+                                            {
+                                                <span>@bill.Address</span>
+                                            }
+                                        </span>
+                                    </div>
+                                    <div class="mf-bot-bill-row">
+                                        <span class="em">@bill.PaymentEmoji</span>
+                                        <span class="tx">
+                                            <b>@bill.Payment</b>
+                                            <span>@bill.PaymentLabel</span>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="mf-bot-bill-foot">@bill.Footer</div>
+                            }
+                        }
+                        <div class="mf-bot-time">@message.At.ToString("HH:mm")</div>
+                    </div>
+                </div>
+                @if (message.QtyPicker && isLast && !Bot.Busy)
+                {
+                    SyncQtyPicker(message);
+                    <div class="mf-bot-qty">
+                        <div class="stp">
+                            <button type="button" @onclick="() => { if (_qty > 1) _qty--; }">−</button>
+                            <span>@_qty</span>
+                            <button type="button" class="plus" @onclick="() => { if (_qty < 50) _qty++; }">+</button>
+                        </div>
+                        <button type="button" class="ok" @onclick="ConfirmQty">✓ @Lang["dish.add"]</button>
+                    </div>
+                }
+                @if (message.OptionCards.Count > 0)
+                {
+                    var live = message == LastOptionMessage && !Bot.Busy;
+                    <div class="mf-bot-opts @(live ? "" : "stale")">
+                        @foreach (var card in message.OptionCards)
+                        {
+                            var c = card;
+                            <button type="button" class="mf-bot-opt" disabled="@(!live)"
+                                    style="--vh: @c.Hue" @onclick="() => OnOptionCard(c)">
+                                @if (c.Photo is string photo)
+                                {
+                                    <img class="ph" src="@photo" alt="" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <span class="ph em">@c.Emoji</span>
+                                }
+                                <span class="inf">
+                                    <span class="nm">@c.Title</span>
+                                    @if (c.Subtitle is not null)
+                                    {
+                                        <span class="sb">@c.Subtitle</span>
+                                    }
+                                    @if (c.Venue is not null || c.BadgeText is not null || c.Closed)
+                                    {
+                                        <span class="tags">
+                                            @if (c.Venue is not null)
+                                            {
+                                                <span class="ven"><span class="e">@c.VenueEmoji</span>@c.Venue</span>
+                                            }
+                                            @if (c.BadgeText is not null)
+                                            {
+                                                <span class="bdg @c.BadgeTone">@c.BadgeText</span>
+                                            }
+                                            @if (c.Closed)
+                                            {
+                                                <span class="bdg off">@Lang["home.closed"]</span>
+                                            }
+                                        </span>
+                                    }
+                                </span>
+                                @if (c.Price.Length > 0)
+                                {
+                                    <span class="prc">@c.Price</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+                @if (message.FromBot && message.Chips.Count > 0 && isLast && !Bot.Busy && !asCartCard)
+                {
+                    <div class="mf-bot-chips">
+                        @foreach (var chip in message.Chips)
+                        {
+                            var c = chip;
+                            <button type="button" class="mf-bot-chip" @onclick="() => OnChip(c)">@c.Label</button>
+                        }
+                    </div>
+                }
+            }
+            @if (Bot.Busy)
+            {
+                <div class="mf-bot-row">
+                    <div class="mf-bot-msg-avatar">@Spark</div>
+                    <div class="mf-bot-bubble mf-bot-typing"><span></span><span></span><span></span></div>
+                </div>
+            }
+        </div>
+
+        <div class="mf-bot-composer">
+            @* dir=auto: typing English in an Arabic UI (or vice versa) keeps the
+               text flowing in its own natural direction. *@
+            <input id="@InputId" class="mf-bot-input" placeholder="@Lang["bot.placeholder"]"
+                   autocomplete="off" dir="auto"
+                   @oninput="e => _draft = e.Value?.ToString() ?? string.Empty"
+                   @onkeydown="OnKeyDown" />
+            <button type="button" class="mf-bot-send" disabled="@Bot.Busy" @onclick="SendDraft">➤</button>
+        </div>
+    </div>
+}
+
+<style>
+    .mf-bot-fab {
+        position: fixed;
+        inset-inline-end: 18px;
+        bottom: 24px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+        z-index: 1292; /* below MudBlazor dialogs (1400) and the order-chat FAB (1295) */
+        background: linear-gradient(135deg, #FF5A00, #E04E00);
+        box-shadow: 0 6px 22px rgba(224, 78, 0, .45);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform .15s ease;
+    }
+    .mf-bot-fab:hover { transform: scale(1.08); }
+    /* The track page has its own driver-chat FAB in this corner — stack above it. */
+    .mf-bot-fab.raised { bottom: 96px; }
+    .mf-bot-fab .mf-bot-spark {
+        width: 32px; height: 32px;
+        color: #fff;
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .18));
+    }
+    .mf-bot-fab-badge {
+        position: absolute;
+        top: -4px;
+        inset-inline-end: -4px;
+        width: 24px; height: 24px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, .2);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; line-height: 1;
+    }
+    .mf-bot-fab-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 90, 0, .5);
+        animation: mf-bot-pulse 2.2s ease-out infinite;
+        pointer-events: none;
+    }
+    @@keyframes mf-bot-pulse {
+        0% { transform: scale(1); opacity: .8; }
+        70% { transform: scale(1.55); opacity: 0; }
+        100% { transform: scale(1.55); opacity: 0; }
+    }
+
+    .mf-bot-panel {
+        position: fixed;
+        inset-inline-end: 18px;
+        bottom: 18px;
+        width: 400px;
+        max-width: calc(100vw - 36px);
+        height: 620px;
+        max-height: calc(100dvh - 36px);
+        z-index: 1390; /* above content and bottom nav, below MudBlazor dialogs (1400) */
+        display: flex;
+        flex-direction: column;
+        border-radius: 22px;
+        overflow: hidden;
+        background: var(--mud-palette-surface, #fff);
+        box-shadow: 0 18px 60px rgba(0, 0, 0, .28);
+        animation: mf-bot-in .18s ease-out;
+    }
+    @@keyframes mf-bot-in {
+        from { transform: translateY(14px); opacity: 0; }
+        to { transform: none; opacity: 1; }
+    }
+
+    .mf-bot-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+        background: linear-gradient(135deg, #FF5A00, #D14700);
+        color: #fff;
+    }
+    .mf-bot-head-avatar {
+        width: 42px; height: 42px;
+        border-radius: 50%;
+        background: #fff;
+        display: flex; align-items: center; justify-content: center;
+        overflow: hidden;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, .35);
+    }
+    .mf-bot-head-avatar .mf-bot-spark { width: 26px; height: 26px; color: #FF5A00; }
+    .mf-bot-head-text { flex: 1; min-width: 0; }
+    .mf-bot-head-title { font-weight: 800; font-size: 15.5px; }
+    .mf-bot-close {
+        border: none; background: rgba(255, 255, 255, .15); color: #fff;
+        width: 30px; height: 30px; border-radius: 50%;
+        cursor: pointer; font-size: 14px;
+    }
+    .mf-bot-close:hover { background: rgba(255, 255, 255, .3); }
+
+    .mf-bot-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 14px 12px;
+        background: var(--mud-palette-background, #FAF6F1);
+    }
+    .mf-bot-row { display: flex; align-items: flex-end; gap: 7px; margin-bottom: 10px; }
+    .mf-bot-row.mine { flex-direction: row-reverse; }
+    .mf-bot-msg-avatar {
+        width: 28px; height: 28px; border-radius: 50%;
+        background: #fff;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        overflow: hidden;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .15);
+    }
+    .mf-bot-msg-avatar .mf-bot-spark { width: 17px; height: 17px; color: #FF5A00; }
+    .mf-bot-bubble {
+        max-width: 82%;
+        padding: 9px 12px;
+        /* Logical corners: the "tail" hugs the avatar side in RTL too. */
+        border-start-start-radius: 16px;
+        border-start-end-radius: 16px;
+        border-end-end-radius: 16px;
+        border-end-start-radius: 5px;
+        background: var(--mud-palette-surface, #fff);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .07);
+        font-size: 13.8px;
+        line-height: 1.45;
+    }
+    .mf-bot-row.mine .mf-bot-bubble {
+        background: linear-gradient(135deg, #FF5A00, #E04E00);
+        color: #fff;
+        border-start-start-radius: 16px;
+        border-start-end-radius: 16px;
+        border-end-end-radius: 5px;
+        border-end-start-radius: 16px;
+    }
+    .mf-bot-bubble.wide { max-width: 96%; width: 96%; }
+
+    /* ── Modern live basket card ── */
+    .mf-bot-cart { display: flex; flex-direction: column; gap: 8px; padding: 2px 0; }
+    .mf-bot-cart-head {
+        display: flex; align-items: center; gap: 9px;
+        padding-bottom: 8px;
+        border-bottom: 1px dashed rgba(0, 0, 0, .1);
+    }
+    .mf-bot-cart-head .em {
+        font-size: 24px; width: 38px; height: 38px; border-radius: 11px;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        background: hsl(var(--vh, 24) 88% 95%);
+        border: 1px solid hsl(var(--vh, 24) 70% 87%);
+    }
+    .mf-bot-cart-head .tx { display: flex; flex-direction: column; line-height: 1.25; }
+    /* Same restaurant colour as the cards the items came from. */
+    .mf-bot-cart-head .tx b { font-size: 14.5px; color: hsl(var(--vh, 24) 62% 34%); unicode-bidi: plaintext; }
+    .mf-bot-cart-head .tx span { font-size: 11.5px; opacity: .6; }
+    .mf-bot-cart-row { display: flex; align-items: center; gap: 8px; }
+    .mf-bot-cart-row .ph {
+        width: 42px; height: 42px; border-radius: 12px; object-fit: cover; flex-shrink: 0;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+    }
+    .mf-bot-cart-row .ph.em {
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px; background: #FFF3EA;
+    }
+    .mf-bot-cart-row .inf { flex: 1; min-width: 0; }
+    .mf-bot-cart-row .nm {
+        font-size: 13px; font-weight: 700;
+        /* Two lines: translated names ("آب معدنی 500 میلی‌لیتر") are far longer than
+           the English they replace and were being cut mid-word on one line. The
+           max-height does the real work — -webkit-box gets blockified here, so the
+           clamp alone would let a long name grow the row without limit. */
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden; line-height: 1.25; max-height: 2.5em;
+        unicode-bidi: plaintext;
+    }
+    .mf-bot-cart-row .pr { font-size: 11.5px; opacity: .6; }
+    .mf-bot-cart-row .stp {
+        display: flex; align-items: center; gap: 2px;
+        background: #FFF3EA; border-radius: 999px; padding: 2px;
+        flex-shrink: 0;
+    }
+    .mf-bot-cart-row .stp button {
+        width: 23px; height: 23px; border: none; border-radius: 50%;
+        background: #fff; color: #E04E00; font-size: 15px; font-weight: 800;
+        cursor: pointer; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+    }
+    .mf-bot-cart-row .stp button.plus { background: #FF5A00; color: #fff; box-shadow: none; }
+    .mf-bot-cart-row .stp span { min-width: 18px; text-align: center; font-weight: 800; font-size: 13px; }
+    .mf-bot-cart-row .tot {
+        font-weight: 800; font-size: 12.5px;
+        flex-shrink: 0; text-align: end;
+    }
+
+    /* Money always reads left-to-right ("10.200 OMR"), even inside an Arabic or Persian
+       line, and never breaks across two lines. Without the isolate the bidi algorithm
+       reorders the amount and strands the currency or the closing bracket. */
+    .mf-money {
+        direction: ltr;
+        unicode-bidi: isolate;
+        white-space: nowrap;
+    }
+    .mf-bot-cart-total {
+        display: flex; justify-content: space-between; align-items: center;
+        padding-top: 8px; border-top: 1px dashed rgba(0, 0, 0, .1);
+        font-size: 13.5px;
+    }
+    .mf-bot-cart-total b { color: #E04E00; font-size: 15px; }
+    .mf-bot-cart-min {
+        font-size: 11.5px; background: #FFF6E5; color: #8a5a00;
+        border-radius: 10px; padding: 6px 10px;
+    }
+    /* Says out loud that a mixed basket becomes one order per restaurant. */
+    .mf-bot-cart-note {
+        font-size: 11.5px; background: #EEF4FF; color: #26467a;
+        border-radius: 10px; padding: 6px 10px;
+    }
+    .mf-bot-cart .mf-bot-cart-head + .mf-bot-cart-head,
+    .mf-bot-cart-row + .mf-bot-cart-head { margin-top: 10px; }
+    .mf-bot-cart-actions { display: flex; gap: 8px; }
+    .mf-bot-cart-actions button {
+        flex: 1; border: none; border-radius: 12px; padding: 9px 8px;
+        font-size: 13px; font-weight: 800; cursor: pointer; font-family: inherit;
+    }
+    .mf-bot-cart-actions .go {
+        background: linear-gradient(135deg, #2e7d32, #43a047); color: #fff;
+        box-shadow: 0 3px 10px rgba(46, 125, 50, .35);
+    }
+    .mf-bot-cart-actions .alt {
+        background: #FFF3EA; color: #E04E00;
+    }
+
+    /* ── Confirmation bill (the "please confirm your order" receipt) ── */
+    .mf-bot-bill {
+        margin-top: 9px;
+        border-radius: 14px;
+        background: var(--mud-palette-surface, #fff);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, .09);
+        overflow: hidden;
+    }
+    .mf-bot-bill-head {
+        display: flex; align-items: center; gap: 8px;
+        padding: 9px 11px;
+        background: hsl(var(--vh, 24) 88% 96%);
+        border-bottom: 1px solid hsl(var(--vh, 24) 70% 89%);
+    }
+    .mf-bot-bill-head .em { font-size: 19px; line-height: 1; }
+    .mf-bot-bill-head b {
+        font-size: 14px; color: hsl(var(--vh, 24) 62% 34%);
+        unicode-bidi: plaintext; min-width: 0;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .mf-bot-bill-items, .mf-bot-bill-charges { padding: 8px 11px; }
+    .mf-bot-bill-charges { border-top: 1px dashed rgba(0, 0, 0, .1); }
+    .mf-bot-bill .ln {
+        display: flex; align-items: baseline; gap: 10px;
+        padding: 3px 0; font-size: 13px;
+    }
+    .mf-bot-bill .ln .tx { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+    .mf-bot-bill .ln .am { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .mf-bot-bill-charges .ln { font-size: 12.5px; opacity: .78; }
+    .mf-bot-bill-charges .ln.off, .mf-bot-bill-charges .ln.off .am { color: #2e7d32; opacity: 1; }
+    .mf-bot-bill-total {
+        display: flex; justify-content: space-between; align-items: center; gap: 10px;
+        padding: 10px 11px;
+        background: linear-gradient(135deg, #FF5A00, #ff8a3d);
+        color: #fff; font-size: 13px; font-weight: 800;
+        text-transform: uppercase; letter-spacing: .4px;
+    }
+    .mf-bot-bill-total b {
+        font-size: 17px; letter-spacing: 0; text-transform: none;
+        white-space: nowrap; font-variant-numeric: tabular-nums;
+    }
+    .mf-bot-bill-row {
+        display: flex; align-items: center; gap: 9px;
+        padding: 9px 11px;
+        border-top: 1px solid rgba(0, 0, 0, .06);
+    }
+    .mf-bot-bill-row .em {
+        font-size: 17px; width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: #FFF3EA;
+    }
+    .mf-bot-bill-row .tx { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+    .mf-bot-bill-row .tx b { font-size: 13px; unicode-bidi: plaintext; overflow-wrap: anywhere; }
+    .mf-bot-bill-row .tx span { font-size: 11.5px; opacity: .6; overflow-wrap: anywhere; }
+    .mf-bot-bill-foot { margin-top: 8px; font-size: 11.5px; opacity: .62; line-height: 1.45; }
+
+    /* ── Quantity stepper (the "how many?" answer) ── */
+    .mf-bot-qty {
+        display: flex; align-items: center; gap: 10px;
+        margin-block: -2px 12px;
+        margin-inline-start: 35px;
+    }
+    .mf-bot-qty .stp {
+        display: flex; align-items: center; gap: 4px;
+        background: var(--mud-palette-surface, #fff);
+        border-radius: 999px; padding: 4px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .1);
+    }
+    .mf-bot-qty .stp button {
+        width: 34px; height: 34px; border: none; border-radius: 50%;
+        background: #FFF3EA; color: #E04E00;
+        font-size: 19px; font-weight: 800; line-height: 1; cursor: pointer;
+        transition: transform .1s ease;
+    }
+    .mf-bot-qty .stp button:active { transform: scale(.92); }
+    .mf-bot-qty .stp button.plus { background: #FF5A00; color: #fff; }
+    .mf-bot-qty .stp span {
+        min-width: 30px; text-align: center;
+        font-size: 16px; font-weight: 800;
+    }
+    .mf-bot-qty .ok {
+        border: none; border-radius: 999px; padding: 10px 20px;
+        background: linear-gradient(135deg, #2e7d32, #43a047); color: #fff;
+        font-size: 13.5px; font-weight: 800; cursor: pointer; font-family: inherit;
+        box-shadow: 0 3px 10px rgba(46, 125, 50, .35);
+    }
+
+    /* ── Product option cards (search / menu results) ── */
+    .mf-bot-opts {
+        display: flex; flex-direction: column; gap: 7px;
+        margin-block: -2px 12px;
+        margin-inline-start: 35px;
+    }
+    .mf-bot-opts.stale { opacity: .55; }
+    .mf-bot-opt {
+        display: flex; align-items: center; gap: 10px;
+        border: none; border-radius: 14px; padding: 7px 10px;
+        background: var(--mud-palette-surface, #fff);
+        box-shadow: 0 1px 5px rgba(0, 0, 0, .08);
+        cursor: pointer; text-align: start; font-family: inherit;
+        transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .mf-bot-opt:not(:disabled):hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(224, 78, 0, .18);
+    }
+    .mf-bot-opt:disabled { cursor: default; }
+    .mf-bot-opt .ph {
+        width: 46px; height: 46px; border-radius: 12px; object-fit: cover; flex-shrink: 0;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+    }
+    .mf-bot-opt .ph.em {
+        display: flex; align-items: center; justify-content: center;
+        font-size: 26px; background: #FFF3EA;
+    }
+    .mf-bot-opt .inf { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .mf-bot-opt .nm {
+        font-size: 13.2px; font-weight: 700; color: var(--mud-palette-text-primary, #2b2119);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        unicode-bidi: plaintext;
+    }
+    .mf-bot-opt .sb {
+        font-size: 11.5px; opacity: .6; color: var(--mud-palette-text-primary, #2b2119);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        unicode-bidi: plaintext;
+    }
+    .mf-bot-opt .prc {
+        font-size: 12.2px; font-weight: 800; color: #E04E00;
+        background: #FFF3EA; border-radius: 999px; padding: 4px 9px;
+        white-space: nowrap; flex-shrink: 0;
+        direction: ltr; unicode-bidi: isolate;
+    }
+
+    /* ── Colour-coded venue + status ──
+       Every card carries --vh, a hue picked from the restaurant's NAME (OrderBot.HueOf),
+       so "Bella Napoli" is the same colour in every list, and two restaurants in one set
+       of results never look alike. The edge stripe reads at a glance; the pill names it. */
+    .mf-bot-opt { border-inline-start: 3px solid hsl(var(--vh, 24) 68% 55%); }
+    .mf-bot-opt .tags {
+        display: flex; align-items: center; gap: 5px;
+        margin-top: 3px; flex-wrap: wrap;
+    }
+    .mf-bot-opt .ven, .mf-bot-banner .ven {
+        display: inline-flex; align-items: center; gap: 4px;
+        max-width: 100%; min-width: 0;
+        padding: 1.5px 8px; border-radius: 999px;
+        font-size: 11.3px; font-weight: 700; line-height: 1.5;
+        background: hsl(var(--vh, 24) 88% 95%);
+        color: hsl(var(--vh, 24) 62% 34%);
+        border: 1px solid hsl(var(--vh, 24) 70% 87%);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        unicode-bidi: plaintext;
+    }
+    .mf-bot-opt .ven .e, .mf-bot-banner .ven .e { font-size: 12px; }
+    .mf-bot-opt .bdg, .mf-bot-banner .bdg {
+        padding: 1.5px 8px; border-radius: 999px;
+        font-size: 11px; font-weight: 800; line-height: 1.5;
+        white-space: nowrap; unicode-bidi: plaintext;
+    }
+    /* Status tones — the order's own progress colour, not the restaurant's. */
+    .bdg.wait  { background: #FFF4D6; color: #8A5B00; }
+    .bdg.ok    { background: #E3F0FF; color: #14509E; }
+    .bdg.cook  { background: #FFE9DA; color: #A33B00; }
+    .bdg.ready { background: #EDE7FF; color: #4A31A8; }
+    .bdg.way   { background: #DDF4F1; color: #0A6B62; }
+    .bdg.done  { background: #DFF5E1; color: #1B6B2B; }
+    .bdg.off   { background: #EFEBE8; color: #6A6259; }
+
+    /* Order banner above a status message. */
+    .mf-bot-banner {
+        display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+        margin-bottom: 7px; padding-bottom: 7px;
+        border-bottom: 1px solid rgba(0, 0, 0, .07);
+    }
+    .mf-bot-banner .no {
+        font-size: 12.5px; font-weight: 800;
+        color: var(--mud-palette-text-primary, #2b2119);
+        unicode-bidi: plaintext;
+    }
+
+    .mf-bot-text {
+        white-space: pre-line;
+        word-break: break-word;
+        /* Chat text mixes languages line by line ("1. 🍕 مارجريتا — 2.800 OMR ·
+           Bella Napoli"). plaintext gives EVERY line its own base direction from
+           its first strong character, so Arabic lines read right-to-left and
+           English lines left-to-right inside the same bubble — without it, RTL
+           mode visually scrambles mixed lines. */
+        unicode-bidi: plaintext;
+    }
+    .mf-bot-time { font-size: 10px; opacity: .55; margin-top: 3px; text-align: end; }
+
+    .mf-bot-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-block: -2px 12px;
+        margin-inline-start: 35px; /* logical: aligns under the bot bubble in RTL too */
+    }
+    .mf-bot-row.mine + .mf-bot-chips { margin-inline-start: 0; }
+    .mf-bot-chip {
+        border: 1.5px solid rgba(255, 90, 0, .45);
+        background: var(--mud-palette-surface, #fff);
+        color: #E04E00;
+        border-radius: 999px;
+        padding: 6px 13px;
+        font-size: 12.8px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: background .12s ease, color .12s ease;
+        unicode-bidi: plaintext;  /* mixed-language labels render sanely in RTL */
+    }
+    .mf-bot-chip:hover { background: #FF5A00; color: #fff; }
+
+    .mf-bot-typing { display: flex; gap: 4px; padding: 12px 14px; }
+    .mf-bot-typing span {
+        width: 7px; height: 7px; border-radius: 50%;
+        background: #C9BEB2;
+        animation: mf-bot-blink 1.2s infinite;
+    }
+    .mf-bot-typing span:nth-child(2) { animation-delay: .2s; }
+    .mf-bot-typing span:nth-child(3) { animation-delay: .4s; }
+    @@keyframes mf-bot-blink {
+        0%, 60%, 100% { opacity: .35; transform: translateY(0); }
+        30% { opacity: 1; transform: translateY(-3px); }
+    }
+
+    .mf-bot-composer {
+        display: flex;
+        gap: 8px;
+        padding: 10px 12px;
+        background: var(--mud-palette-surface, #fff);
+        border-top: 1px solid rgba(0, 0, 0, .06);
+    }
+    .mf-bot-input {
+        flex: 1;
+        border: 1.5px solid rgba(0, 0, 0, .12);
+        border-radius: 999px;
+        padding: 9px 15px;
+        font-size: 13.8px;
+        outline: none;
+        background: var(--mud-palette-background, #FAF6F1);
+        font-family: inherit;
+    }
+    .mf-bot-input:focus { border-color: #FF5A00; }
+    .mf-bot-send {
+        width: 40px; height: 40px;
+        border: none; border-radius: 50%;
+        background: linear-gradient(135deg, #FF5A00, #E04E00);
+        color: #fff; font-size: 16px;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .mf-bot-send:disabled { opacity: .5; cursor: default; }
+    [dir='rtl'] .mf-bot-send { transform: scaleX(-1); }
+
+    @@media (max-width: 640px) {
+        /* Stacked from the bottom edge: nav bar, then basket bar, then this. */
+        .mf-bot-fab { bottom: 86px; }
+        .mf-bot-fab.raised { bottom: 158px; }
+        .mf-bot-panel {
+            inset: 0;
+            width: 100%;
+            max-width: 100%;
+            height: 100dvh;
+            max-height: 100dvh;
+            border-radius: 0;
+        }
+    }
+
+    /* The basket bar only exists below 600px — matching that exactly, so the button
+       isn't lifted over empty space on a tablet where the bar is hidden. */
+    @@media (max-width: 599.98px) {
+        .mf-bot-fab.has-basket { bottom: 146px; }
+        .mf-bot-fab.raised.has-basket { bottom: 218px; }
+    }
+</style>
+
+@code {
+    // AI sparkle mark (color via CSS currentColor) — used on the FAB and all bot avatars.
+    private static readonly RenderFragment Spark =
+        @<svg class="mf-bot-spark" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path fill="currentColor" d="M10.5 4 Q11.5 11 18.5 12 Q11.5 13 10.5 20 Q9.5 13 2.5 12 Q9.5 11 10.5 4 Z" />
+            <path fill="currentColor" d="M19 2 Q19.5 5 22.5 5.5 Q19.5 6 19 9 Q18.5 6 15.5 5.5 Q18.5 5 19 2 Z" />
+        </svg>;
+
+    private const string InputId = "mf-bot-input";
+    private bool _open;
+    private string _draft = "";
+    private int _renderedMessages = -1;
+
+    private bool OnTrackPage =>
+        Nav.ToBaseRelativePath(Nav.Uri).StartsWith("track/", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Two things can occupy this corner above the bottom nav: the basket bar (whenever
+    /// there is something in the basket) and the track page's own courier-chat button.
+    /// Lift the assistant clear of whichever are showing instead of sitting on them.
+    /// </summary>
+    private string LiftClass => (OnTrackPage, Cart.Count > 0) switch
+    {
+        (true, true) => "raised has-basket",
+        (true, false) => "raised",
+        (false, true) => "has-basket",
+        _ => "",
+    };
+
+    private OrderBot.BotMessage? LastOptionMessage =>
+        Bot.Messages.LastOrDefault(m => m.OptionCards.Count > 0);
+
+    /// <summary>Only the newest cart message is live — older ones show their text.</summary>
+    private bool RenderAsCartCard(OrderBot.BotMessage message) =>
+        message.CartCard &&
+        ReferenceEquals(message, Bot.Messages.LastOrDefault(m => m.CartCard)) &&
+        Cart.Lines.Count > 0;
+
+    private async Task OnOptionCard(OrderBot.BotOptionView card) =>
+        await Bot.SendAsync(card.Title, $"opt:{card.Number}");
+
+    private int _qty = 1;
+    private OrderBot.BotMessage? _qtyFor;
+
+    /// <summary>A fresh "how many?" question starts back at 1.</summary>
+    private void SyncQtyPicker(OrderBot.BotMessage message)
+    {
+        if (ReferenceEquals(_qtyFor, message)) return;
+        _qtyFor = message;
+        _qty = 1;
+    }
+
+    private async Task ConfirmQty() =>
+        await Bot.SendAsync(_qty.ToString(), $"qty:{_qty}");
+
+    protected override void OnInitialized()
+    {
+        // The only moment a real HttpContext exists in a circuit. Behind IIS and Cloudflare
+        // the visitor is the FIRST hop in X-Forwarded-For; the socket is the proxy.
+        if (Http.HttpContext is { } context)
+        {
+            var forwarded = context.Request.Headers["X-Forwarded-For"].ToString();
+            Bot.VisitorIp = forwarded.Split(',', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim()
+                            ?? context.Connection.RemoteIpAddress?.ToString();
+        }
+        Bot.Page = Nav.ToBaseRelativePath(Nav.Uri) is { Length: > 0 } rel ? "/" + rel : "/";
+        Bot.Changed += OnBotChanged;
+        Lang.Changed += OnLangChanged;
+        Nav.LocationChanged += OnLocationChanged;
+        Cart.Changed += OnCartChanged;
+    }
+
+    private void OnCartChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void Open()
+    {
+        _open = true;
+        _draft = "";   // the old input element is gone; never ghost-send stale text
+        Bot.Start();
+    }
+
+    private void Close() => _open = false;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        // IsComposing: Enter inside a Japanese/Chinese IME just commits the
+        // composition — it must not send the half-typed message.
+        if (e.Key == "Enter" && !e.IsComposing) await SendDraft();
+    }
+
+    private async Task SendDraft()
+    {
+        var text = _draft.Trim();
+        if (text.Length == 0 || Bot.Busy) return;
+        _draft = "";
+        try { await JS.InvokeVoidAsync("mfChat.clearInput", InputId); } catch { }
+        await Bot.SendAsync(text);
+    }
+
+    private async Task OnChip(OrderBot.BotChip chip)
+    {
+        if (chip.Payload.StartsWith("nav:", StringComparison.Ordinal))
+        {
+            _open = false;
+            Nav.NavigateTo(chip.Payload[4..]);
+            return;
+        }
+        await Bot.SendAsync(chip.Label, chip.Payload);
+    }
+
+    private void OnBotChanged() => _ = InvokeAsync(async () =>
+    {
+        StateHasChanged();
+        try { await JS.InvokeVoidAsync("mfBot.scroll", "mf-bot-scroll"); } catch { }
+    });
+
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        Bot.Page = Nav.ToBaseRelativePath(Nav.Uri) is { Length: > 0 } moved ? "/" + moved : "/";
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Scroll only when the conversation actually grew — not on every
+        // keystroke re-render, which would fight the user reading history.
+        var count = Bot.Messages.Count + (Bot.Busy ? 1 : 0);
+        if (_open && count != _renderedMessages)
+        {
+            _renderedMessages = count;
+            try { await JS.InvokeVoidAsync("mfBot.scroll", "mf-bot-scroll"); } catch { }
+        }
+    }
+
+    public void Dispose()
+    {
+        Bot.Changed -= OnBotChanged;
+        Lang.Changed -= OnLangChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+        Cart.Changed -= OnCartChanged;
+    }
+}

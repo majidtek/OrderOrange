@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- The server-only half of ClientCore: needs the ASP.NET Core shared framework, which a
+       WebAssembly app cannot carry. Referenced by the Blazor Server apps only. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\OrderOrange.ClientCore\OrderOrange.ClientCore.csproj" />
+  </ItemGroup>
+
+</Project>

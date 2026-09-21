@@ -1,0 +1,45 @@
+@inherits LayoutComponentBase
+@inject LanguageService Lang
+@implements IDisposable
+
+@* The kitchen's own layout: session, theme, direction — and nothing else. No app bar, no
+   drawer, no container, no page padding. A screen bolted above a pass has room for tickets
+   and for nothing at all besides. *@
+
+<MudThemeProvider Theme="MainLayout.Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    <SessionGate>
+        <SignedOut>
+            <LoginView AppName="OrderOrange Kitchen" GuideUrl="guide.html"
+                       Tagline="@Lang["kds.tagline"]"
+                       LogoUrl="_content/OrderOrange.ClientCore/logo.svg?v=4"
+                       PartnerRegister="true"
+                       RegisterHref="/register"
+                       PasswordOnly="true"
+                       GooglePartner="true"
+                       AllowedRoles="new[] { UserRole.RestaurantOwner }"
+                       WrongRoleMessage="@Lang["login.ptrWrong"]" />
+        </SignedOut>
+        <SignedIn>
+            <div class="kds-root">
+                @Body
+            </div>
+        </SignedIn>
+    </SessionGate>
+</MudRTLProvider>
+
+@code {
+    // Arriving straight at /kds (or reloading the screen at 7am) must not fall back to
+    // the default locale — the same fix the chat layout needed.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Lang.EnsureLoadedAsync();
+    }
+
+    protected override void OnInitialized() => Lang.Changed += OnLangChanged;
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Lang.Changed -= OnLangChanged;
+}

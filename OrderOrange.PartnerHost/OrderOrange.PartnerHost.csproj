@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <!-- Serves the WebAssembly partner portal under IIS (no URL Rewrite module needed) and
+       keeps the two Google Maps helpers server-side so the key never reaches the browser. -->
+  <ItemGroup>
+    <ProjectReference Include="..\OrderOrange.RestaurantWeb\OrderOrange.RestaurantWeb.csproj" />
+    <ProjectReference Include="..\OrderOrange.ClientCore\OrderOrange.ClientCore.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
+    <PackageReference Include="Yarp.ReverseProxy" Version="2.3.0" />
+  </ItemGroup>
+
+</Project>

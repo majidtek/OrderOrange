@@ -1,0 +1,266 @@
+@inject ApiClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject LanguageService L
+
+@* AI-style smart search: glowing command-palette input, instant grouped results. *@
+
+<MudDialog Class="mf-search-dialog" ContentClass="pa-4 pt-3">
+    <DialogContent>
+        <div class="d-flex align-center mb-3" style="gap: 8px;">
+            <MudText Typo="Typo.subtitle1">✨ @L["search.title"]</MudText>
+            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["search.ai"]</MudChip>
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => Dialog.Cancel())" />
+        </div>
+
+        <div class="mf-search-box mb-4">
+            <span class="mf-search-spark">✨</span>
+            @* Uncontrolled on purpose: Blazor never writes the value back, so mobile
+               IME composition (Arabic/Persian keyboards) is never disturbed. *@
+            <input @ref="_input" placeholder="@L["search.placeholder"]"
+                   @oninput="OnInput" @onkeydown="OnKeyDown" />
+            @if (!string.IsNullOrEmpty(_query))
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Backspace" Size="Size.Small"
+                               OnClick="@(() => PickQuery(""))" />
+            }
+        </div>
+
+        <div class="mf-search-scroll">
+            @if (string.IsNullOrWhiteSpace(_query))
+            {
+                @if (_recent.Count > 0)
+                {
+                    <MudText Typo="Typo.overline" Color="Color.Secondary">🕐 @L["search.recent"]</MudText>
+                    <div class="d-flex flex-wrap mt-2 mb-4" style="gap: 8px;">
+                        @foreach (var recent in _recent)
+                        {
+                            var term = recent;
+                            <div class="mf-search-suggestion" @onclick="@(() => PickQuery(term))">
+                                <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" /> @term
+                            </div>
+                        }
+                    </div>
+                }
+                <MudText Typo="Typo.overline" Color="Color.Secondary">@L["search.trending"]</MudText>
+                <div class="d-flex flex-wrap mt-2" style="gap: 8px;">
+                    @foreach (var suggestion in Suggestions)
+                    {
+                        var s = suggestion;
+                        <div class="mf-search-suggestion" @onclick="@(() => PickQuery(s.term))">
+                            <span>@s.emoji</span> @s.term
+                        </div>
+                    }
+                </div>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-6" Align="Align.Center">
+                    @L["search.hint"]
+                </MudText>
+            }
+            else if (_searching)
+            {
+                <div class="mf-search-shimmer"></div>
+                <div class="mf-search-shimmer" style="animation-delay: .1s;"></div>
+                <div class="mf-search-shimmer" style="animation-delay: .2s;"></div>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center" Class="d-block mt-2">
+                    ✨ @L["search.searching"] “@_query”…
+                </MudText>
+            }
+            else if (_results is null || (_results.Restaurants.Count == 0 && _results.Dishes.Count == 0))
+            {
+                @if (_results?.DidYouMean is not null)
+                {
+                    <div class="d-flex justify-center mb-2">
+                        <div class="mf-search-suggestion" @onclick="@(() => PickQuery(_results.DidYouMean))">
+                            💡 @L["search.didYouMean"] <b style="color: var(--mud-palette-primary);">&nbsp;@_results.DidYouMean&nbsp;</b>?
+                        </div>
+                    </div>
+                }
+                <EmptyState Emoji="🤔" Title="@($"{L["search.nothing"]} “{_query}”")"
+                            Subtitle="@L["search.tryHint"]" />
+            }
+            else
+            {
+                @if (_results.DidYouMean is not null)
+                {
+                    <div class="mf-search-suggestion mb-2" @onclick="@(() => PickQuery(_results.DidYouMean))">
+                        💡 @L["search.didYouMean"] <b style="color: var(--mud-palette-primary);">&nbsp;@_results.DidYouMean&nbsp;</b>?
+                    </div>
+                }
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                    @L["search.found"]: <b>@_results.Restaurants.Count @L["search.restaurants"]</b>
+                    · <b>@_results.Dishes.Count @L["search.dishes"]</b> — “@_query”
+                </MudText>
+
+                @if (_results.Restaurants.Count > 0)
+                {
+                    <MudText Typo="Typo.overline" Color="Color.Secondary">@L["search.restaurants"]</MudText>
+                    @foreach (var restaurant in _results.Restaurants)
+                    {
+                        var r = restaurant;
+                        <div class="mf-search-hit" @onclick="@(() => Open(r.Id, r.IsOpen))">
+                            @* A shop that has uploaded a logo is recognised by it, not by an emoji. *@
+                            @if (r.LogoPhoto is { Length: > 0 } hitLogo)
+                            {
+                                <div class="mf-hit-emoji has-logo"><img src="@hitLogo" alt="@r.Name" loading="lazy" /></div>
+                            }
+                            else
+                            {
+                                <div class="mf-hit-emoji" style="background: @r.BannerColor;"><Emoji Glyph="@r.LogoEmoji" /></div>
+                            }
+                            <div class="flex-grow-1" style="min-width: 0;">
+                                <MudText Typo="Typo.subtitle2">@StoreText.Name(r.Name, r.Names, L)</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @StoreText.Cuisines(r.Cuisine, r.Cuisines, L) · @StoreText.Area(r.Area, L)@(r.RatingCount > 0 ? $"· ★ {r.Rating:0.0}" : "")
+                                </MudText>
+                            </div>
+                            @if (!r.IsOpen)
+                            {
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@L["partner.closed"]</MudChip>
+                            }
+                            <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Color="Color.Default" Size="Size.Small" Class="oo-dir" />
+                        </div>
+                    }
+                }
+
+                @if (_results.Dishes.Count > 0)
+                {
+                    <MudText Typo="Typo.overline" Color="Color.Secondary" Class="d-block mt-3">@L["search.dishes"]</MudText>
+                    @foreach (var dish in _results.Dishes)
+                    {
+                        var d = dish;
+                        <div class="mf-search-hit" @onclick="@(() => Open(d.RestaurantId, d.RestaurantIsOpen))">
+                            <div class="mf-hit-emoji">
+                                @if (FoodPhoto.ForDish(d.Name) is string hitPhoto)
+                                {
+                                    <img class="hp" src="@hitPhoto" alt="" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <Emoji Glyph="@d.ImageEmoji" />
+                                }
+                            </div>
+                            <div class="flex-grow-1" style="min-width: 0;">
+                                <MudText Typo="Typo.subtitle2">@L.Product(d.Name)</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @d.RestaurantLogoEmoji @d.RestaurantName @(d.RestaurantIsOpen ? "" : $"· {L["partner.closed"]}")
+                                </MudText>
+                            </div>
+                            <MudText Typo="Typo.body2" Color="Color.Primary"><b>@Fmt.Rial(d.Price)</b></MudText>
+                        </div>
+                    }
+                }
+            }
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    private static readonly (string emoji, string term)[] Suggestions =
+    [
+        ("🍕", "Pizza"), ("🍔", "Burger"), ("🌯", "Shawarma"), ("🍣", "Sushi"),
+        ("🍚", "Biryani"), ("🍰", "Dessert"), ("☕", "Coffee"), ("🥗", "Healthy")
+    ];
+
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private const string RecentKey = "mf.recentSearches";
+
+    private ElementReference _input;
+    private List<string> _recent = [];
+    private string _query = "";
+    private bool _searching;
+    private SearchResultsDto? _results;
+    private System.Timers.Timer? _debounce;
+    private int _searchVersion;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { await _input.FocusAsync(); } catch { /* focus is a nicety */ }
+            try
+            {
+                var json = await JS.InvokeAsync<string?>("localStorage.getItem", RecentKey);
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    _recent = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? [];
+                    StateHasChanged();
+                }
+            }
+            catch { /* recents are a convenience */ }
+        }
+    }
+
+    /// <summary>Remember what the user actually searched and picked, for next time.</summary>
+    private async Task RememberSearch()
+    {
+        var term = _query.Trim();
+        if (term.Length < 2) return;
+        _recent.RemoveAll(r => string.Equals(r, term, StringComparison.OrdinalIgnoreCase));
+        _recent.Insert(0, term);
+        if (_recent.Count > 8) _recent = _recent.Take(8).ToList();
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", RecentKey,
+                System.Text.Json.JsonSerializer.Serialize(_recent));
+        }
+        catch { }
+    }
+
+    private Task OnInput(ChangeEventArgs e) => SetQuery(e.Value?.ToString() ?? "");
+
+    /// <summary>Programmatic query change (chips, clear, did-you-mean). The input is
+    /// uncontrolled, so the DOM value must be written explicitly via JS too.</summary>
+    private async Task PickQuery(string value)
+    {
+        try { await JS.InvokeVoidAsync("mfInput.set", _input, value); } catch { /* input helper is a nicety */ }
+        await SetQuery(value);
+    }
+
+    private Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") Dialog.Cancel();
+        return Task.CompletedTask;
+    }
+
+    private Task SetQuery(string value)
+    {
+        _query = value;
+        _debounce?.Stop();
+        _debounce?.Dispose();
+
+        if (_query.Trim().Length < 2)
+        {
+            _results = null;
+            _searching = false;
+            return Task.CompletedTask;
+        }
+
+        _searching = true;
+        var version = ++_searchVersion;
+        _debounce = new System.Timers.Timer(300) { AutoReset = false };
+        _debounce.Elapsed += (_, _) => _ = InvokeAsync(async () =>
+        {
+            var results = await Api.SearchAsync(_query);
+            if (version != _searchVersion) return; // a newer keystroke superseded this search
+            _results = results;
+            _searching = false;
+            StateHasChanged();
+
+            // What people look for — and what the catalog failed to answer — is
+            // recorded once the search SETTLES, never on every keystroke.
+            var found = (results?.Restaurants.Count ?? 0) + (results?.Dishes.Count ?? 0);
+            _ = Api.TrackSearchAsync(_query, found, L.Locale);
+        });
+        _debounce.Start();
+        return Task.CompletedTask;
+    }
+
+    private async Task Open(int restaurantId, bool isOpen)
+    {
+        await RememberSearch();
+        Dialog.Close(DialogResult.Ok(true));
+        Nav.NavigateTo(StorePath.For(restaurantId)); // closed stores still show their menu
+    }
+}

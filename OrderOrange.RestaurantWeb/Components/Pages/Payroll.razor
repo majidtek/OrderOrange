@@ -1,0 +1,275 @@
+@page "/staff/payroll"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Partner — Pay salaries</PageTitle>
+
+<PageHeader Title="@L["pay.title"]" Subtitle="@L["pay.sub"]" />
+
+<div class="rp">
+    @* ---------- Month picker ---------- *@
+    <div class="d-flex align-center flex-wrap mb-4" style="gap: 10px;">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="@(() => Shift(-1))" />
+        <div class="pr-month">@MonthLabel</div>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="@(() => Shift(1))" Disabled="@IsCurrentMonth" />
+        @if (!IsCurrentMonth)
+        {
+            <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ThisMonth">@L["pay.thisMonth"]</MudButton>
+        }
+    </div>
+
+    <MudGrid Spacing="3" Class="mb-1">
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.expected"]" Value="@(_payroll is null ? "…" : Fmt.RialShort(_payroll.Expected).Value)" Icon="@Icons.Material.Filled.Summarize" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.paid"]" Value="@(_payroll is null ? "…" : Fmt.RialShort(_payroll.PaidTotal).Value)" Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.remaining"]" Value="@(_payroll is null ? "…" : Fmt.RialShort(_payroll.Remaining).Value)" Icon="@Icons.Material.Filled.HourglassBottom" Color="Color.Warning" />
+        </MudItem>
+        <MudItem xs="6" md="3">
+            <StatCard Label="@L["w.people"]" Value="@(_payroll is null ? "…" : $"{_payroll.PaidCount} / {_payroll.PaidCount + _payroll.DueCount}")" Icon="@Icons.Material.Filled.Groups" Color="Color.Primary" />
+        </MudItem>
+    </MudGrid>
+
+    @if (_payroll is null)
+    {
+        <Loader />
+    }
+    else
+    {
+        @* ---------- Still to pay ---------- *@
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card my-4">
+            <div class="d-flex align-center mb-3" style="gap: 8px;">
+                <MudText Typo="Typo.h6" Style="font-weight: 800;">@L["pay.stillToPay"]</MudText>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">@_payroll.DueCount</MudChip>
+                <MudSpacer />
+                @if (_payroll.DueCount > 0)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.DoneAll" OnClick="PayAll" Disabled="_busy">
+                        @L["pay.payEveryone"]
+                    </MudButton>
+                }
+            </div>
+            @if (_payroll.Due.Count == 0)
+            {
+                <div class="pv-empty">
+                    <span class="em">🎉</span>
+                    <MudText Typo="Typo.body1" Style="font-weight: 700;">@string.Format(L["pay.allPaid"], MonthLabel)</MudText>
+                </div>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 44px;"></th>
+                            <th>@L["w.member"]</th>
+                            <th class="num">@L["att.hours"]</th>
+                            <th class="num">@L["w.salary"]</th>
+                            <th style="width: 120px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var member in _payroll.Due)
+                        {
+                            var m = member;
+                            <tr>
+                                <td>
+                                    <span class="st-mini">
+                                        @if (m.Photo is not null)
+                                        {
+                                            <img src="@m.Photo" alt="" />
+                                        }
+                                        else
+                                        {
+                                            @StaffRoles.Emoji(m.Role)
+                                        }
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="strong">@m.FullName</div>
+                                    <div class="bl-sub">@L["srole." + m.Role]</div>
+                                </td>
+                                <td class="num">
+                                    @if (m.UserId is null)
+                                    {
+                                        <span class="bl-sub" title="@L["att.notLinked"]">—</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="strong">@m.HoursWorked.ToString("0.#")</span> <span class="bl-sub">@L["att.h"]</span>
+                                        @if (m.LeaveDays > 0 || m.LeaveHours > 0)
+                                        {
+                                            <div class="bl-sub">@L["lv.short"]: @(m.LeaveDays > 0 ? $"{m.LeaveDays} {L["att.days"]}" : "")@(m.LeaveDays > 0 && m.LeaveHours > 0 ? " · " : "")@(m.LeaveHours > 0 ? $"{m.LeaveHours:0.#} {L["att.h"]}" : "")</div>
+                                        }
+                                    }
+                                </td>
+                                <td class="num strong">@Fmt.RialShort(m.MonthlySalary)</td>
+                                <td>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
+                                               StartIcon="@Icons.Material.Filled.Payments" OnClick="@(() => Pay(m))" Disabled="_busy">
+                                        @L["pay.payBtn"]
+                                    </MudButton>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            }
+        </MudPaper>
+
+        @* ---------- Already paid ---------- *@
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl pv-card">
+            <div class="d-flex align-center mb-3" style="gap: 8px;">
+                <MudText Typo="Typo.h6" Style="font-weight: 800;">@string.Format(L["pay.paidIn"], MonthLabel)</MudText>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Success">@_payroll.PaidCount</MudChip>
+            </div>
+            @if (_payroll.Paid.Count == 0)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@L["pay.nobodyPaid"]</MudText>
+            }
+            else
+            {
+                <MudSimpleTable Dense="true" Hover="true" Class="rp-table">
+                    <thead>
+                        <tr>
+                            <th>@L["w.member"]</th>
+                            <th class="num">@L["w.base"]</th>
+                            <th class="num">@L["w.bonus"]</th>
+                            <th class="num">@L["w.deduction"]</th>
+                            <th class="num">@L["pay.netPaid"]</th>
+                            <th>@L["w.method"]</th>
+                            <th style="width: 46px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var payment in _payroll.Paid)
+                        {
+                            var p = payment;
+                            <tr>
+                                <td>
+                                    <div class="strong">@p.StaffName</div>
+                                    <div class="bl-sub">@L["srole." + p.Role] · @p.PaidAt.ToString("d MMM, HH:mm")</div>
+                                </td>
+                                <td class="num">@Fmt.RialShort(p.BaseSalary)</td>
+                                <td class="num">@(p.Bonus > 0 ? (MarkupString)("+" + Fmt.RialShort(p.Bonus).Value) : (MarkupString)"—")</td>
+                                <td class="num">@(p.Deduction > 0 ? (MarkupString)("−" + Fmt.RialShort(p.Deduction).Value) : (MarkupString)"—")</td>
+                                <td class="num strong">@Fmt.RialShort(p.NetPaid)</td>
+                                <td><span class="pr-method">@p.Method</span></td>
+                                <td>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Color="Color.Error"
+                                                   title="@L["pay.undoTitle"]" OnClick="@(() => Undo(p))" />
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="total">
+                            <td>@L["common.total"]</td>
+                            <td class="num"></td>
+                            <td class="num"></td>
+                            <td class="num"></td>
+                            <td class="num strong">@Fmt.RialShort(_payroll.PaidTotal)</td>
+                            <td colspan="2"></td>
+                        </tr>
+                    </tfoot>
+                </MudSimpleTable>
+            }
+        </MudPaper>
+    }
+</div>
+
+@code {
+    private PayrollDto? _payroll;
+    private int _year = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+    private bool _busy;
+
+    private string MonthLabel => new DateTime(_year, _month, 1).ToString("MMMM yyyy");
+    private bool IsCurrentMonth => _year == DateTime.Today.Year && _month == DateTime.Today.Month;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        _payroll = null;
+        _payroll = await Api.GetPayrollAsync(_year, _month);
+    }
+
+    private async Task Shift(int months)
+    {
+        var next = new DateTime(_year, _month, 1).AddMonths(months);
+        if (next > new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)) return;
+        _year = next.Year;
+        _month = next.Month;
+        await Reload();
+    }
+
+    private async Task ThisMonth()
+    {
+        _year = DateTime.Today.Year;
+        _month = DateTime.Today.Month;
+        await Reload();
+    }
+
+    private async Task Pay(StaffDto member)
+    {
+        var parameters = new DialogParameters<PaySalaryDialog>
+        {
+            { d => d.Member, member },
+            { d => d.Year, _year },
+            { d => d.Month, _month }
+        };
+        var dialog = await Dialogs.ShowAsync<PaySalaryDialog>(string.Format(L["pay.payTitle"], member.FullName), parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled == false)
+        {
+            Snackbar.Add(string.Format(L["pay.paidToast"], member.FullName, MonthLabel), Severity.Success);
+            await Reload();
+        }
+    }
+
+    /// <summary>Pays every remaining member their plain salary — no bonus, no deduction.</summary>
+    private async Task PayAll()
+    {
+        if (_payroll is null) return;
+        var confirmed = await Dialogs.ShowMessageBox(L["pay.payEveryone"],
+            string.Format(L["pay.payAllMsg"], _payroll.DueCount, MonthLabel, Fmt.Money(_payroll.Remaining)),
+            yesText: L["pay.payAll"], cancelText: L["common.cancel"]);
+        if (confirmed != true) return;
+
+        _busy = true;
+        try
+        {
+            var failed = 0;
+            foreach (var member in _payroll.Due.ToList())
+            {
+                var (ok, _) = await Api.PaySalaryAsync(new PaySalaryRequest(member.Id, _year, _month, 0, 0, "cash", null));
+                if (!ok) failed++;
+            }
+            Snackbar.Add(failed == 0 ? L["pay.complete"] : string.Format(L["pay.failed"], failed),
+                failed == 0 ? Severity.Success : Severity.Warning);
+            await Reload();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task Undo(SalaryPaymentDto payment)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["pay.undoTitle"],
+            string.Format(L["pay.undoMsg"], Fmt.Money(payment.NetPaid), payment.StaffName),
+            yesText: L["pay.undo"], cancelText: L["common.keep"]);
+        if (confirmed != true) return;
+        var (ok, error) = await Api.UndoSalaryAsync(payment.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.undoFail"], Severity.Error);
+        await Reload();
+    }
+}

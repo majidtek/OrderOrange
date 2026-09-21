@@ -1,0 +1,308 @@
+﻿@page "/instagram"
+@using OrderOrange.Shared
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+
+@* The shop's own Instagram. The owner connects their account once with a token from
+   Instagram, then posts a dish or a picture from here — caption, hashtags, done. *@
+
+<PageTitle>OrderOrange — @L["ig.title"]</PageTitle>
+
+<div class="ig-page">
+    <div class="ig-head">
+        <div>
+            <MudText Typo="Typo.h5" Class="mb-1 ig-h5"><MudIcon Icon="@OrderOrange.ClientCore.Services.BrandIcons.Instagram" Class="ig-h5-ic" />@L["ig.title"]</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@L["ig.sub"]</MudText>
+        </div>
+        @if (_status is { Connected: true })
+        {
+            <div class="ig-acct">
+                <span class="dot @(_status.Problem is null ? "ok" : "bad")"></span>
+                <span class="nm">@@@_status.Username</span>
+                <MudIconButton Icon="@Icons.Material.Filled.LinkOff" Size="Size.Small" Title="@L["ig.disconnect"]" OnClick="Disconnect" />
+            </div>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="my-4" />
+    }
+    else if (_status is not { Connected: true })
+    {
+        @* ---------- not connected: the three steps ---------- *@
+        <MudPaper Elevation="0" Class="ig-card">
+            <div class="ig-connect">
+                <span class="ig-mark"><MudIcon Icon="@OrderOrange.ClientCore.Services.BrandIcons.Instagram" Style="width:26px;height:26px;" /></span>
+                <MudText Typo="Typo.h6">@L["ig.connectTitle"]</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@L["ig.connectSub"]</MudText>
+
+                <ol class="ig-steps">
+                    <li>@L["ig.step1"]</li>
+                    <li>@L["ig.step2"]</li>
+                    <li>@L["ig.step3"]</li>
+                </ol>
+
+                <MudTextField @bind-Value="_token" Label="@L["ig.token"]" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Lines="3" Class="mt-4 mf-ltr" HelperText="@L["ig.tokenHint"]" />
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="my-2">@_error</MudAlert>
+                }
+                <div class="d-flex align-center mt-3" style="gap: 10px; flex-wrap: wrap;">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Link"
+                               Disabled="_busy" OnClick="Connect">@L["ig.connect"]</MudButton>
+                    <MudButton Variant="Variant.Text" Href="https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login"
+                               Target="_blank" EndIcon="@Icons.Material.Filled.OpenInNew">@L["ig.help"]</MudButton>
+                </div>
+            </div>
+        </MudPaper>
+    }
+    else
+    {
+        @if (_status.Problem is { Length: > 0 } problem)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">@problem</MudAlert>
+        }
+
+        <div class="ig-grid">
+            @* ---------- compose ---------- *@
+            <MudPaper Elevation="0" Class="ig-card">
+                <MudText Typo="Typo.subtitle1" Class="mb-3"><b>@L["ig.newPost"]</b></MudText>
+
+                <div class="ig-pick">
+                    <div class="d-flex align-center mb-1" style="gap: 8px;">
+                        <span class="ig-pick-h flex-grow-1" style="margin-bottom:0">@L["ig.picture"]</span>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" StartIcon="@Icons.Material.Filled.Search"
+                                   OnClick="OpenPicker">@L["igp.allProducts"]</MudButton>
+                    </div>
+                    <div class="ig-thumbs">
+                        @foreach (var item in _withPhotos)
+                        {
+                            var i = item;
+                            <button type="button" class="ig-thumb @(_menuItemId == i.Id ? "on" : "")" @onclick="@(() => Choose(i))">
+                                <img src="@i.Photo" alt="@i.Name" loading="lazy" />
+                                <span>@i.Name</span>
+                            </button>
+                        }
+                        <button type="button" class="ig-thumb add" @onclick="PickFile" disabled="@_uploading">
+                            <span class="plus">@(_uploading ? "…" : "+")</span>
+                            <span>@L["ig.upload"]</span>
+                        </button>
+                    </div>
+                    @if (_uploaded is not null)
+                    {
+                        <div class="ig-chosen">
+                            <img src="@_uploaded" alt="" />
+                            <MudText Typo="Typo.caption">@L["ig.uploadReady"]</MudText>
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => _uploaded = null)" />
+                        </div>
+                    }
+                </div>
+
+                <MudTextField @bind-Value="_caption" Label="@L["ig.caption"]" Variant="Variant.Outlined"
+                              Margin="Margin.Dense" Lines="6" Class="mt-3" Counter="2200" MaxLength="2200" />
+
+                <div class="ig-tags">
+                    @foreach (var tag in Hashtags)
+                    {
+                        var t = tag;
+                        <button type="button" @onclick="@(() => AddTag(t))">@t</button>
+                    }
+                </div>
+
+                @if (_postError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="my-2">@_postError</MudAlert>
+                }
+
+                <div class="d-flex align-center mt-3" style="gap: 12px; flex-wrap: wrap;">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send"
+                               Disabled="@(_busy || !CanPost)" OnClick="Publish">
+                        @(_busy ? L["ig.posting"] : L["ig.post"])
+                    </MudButton>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @string.Format(L["ig.quota"], _status.QuotaTotal - _status.QuotaUsed, _status.QuotaTotal)
+                    </MudText>
+                </div>
+            </MudPaper>
+
+            @* ---------- the account ---------- *@
+            <div>
+                <MudPaper Elevation="0" Class="ig-card mb-3">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2"><b>@L["ig.account"]</b></MudText>
+                    <div class="ig-facts">
+                        <div><span>@L["ig.accName"]</span><b class="mf-ltr">@@@_status.Username</b></div>
+                        <div><span>@L["ig.tokenLife"]</span><b>@string.Format(L["ig.daysLeft"], _status.DaysLeft)</b></div>
+                        @if (_status.LastPostAt is { } last)
+                        {
+                            <div><span>@L["ig.lastPost"]</span><b>@last.ToString("dd MMM, HH:mm")</b></div>
+                        }
+                    </div>
+                    @if (_status.LastPostUrl is { Length: > 0 } url)
+                    {
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@url" Target="_blank"
+                                   EndIcon="@Icons.Material.Filled.OpenInNew" Class="mt-2">@L["ig.openLast"]</MudButton>
+                    }
+                </MudPaper>
+
+                @if (_recent is { Count: > 0 })
+                {
+                    <MudPaper Elevation="0" Class="ig-card">
+                        <MudText Typo="Typo.subtitle1" Class="mb-2"><b>@L["ig.recent"]</b></MudText>
+                        <div class="ig-recent">
+                            @foreach (var media in _recent)
+                            {
+                                <a href="@media.Permalink" target="_blank" rel="noopener" title="@media.Caption">
+                                    @if (media.ThumbUrl is { Length: > 0 } thumb)
+                                    {
+                                        <img src="@thumb" alt="" loading="lazy" />
+                                    }
+                                </a>
+                            }
+                        </div>
+                    </MudPaper>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private InstagramStatusDto? _status;
+    private List<InstagramMediaDto>? _recent;
+    private List<MenuItemDto> _withPhotos = [];
+    private List<MenuCategoryDto> _menu = [];
+    private bool _loading = true, _busy, _uploading;
+    private string _token = "", _caption = "";
+    private string? _error, _postError, _uploaded;
+    private int? _menuItemId;
+
+    private static readonly string[] Hashtags =
+        ["#OrderOrange", "#Oman", "#Muscat", "#FoodDelivery", "#مسقط", "#عمان", "#توصيل"];
+
+    private bool CanPost => _caption.Trim().Length > 0 && (_menuItemId is not null || _uploaded is not null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.Changed += OnLang;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _status = await Api.GetInstagramAsync();
+        if (_status is { Connected: true })
+        {
+            _recent = await Api.GetInstagramPostsAsync();
+            // Only products that HAVE a picture can be posted — Instagram needs one.
+            _menu = await Api.GetMyMenuAsync() ?? [];
+            _withPhotos = _menu.SelectMany(c => c.Items)
+                .Where(i => i.Photo is { Length: > 0 } && i.IsAvailable)
+                .Take(24).ToList();
+        }
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private async Task OpenPicker()
+    {
+        var parameters = new DialogParameters<PickProductDialog> { { d => d.Categories, _menu } };
+        var dialog = await Dialogs.ShowAsync<PickProductDialog>(L["igp.pickProduct"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+        var result = await dialog.Result;
+        if (result?.Canceled != false || result.Data is not MenuItemDto item) return;
+        _menuItemId = null;
+        Choose(item);
+        // A product chosen from the whole menu may not be in the strip; show it there too.
+        if (_withPhotos.All(x => x.Id != item.Id)) _withPhotos.Insert(0, item);
+        StateHasChanged();
+    }
+
+    private void Choose(MenuItemDto item)
+    {
+        _menuItemId = _menuItemId == item.Id ? null : item.Id;
+        _uploaded = null;
+        // A first caption the owner can edit: the dish, its price, the store's hashtags.
+        if (_menuItemId is not null && _caption.Trim().Length == 0)
+            _caption = $"{item.NameFor(L.Locale)} — {item.Price:0.000} {Fmt.Symbol}\n\n{L["ig.captionSeed"]}\n\n#OrderOrange #Oman #Muscat";
+    }
+
+    private void AddTag(string tag)
+    {
+        if (_caption.Contains(tag, StringComparison.OrdinalIgnoreCase)) return;
+        _caption = _caption.TrimEnd() + (_caption.Trim().Length == 0 ? "" : " ") + tag;
+    }
+
+    private async Task PickFile()
+    {
+        _uploading = true;
+        try
+        {
+            var meta = await JS.InvokeAsync<string?>("mfImage.pick", false, 680000);
+            if (string.IsNullOrEmpty(meta)) return;
+            if (meta is "huge" or "too-big") { _postError = L["common.photoTooLarge"]; return; }
+            var parked = System.Text.Json.JsonDocument.Parse(meta);
+            var id = parked.RootElement.GetProperty("id").GetString()!;
+            var size = parked.RootElement.GetProperty("size").GetInt32();
+            var sb = new System.Text.StringBuilder(size);
+            for (var offset = 0; offset < size; offset += 50000)
+                sb.Append(await JS.InvokeAsync<string>("mfBlob.chunk", id, offset, 50000));
+            await JS.InvokeVoidAsync("mfBlob.end", id);
+            _uploaded = sb.ToString();
+            _menuItemId = null;
+        }
+        catch { _postError = L["common.photoTooLarge"]; }
+        finally { _uploading = false; StateHasChanged(); }
+    }
+
+    private async Task Connect()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.ConnectInstagramAsync(new ConnectInstagramRequest(_token.Trim()));
+            if (!ok) { _error = error ?? L["common.saveFail"]; return; }
+            _token = "";
+            Snackbar.Add(L["ig.connected"], Severity.Success);
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Disconnect()
+    {
+        var yes = await Dialogs.ShowMessageBox(L["ig.disconnect"], L["ig.disconnectMsg"],
+            yesText: L["ig.disconnect"], cancelText: L["common.cancel"]);
+        if (yes != true) return;
+        await Api.DisconnectInstagramAsync();
+        _recent = null;
+        await LoadAsync();
+    }
+
+    private async Task Publish()
+    {
+        _postError = null;
+        _busy = true;
+        try
+        {
+            var (result, error) = await Api.PostToInstagramAsync(new InstagramPostRequest(
+                _caption.Trim(), _menuItemId, null, _uploaded));
+            if (result is null) { _postError = error ?? L["common.saveFail"]; return; }
+            Snackbar.Add(L["ig.posted"], Severity.Success);
+            _caption = "";
+            _menuItemId = null;
+            _uploaded = null;
+            await LoadAsync();
+        }
+        finally { _busy = false; }
+    }
+
+    private void OnLang() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => L.Changed -= OnLang;
+}

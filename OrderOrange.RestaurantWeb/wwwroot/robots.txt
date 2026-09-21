@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /guide.html
+Allow: /guide.*.html
+Allow: /guide/
+Allow: /api.html
+Allow: /sitemap.xml
+Disallow: /
+
+Sitemap: https://partner.orderorange.com/sitemap.xml

@@ -1,0 +1,523 @@
+﻿@page "/warehouses"
+@using OrderOrange.Shared
+@using OrderOrange.RestaurantWeb.Services
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* Where the stock is, drawn as a map. Every place is a node the owner drags into position,
+   wearing the icon they chose — a factory, a truck, a store — and a line from one node to
+   the next says "this feeds that". The materials page stays the truth about how much the
+   shop owns; the map only splits that number by place, and whatever has not been put
+   anywhere yet stays visible as the unassigned pool so the two can be reconciled by eye. *@
+
+<PageTitle>OrderOrange — @L["wh.title"]</PageTitle>
+
+<PageHeader Title="@L["wh.title"]" Subtitle="@L["wh.sub"]" />
+
+@if (_board is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="wh">
+        @* ---------------- the bar above the map ---------------- *@
+        <div class="whm-bar">
+            <button type="button" class="whm-add" @onclick="AddPlace">＋ @L["wh.addPlace"]</button>
+
+            <button type="button" class="whm-pool @(_selected == 0 ? "on" : "")" @onclick="@(() => Select(0))">
+                <MudIcon Icon="@Icons.Material.Filled.Inventory2" Size="Size.Small" />
+                <span class="nm">@L["wh.unassigned"]</span>
+                <span class="meta">@string.Format(L["wh.items"], _board.Unassigned.Count) · @Fmt.Money(_board.UnassignedValue)</span>
+            </button>
+
+            @if (_board.Central is { } central)
+            {
+                <button type="button" class="whm-central @(_selected == CentralPick ? "on" : "")" @onclick="SelectCentral">
+                    <MudIcon Icon="@Icons.Material.Filled.Hub" Size="Size.Small" />
+                    <span class="nm">@central.Name</span>
+                    <span class="meta">@string.Format(L["wh.centralOf"], central.StoreName) · @string.Format(L["wh.items"], central.ItemCount) · @Fmt.Money(central.Value)</span>
+                </button>
+            }
+
+            <span class="whm-hint">@L["wh.dragHint"]</span>
+        </div>
+
+        @* ---------------- the map ---------------- *@
+        <div class="whm-wrap">
+        <div class="whm-canvas @(_linkFrom > 0 ? "linking" : "")">
+            <svg class="whm-lines" preserveAspectRatio="none">
+                <defs>
+                    <marker id="whm-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+                        <path d="M0,0 L10,5 L0,10 z" />
+                    </marker>
+                </defs>
+                @foreach (var (from, to) in Links)
+                {
+                    <path data-from="@from" data-to="@to" marker-end="url(#whm-arrow)" />
+                }
+            </svg>
+
+            @foreach (var place in _board.Warehouses)
+            {
+                var w = place;
+                <div class="whm-node @NodeClass(w)" data-id="@w.Id" style="left:@Pct(w.X);top:@Pct(w.Y)"
+                     @onclick="@(() => NodeTap(w))">
+                    <div class="whm-ic"><MudIcon Icon="@WarehouseIconSet.Glyph(w.Icon)" /></div>
+                    <div class="whm-body">
+                        <div class="nm">
+                            <span class="t">@w.Name</span>
+                            @if (w.IsCentral)
+                            {
+                                <em class="c">@L["wh.central"]</em>
+                            }
+                            else if (w.IsDefault)
+                            {
+                                <em>@L["wh.default"]</em>
+                            }
+                        </div>
+                        <div class="meta">@L[$"wh.kind.{w.Kind}"] · @string.Format(L["wh.items"], w.ItemCount)</div>
+                        <div class="val">@Fmt.Money(w.Value)</div>
+                    </div>
+                    <div class="whm-tools">
+                        <button type="button" class="@(_linkFrom == w.Id ? "on" : "")" title="@L["wh.link"]"
+                                @onclick="@(() => StartLink(w))" @onclick:stopPropagation="true">
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowRightAlt" Size="Size.Small" />
+                        </button>
+                        <button type="button" title="@L["common.edit"]"
+                                @onclick="@(() => EditPlace(w))" @onclick:stopPropagation="true">
+                            <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" />
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @foreach (var (from, to) in Links)
+            {
+                var f = from; var t = to;
+                var moves = _transfers.Count(x => x.FromId == f && x.ToId == t);
+                <button type="button" class="whm-lbl" data-from="@f" data-to="@t" hidden
+                        title="@L["wh.unlink"]" @onclick="@(() => Unlink(f, t))">
+                    @(moves > 0 ? string.Format(L["wh.moves"], moves) : L["wh.feeds"])
+                    <span class="x">×</span>
+                </button>
+            }
+
+            @if (_board.Warehouses.Count == 0)
+            {
+                <div class="whm-empty">
+                    <MudIcon Icon="@Icons.Material.Filled.Warehouse" Style="font-size:38px" />
+                    <p>@L["wh.mapEmpty"]</p>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddPlace">@L["wh.addPlace"]</MudButton>
+                </div>
+            }
+
+        </div>
+        </div>
+
+        @if (_linkFrom > 0 && _board.Warehouses.FirstOrDefault(w => w.Id == _linkFrom) is { } src)
+        {
+            <div class="whm-linkhint">
+                <span>@string.Format(L["wh.linkHint"], src.Name)</span>
+                <button type="button" @onclick="@(() => _linkFrom = 0)">@L["common.cancel"]</button>
+            </div>
+        }
+
+        <div class="wh-grid">
+            @* ---------------- what is in the chosen place ---------------- *@
+            <MudPaper Elevation="0" Class="wh-card">
+                <div class="wh-head">
+                    <h3>@SelectedName</h3>
+                    @if (_selected > 0 && _board.Warehouses.FirstOrDefault(w => w.Id == _selected) is { } chosen)
+                    {
+                        <div class="tools">
+                            <button type="button" @onclick="@(() => EditPlace(chosen))" title="@L["common.edit"]">✎</button>
+                            <button type="button" @onclick="@(() => RemovePlace(chosen))" title="@L["common.delete"]">🗑</button>
+                        </div>
+                    }
+                </div>
+
+                @if (Rows.Count == 0)
+                {
+                    <p class="wh-empty">@L["wh.emptyPlace"]</p>
+                }
+                else
+                {
+                    <div class="wh-rows">
+                        @foreach (var row in Rows)
+                        {
+                            <div class="wh-row">
+                                <span class="nm">@row.Name</span>
+                                <span class="qt">@Fmt.Amount(row.Quantity) @row.Unit</span>
+                                <span class="val">@Fmt.Money(row.Value)</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </MudPaper>
+
+            @* ---------------- move stock ---------------- *@
+            <MudPaper Elevation="0" Class="wh-card">
+                <h3>@L["wh.moveTitle"]</h3>
+
+                <div class="wh-move">
+                    <MudSelect T="int" Value="_fromId" ValueChanged="SetFrom" Label="@L["wh.from"]" Variant="Variant.Outlined"
+                               Margin="Margin.Dense" Dense="true">
+                        <MudSelectItem T="int" Value="0">@L["wh.unassigned"]</MudSelectItem>
+                        @foreach (var w in _board.Warehouses)
+                        {
+                            <MudSelectItem T="int" Value="@w.Id">@w.Name</MudSelectItem>
+                        }
+                        @if (_board.Central is { IsMine: false } rc)
+                        {
+                            <MudSelectItem T="int" Value="CentralPick">@rc.Name · @rc.StoreName</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <span class="arrow">➜</span>
+                    @if (_fromId == CentralPick)
+                    {
+                        <div class="wh-fixed">@L["wh.toThisBranch"]</div>
+                    }
+                    else
+                    {
+                        <MudSelect T="int" @bind-Value="_toId" Label="@L["wh.to"]" Variant="Variant.Outlined"
+                                   Margin="Margin.Dense" Dense="true">
+                            @foreach (var w in _board.Warehouses)
+                            {
+                                <MudSelectItem T="int" Value="@w.Id">@w.Name</MudSelectItem>
+                            }
+                            @if (_board.Central is { IsMine: true } && _board.Branches is { Count: > 0 } branches)
+                            {
+                                @foreach (var b in branches)
+                                {
+                                    <MudSelectItem T="int" Value="@(-b.StoreId)">@string.Format(L["wh.branch"], b.Name)</MudSelectItem>
+                                }
+                            }
+                        </MudSelect>
+                    }
+                </div>
+
+                @if (_board.Warehouses.Count == 0)
+                {
+                    <p class="wh-empty mt-2">@L["wh.needPlace"]</p>
+                }
+                else
+                {
+                    <div class="wh-hint">@L["wh.pickWhat"]</div>
+                    @if (Source.Count == 0)
+                    {
+                        <p class="wh-empty">@L["wh.sourceEmpty"]</p>
+                    }
+                    else
+                    {
+                        <div class="wh-pick">
+                            @foreach (var row in Source)
+                            {
+                                var r = row;
+                                var taken = _lines.GetValueOrDefault(r.MaterialId);
+                                <div class="wh-pick-row @(taken > 0 ? "on" : "")">
+                                    <span class="nm">@r.Name</span>
+                                    <span class="have">@Fmt.Amount(r.Quantity) @r.Unit</span>
+                                    <input type="number" min="0" step="0.5" max="@r.Quantity"
+                                           value="@(taken > 0 ? taken.ToString() : "")"
+                                           placeholder="0" @onchange="@(e => SetLine(r, e.Value?.ToString()))" />
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <MudTextField @bind-Value="_note" Label="@L["wh.note"]" Variant="Variant.Outlined"
+                                  Margin="Margin.Dense" Class="mt-3" MaxLength="300" />
+
+                    @if (_error is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_error</MudAlert>
+                    }
+
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Size="Size.Large"
+                               Class="mt-3" Disabled="@(_busy || _lines.Count == 0 || !CanMove)"
+                               OnClick="Move">
+                        @(_busy ? L["common.saving"] : string.Format(L["wh.moveN"], _lines.Count))
+                    </MudButton>
+                }
+            </MudPaper>
+        </div>
+
+        @* ---------------- what moved ---------------- *@
+        <MudPaper Elevation="0" Class="wh-card mt-3">
+            <h3>@L["wh.history"]</h3>
+            @if (_transfers.Count == 0)
+            {
+                <p class="wh-empty">@L["wh.historyEmpty"]</p>
+            }
+            else
+            {
+                <div class="wh-log">
+                    @foreach (var t in _transfers)
+                    {
+                        <div class="wh-move-row">
+                            <span class="route">
+                                <b>@(string.IsNullOrEmpty(t.FromName) ? L["wh.unassigned"] : t.FromName)</b>
+                                ➜ <b>@(string.IsNullOrEmpty(t.ToName) ? L["wh.unassigned"] : t.ToName)</b>
+                            </span>
+                            <span class="what">
+                                @string.Join(" · ", t.Lines.Take(4).Select(l => $"{Fmt.Amount(l.Quantity)} {l.Unit} {l.Name}"))
+                                @if (t.Lines.Count > 4)
+                                {
+                                    <text> +@(t.Lines.Count - 4)</text>
+                                }
+                            </span>
+                            <span class="val">@Fmt.Money(t.TotalValue)</span>
+                            <span class="who">@t.By · @t.At.ToString("dd MMM HH:mm")</span>
+                            @if (!string.IsNullOrWhiteSpace(t.Note))
+                            {
+                                <span class="note">@t.Note</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </MudPaper>
+    </div>
+}
+
+@code {
+    private WarehouseBoardDto? _board;
+    private List<TransferDto> _transfers = [];
+    private List<WarehouseStockDto> _placeStock = [];
+    private readonly Dictionary<int, decimal> _lines = [];
+    private const int CentralPick = -1;   // the central warehouse of ANOTHER store, as a source or a selection
+    private int _selected;          // 0 = the unassigned pool, CentralPick = the remote central
+    private List<WarehouseStockDto> _centralStock = [];
+    private int _linkFrom;          // a node whose line is being drawn, 0 when none
+    private int _fromId, _toId;
+    private string _note = "";
+    private string? _error;
+    private bool _busy;
+    private DotNetObjectReference<Warehouses>? _selfRef;
+
+    private string SelectedName => _selected switch
+    {
+        0 => L["wh.unassigned"],
+        CentralPick => _board?.Central?.Name ?? "",
+        _ => _board?.Warehouses.FirstOrDefault(w => w.Id == _selected)?.Name ?? "",
+    };
+
+    /// <summary>What the chosen place holds — the pool comes back on the board itself.</summary>
+    private List<WarehouseStockDto> Rows => _selected switch
+    {
+        0 => _board?.Unassigned ?? [],
+        CentralPick => _centralStock,
+        _ => _placeStock,
+    };
+
+    /// <summary>What can be moved out of the source, which is what the pickers offer.</summary>
+    private List<WarehouseStockDto> Source => _fromId switch
+    {
+        0 => _board?.Unassigned ?? [],
+        CentralPick => _centralStock,
+        _ => _fromStock,
+    };
+
+    /// <summary>A branch destination is a negative store id; only the central place may send there.</summary>
+    private bool CanMove =>
+        _fromId == CentralPick
+        || (_toId < 0 && _board?.Central is { IsMine: true } c && _fromId == c.WarehouseId)
+        || (_toId > 0 && _toId != _fromId);
+    private List<WarehouseStockDto> _fromStock = [];
+
+    /// <summary>Every line on the map, from the place that feeds to the place that is fed.</summary>
+    private IEnumerable<(int From, int To)> Links =>
+        _board is null ? [] :
+        _board.Warehouses.SelectMany(w => (w.Links ?? []).Select(to => (w.Id, to)))
+            .Where(l => _board.Warehouses.Any(w => w.Id == l.to));
+
+    private static string Pct(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private string NodeClass(WarehouseDto w) =>
+        (w.Id == _selected ? "on " : "") + (w.Id == _linkFrom ? "src " : "") + (w.IsCentral ? "central " : "") + "i-" + w.Icon;
+
+    protected override async Task OnInitializedAsync()
+    {
+        L.Changed += OnLang;
+        await Reload();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Every node learns its hands, and the lines are redrawn to wherever the nodes are now.
+        if (_board is null) return;
+        _selfRef ??= DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("mfWh.wire", _selfRef);
+    }
+
+    /// <summary>The map dropped a node somewhere. Keep it there locally and tell the server.</summary>
+    [JSInvokable]
+    public async Task OnNodeMoved(int id, double x, double y)
+    {
+        if (_board is null) return;
+        var i = _board.Warehouses.FindIndex(w => w.Id == id);
+        if (i < 0) return;
+        _board.Warehouses[i] = _board.Warehouses[i] with { X = Math.Clamp(x, 2, 96), Y = Math.Clamp(y, 4, 94) };
+        var (ok, error) = await Api.MoveWarehouseNodeAsync(id, x, y);
+        if (!ok) Snackbar.Add(error ?? L["common.saveFail"], Severity.Error);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Reload()
+    {
+        _board = await Api.WarehousesAsync() ?? _board;
+        _transfers = await Api.TransfersAsync() ?? [];
+        if (_board is not null && _toId == 0)
+            _toId = _board.Warehouses.FirstOrDefault(w => w.IsDefault)?.Id
+                    ?? _board.Warehouses.FirstOrDefault()?.Id ?? 0;
+        await LoadSelectedAsync();
+        await LoadSourceAsync();
+    }
+
+    private async Task LoadSelectedAsync()
+    {
+        if (_selected == CentralPick) { _centralStock = await Api.CentralStockAsync() ?? []; return; }
+        _placeStock = _selected <= 0 ? [] : await Api.WarehouseStockAsync(_selected) ?? [];
+    }
+
+    private async Task LoadSourceAsync()
+    {
+        if (_fromId == CentralPick) { _centralStock = await Api.CentralStockAsync() ?? []; return; }
+        _fromStock = _fromId <= 0 ? [] : await Api.WarehouseStockAsync(_fromId) ?? [];
+    }
+
+    private async Task SelectCentral()
+    {
+        if (_board?.Central is not { } c) return;
+        // our own central is an ordinary node; someone else's is read through the central endpoint
+        if (c.IsMine) { await Select(c.WarehouseId); return; }
+        await Select(CentralPick);
+        if (_fromId != CentralPick) await SetFrom(CentralPick);
+    }
+
+    /// <summary>A tap on a node: finish a line if one is being drawn, otherwise choose the place.</summary>
+    private async Task NodeTap(WarehouseDto w)
+    {
+        if (_linkFrom > 0)
+        {
+            if (_linkFrom == w.Id) { _linkFrom = 0; return; }
+            var (ok, error) = await Api.LinkWarehousesAsync(_linkFrom, w.Id);
+            _linkFrom = 0;
+            if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+            await Reload();
+            return;
+        }
+        await Select(w.Id);
+        // choosing a place on the map also makes it the source of the next move
+        if (_fromId != w.Id) await SetFrom(w.Id);
+    }
+
+    private void StartLink(WarehouseDto w) => _linkFrom = _linkFrom == w.Id ? 0 : w.Id;
+
+    private async Task Unlink(int from, int to)
+    {
+        var (ok, error) = await Api.UnlinkWarehousesAsync(from, to);
+        if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        await Reload();
+    }
+
+    private async Task Select(int id)
+    {
+        _selected = id;
+        _linkFrom = 0;
+        await LoadSelectedAsync();
+    }
+
+    private async Task SetFrom(int id)
+    {
+        _fromId = id;
+        _lines.Clear();
+        await LoadSourceAsync();
+    }
+
+    private void SetLine(WarehouseStockDto row, string? raw)
+    {
+        if (!decimal.TryParse(raw, out var quantity) || quantity <= 0)
+        {
+            _lines.Remove(row.MaterialId);
+            return;
+        }
+        _lines[row.MaterialId] = Math.Min(quantity, row.Quantity);
+    }
+
+    private async Task Move()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var lines = _lines.Select(l => new TransferLineRequest(l.Key, l.Value)).ToList();
+            bool ok; string? error;
+            if (_fromId == CentralPick)
+                (ok, error) = await Api.CentralTransferAsync(new CentralTransferRequest(_board!.StoreId, lines, _note));
+            else if (_toId < 0)
+            {
+                if (_board?.Central is not { IsMine: true } c || _fromId != c.WarehouseId)
+                { _error = L["wh.centralOnly"]; return; }
+                (ok, error) = await Api.CentralTransferAsync(new CentralTransferRequest(-_toId, lines, _note));
+            }
+            else
+                (ok, error) = await Api.TransferStockAsync(
+                    new TransferRequest(_fromId == 0 ? null : _fromId, _toId, lines, _note));
+            if (!ok) { _error = error ?? L["common.saveFail"]; return; }
+
+            Snackbar.Add(L[_fromId == CentralPick || _toId < 0 ? "wh.sentToBranch" : "wh.moved"], Severity.Success);
+            _lines.Clear();
+            _note = "";
+            await Reload();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task AddPlace()
+    {
+        var result = await Dialogs.ShowAsync<WarehouseDialog>(L["wh.addPlace"]);
+        if (await result.Result is { Canceled: false, Data: SaveWarehouseRequest req })
+        {
+            var (ok, error) = await Api.CreateWarehouseAsync(req);
+            if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+            await Reload();
+        }
+    }
+
+    private async Task EditPlace(WarehouseDto place)
+    {
+        var parameters = new DialogParameters { ["Existing"] = place };
+        var result = await Dialogs.ShowAsync<WarehouseDialog>(place.Name, parameters);
+        if (await result.Result is { Canceled: false, Data: SaveWarehouseRequest req })
+        {
+            var (ok, error) = await Api.UpdateWarehouseAsync(place.Id, req);
+            if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+            await Reload();
+        }
+    }
+
+    private async Task RemovePlace(WarehouseDto place)
+    {
+        var (ok, error) = await Api.DeleteWarehouseAsync(place.Id);
+        if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        Snackbar.Add(L["wh.removed"], Severity.Info);
+        if (_selected == place.Id) _selected = 0;
+        if (_fromId == place.Id) _fromId = 0;
+        if (_toId == place.Id) _toId = 0;
+        await Reload();
+    }
+
+    private void OnLang() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        L.Changed -= OnLang;
+        _selfRef?.Dispose();
+    }
+}

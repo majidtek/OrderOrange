@@ -1,0 +1,205 @@
+@page "/users"
+@inject ApiClient Api
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject IConfiguration Config
+
+<PageTitle>Admin — Users</PageTitle>
+
+<PageHeader Title="@L["nav.users"]" Subtitle="@L["admin.usersSub"]">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="CreateUser">@L["admin.newUser"]</MudButton>
+    </Actions>
+</PageHeader>
+
+<MudTabs Elevation="0" ApplyEffectsToContainer="true" PanelClass="pt-4" ActivePanelIndex="_tab" ActivePanelIndexChanged="OnTabChanged">
+    <MudTabPanel Text="@L["admin.all"]" />
+    <MudTabPanel Text="@L["role.Customer"]" />
+    <MudTabPanel Text="@L["role.RestaurantOwner"]" />
+    <MudTabPanel Text="@L["role.Driver"]" />
+    <MudTabPanel Text="@L["role.Administrator"]" />
+</MudTabs>
+
+<MudTextField T="string" @bind-Value="_search" Placeholder="@L["admin.searchUsers"]"
+               Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Clearable="true"
+               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+               Immediate="true" DebounceInterval="450" OnDebounceIntervalElapsed="Refresh" />
+
+<MudTable T="UserDto" @ref="_table" ServerData="LoadUsers" Hover="true" Dense="true"
+          Elevation="0" Outlined="true" Class="rounded-xl" RowsPerPage="25">
+    <HeaderContent>
+            <MudTh>@L["common.name"]</MudTh>
+            <MudTh>@L["admin.contact"]</MudTh>
+            <MudTh>@L["admin.role"]</MudTh>
+            <MudTh>@L["admin.linkedTo"]</MudTh>
+            <MudTh>@L["admin.joined"]</MudTh>
+            <MudTh>@L["common.status"]</MudTh>
+            <MudTh />
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd>
+                <div class="d-flex align-center" style="gap: 8px;">
+                    <MudAvatar Color="Color.Secondary" Size="Size.Small">@context.FullName[..1]</MudAvatar>
+                    <b>@context.FullName</b>
+                </div>
+            </MudTd>
+            <MudTd>
+                <MudText Typo="Typo.body2" Class="mf-ltr">@context.Email</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mf-ltr">@context.Phone</MudText>
+            </MudTd>
+            <MudTd>@Fmt.RoleLabel(context.Role, L)</MudTd>
+            <MudTd>
+                @if (context.RestaurantName is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">🍽️ @context.RestaurantName</MudChip>
+                }
+                else if (context.DriverOnline is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                             Color="@(context.DriverOnline == true ? Color.Success : Color.Default)">
+                        @(context.DriverOnline == true ? "🟢 " + L["admin.onlineNow"] : "⚪ " + L["partner.closed"])
+                    </MudChip>
+                }
+                else
+                {
+                    <span>—</span>
+                }
+            </MudTd>
+            <MudTd>@context.CreatedAt.ToString("dd MMM yyyy")</MudTd>
+            <MudTd>
+                <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)" Variant="Variant.Text">
+                    @(context.IsActive ? L["admin.active"] : L["admin.deactivated"])
+                </MudChip>
+            </MudTd>
+            <MudTd Style="white-space: nowrap;">
+                @* Straight into this person's app as them — partner portal for a partner,
+                   shop for a customer, rider app for a rider. Admins can't be targets. *@
+                @if (context.Role != UserRole.Administrator && context.IsActive)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Login" Size="Size.Small" Color="Color.Primary"
+                                   title="@L["admin.openAsUser"]"
+                                   OnClick="@(() => OpenAs(context))" />
+                }
+                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                           Color="@(context.IsActive ? Color.Error : Color.Success)"
+                           OnClick="@(() => ToggleActive(context))">
+                    @(context.IsActive ? L["admin.deactivate"] : L["admin.activate"])
+                </MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" title="@L["common.edit"]"
+                               OnClick="@(() => EditUser(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Key" Size="Size.Small" title="@L["admin.resetPw"]"
+                               OnClick="@(() => ResetPassword(context))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent>
+            <EmptyState Emoji="👤" Title="@L["admin.noUsers"]" />
+        </NoRecordsContent>
+        <LoadingContent>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-4">@L["admin.loading"]</MudText>
+        </LoadingContent>
+        <PagerContent>
+            <MudTablePager RowsPerPageOptions="new[] { 10, 25, 50 }" />
+        </PagerContent>
+    </MudTable>
+
+@code {
+    private MudTable<UserDto>? _table;
+    private string _search = "";
+    private int _tab;
+
+    private UserRole? RoleFilter => _tab switch
+    {
+        1 => UserRole.Customer,
+        2 => UserRole.RestaurantOwner,
+        3 => UserRole.Driver,
+        4 => UserRole.Administrator,
+        _ => null
+    };
+
+    private string? SearchOrNull => string.IsNullOrWhiteSpace(_search) ? null : _search.Trim();
+
+    /// <summary>Server-side page load — 10 million users never travel over the wire.</summary>
+    private async Task<TableData<UserDto>> LoadUsers(TableState state, CancellationToken _)
+    {
+        var total = await Api.GetUsersCountAsync(RoleFilter, SearchOrNull) ?? 0;
+        var items = await Api.GetUsersAsync(RoleFilter, SearchOrNull, state.Page * state.PageSize, state.PageSize) ?? [];
+        return new TableData<UserDto> { TotalItems = total, Items = items };
+    }
+
+    private Task Reload() => Refresh();
+
+    private Task Refresh() => _table?.ReloadServerData() ?? Task.CompletedTask;
+
+    private async Task OnTabChanged(int tab)
+    {
+        _tab = tab;
+        await Refresh();
+    }
+
+    private async Task ToggleActive(UserDto user)
+    {
+        if (user.IsActive)
+        {
+            var confirmed = await Dialogs.ShowMessageBox(L["admin.deactivate"],
+                string.Format(L["admin.deactivateMsg"], user.FullName), yesText: L["admin.deactivate"], cancelText: L["common.keep"]);
+            if (confirmed != true) return;
+        }
+        var (ok, error) = await Api.ToggleUserActiveAsync(user.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+        await Reload();
+    }
+
+    private async Task EditUser(UserDto user)
+    {
+        var parameters = new DialogParameters<EditUserDialog> { { d => d.User, user } };
+        var dialog = await Dialogs.ShowAsync<EditUserDialog>(L["common.edit"], parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        if ((await dialog.Result)?.Canceled == false && _table is not null) await _table.ReloadServerData();
+    }
+
+    private async Task ResetPassword(UserDto user)
+    {
+        var parameters = new DialogParameters<ResetPasswordDialog>
+        {
+            { d => d.UserId, user.Id },
+            { d => d.UserName, user.FullName }
+        };
+        var dialog = await Dialogs.ShowAsync<ResetPasswordDialog>(L["admin.resetPw"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled == false)
+            Snackbar.Add(string.Format(L["admin.pwReset"], user.FullName), Severity.Success);
+    }
+
+    // Its own page, not a dialog — the partner form is seven fields deep, which on a
+    // phone made a sheet scrolling inside a page. The tab still decides what is created.
+    private void CreateUser() =>
+        Nav.NavigateTo(RoleFilter is { } role ? $"/users/new?role={(int)role}" : "/users/new");
+
+    /// <summary>
+    /// Mints a single-use code and opens THIS person's app in a new tab, signed in as
+    /// them — the partner portal for a partner, the shop for a customer, the rider app
+    /// for a rider. The admin's own session here is untouched.
+    /// </summary>
+    private async Task OpenAs(UserDto user)
+    {
+        var (code, error) = await Api.StartImpersonationAsync(user.Id);
+        if (code is null)
+        {
+            Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+            return;
+        }
+
+        var baseUrl = (user.Role switch
+        {
+            UserRole.RestaurantOwner => Config["PartnerUrl"] ?? "https://partner.orderorange.com",
+            UserRole.Driver => Config["DeliveryUrl"] ?? "https://delivery.orderorange.com",
+            _ => Config["ClientUrl"] ?? "https://orderorange.com",
+        }).TrimEnd('/');
+
+        await JS.InvokeVoidAsync("open", $"{baseUrl}/?impersonate={code.Code}", "_blank");
+    }
+}

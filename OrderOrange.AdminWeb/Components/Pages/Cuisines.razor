@@ -1,0 +1,64 @@
+@page "/cuisines"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<PageTitle>Admin — Cuisines</PageTitle>
+
+<PageHeader Title="@L["nav.cuisines"]" Subtitle="@L["admin.cuisinesSub"]">
+    <Actions>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="@(() => Edit(null))">@L["admin.newCuisine"]</MudButton>
+    </Actions>
+</PageHeader>
+
+@if (_cuisines is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        @foreach (var cuisine in _cuisines)
+        {
+            var c = cuisine;
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl d-flex align-center" Style="gap: 12px;">
+                    <div style="font-size: 34px;">@c.Emoji</div>
+                    <MudText Typo="Typo.subtitle1" Class="flex-grow-1">@L.Data("cuisine", c.Name)</MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => Edit(c))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => Delete(c))" />
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<CuisineDto>? _cuisines;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload() => _cuisines = await Api.GetCuisinesAsync();
+
+    private async Task Edit(CuisineDto? cuisine)
+    {
+        var parameters = new DialogParameters<CuisineDialog> { { d => d.Existing, cuisine } };
+        var dialog = await Dialogs.ShowAsync<CuisineDialog>(cuisine is null ? L["admin.newCuisine"] : L["admin.editCuisine"], parameters);
+        var result = await dialog.Result;
+        if (result?.Canceled == false) await Reload();
+    }
+
+    private async Task Delete(CuisineDto cuisine)
+    {
+        var confirmed = await Dialogs.ShowMessageBox(L["admin.deleteCuisine"],
+            $"Delete “{cuisine.Name}”? This fails if any restaurant still uses it.",
+            yesText: "Delete", cancelText: "Keep");
+        if (confirmed != true) return;
+        var (ok, error) = await Api.DeleteCuisineAsync(cuisine.Id);
+        if (!ok) Snackbar.Add(error ?? L["common.deleteFail"], Severity.Error);
+        await Reload();
+    }
+}

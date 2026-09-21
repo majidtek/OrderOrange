@@ -1,0 +1,141 @@
+﻿@inherits LayoutComponentBase
+@inject AppState State
+@inject NavigationManager Nav
+@inject LanguageService Lang
+@inject ApiClient Api
+@implements IDisposable
+
+<MudThemeProvider Theme="Theme" />
+<MudRTLProvider RightToLeft="@Lang.IsRtl">
+    @* These three render OUTSIDE the page tree — dialogs, menus, toasts. They must sit
+       inside the RTL provider or none of what they draw ever flips for Arabic/Persian/
+       Urdu, which is exactly the bug this fixed. *@
+    <MudPopoverProvider />
+    <MudDialogProvider />
+    <MudSnackbarProvider />
+    @* First visit: the customer picks a language before anything else happens. *@
+    <LanguageGate />
+<SessionGate>
+    <SignedOut>
+        <LoginView AppName="OrderOrange Admin"
+                   Tagline="@Lang["admin.tagline"]"
+                   LogoUrl="_content/OrderOrange.ClientCore/logo.svg?v=4"
+                   AllowedRoles="new[] { UserRole.Administrator }"
+                   WrongRoleMessage="@Lang["admin.adminsOnly"]"
+                   DemoHint="@Lang["admin.demoHint"]" />
+    </SignedOut>
+    <SignedIn>
+        <MudLayout>
+            <MudAppBar Elevation="0" Class="mf-appbar">
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                               OnClick="@(() => _drawerOpen = !_drawerOpen)" />
+                <div class="mf-brand ml-2">
+                    <div class="mf-brand-mark">🛠️</div>
+                    <span class="mf-brand-name">OrderOrange <span class="d-none d-sm-inline">Admin</span></span>
+                </div>
+                <MudSpacer />
+                <JoinsBell />
+                <LanguageMenu Compact="true" />
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <ActivatorContent>
+                        <MudAvatar Color="Color.Primary">@Initial</MudAvatar>
+                    </ActivatorContent>
+                    <ChildContent>
+                        <div class="px-4 py-2">
+                            <MudText Typo="Typo.subtitle2">@State.FullName</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mf-ltr">@State.Email</MudText>
+                        </div>
+                        <MudDivider />
+                        <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="SignOut">@Lang["common.signout"]</MudMenuItem>
+                    </ChildContent>
+                </MudMenu>
+            </MudAppBar>
+            <MudDrawer @bind-Open="_drawerOpen" Elevation="0" ClipMode="DrawerClipMode.Always" Variant="DrawerVariant.Responsive">
+                <MudNavMenu Class="pa-2">
+                    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@Lang["nav.dashboard"]</MudNavLink>
+                    <MudNavLink Href="/orders" Icon="@Icons.Material.Filled.ReceiptLong">@Lang["nav.orders"]</MudNavLink>
+                    <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.Assessment">@Lang["nav.reports"]</MudNavLink>
+                    <MudNavLink Href="/activity" Icon="@Icons.Material.Filled.Sensors">@Lang["nav.activity"]</MudNavLink>
+                    <MudNavLink Href="/visitors" Icon="@Icons.Material.Filled.Dns">@Lang["nav.visitors"]</MudNavLink>
+                    <MudNavLink Href="/bot-chats" Icon="@Icons.Material.Filled.Forum">@Lang["bots.title"]</MudNavLink>
+                    <MudNavLink Href="/contact-messages" Icon="@Icons.Material.Filled.MarkEmailUnread">@Lang["nav.contact"] <ContactBadge /></MudNavLink>
+                    <MudNavLink Href="/insights" Icon="@Icons.Material.Filled.QueryStats">@Lang["nav.insights"]</MudNavLink>
+                    <MudNavLink Href="/chats" Icon="@Icons.Material.Filled.Forum">@Lang["nav.chats"]</MudNavLink>
+                    <MudNavLink Href="/restaurants" Icon="@Icons.Material.Filled.Storefront">@Lang["admin.partners"]</MudNavLink>
+                    <MudNavLink Href="/drivers" Icon="@Icons.Material.Filled.Badge">@Lang["nav.drivers"]</MudNavLink>
+                    <MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group">@Lang["nav.users"]</MudNavLink>
+                    <MudNavLink Href="/support" Icon="@Icons.Material.Filled.SupportAgent">@Lang["nav.support"] <SupportBadge /></MudNavLink>
+                    <MudNavGroup Title="@Lang["nav.basicinfo"]" Icon="@Icons.Material.Filled.Tune" Expanded="true">
+                        <MudNavLink Href="/products" Icon="@Icons.Material.Filled.MenuBook">@Lang["nav.products"]</MudNavLink>
+                        <MudNavLink Href="/cuisines" Icon="@Icons.Material.Filled.Category">@Lang["nav.cuisines"]</MudNavLink>
+                        <MudNavLink Href="/coupons" Icon="@Icons.Material.Filled.LocalOffer">@Lang["nav.coupons"]</MudNavLink>
+                    </MudNavGroup>
+                </MudNavMenu>
+            </MudDrawer>
+            <MudMainContent Class="pb-12">
+                <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-6">
+                    @Body
+                </MudContainer>
+            </MudMainContent>
+        </MudLayout>
+    </SignedIn>
+</SessionGate>
+</MudRTLProvider>
+
+@code {
+    private static readonly MudTheme Theme = FoodTheme.Build();
+
+    private bool _drawerOpen = true;
+
+    private string Initial => string.IsNullOrEmpty(State.FullName) ? "?" : State.FullName[..1].ToUpper();
+
+    /// <summary>
+    /// The visitor own address, read once while a real HTTP request still exists. After
+    /// the circuit opens there is nothing to read it from, and the API sees only this
+    /// server — which logged every person here as 127.0.0.1.
+    /// </summary>
+    // Running in the browser, the API sees the visitor's own address on every call.
+    private string? _visitorIp;
+
+    protected override void OnInitialized()
+    {
+        Lang.Changed += OnLangChanged;
+        Nav.LocationChanged += OnLocationChanged;
+        State.Changed += OnStateChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Lang.EnsureLoadedAsync();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => TrackVisit();
+
+    private void OnStateChanged() => _ = InvokeAsync(() =>
+    {
+        TrackVisit();
+        StateHasChanged();
+    });
+
+    private void TrackVisit()
+    {
+        if (!State.IsAuthenticated) return;
+        var page = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+        _ = Api.TrackVisitAsync("Admin", page, _visitorIp);
+    }
+
+    private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void SignOut()
+    {
+        State.SignOut();
+        Nav.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        Lang.Changed -= OnLangChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+        State.Changed -= OnStateChanged;
+    }
+}

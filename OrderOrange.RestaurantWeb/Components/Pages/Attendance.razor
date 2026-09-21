@@ -1,0 +1,300 @@
+@page "/attendance"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+@* Two buttons and the truth about today. "I'm here" opens a shift, "Leaving" closes it;
+   each press asks the phone where it is and sends that along. Below: the person's own
+   leave — ask for a few hours or some days; the store's admin says yes or no. *@
+
+<PageTitle>Partner — @L["att.title"]</PageTitle>
+
+<PageHeader Title="@L["att.title"]" Subtitle="@L["att.sub"]" />
+
+@if (_me is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="att-wrap">
+        <div class="att-card @(_me.Open is null ? "" : "on")">
+            <div class="att-state">
+                <span class="dot"></span>
+                @if (_me.Open is { } open)
+                {
+                    <div>
+                        <b>@string.Format(L["att.present"], open.InAt.ToString("HH:mm"))</b>
+                        <small>@Elapsed(open.InAt)</small>
+                    </div>
+                }
+                else
+                {
+                    <div><b>@L["att.away"]</b><small>@DateTime.Now.ToString("dddd, d MMMM")</small></div>
+                }
+            </div>
+
+            @if (_me.Open is null)
+            {
+                <button type="button" class="att-btn in" disabled="@_busy" @onclick="ClockIn">
+                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.WhereToVote" /></span>
+                    <span>@(_busy ? L["att.locating"] : L["att.here"])</span>
+                </button>
+            }
+            else
+            {
+                <button type="button" class="att-btn out" disabled="@_busy" @onclick="ClockOut">
+                    <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Logout" /></span>
+                    <span>@(_busy ? L["att.locating"] : L["att.leave"])</span>
+                </button>
+            }
+
+            @if (_notice is not null)
+            {
+                <div class="att-notice">@_notice</div>
+            }
+        </div>
+
+        <div class="att-stats">
+            <div><b>@_me.HoursToday.ToString("0.#")<small>@L["att.h"]</small></b><span>@L["att.today"]</span></div>
+            <div><b>@_me.HoursThisMonth.ToString("0.#")<small>@L["att.h"]</small></b><span>@L["att.thisMonth"]</span></div>
+            <div><b>@_me.DaysThisMonth</b><span>@L["att.days"]</span></div>
+        </div>
+
+        @if (_me.Today.Count > 0)
+        {
+            <div class="att-list">
+                <b class="hd">@L["att.today"]</b>
+                @foreach (var s in _me.Today)
+                {
+                    <div class="row">
+                        <span class="t">@s.InAt.ToString("HH:mm")</span>
+                        <span class="arrow">→</span>
+                        <span class="t">@(s.OutAt?.ToString("HH:mm") ?? L["att.open"])</span>
+                        <span class="hrs">@s.Hours.ToString("0.0") @L["att.h"]</span>
+                        <span class="loc">
+                            @if (s.InLat is double la && s.InLng is double lo)
+                            {
+                                <a href="@($"https://maps.google.com/?q={Inv(la)},{Inv(lo)}")" target="_blank" rel="noopener"><MudIcon Icon="@Icons.Material.Filled.Place" /> @L["att.map"]</a>
+                            }
+                            else
+                            {
+                                <span class="none"><MudIcon Icon="@Icons.Material.Filled.LocationOff" /> @L["att.noLocation"]</span>
+                            }
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+
+        @* ---------- Leave ---------- *@
+        <div class="lv-card">
+            <div class="hd">
+                <b>@L["lv.title"]</b>
+                <button type="button" class="lv-ask" @onclick="@(() => { ResetLeaveForm(); _leaveOpen = true; })">＋ @L["lv.ask"]</button>
+            </div>
+            @if (_me.Leaves.Count == 0)
+            {
+                <small class="lv-empty">@L["lv.none"]</small>
+            }
+            else
+            {
+                @foreach (var lv in _me.Leaves)
+                {
+                    <div class="lv-row @lv.Status">
+                        <span class="kind">@(lv.Kind == "hourly" ? "⏱" : "📅")</span>
+                        <div class="txt">
+                            <b>@LeaveLabel(lv)</b>
+                            <small>
+                                @(lv.Kind == "hourly" ? $"{lv.From:ddd d MMM} · {lv.From:HH:mm}–{lv.To:HH:mm}" : $"{lv.From:ddd d MMM} – {lv.To:ddd d MMM}")
+                                @if (!string.IsNullOrEmpty(lv.Reason)) { <text> · @lv.Reason</text> }
+                            </small>
+                            @if (lv.Status != "pending" && !string.IsNullOrEmpty(lv.DecisionNote))
+                            {
+                                <small class="note">“@lv.DecisionNote” — @lv.DecidedBy</small>
+                            }
+                        </div>
+                        <span class="st">@L["lv.st." + lv.Status]</span>
+                        @if (lv.Status == "pending")
+                        {
+                            <button type="button" class="x" title="@L["lv.withdraw"]" @onclick="@(() => Withdraw(lv))">✕</button>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    </div>
+}
+
+@* ---------- Asking for leave ---------- *@
+@if (_leaveOpen)
+{
+    <div class="oo-modal" @onclick="@(() => _leaveOpen = false)">
+        <div class="tm-sheet lv-sheet" @onclick:stopPropagation="true">
+            <div class="head">
+                <span class="ic"><MudIcon Icon="@Icons.Material.Filled.EventBusy" /></span>
+                <b>@L["lv.ask"]</b>
+            </div>
+
+            <div class="lv-kind">
+                <button type="button" class="@(_kind == "hourly" ? "on" : "")" @onclick="@(() => _kind = "hourly")">⏱ @L["lv.hourly"]</button>
+                <button type="button" class="@(_kind == "daily" ? "on" : "")" @onclick="@(() => _kind = "daily")">📅 @L["lv.daily"]</button>
+            </div>
+
+            @if (_kind == "hourly")
+            {
+                <label class="lv-field"><span>@L["att.date"]</span><input type="date" @bind="_date" /></label>
+                <div class="lv-two">
+                    <label class="lv-field"><span>@L["lv.from"]</span><input type="time" @bind="_fromTime" /></label>
+                    <label class="lv-field"><span>@L["lv.to"]</span><input type="time" @bind="_toTime" /></label>
+                </div>
+            }
+            else
+            {
+                <div class="lv-two">
+                    <label class="lv-field"><span>@L["lv.from"]</span><input type="date" @bind="_date" /></label>
+                    <label class="lv-field"><span>@L["lv.to"]</span><input type="date" @bind="_toDate" /></label>
+                </div>
+            }
+            <label class="lv-field"><span>@L["lv.reason"]</span><textarea rows="2" maxlength="300" @bind="_reason" placeholder="@L["lv.reasonHint"]"></textarea></label>
+
+            @if (_leaveError is not null)
+            {
+                <div class="att-notice">@_leaveError</div>
+            }
+
+            <div class="acts">
+                <MudButton OnClick="@(() => _leaveOpen = false)">@L["common.cancel"]</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SendLeave" Disabled="_busy"
+                           StartIcon="@Icons.Material.Filled.Send">@L["lv.send"]</MudButton>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private MyAttendanceDto? _me;
+    private bool _busy;
+    private string? _notice;
+    private System.Threading.Timer? _tick;
+
+    // leave form
+    private bool _leaveOpen;
+    private string _kind = "hourly";
+    // Blazor binds date/time inputs to typed values (DateTime / TimeOnly), not strings.
+    private DateTime _date = DateTime.Today;
+    private DateTime _toDate = DateTime.Today;
+    private TimeOnly _fromTime = new(10, 0);
+    private TimeOnly _toTime = new(12, 0);
+    private string _reason = "";
+    private string? _leaveError;
+
+    private sealed class GeoResult
+    {
+        public double? Lat { get; set; }
+        public double? Lng { get; set; }
+        public double? Accuracy { get; set; }
+        public string? Error { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _me = await Api.GetMyAttendanceAsync();
+        // The "present since" line keeps counting while the page is open.
+        _tick = new System.Threading.Timer(_ => InvokeAsync(StateHasChanged), null, 30_000, 30_000);
+    }
+
+    private static string Inv(double d) => d.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private string Elapsed(DateTime since)
+    {
+        var span = DateTime.Now - since;
+        return span.TotalHours >= 1 ? $"{(int)span.TotalHours} {L["att.h"]} {span.Minutes:00}" : $"{span.Minutes} min";
+    }
+
+    private string LeaveLabel(LeaveDto lv) => lv.Kind == "hourly"
+        ? $"{L["lv.hourly"]} · {lv.Hours:0.#} {L["att.h"]}"
+        : $"{L["lv.daily"]} · {lv.Days} {L["att.days"]}";
+
+    /// <summary>Asks the browser where the phone is. Null fields = it would not say.</summary>
+    private async Task<(ClockRequest req, string? problem)> LocateAsync()
+    {
+        try
+        {
+            var geo = await JS.InvokeAsync<GeoResult>("mfGeo.get", 15000);
+            if (geo.Error is null) return (new ClockRequest(geo.Lat, geo.Lng, geo.Accuracy), null);
+            return (new ClockRequest(null, null, null), geo.Error == "denied" ? L["att.locDenied"] : L["att.locFailed"]);
+        }
+        catch { return (new ClockRequest(null, null, null), L["att.locFailed"]); }
+    }
+
+    private async Task ClockIn()
+    {
+        _busy = true; _notice = null;
+        try
+        {
+            var (req, problem) = await LocateAsync();
+            var (state, error) = await Api.ClockInAsync(req);
+            if (state is null) { await Dialogs.ShowMessageBox(L["common.wentWrong"], L.ServerError(error) ?? L["common.saveFail"], yesText: L["common.close"]); return; }
+            _me = state; _notice = problem;
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task ClockOut()
+    {
+        _busy = true; _notice = null;
+        try
+        {
+            var (req, problem) = await LocateAsync();
+            var (state, error) = await Api.ClockOutAsync(req);
+            if (state is null) { await Dialogs.ShowMessageBox(L["common.wentWrong"], L.ServerError(error) ?? L["common.saveFail"], yesText: L["common.close"]); return; }
+            _me = state; _notice = problem;
+        }
+        finally { _busy = false; }
+    }
+
+    private void ResetLeaveForm()
+    {
+        _kind = "hourly"; _leaveError = null; _reason = "";
+        _date = DateTime.Today; _toDate = DateTime.Today; _fromTime = new(10, 0); _toTime = new(12, 0);
+    }
+
+    private async Task SendLeave()
+    {
+        _leaveError = null;
+        var day = _date.Date;
+        DateTime from, to;
+        if (_kind == "hourly")
+        {
+            if (_toTime <= _fromTime) { _leaveError = L["lv.e.span"]; return; }
+            from = day + _fromTime.ToTimeSpan(); to = day + _toTime.ToTimeSpan();
+        }
+        else
+        {
+            if (_toDate.Date < day) { _leaveError = L["lv.e.span"]; return; }
+            from = day; to = _toDate.Date;
+        }
+        _busy = true;
+        try
+        {
+            var (state, error) = await Api.RequestLeaveAsync(new LeaveRequestDto(_kind, from, to, _reason));
+            if (state is null) { _leaveError = L.ServerError(error) ?? L["common.saveFail"]; return; }
+            _me = state; _leaveOpen = false;
+            Snackbar.Add(L["lv.sent"], Severity.Success);
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Withdraw(LeaveDto lv)
+    {
+        var (ok, error) = await Api.CancelLeaveAsync(lv.Id);
+        if (!ok) { Snackbar.Add(L.ServerError(error) ?? L["common.wentWrong"], Severity.Error); return; }
+        _me = await Api.GetMyAttendanceAsync();
+    }
+
+    public void Dispose() => _tick?.Dispose();
+}

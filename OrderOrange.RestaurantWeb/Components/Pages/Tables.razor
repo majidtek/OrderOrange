@@ -1,0 +1,446 @@
+﻿@page "/tables"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* The dining room, the simple way: every salon is a section with its own
+   "add table" button; tables are cards inside it. No canvas, no dragging —
+   one button adds a salon, one button adds a table into it. *@
+
+<div class="d-flex align-center flex-wrap mb-4" style="gap: 10px;">
+    <div style="flex: 1 1 240px;">
+        <MudText Typo="Typo.h5" Style="font-weight: 800;">@L["tables.title"]</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">@L["tables.subtitle"]</MudText>
+    </div>
+    @if (_tables is not null)
+    {
+        <div class="oo-fp-stats">
+            <span class="ok">● @_tables.Count(t => !t.IsOccupied) @L["tables.free"]</span>
+            <span class="hot">● @_tables.Count(t => t.IsOccupied) @L["tables.busy"]</span>
+        </div>
+        <MudIconButton Icon="@Icons.Material.Filled.HelpOutline" OnClick="@(() => _tour?.StartAsync() ?? Task.CompletedTask)" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="AddSalon">
+            @L["tables.addSalon"]
+        </MudButton>
+    }
+</div>
+
+<GuidedTour @ref="_tour" Steps="TableTourSteps" />
+
+@if (_tables is null || _rooms is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+}
+else
+{
+    <div class="sal-board-scroll">
+    <div class="sal-board">
+    @foreach (var r in _rooms)
+    {
+        var salon = r;
+        var members = TablesOf(salon.Id);
+        <div class="sal" data-sal="@salon.Id" @key="salon.Id"
+             style="left: @Pct(salon.X); top: @Pct(salon.Y); width: @Pct(salon.W); height: @Pct(salon.H);">
+            <div class="sal-head">
+                <span class="sal-drag" title="⠿"><MudIcon Icon="@Icons.Material.Filled.DragIndicator" Style="width:18px;height:18px;" /></span>
+                <span class="sal-ic"><MudIcon Icon="@Icons.Material.Filled.BorderStyle" /></span>
+                @if (_renamingRoomId == salon.Id)
+                {
+                    <input class="sal-rename" @bind="_renameText" @bind:event="oninput" maxlength="60"
+                           @onkeydown="@(e => { if (e.Key == "Enter") _ = ConfirmRenameSalon(salon); if (e.Key == "Escape") _renamingRoomId = null; })" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Check" Size="Size.Small" Color="Color.Primary"
+                                   OnClick="@(() => ConfirmRenameSalon(salon))" />
+                }
+                else
+                {
+                    <b class="sal-name">@salon.Name</b>
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                                   OnClick="@(() => { _renamingRoomId = salon.Id; _renameText = salon.Name; })" />
+                }
+                <span class="sal-meta">
+                    @members.Count 🍽️ · @members.Sum(t => t.Seats) <MudIcon Icon="@Icons.Material.Filled.EventSeat" Style="width:13px;height:13px;vertical-align:-2px;" />
+                </span>
+                <span style="flex: 1;"></span>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                           StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => AddTable(salon))">
+                    @L["tables.add"]
+                </MudButton>
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => RemoveSalon(salon))" />
+            </div>
+            <div class="sal-grid">
+                @foreach (var t in members)
+                {
+                    @TableCard(t)
+                }
+                <button type="button" class="sal-add" @onclick="@(() => AddTable(salon))">
+                    <MudIcon Icon="@Icons.Material.Filled.Add" Style="width:20px;height:20px;" />
+                    @L["tables.add"]
+                </button>
+            </div>
+            <i class="sal-c l"></i>
+            <i class="sal-c r"></i>
+        </div>
+    }
+    </div>
+    </div>
+
+    @if (Homeless.Count > 0)
+    {
+        <div class="sal loose" data-sal="loose">
+            <div class="sal-head">
+                <span class="sal-ic dim"><MudIcon Icon="@Icons.Material.Filled.HelpOutline" /></span>
+                <b class="sal-name">@L["tables.noSalon"]</b>
+                <span class="sal-meta">@Homeless.Count 🍽️</span>
+            </div>
+            <div class="sal-grid">
+                @foreach (var t in Homeless)
+                {
+                    @TableCard(t)
+                }
+            </div>
+        </div>
+    }
+
+    @if (Selected is { } sel)
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mt-3 oo-fp-actions">
+            <div class="d-flex align-center flex-wrap" style="gap: 10px;">
+                <div style="min-width: 0; flex: 1 1 180px;">
+                    <MudText Typo="Typo.subtitle1" Style="font-weight: 800;">
+                        <MudIcon Icon="@TypeIcon(sel.Type)" Style="@($"color:{TypeColor(sel.Type)};vertical-align:-4px;")" /> @sel.Name
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text"
+                                 Color="@(sel.IsOccupied ? Color.Warning : Color.Success)">
+                            @(sel.IsOccupied ? L["tables.busy"] : L["tables.free"])
+                        </MudChip>
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @L[$"tables.type.{sel.Type}"] · @sel.Seats <MudIcon Icon="@Icons.Material.Filled.EventSeat" Style="width:12px;height:12px;vertical-align:-2px;" /> · @SalonLabel(sel.RoomId)
+                        @if (sel.IsOccupied)
+                        {
+                            <text> · 👤 @(sel.CustomerName ?? sel.GuestName)</text>
+                            @if (sel.OccupiedAt is { } at)
+                            {
+                                <text> (@Fmt.TimeAgo(at, L))</text>
+                            }
+                        }
+                    </MudText>
+                </div>
+
+                @if (sel.IsOccupied)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.ReceiptLong" OnClick="@(() => OpenInvoice(sel))">
+                        @L["tables.invoice"]
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.CleaningServices" OnClick="@(() => ClearTable(sel))">
+                        @L["tables.clear"]
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.AirlineSeatReclineNormal" OnClick="@(() => Seat(sel))">
+                        @L["tables.seat"]
+                    </MudButton>
+                }
+
+                @if (_rooms.Count > 0)
+                {
+                    <MudMenu Size="Size.Small" Dense="true" Label="@L["tables.moveSalon"]"
+                             StartIcon="@Icons.Material.Filled.MoveDown" Variant="Variant.Outlined">
+                        @foreach (var room in _rooms.Where(x => x.Id != sel.RoomId))
+                        {
+                            var target = room;
+                            <MudMenuItem OnClick="@(() => MoveToSalon(sel, target.Id))">@target.Name</MudMenuItem>
+                        }
+                    </MudMenu>
+                }
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => Edit(sel))" />
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
+                               OnClick="@(() => Remove(sel))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="@(() => _selectedId = null)" />
+            </div>
+        </MudPaper>
+    }
+}
+
+@code {
+    // ───────────── Guided tour of the floor ─────────────
+    private GuidedTour? _tour;
+
+    private static readonly GuidedTour.Step[] TableTourSteps =
+    [
+        new(".sal-tbl", "🍽️", "tbl.tour1t", "tbl.tour1d"),
+        new(".oo-fp-stats", "🟢", "tbl.tour2t", "tbl.tour2d"),
+        new(".sal-add", "➕", "tbl.tour3t", "tbl.tour3d"),
+    ];
+
+    private List<StoreTableDto>? _tables;
+    private List<StoreRoomDto>? _rooms;
+    private int? _selectedId;
+    private int? _renamingRoomId;
+    private string _renameText = "";
+    private System.Threading.Timer? _clock;
+
+    private StoreTableDto? Selected => _tables?.FirstOrDefault(t => t.Id == _selectedId);
+
+    private List<StoreTableDto> TablesOf(int roomId) =>
+        (_tables ?? []).Where(t => t.RoomId == roomId).OrderBy(t => NameOrder(t.Name)).ThenBy(t => t.Name).ToList();
+
+    private List<StoreTableDto> Homeless =>
+        (_tables ?? []).Where(t => t.RoomId is null || _rooms!.All(r => r.Id != t.RoomId))
+            .OrderBy(t => NameOrder(t.Name)).ThenBy(t => t.Name).ToList();
+
+    private static long NameOrder(string name) => long.TryParse(name.TrimStart('T', 't'), out var n) ? n : long.MaxValue;
+
+    private string SalonLabel(int? roomId) =>
+        _rooms?.FirstOrDefault(r => r.Id == roomId)?.Name ?? L["tables.noSalon"];
+
+    /// <summary>One table card: state, name, seats, holder — tap to open its actions.</summary>
+    private RenderFragment TableCard(StoreTableDto t) => __builder =>
+    {
+        <button type="button"
+                class="sal-tbl @(t.IsOccupied ? "busy" : "free") @(t.Id == _selectedId ? "sel" : "")"
+                @onclick="@(() => _selectedId = _selectedId == t.Id ? null : t.Id)">
+            <span class="tic" style="@($"color:{TypeColor(t.Type)}")">
+                <MudIcon Icon="@TypeIcon(t.Type)" Style="width:16px;height:16px;" />
+            </span>
+            <b class="tnm">@t.Name</b>
+            <span class="tst">@t.Seats <MudIcon Icon="@Icons.Material.Filled.EventSeat" Style="width:11px;height:11px;vertical-align:-1.5px;" /></span>
+            @if (t.IsOccupied)
+            {
+                <span class="twho">👤 @(t.CustomerName ?? t.GuestName)</span>
+                @if (t.OccupiedAt is { } at)
+                {
+                    <span class="tdur">⏱ @Duration(at, L)</span>
+                }
+            }
+        </button>
+    };
+
+    // Crisp line icons instead of emoji — they render identically on every phone,
+    // and each type keeps one signature colour so the room reads at a glance.
+    public static string TypeIcon(string type) => type switch
+    {
+        "outdoor" => Icons.Material.Filled.Deck,
+        "vip" => Icons.Material.Filled.WorkspacePremium,
+        "family" => Icons.Material.Filled.FamilyRestroom,
+        "counter" => Icons.Material.Filled.Countertops,
+        "other" => Icons.Material.Filled.EventSeat,
+        _ => Icons.Material.Filled.TableRestaurant,
+    };
+
+    public static string TypeColor(string type) => type switch
+    {
+        "outdoor" => "#0288d1",
+        "vip" => "#e69b00",
+        "family" => "#7b1fa2",
+        "counter" => "#455a64",
+        "other" => "#607d8b",
+        _ => "#6d4c41",
+    };
+
+    public static string Duration(DateTime at, LanguageService lang)
+    {
+        var span = DateTime.Now - at;
+        return span.TotalHours >= 1
+            ? string.Format(lang["tables.durH"], (int)span.TotalHours, span.Minutes.ToString("00"))
+            : string.Format(lang["tables.durM"], Math.Max(1, (int)span.TotalMinutes));
+    }
+
+    protected override Task OnInitializedAsync()
+    {
+        // The "seated for" clocks tick on their own — a table held for an hour must
+        // say so even if nobody touches the page.
+        _clock = new System.Threading.Timer(
+            _ => { if (_tables?.Any(t => t.IsOccupied) == true) InvokeAsync(StateHasChanged); },
+            null, 30_000, 30_000);
+        return Load();
+    }
+
+    private DotNetObjectReference<Tables>? _selfRef;
+
+    private static string Pct(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>A panel moved or stretched on the board — its rectangle IS the layout.</summary>
+    [JSInvokable]
+    public async Task OnSalonRect(int id, double x, double y, double w, double h)
+    {
+        var room = _rooms?.FirstOrDefault(r => r.Id == id);
+        if (room is null) return;
+        var i = _rooms!.IndexOf(room);
+        _rooms[i] = room with { X = x, Y = y, W = w, H = h };
+
+        var (saved, error) = await Api.MoveRoomAsync(id, new RoomRectRequest(x, y, w, h));
+        if (saved is null)
+        {
+            Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+            await Load(); // snap back to what the server holds
+        }
+        else
+        {
+            _rooms[i] = saved;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Every panel learns its hands: drag anywhere on the area, stretch by
+        // the grip — the rectangle goes to the server on release.
+        if (_rooms is null) return;
+        _selfRef ??= DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("mfSal.wire", _selfRef);
+    }
+
+    private async Task Load()
+    {
+        _tables = await Api.GetTablesAsync() ?? [];
+        _rooms = await Api.GetRoomsAsync() ?? [];
+    }
+
+    // ---------- Salons ----------
+
+    private async Task AddSalon()
+    {
+        // Find an empty spot on the main area for the newcomer (3×3 grid scan).
+        double x = 35, y = 35;
+        for (var slot = 0; slot < 9; slot++)
+        {
+            double cx = 1 + slot % 3 * 33, cy = 1 + slot / 3 * 33;
+            if (!_rooms!.Any(r => cx < r.X + r.W + 1 && cx + 31 > r.X - 1 &&
+                                  cy < r.Y + r.H + 1 && cy + 31 > r.Y - 1))
+            {
+                x = cx; y = cy;
+                break;
+            }
+        }
+        var name = $"{L["tables.room"]} {_rooms!.Count + 1}";
+        var (room, error) = await Api.CreateRoomAsync(new SaveStoreRoomRequest(name, "", x, y, 31, 31));
+        if (room is null) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        _rooms.Add(room);
+        _renamingRoomId = room.Id; // fresh salon opens ready for its real name
+        _renameText = room.Name;
+    }
+
+    private async Task ConfirmRenameSalon(StoreRoomDto salon)
+    {
+        var name = _renameText.Trim();
+        _renamingRoomId = null;
+        if (name.Length == 0 || name == salon.Name) return;
+        var (ok, error) = await Api.RenameRoomAsync(salon.Id,
+            new SaveStoreRoomRequest(name, salon.Floor, salon.X, salon.Y, salon.W, salon.H));
+        if (!ok) { Snackbar.Add(error ?? L["common.saveFail"], Severity.Error); return; }
+        var i = _rooms!.FindIndex(r => r.Id == salon.Id);
+        if (i >= 0) _rooms[i] = salon with { Name = name };
+    }
+
+    private async Task RemoveSalon(StoreRoomDto salon)
+    {
+        var ok = await Dialogs.ShowMessageBox(L["tables.removeRoomTitle"],
+            string.Format(L["tables.removeRoomBody"], salon.Name),
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (ok != true) return;
+
+        var (done, error) = await Api.DeleteRoomAsync(salon.Id);
+        if (!done) { Snackbar.Add(error ?? L["common.updateFail"], Severity.Error); return; }
+        _rooms!.RemoveAll(r => r.Id == salon.Id);
+        await Load(); // its tables drop into "without salon"
+    }
+
+
+    // ---------- Tables ----------
+
+    private async Task AddTable(StoreRoomDto salon)
+    {
+        // The next free number across the whole floor: 1..71 → 72.
+        var next = _tables!.Select(t => NameOrder(t.Name)).Where(n => n != long.MaxValue)
+            .DefaultIfEmpty(0).Max() + 1;
+        var parameters = new DialogParameters<TableDialog>
+        {
+            { d => d.Existing, null },
+            { d => d.RoomId, salon.Id },
+            { d => d.SuggestedName, next.ToString() },
+        };
+        var dialog = await Dialogs.ShowAsync<TableDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        if ((await dialog.Result)?.Canceled == false) await Load();
+    }
+
+    private async Task Edit(StoreTableDto table)
+    {
+        var parameters = new DialogParameters<TableDialog>
+        {
+            { d => d.Existing, table },
+            { d => d.RoomId, table.RoomId },
+        };
+        var dialog = await Dialogs.ShowAsync<TableDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        if ((await dialog.Result)?.Canceled == false) await Load();
+    }
+
+    private async Task MoveToSalon(StoreTableDto table, int roomId)
+    {
+        var (ok, error) = await Api.UpdateTableAsync(table.Id,
+            new SaveStoreTableRequest(table.Name, table.Type, table.Seats, table.Floor, table.Shape, roomId));
+        if (!ok) { Snackbar.Add(error ?? L["common.updateFail"], Severity.Error); return; }
+        await Load();
+    }
+
+    private async Task Remove(StoreTableDto table)
+    {
+        var ok = await Dialogs.ShowMessageBox(L["tables.removeTitle"],
+            string.Format(L["tables.removeBody"], table.Name),
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (ok != true) return;
+
+        var (done, error) = await Api.DeleteTableAsync(table.Id);
+        if (!done) Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
+        _selectedId = null;
+        await Load();
+    }
+
+    private async Task Seat(StoreTableDto table)
+    {
+        var parameters = new DialogParameters<SeatTableDialog> { { d => d.Table, table } };
+        var dialog = await Dialogs.ShowAsync<SeatTableDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        if ((await dialog.Result)?.Canceled != false) return;
+
+        // Seating opened the party's invoice — go straight to the till for round one.
+        OpenInvoice(table);
+    }
+
+    /// <summary>The table's open invoice lives on the POS page — the full till screen.</summary>
+    private void OpenInvoice(StoreTableDto table) => Nav.NavigateTo($"/pos/{table.Id}");
+
+    private async Task ClearTable(StoreTableDto table)
+    {
+        // A running bill blocks the broom: settle the invoice, THEN the table frees
+        // itself. Clearing must never be a way to lose what the party owes.
+        var tab = await Api.GetTabForTableAsync(table.Id);
+        if (tab is { Lines.Count: > 0 })
+        {
+            Snackbar.Add(L["tab.mustClose"], Severity.Info);
+            OpenInvoice(table);
+            return;
+        }
+
+        var (_, error) = await Api.ClearTableAsync(table.Id);
+        if (error is not null) Snackbar.Add(error, Severity.Error);
+        await Load();
+    }
+
+    public void Dispose()
+    {
+        _clock?.Dispose();
+        _selfRef?.Dispose();
+    }
+}

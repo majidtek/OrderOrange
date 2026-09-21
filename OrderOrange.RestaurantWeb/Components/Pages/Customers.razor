@@ -1,0 +1,138 @@
+@page "/customers"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+@* The store's own customer book. These people have no app and no account — the shop
+   knows them by phone. Orders are taken at the POS — this page only keeps the book. *@
+
+<MudText Typo="Typo.h5" Style="font-weight: 800;" Class="mb-1">@L["cust.title"]</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@L["cust.subtitle"]</MudText>
+
+<div class="d-flex align-center flex-wrap mb-4" style="gap: 12px;">
+    <MudTextField T="string" Value="_search" ValueChanged="OnSearch" Placeholder="@L["cust.search"]"
+                  Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" Clearable="true"
+                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                  Style="max-width: 340px;" />
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+               OnClick="@(() => Edit(null))">
+        @L["cust.add"]
+    </MudButton>
+</div>
+
+@if (_customers is null)
+{
+    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+}
+else if (_customers.Count == 0)
+{
+    <MudPaper Elevation="0" Outlined="true" Class="pa-8 rounded-xl text-center">
+        <div style="font-size: 46px; line-height: 1;">📇</div>
+        <MudText Typo="Typo.h6" Class="mt-2" Style="font-weight: 800;">@L["cust.emptyTitle"]</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-1">@L["cust.emptyBody"]</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-4"
+                   StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="@(() => Edit(null))">
+            @L["cust.add"]
+        </MudButton>
+    </MudPaper>
+}
+else
+{
+    <div class="cust-grid">
+        @foreach (var c in _customers.Skip(_page * PageSize).Take(PageSize))
+        {
+            var customer = c;
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl cust-card">
+                <div class="d-flex align-center mb-2" style="gap: 12px;">
+                    <MudAvatar Color="Color.Primary" Size="Size.Medium">
+                        @(customer.Name.Length > 0 ? customer.Name[..1].ToUpper() : "?")
+                    </MudAvatar>
+                    <div style="min-width: 0; flex: 1;">
+                        <MudText Typo="Typo.subtitle1" Style="font-weight: 800;">@customer.Name</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary"><PhoneMask Phone="@customer.Phone" Hint="@L["ph.tapShow"]" /></MudText>
+                    </div>
+                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+                        <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => Edit(customer))">
+                            @L["common.edit"]
+                        </MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" OnClick="@(() => Remove(customer))">
+                            @L["common.delete"]
+                        </MudMenuItem>
+                    </MudMenu>
+                </div>
+
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="cust-addr">
+                    <MudIcon Icon="@Icons.Material.Filled.Place" Style="font-size: 15px; vertical-align: -2px;" />
+                    @customer.Address
+                </MudText>
+
+                @if (!string.IsNullOrWhiteSpace(customer.Notes))
+                {
+                    <MudText Typo="Typo.caption" Class="cust-note mt-2">💬 @customer.Notes</MudText>
+                }
+
+                <div class="cust-meta mt-3">
+                    <span>@string.Format(L["cust.orders"], customer.OrderCount)</span>
+                    @if (customer.LastOrderAt is { } last)
+                    {
+                        <span>· @string.Format(L["cust.lastOrder"], last.ToString("dd MMM"))</span>
+                    }
+                </div>
+
+            </MudPaper>
+        }
+    </div>
+    @if (_customers.Count > PageSize)
+    {
+        <Pager Page="_page" Pages="@(((_customers.Count - 1) / PageSize) + 1)" HasMore="HasMore" PageChanged="@(p => _page = p)" />
+    }
+}
+
+@code {
+    private List<StoreCustomerDto>? _customers;
+    private string _search = "";
+
+    private const int PageSize = 24;
+    private int _page;
+    private bool HasMore => _customers.Count > (_page + 1) * PageSize;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _customers = await Api.GetStoreCustomersAsync(_search) ?? [];
+    }
+
+    private async Task OnSearch(string value)
+    {
+        _search = value ?? "";
+        _page = 0;   // a new search starts from its first page
+        await Load();
+    }
+
+    private async Task Edit(StoreCustomerDto? existing)
+    {
+        var parameters = new DialogParameters<CustomerDialog> { { d => d.Existing, existing } };
+        var dialog = await Dialogs.ShowAsync<CustomerDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+        if ((await dialog.Result)?.Canceled == false) await Load();
+    }
+
+    private async Task Remove(StoreCustomerDto customer)
+    {
+        var ok = await Dialogs.ShowMessageBox(
+            L["cust.removeTitle"],
+            string.Format(L["cust.removeBody"], customer.Name),
+            yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (ok != true) return;
+
+        var (done, error) = await Api.DeleteStoreCustomerAsync(customer.Id);
+        Snackbar.Add(done ? L["cust.removed"] : error ?? L["common.saveFail"],
+            done ? Severity.Normal : Severity.Error);
+        if (done) await Load();
+    }
+
+
+}

@@ -1,0 +1,61 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+<MudDialog>
+    <DialogContent>
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+            @L["card.testNote"] — <b>4242 4242 4242 4242</b>
+        </MudAlert>
+
+        @* Same rule as email and phone: a card number is never right-to-left. *@
+        <MudTextField Margin="Margin.Dense" @bind-Value="_number" Label="@L["card.number"]" Variant="Variant.Outlined" Class="mb-3 mf-ltr"
+                      Placeholder="4242 4242 4242 4242" Immediate="true"
+                      Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.CreditCard" />
+        <MudTextField Margin="Margin.Dense" @bind-Value="_holder" Label="@L["card.holder"]" Variant="Variant.Outlined" Class="mb-3" />
+        <div class="d-flex" style="gap: 12px;">
+            <MudNumericField Margin="Margin.Dense" @bind-Value="_month" Label="@L["card.month"]" Variant="Variant.Outlined" Min="1" Max="12" Class="mb-3" />
+            <MudNumericField Margin="Margin.Dense" @bind-Value="_year" Label="@L["card.year"]" Variant="Variant.Outlined"
+                             Min="@DateTime.Now.Year" Max="@(DateTime.Now.Year + 15)" Class="mb-3" />
+            <MudTextField Margin="Margin.Dense" @bind-Value="_cvv" Label="@L["card.cvv"]" Variant="Variant.Outlined" Class="mb-3"
+                          InputType="InputType.Password" MaxLength="4" />
+        </div>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy"
+                   StartIcon="@Icons.Material.Filled.AddCard">@L["card.save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private string _number = "";
+    private string _holder = "";
+    private int _month = 12;
+    private int _year = DateTime.Now.Year + 3;
+    private string _cvv = "";
+    private string? _error;
+    private bool _busy;
+
+    private async Task Save()
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.AddCardAsync(new SaveCardRequest(_holder, _number, _month, _year, _cvv));
+            if (!ok) { _error = error; return; }
+            Dialog.Close(DialogResult.Ok(true));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

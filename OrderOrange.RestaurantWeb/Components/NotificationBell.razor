@@ -1,0 +1,178 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+@implements IDisposable
+@using OrderOrange.RestaurantWeb.Components.Pages
+
+@* The notification bell: one badge for everything that wants the owner's eyes —
+   orders, guest chats, stock, payments, arriving reservations. A tap opens the
+   notification center dialog; the count keeps itself honest on a quiet poll.
+
+   Each NEW item also rings as a SYSTEM notification (mfNotify) — the counter
+   tablet sitting on the POS page still announces an incoming order. *@
+
+@* A hand-drawn badge: MudBadge insists on hanging outside the button, where the
+   app bar beheads it. This one is a plain span pinned INSIDE the corner. *@
+@* Two bells, two sounds: online orders (🛵) and everything happening at the
+   tables (🍽 — table orders, guest chats, reservations). Both open the same centre. *@
+<div class="nb-bell" title="@L["ntf.online"]">
+    <MudIconButton Icon="@(_notifGranted ? Icons.Material.Filled.DeliveryDining : Icons.Material.Filled.NotificationsOff)"
+                   Color="@(_notifGranted ? Color.Inherit : Color.Warning)"
+                   title="@(_notifGranted ? L["ntf.online"] : L["ntf.allow"])" OnClick="@(() => OpenAsync("order"))" />
+    @if (OnlineCount > 0)
+    {
+        <span class="nb-count2">@OnlineCount</span>
+    }
+</div>
+<div class="nb-bell" title="@L["ntf.tables"]">
+    <MudIconButton Icon="@Icons.Material.Filled.TableRestaurant" Color="Color.Inherit"
+                   title="@L["ntf.tables"]" OnClick="@(() => OpenAsync("table"))" />
+    @if (TableCount > 0)
+    {
+        <span class="nb-count2 tbl">@TableCount</span>
+    }
+</div>
+
+@code {
+    private NotificationsDto? _data;
+    private Timer? _timer;
+
+    /// <summary>Online orders waiting for a yes.</summary>
+    private int OnlineCount => Unseen.Count(i => i.Type == "order");
+
+    /// <summary>Everything at the tables: table orders, guest chats, reservations.</summary>
+    private int TableCount => Unseen.Count(i => i.Type is "table" or "chat" or "reservation");
+
+    // Opened once = gone. What the owner has already looked at, remembered in this browser
+    // so a poll (or a reload) never resurrects it; new items still ring and count.
+    private readonly HashSet<string> _seen = [];
+    private List<NotificationDto> Unseen => (_data?.Items ?? []).Where(i => !_seen.Contains(Key(i))).ToList();
+
+    private async Task LoadSeenAsync()
+    {
+        try
+        {
+            var raw = await JS.InvokeAsync<string?>("localStorage.getItem", "nb-read-v2");
+            if (raw is { Length: > 0 }) foreach (var k in raw.Split((char)10, StringSplitOptions.RemoveEmptyEntries)) _seen.Add(k);
+        }
+        catch { }
+    }
+
+    private async Task MarkReadAsync(NotificationDto item)
+    {
+        _seen.Add(Key(item));
+        await SaveSeenAsync();
+    }
+
+    private async Task SaveSeenAsync()
+    {
+        try { await JS.InvokeVoidAsync("localStorage.setItem", "nb-read-v2", string.Join((char)10, _seen.TakeLast(400))); }
+        catch { }
+    }
+
+    // What has already rung, so a poll never re-announces the same item.
+    private readonly HashSet<string> _announced = [];
+    private bool _primed;
+    private bool _notifGranted = true;   // optimistic until the browser answers
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+        // The bell must notice a busy night without being asked — and 30s is the
+        // difference between an order announced and an order gone cold.
+        _timer = new Timer(async _ =>
+        {
+            try { await RefreshAsync(); await InvokeAsync(StateHasChanged); } catch { }
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Registers the service worker and asks for permission once. Browsers may
+        // hold the prompt for a gesture; the bell click asks again then.
+        if (firstRender)
+        {
+            await LoadSeenAsync();
+            StateHasChanged();
+            try
+            {
+                _notifGranted = await JS.InvokeAsync<string>("mfNotify.init") == "granted";
+                StateHasChanged();
+                if (_notifGranted) await SubscribePushAsync();
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>
+    /// Registers this browser for REAL push: once subscribed, a new order rings the
+    /// device from the server even with the portal closed — the poll only covers
+    /// open tabs, which is exactly when nobody needs reminding.
+    /// </summary>
+    private async Task SubscribePushAsync()
+    {
+        try
+        {
+            if (await Api.GetPushVapidAsync() is not { } vapid) return;
+            var sub = await JS.InvokeAsync<PushSubscribeRequest?>("mfNotify.subscribePush", vapid.PublicKey);
+            if (sub is not null) await Api.SubscribePushAsync(sub);
+        }
+        catch { /* push is a bonus channel — the poll still covers open tabs */ }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _data = await Api.GetNotificationsAsync();
+        if (_data is null) return;
+
+        var fresh = _data.Items.Where(i => _announced.Add(Key(i))).ToList();
+        if (!_primed)
+        {
+            // The first load is HISTORY — announcing last night's list at sign-in
+            // would teach everyone to ignore the bell.
+            _primed = true;
+            return;
+        }
+        foreach (var item in fresh.Take(4))
+        {
+            try { await JS.InvokeVoidAsync("mfNotify.show", item.Title, item.Body, item.Nav); }
+            catch { /* notifications are a courtesy, never a failure */ }
+        }
+    }
+
+    private static string Key(NotificationDto i) => $"{i.Type}|{i.At:O}|{i.Title}";
+
+    private async Task OpenAsync(string tab)
+    {
+        // A real user gesture — the moment a held-back permission prompt may show.
+        try
+        {
+            var wasGranted = _notifGranted;
+            _notifGranted = await JS.InvokeAsync<string>("mfNotify.init") == "granted";
+            if (_notifGranted && !wasGranted) await SubscribePushAsync();
+        }
+        catch { }
+
+        // Fresh data the moment it opens — a 60s-old list is ancient on a busy night.
+        try { _data = await Api.GetNotificationsAsync(); } catch { }
+
+        var shown = Unseen;
+        var view = new NotificationsDto(shown.Count, shown);
+        var parameters = new DialogParameters<NotificationsDialog>
+        {
+            { d => d.Data, view }, { d => d.InitialTab, tab },
+            // Only the item the owner actually taps is "read" — the rest stay on the bell.
+            { d => d.OnOpened, EventCallback.Factory.Create<NotificationDto>(this, MarkReadAsync) },
+        };
+        var dialog = await Dialogs.ShowAsync<NotificationsDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+
+        // Opening reads the stock alerts; orders/payments clear by being DONE.
+        try { await Api.MarkStockAlertsSeenAsync(); } catch { }
+        await dialog.Result;
+        await RefreshAsync();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

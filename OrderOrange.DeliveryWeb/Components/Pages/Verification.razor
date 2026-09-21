@@ -1,0 +1,152 @@
+@page "/verification"
+@inject ApiClient Api
+@inject ISnackbar Snackbar
+@inject LanguageService L
+
+<PageTitle>Delivery — Verification</PageTitle>
+
+@if (_info is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <div class="d-flex align-center mb-1" style="gap: 10px;">
+        <MudText Typo="Typo.h4">🪪 @L["drv.verify"]</MudText>
+        @switch (_info.Status)
+        {
+            case DriverVerificationStatus.Pending:
+                <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" Size="Size.Small"
+                         Icon="@Icons.Material.Filled.HourglassTop">@L["drv.stPending"]</MudChip>
+                break;
+            case DriverVerificationStatus.Approved:
+                <MudChip T="string" Color="Color.Success" Variant="Variant.Filled" Size="Size.Small"
+                         Icon="@Icons.Material.Filled.Verified">@L["drv.stApproved"]</MudChip>
+                break;
+            case DriverVerificationStatus.Rejected:
+                <MudChip T="string" Color="Color.Error" Variant="Variant.Filled" Size="Size.Small"
+                         Icon="@Icons.Material.Filled.Cancel">@L["drv.stRejected"]</MudChip>
+                break;
+        }
+    </div>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-5">@L["drv.verifySub"]</MudText>
+
+    @if (_info.Status == DriverVerificationStatus.Approved)
+    {
+        <MudAlert Severity="Severity.Success" Class="rounded-xl mb-5" Icon="@Icons.Material.Filled.Verified">
+            @L["drv.approvedMsg"]
+        </MudAlert>
+    }
+    else if (_info.Status == DriverVerificationStatus.Pending)
+    {
+        <MudAlert Severity="Severity.Warning" Class="rounded-xl mb-5" Icon="@Icons.Material.Filled.HourglassTop">
+            @L["drv.pendingMsg"]
+            @if (_info.SubmittedAt is not null)
+            {
+                <div style="opacity:.8; font-size:12px;">@Fmt.TimeAgo(_info.SubmittedAt.Value, L)</div>
+            }
+        </MudAlert>
+    }
+    else if (_info.Status == DriverVerificationStatus.Rejected)
+    {
+        <MudAlert Severity="Severity.Error" Class="rounded-xl mb-5" Icon="@Icons.Material.Filled.Cancel">
+            <b>@L["drv.rejectedMsg"]</b>
+            @if (!string.IsNullOrWhiteSpace(_info.Reason))
+            {
+                <div class="mt-1">@L["drv.reason"]: @_info.Reason</div>
+            }
+            <div style="opacity:.8; font-size:12px;" class="mt-1">@L["drv.resubmitHint"]</div>
+        </MudAlert>
+    }
+
+    @if (_info.Status != DriverVerificationStatus.Approved && _info.Status != DriverVerificationStatus.Pending)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">@L["drv.uploadHint"]</MudText>
+        <MudGrid Spacing="3">
+            @foreach (var slot in _slots)
+            {
+                var s = slot;
+                <MudItem xs="6" sm="3">
+                    <label for="@s.InputId" style="cursor: pointer; display: block;">
+                        <div class="dlv-doc @(s.DataUrl is null ? "" : "filled")">
+                            @if (s.DataUrl is null)
+                            {
+                                <div style="font-size: 40px; line-height: 1.4;">@s.Emoji</div>
+                                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;">@L[s.LabelKey]</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@L["drv.tapUpload"]</MudText>
+                            }
+                            else
+                            {
+                                <img src="@s.DataUrl" alt="@L[s.LabelKey]" />
+                                <MudText Typo="Typo.subtitle2" Class="mt-1" Style="font-weight: 700;">✅ @L[s.LabelKey]</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@L["drv.tapChange"]</MudText>
+                            }
+                        </div>
+                    </label>
+                    <InputFile id="@s.InputId" OnChange="@(e => OnPicked(e, s))" accept="image/png,image/jpeg,image/webp" hidden />
+                </MudItem>
+            }
+        </MudGrid>
+
+        <button class="dlv-cta mt-5" disabled="@(!AllPicked || _busy)" @onclick="Submit">
+            <MudIcon Icon="@Icons.Material.Filled.Send" />
+            @(_busy ? "…" : L["drv.submit"])
+        </button>
+    }
+}
+
+@code {
+    private sealed class DocSlot(string inputId, string labelKey, string emoji)
+    {
+        public string InputId { get; } = inputId;
+        public string LabelKey { get; } = labelKey;
+        public string Emoji { get; } = emoji;
+        public string? DataUrl { get; set; }
+    }
+
+    private DriverVerificationDto? _info;
+    private bool _busy;
+
+    private readonly DocSlot[] _slots =
+    [
+        new("doc-id-front", "drv.idFront", "🪪"),
+        new("doc-id-back", "drv.idBack", "🪪"),
+        new("doc-lic-front", "drv.licFront", "📄"),
+        new("doc-lic-back", "drv.licBack", "📄")
+    ];
+
+    private bool AllPicked => _slots.All(s => s.DataUrl is not null);
+
+    protected override async Task OnInitializedAsync() => _info = await Api.GetDriverVerificationAsync();
+
+    private async Task OnPicked(InputFileChangeEventArgs e, DocSlot slot)
+    {
+        var file = e.File;
+        if (file.Size > 2_000_000)
+        {
+            Snackbar.Add(L["drv.tooBig"], Severity.Warning);
+            return;
+        }
+        using var stream = file.OpenReadStream(2_000_000);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+        slot.DataUrl = $"data:{file.ContentType};base64,{Convert.ToBase64String(memory.ToArray())}";
+    }
+
+    private async Task Submit()
+    {
+        _busy = true;
+        try
+        {
+            var (ok, error) = await Api.SubmitDriverDocsAsync(new SubmitDriverDocsRequest(
+                _slots[0].DataUrl!, _slots[1].DataUrl!, _slots[2].DataUrl!, _slots[3].DataUrl!));
+            if (ok)
+            {
+                Snackbar.Add(L["drv.sentMsg"], Severity.Success);
+                _info = await Api.GetDriverVerificationAsync();
+            }
+            else Snackbar.Add(error ?? L["common.submitFail"], Severity.Error);
+        }
+        finally { _busy = false; }
+    }
+}

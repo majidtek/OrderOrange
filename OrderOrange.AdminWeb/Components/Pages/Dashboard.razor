@@ -1,0 +1,125 @@
+@page "/"
+@inject ApiClient Api
+@inject LanguageService L
+
+<PageTitle>Admin — Dashboard</PageTitle>
+
+<PageHeader Title="@L["nav.dashboard"]" Subtitle="@L["admin.dashSub"]" />
+
+@if (_data is null)
+{
+    <Loader FullPage="true" />
+}
+else
+{
+    <AutoRefresh OnRefresh="Reload" Seconds="10" />
+
+    <MudText Typo="Typo.overline" Color="Color.Secondary">@L["admin.today"]</MudText>
+    <MudGrid Spacing="3" Class="mb-3">
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.ordersToday"]" Value="@_data.TodayOrders.ToString()" Icon="@Icons.Material.Filled.ReceiptLong" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.revenueToday"]" Value="@Fmt.Rial(_data.TodayRevenue).Value" Icon="@Icons.Material.Filled.Payments" Color="Color.Success" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.commissionToday"]" Value="@Fmt.Rial(_data.TodayCommission).Value" Icon="@Icons.Material.Filled.AccountBalance" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.activeNow"]" Value="@_data.ActiveOrders.ToString()" Icon="@Icons.Material.Filled.LocalFireDepartment"
+                      Color="@(_data.ActiveOrders > 0 ? Color.Warning : Color.Success)" />
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.overline" Color="Color.Secondary">@L["admin.platform"]</MudText>
+    <MudGrid Spacing="3" Class="mb-3">
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.customers"]" Value="@_data.TotalCustomers.ToString()" Icon="@Icons.Material.Filled.Group" Color="Color.Primary" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.restaurants"]" Value="@_data.TotalRestaurants.ToString()" Icon="@Icons.Material.Filled.Storefront" Color="Color.Secondary"
+                      Hint="@(_data.PendingRestaurantApprovals > 0 ? $"{_data.PendingRestaurantApprovals} {L["admin.pendingApproval"]}" : L["admin.allApproved"])" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.driversOnline"]" Value="@($"{_data.OnlineDrivers} / {_data.TotalDrivers}")" Icon="@Icons.Material.Filled.Moped" Color="Color.Info" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <StatCard Label="@L["admin.alltimeCommission"]" Value="@Fmt.Rial(_data.TotalCommission).Value" Icon="@Icons.Material.Filled.Savings" Color="Color.Success"
+                      Hint="@($"{_data.TotalOrders} orders · {Fmt.Money(_data.TotalRevenue)} gross")" />
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+        <MudText Typo="Typo.h6" Class="mb-1">@L["admin.last14"]</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@L["admin.revenuePerDayDesc"]</MudText>
+        <MudChart ChartType="ChartType.Line" ChartSeries="_series" XAxisLabels="_chartLabels"
+                  Height="300px" Width="100%" ChartOptions="ChartOpts" />
+    </MudPaper>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl" Style="height: 100%;">
+                <MudText Typo="Typo.h6" Class="mb-3">@L["admin.byStatus"]</MudText>
+                @foreach (var row in _data.OrdersByStatus.OrderBy(s => s.Status))
+                {
+                    var pct = _data.TotalOrders == 0 ? 0 : row.Count * 100.0 / _data.TotalOrders;
+                    <div class="d-flex align-center py-1" style="gap: 10px;">
+                        <div style="width: 150px;"><StatusChip Status="@row.Status" /></div>
+                        <MudProgressLinear Value="@pct" Color="@Fmt.StatusColor(row.Status)" Rounded="true" Class="flex-grow-1" />
+                        <MudText Typo="Typo.body2" Style="width: 36px; text-align: right;">@row.Count</MudText>
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl" Style="height: 100%;">
+                <MudText Typo="Typo.h6" Class="mb-3">@L["admin.topRestaurants"]</MudText>
+                <MudSimpleTable Dense="true" Hover="true">
+                    <thead>
+                        <tr><th>@L["admin.restaurant"]</th><th>@L["w.orders"]</th><th>@L["admin.rating"]</th><th style="text-align:right;">@L["admin.revenue"]</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var restaurant in _data.TopRestaurants)
+                        {
+                            <tr>
+                                <td>@restaurant.LogoEmoji @restaurant.Name</td>
+                                <td>@restaurant.Orders</td>
+                                <td>@(restaurant.Rating > 0 ? $"{restaurant.Rating:0.0} ★" : "—")</td>
+                                <td style="text-align:right;"><b>@Fmt.Rial(restaurant.Revenue)</b></td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private static readonly ChartOptions ChartOpts = new()
+    {
+        LineStrokeWidth = 3,
+        InterpolationOption = InterpolationOption.NaturalSpline,
+        YAxisTicks = 20
+    };
+
+    private AdminDashboardDto? _data;
+    private List<ChartSeries> _series = [];
+    private string[] _chartLabels = [];
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        _data = await Api.GetAdminDashboardAsync();
+        if (_data is null) return;
+
+        // Sparse labels so 14 days don't collide on narrow screens.
+        _chartLabels = _data.Trend.Select((t, i) => i % 2 == 0 ? t.Date.ToString("dd/MM") : "").ToArray();
+        _series =
+        [
+            new ChartSeries { Name = L["admin.revenueOmr"], Data = _data.Trend.Select(t => (double)t.Revenue).ToArray() },
+            new ChartSeries { Name = "Orders", Data = _data.Trend.Select(t => (double)t.Orders).ToArray() }
+        ];
+    }
+}

@@ -1,0 +1,96 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService Lang
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* The very first thing a new visitor sees: pick your language. Nothing is preselected —
+   defaulting to English quietly decides for everyone who never finds the language menu.
+   Shown exactly once; the choice is stored and the screen never comes back.
+
+   Every label here is each language's own name in its own script, because this screen
+   appears BEFORE a language exists to translate anything into. A native name needs no
+   translation — an Arabic speaker finds العربية whatever the rest of the page says. *@
+
+@* Nothing is asked on arrival any more: the app opens in English, and the language
+   is changed only from the app bar's language menu. This card is what that menu
+   opens — it renders solely when someone asks for it. *@
+@if (Show)
+{
+    <div class="mf-langgate mini" dir="ltr">
+        <div class="mf-langgate-card mini">
+            <button type="button" class="mini-x" @onclick="@(() => Pick("en"))">✕</button>
+            <div class="grid mini">
+                @foreach (var option in LanguageService.SupportedLanguages.Where(l => Primary.Contains(l.Code)))
+                {
+                    var lang = option;
+                    <button type="button" class="tile" @onclick="@(() => Pick(lang.Code))">
+                        <span class="flag">@lang.Flag</span>
+                        <span class="name">@lang.NativeName</span>
+                    </button>
+                }
+            </div>
+            @* The rest slide open and scroll: the panel is always in the tree so it can
+               animate its height, and it holds its own scrollbar once open. *@
+            <div class="rest-wrap @(_expanded ? "open" : "")">
+                <div class="grid mini rest">
+                    @foreach (var option in LanguageService.SupportedLanguages.Where(l => !Primary.Contains(l.Code)))
+                    {
+                        var lang = option;
+                        <button type="button" class="tile" @onclick="@(() => Pick(lang.Code))">
+                            <span class="flag">@lang.Flag</span>
+                            <span class="name">@lang.NativeName</span>
+                        </button>
+                    }
+                </div>
+            </div>
+            <button type="button" class="mini-more @(_expanded ? "up" : "")"
+                    @onclick="@(() => _expanded = !_expanded)">▾</button>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Only a deliberate "change language" opens this — never the first visit.</summary>
+    [Parameter] public bool Show { get; set; }
+    [Parameter] public EventCallback Closed { get; set; }
+
+    private static readonly string[] Primary = ["en", "ar", "fa"];
+    private bool _expanded;
+
+    /// <summary>A visit that came through a store's QR — table code or shop link.</summary>
+    private bool QrEntry
+    {
+        get
+        {
+            var uri = new Uri(Nav.Uri);
+            var path = Nav.ToBaseRelativePath(Nav.Uri);
+            return path.StartsWith("reserve/", StringComparison.OrdinalIgnoreCase)
+                || uri.Query.Contains("id=", StringComparison.OrdinalIgnoreCase)
+                || uri.Query.Contains("qr=1", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    protected override void OnInitialized() => Lang.Changed += OnChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The gate may be the first component to run — make sure storage was consulted,
+        // or a returning customer would see the screen flash before their choice loads.
+        if (firstRender) await Lang.EnsureLoadedAsync();
+    }
+
+    private async Task Pick(string code)
+    {
+        var wasEnglish = Lang.IsEnglish;
+        await Lang.SetLocaleAsync(code);   // stored before any reload
+        // The page underneath is already rendered in English — keeping English needs
+        // no reload at all. Any OTHER language gets the same clean hard load as the
+        // language menu: strings, fonts and direction all start fresh.
+        if (!(code == "en" && wasEnglish))
+            Nav.Refresh(forceReload: true);
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Lang.Changed -= OnChanged;
+}

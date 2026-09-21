@@ -1,0 +1,45 @@
+@page "/signin/email"
+@layout Layout.AuthLayout
+@inject NavigationManager Nav
+@inject LanguageService L
+
+@* Signing in with a code, on its own page. The dialog keeps a single clear action —
+   Continue with Google — and links here for anyone who would rather use their email.
+
+   Whatever the customer was doing is remembered in ?return= so a half-finished basket
+   or checkout is exactly where they left it afterwards. *@
+
+<PageTitle>OrderOrange</PageTitle>
+
+@* No register tab: an unknown address is simply signed up as it signs in. *@
+<LoginView AppName="OrderOrange"
+           LogoUrl="logo.svg?v=4"
+           Tagline="@L["auth.signInToContinue"]"
+           AllowedRoles="new[] { UserRole.Customer, UserRole.RestaurantOwner, UserRole.Driver }"
+           WrongRoleMessage="@L["login.clientWrong"]"
+           PasswordHref="@($"/signin/password?return={Uri.EscapeDataString(SafeReturn)}")"
+           OnCodeRequested="GoToCode"
+           OnSignedIn="Done"
+           OnClose="Back" />
+
+@code {
+    /// <summary>Where to go once they are in. Defaults home if we arrived here directly.</summary>
+    [SupplyParameterFromQuery(Name = "return")] public string? ReturnUrl { get; set; }
+
+    private void Done() => Go();
+    private void Back() => Go();
+
+    /// <summary>
+    /// The code is typed on its own page, with the address in the URL. Phones leave here
+    /// for the inbox; when the browser reloads the tab on return, a URL survives where
+    /// in-page state would not — the customer lands back on the code field.
+    /// </summary>
+    private void GoToCode((string Email, int Wait) sent) =>
+        Nav.NavigateTo($"/signin/code?email={Uri.EscapeDataString(sent.Email)}&wait={sent.Wait}" +
+                       $"&return={Uri.EscapeDataString(SafeReturn)}");
+
+    private string SafeReturn =>
+        ReturnUrl is { Length: > 0 } r && r.StartsWith('/') && !r.StartsWith("//") ? r : "/";
+
+    private void Go() => Nav.NavigateTo(SafeReturn);
+}

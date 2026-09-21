@@ -1,0 +1,171 @@
+@page "/bill/{Code}"
+@layout OrderOrange.ClientWeb.Components.Layout.PublicLayout
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+
+@* Where a receipt's verification QR lands. Public — no sign-in. The page shows the
+   REAL slip, exactly as the paper prints it, under a small verified seal: the holder
+   compares paper to screen line by line, which is the whole point of the QR. *@
+
+<PageTitle>@L["vfy.title"] · OrderOrange</PageTitle>
+
+<div class="pub-top">
+    <div class="pub-brand">
+        <img src="logo.svg?v=4" alt="OrderOrange" />
+        <span>OrderOrange</span>
+    </div>
+    <LanguageMenu Compact="true" />
+</div>
+
+@if (_loading)
+{
+    <Loader FullPage="true" Label="@L["vfy.checking"]" />
+}
+else if (_bill is null)
+{
+    <div class="pub-wrap">
+        <div class="bill-card bill-bad">
+            <div class="bill-seal bad">✕</div>
+            <h1>@L["vfy.notFound"]</h1>
+            <p>@L["vfy.notFoundHint"]</p>
+            <div class="bill-code">@Code</div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large"
+                       Class="bill-cta" OnClick="@(() => Nav.NavigateTo("/", true))">@L["vfy.openApp"]</MudButton>
+        </div>
+    </div>
+}
+else
+{
+    <div class="pub-wrap">
+        @* The seal stays OUTSIDE the slip: the paper never printed one. *@
+        <div class="bill-sealrow">
+            <span class="ok">✓</span>
+            <b>@L["vfy.verified"]</b>
+        </div>
+
+        @* The slip itself — same classes, same layout, same English-only text as the
+           printed paper. mf-ascii keeps the digits Western in every UI language. *@
+        <div class="rcpt mf-ascii bill-slip">
+            @if (_bill.RestaurantLogo is not null)
+            {
+                <div class="c"><img class="rlogo" src="@_bill.RestaurantLogo" alt="@_bill.RestaurantName" /></div>
+            }
+            <div class="c nm">@_bill.RestaurantName</div>
+            <div class="c sm">@_bill.RestaurantArea@(_bill.StoreStreet.Length > 0 ? $" · {_bill.StoreStreet}" : "")</div>
+            @if (_bill.StorePhone.Length > 0)
+            {
+                <div class="c sm">Tel: <span class="mf-ltr">@_bill.StorePhone</span> · Muscat, Oman</div>
+            }
+            @if (_bill.CrNumber.Length > 0 || _bill.VatNumber.Length > 0)
+            {
+                <div class="c xs">
+                    @(_bill.CrNumber.Length > 0 ? $"CR No: {_bill.CrNumber}" : "")@(_bill.CrNumber.Length > 0 && _bill.VatNumber.Length > 0 ? " · " : "")@(_bill.VatNumber.Length > 0 ? $"VAT No: {_bill.VatNumber}" : "")
+                </div>
+            }
+            <div class="dash sep-dash"></div>
+
+            <div class="c ttl">TAX INVOICE</div>
+            <div class="row"><span>Order</span><b>@_bill.Number</b></div>
+            <div class="row"><span>Date</span><span>@_bill.PlacedAt.ToString("dd/MM/yyyy HH:mm")</span></div>
+            <div class="row"><span>Type</span><span>@TypeEn @TypeIcon</span></div>
+            @if (_bill.TableName is { Length: > 0 })
+            {
+                <div class="row"><span>Table</span><b>@_bill.TableName</b></div>
+            }
+            <div class="row"><span>Customer</span><b>@_bill.CustomerInitials</b></div>
+            <div class="dash sep-dash"></div>
+
+            @foreach (var line in _bill.Items)
+            {
+                <div class="item">
+                    <span class="q">@(line.Quantity)x</span>
+                    <span class="n">@line.Name</span>
+                    <span class="p">@Fmt.Rial(line.LineTotal)</span>
+                </div>
+            }
+            <div class="dash sep-dash"></div>
+
+            <div class="row"><span>Items</span><span>@_bill.Items.Sum(i => i.Quantity)</span></div>
+            <div class="row"><span>Subtotal</span><span>@Fmt.Rial(_bill.Subtotal)</span></div>
+            @if (_bill.DeliveryFee > 0)
+            {
+                <div class="row"><span>Delivery</span><span>@Fmt.Rial(_bill.DeliveryFee)</span></div>
+            }
+            @if (_bill.ServiceFee > 0)
+            {
+                <div class="row"><span>Service</span><span>@Fmt.Rial(_bill.ServiceFee)</span></div>
+            }
+            @if (_bill.TaxAmount > 0)
+            {
+                <div class="row"><span>VAT @_bill.TaxPercent.ToString("0.#")%</span><span>@Fmt.Rial(_bill.TaxAmount)</span></div>
+            }
+            @if (_bill.Discount > 0)
+            {
+                <div class="row"><span>Discount</span><span>-@Fmt.Rial(_bill.Discount)</span></div>
+            }
+            <div class="dash sep-dash"></div>
+            <div class="row total"><span>TOTAL</span><span>@Fmt.Rial(_bill.Total)</span></div>
+            <div class="row"><span>Payment</span><span>@PayEn</span></div>
+            <div class="c pay">
+                @(_bill.IsPaid ? $"*** PAID — {PayEn} ***" : $"*** {PayEn} — COLLECT {Fmt.Money(_bill.Total)} ***")
+            </div>
+
+            <div class="dash sep-dash"></div>
+            <div class="c xs mono">@_bill.Code</div>
+            <div class="c nm2">OrderOrange</div>
+        </div>
+
+        <MudButton Variant="Variant.Text" Color="Color.Primary"
+                   Class="d-block mx-auto" OnClick="@(() => Nav.NavigateTo("/", true))">@L["vfy.openApp"]</MudButton>
+        <div class="bill-foot">@L["vfy.footer"]</div>
+    </div>
+
+    @* The bill in hand IS the recommendation — a FIXED bar keeps the way back to this
+       store's menu under the thumb however far the slip scrolls. *@
+    @if (_bill.RestaurantId > 0)
+    {
+        <div class="bill-again-bar">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.Restaurant"
+                       OnClick="@(() => Nav.NavigateTo(StorePath.For(_bill.RestaurantId), true))">
+                @L["vfy.orderAgain"]
+            </MudButton>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+
+    private PublicBillDto? _bill;
+    private bool _loading = true;
+    private string? _loadedFor;
+
+    private bool IsDineIn => _bill!.TableName is { Length: > 0 }
+        || _bill.DeliveryAddress?.StartsWith("Dine-in", StringComparison.OrdinalIgnoreCase) == true;
+    private bool IsCounter => !IsDineIn && _bill!.DeliveryAddress?.Equals("Counter", StringComparison.OrdinalIgnoreCase) == true;
+    private bool IsDelivery => !IsDineIn && !IsCounter && _bill!.OrderType == OrderType.Delivery;
+
+    private string TypeEn => IsDineIn ? "DINE-IN" : IsCounter ? "COUNTER" : IsDelivery ? "DELIVERY" : "PICKUP";
+    private string TypeIcon => IsDineIn ? "🍽️" : IsCounter ? "🧾" : IsDelivery ? "🛵" : "🏪";
+
+    private string PayEn => _bill!.PaymentMethod switch
+    {
+        PaymentMethod.CardOnline => "ONLINE",
+        PaymentMethod.CardOnDelivery => "CARD",
+        _ => "CASH",
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // JS storage is only reachable after the first render, so the saved
+        // language and the lookup both wait until the circuit is live.
+        if (!firstRender && _loadedFor == Code) return;
+        _loadedFor = Code;
+        await L.EnsureLoadedAsync();
+        _bill = await Api.VerifyBillAsync(Code);
+        _loading = false;
+        StateHasChanged();
+    }
+}

@@ -1,0 +1,165 @@
+﻿@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-2">@L["w.job"]</MudText>
+        <div class="bl-cats mb-4">
+            @foreach (var (key, emoji, label) in StaffRoles.All)
+            {
+                var k = key;
+                <button type="button" class="bl-cat @(_role == k ? "on" : "")" @onclick="@(() => _role = k)">
+                    <span class="e">@emoji</span><span>@L["srole." + key]</span>
+                </button>
+            }
+        </div>
+
+        <div class="d-flex align-center mb-3" style="gap: 14px;">
+            <input type="file" id="staff-photo-input" accept="image/png,image/jpeg,image/webp" hidden />
+            <div class="st-photo-box">
+                @if (_photo is not null)
+                {
+                    <img src="@_photo" alt="@L["common.photo"]" />
+                }
+                else
+                {
+                    <span>@StaffRoles.Emoji(_role)</span>
+                }
+            </div>
+            <div class="d-flex flex-column" style="gap: 6px;">
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PhotoCamera"
+                    OnClick="PickPhoto" Disabled="_uploading">
+                    @(_uploading ? "…" : _photo is null ? L["staff.addPhoto"] : L["staff.changePhoto"])
+                </MudButton>
+                @if (_photo is not null)
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Error" Size="Size.Small" OnClick="@(() => _photo = null)">@L["common.delete"]</MudButton>
+                }
+            </div>
+        </div>
+
+        <MudTextField @bind-Value="_fullName" Label="@L["staff.fullName"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+            Class="mb-3" Immediate="true" MaxLength="120" />
+        <div class="d-flex" style="gap: 12px;">
+            <MudTextField @bind-Value="_phone" Label="@L["common.phone"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                Class="mb-3" Placeholder="+968 ..." MaxLength="40" />
+            <MudTextField @bind-Value="_nationalId" Label="@L["staff.idField"]" Variant="Variant.Outlined"
+                Margin="Margin.Dense" Class="mb-3" MaxLength="40" />
+        </div>
+        <div class="d-flex" style="gap: 12px;">
+            <MudNumericField @bind-Value="_salary" Label="@L["staff.monthlySalary"]" Variant="Variant.Outlined"
+                Margin="Margin.Dense" Format="0.000" Min="0m" Step="10m" Class="mb-3" />
+            <MfDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_hiredOn" Label="@L["staff.hiredOn"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" />
+        </div>
+        <MudTextField @bind-Value="_notes" Label="@L["common.notes"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+            Lines="2" Class="mb-2" MaxLength="300" />
+        @* Which login this person clocks in with — ties attendance hours to their payroll line. *@
+        <MudSelect T="int" @bind-Value="_userId" Label="@L["att.loginLink"]" HelperText="@L["att.loginLinkHint"]"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="mb-2">
+            <MudSelectItem T="int" Value="0">@L["att.noLogin"]</MudSelectItem>
+            @foreach (var member in _team)
+            {
+                <MudSelectItem T="int" Value="@member.UserId">@member.FullName · @member.Email</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSwitch T="bool" @bind-Value="_isActive" Color="Color.Success" Label="@L["staff.currentlyWorking"]" />
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" Disabled="_busy">
+            @(Existing is null ? L["staff.addToTeam"] : L["common.save"])
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public StaffDto? Existing { get; set; }
+
+    private string _role = "barista";
+    private string _fullName = "";
+    private string _phone = "";
+    private string _nationalId = "";
+    private string? _photo;
+    private decimal _salary = 250.000m;
+    private DateTime? _hiredOn = DateTime.Today;
+    private string _notes = "";
+    private bool _isActive = true;
+    private bool _uploading;
+    private string? _error;
+    private bool _busy;
+    private int _userId;
+    private List<StoreMemberDto> _team = [];
+
+    private sealed class PhotoPick
+    {
+        public string? DataUrl { get; set; }
+        public string? Error { get; set; }
+        public bool Image { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The store's logins, for the attendance link. Not every owner may read the
+        // team (403 → empty list, the select simply offers "no login").
+        _team = await Api.GetTeamAsync() ?? [];
+        if (Existing is null) return;
+        _userId = Existing.UserId ?? 0;
+        _role = Existing.Role;
+        _fullName = Existing.FullName;
+        _phone = Existing.Phone ?? "";
+        _nationalId = Existing.NationalId ?? "";
+        _photo = Existing.Photo;
+        _salary = Existing.MonthlySalary;
+        _hiredOn = Existing.HiredOn;
+        _notes = Existing.Notes ?? "";
+        _isActive = Existing.IsActive;
+    }
+
+    private async Task PickPhoto()
+    {
+        _uploading = true;
+        try
+        {
+            PhotoPick? pick = null;
+            try { pick = await JS.InvokeAsync<PhotoPick?>("mfChat.pickCompressed", "staff-photo-input", 90); } catch { }
+                if (pick?.DataUrl is null || !pick.Image)
+                {
+                    if (pick?.Error == "TOO_BIG") _error = L["common.photoTooLarge"];
+                    return;
+                }
+                _photo = pick.DataUrl;
+            }
+            finally
+            {
+                _uploading = false;
+                StateHasChanged();
+            }
+        }
+
+        private async Task Save()
+        {
+            _error = null;
+            _busy = true;
+            try
+            {
+                var request = new SaveStaffRequest(_fullName, _role, _phone, _nationalId, _photo ?? "",
+                _salary, _hiredOn ?? DateTime.Today, _isActive, _notes, _userId > 0 ? _userId : null);
+                var (ok, error) = Existing is null
+                ? await Api.CreateStaffAsync(request)
+                : await Api.UpdateStaffAsync(Existing.Id, request);
+                if (!ok) { _error = error ?? L["common.saveFail"]; return; }
+                Dialog.Close(DialogResult.Ok(true));
+            }
+            finally
+            {
+                _busy = false;
+            }
+        }
+    }

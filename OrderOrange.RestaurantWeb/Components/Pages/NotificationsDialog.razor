@@ -1,0 +1,97 @@
+﻿@inject LanguageService L
+@inject NavigationManager Nav
+
+@* The notification center as a proper dialog: the same tabs and severity-striped
+   rows the bell popover had, with the room to breathe a phone screen never gave it. *@
+
+<MudDialog>
+    <TitleContent>🔔 @L["ntf.title"]</TitleContent>
+    <DialogContent>
+        <div class="nb-dlg">
+            <div class="nb-tabs">
+                @foreach (var (key, icon) in new[]
+                {
+                    ("all", "☰"), ("order", "🧾"), ("table", "🍽️"), ("chat", "💬"), ("stock", "📦"), ("payment", "💳"), ("support", "🎧"),
+                })
+                {
+                    var count = key == "all" ? Data?.Items.Count : Data?.Items.Count(i => InTab(i.Type, key));
+                    <button type="button" class="@(_tab == key ? "on" : "")" @onclick="@(() => _tab = key)">
+                        @icon @L[$"ntf.tab.{key}"]
+                        @if (count is > 0)
+                        {
+                            <i>@count</i>
+                        }
+                    </button>
+                }
+            </div>
+
+            @if (Visible.Count == 0)
+            {
+                <div class="sb-empty">✅ @L["ntf.empty"]</div>
+            }
+            else
+            {
+                <div class="nb-list">
+                    @foreach (var item in Visible)
+                    {
+                        <button type="button" class="nb-row @item.Severity" @onclick="@(() => Open(item))">
+                            <span class="ic">@TypeIcon(item.Type)</span>
+                            <span class="tx">
+                                <b>@item.Title</b>
+                                <small>@WithRial(item.Body)</small>
+                            </span>
+                            <span class="when">@Fmt.TimeAgo(item.At, L)</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.close"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    [Parameter] public NotificationsDto? Data { get; set; }
+
+    /// <summary>Which tab to open on: the app-bar icon that was tapped decides.</summary>
+    [Parameter] public string InitialTab { get; set; } = "all";
+
+    /// <summary>Fired for the ONE item the owner taps — that item counts as read.</summary>
+    [Parameter] public EventCallback<NotificationDto> OnOpened { get; set; }
+
+    private string _tab = "all";
+
+    protected override void OnInitialized() => _tab = string.IsNullOrEmpty(InitialTab) ? "all" : InitialTab;
+
+    /// <summary>The Tables tab gathers everything happening at a table: its orders, guest chats, reservations.</summary>
+    private static bool InTab(string type, string tab) => tab switch
+    {
+        "all" => true,
+        "table" => type is "table" or "chat" or "reservation",
+        _ => type == tab,
+    };
+
+    private List<NotificationDto> Visible =>
+        (Data?.Items ?? []).Where(i => InTab(i.Type, _tab)).ToList();
+
+    private static string TypeIcon(string type) => type switch
+    {
+        "order" => "🧾", "table" => "🍽️", "chat" => "💬", "stock" => "📦",
+        "payment" => "💳", "reservation" => "📅", "calendar" => "🗓️", "support" => "🎧", _ => "🔔",
+    };
+
+    /// <summary>Server bodies say "3.225 OMR" as plain text — escape first, then let
+    /// the letters become the official symbol. Escaping first keeps names harmless.</summary>
+    private static MarkupString WithRial(string text) =>
+        new(System.Net.WebUtility.HtmlEncode(text).Replace("OMR", Fmt.UsesRialGlyph ? Fmt.RialSvg : System.Net.WebUtility.HtmlEncode(Fmt.Symbol)));
+
+    private async Task Open(NotificationDto item)
+    {
+        if (OnOpened.HasDelegate) await OnOpened.InvokeAsync(item);
+        Dialog.Close();
+        Nav.NavigateTo(item.Nav);
+    }
+}

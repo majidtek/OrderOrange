@@ -1,0 +1,46 @@
+@namespace OrderOrange.ClientCore.Components
+@inject LanguageService L
+
+@* The one pager for every list. It says in words where the reader stands —
+   "Page 1 of 2" — instead of a bare "1 / 2" that RTL text turned into "2 / 1",
+   and both arrows carry their name so nobody has to guess which way is forward
+   (Majed 2026-09-07: "this is not clear for users").
+
+   Direction is decided HERE, not by CSS guesswork: the bar carries its own dir
+   from the language, and the arrow glyphs are chosen for it — "‹ Previous … Next ›"
+   in English, "قبلی › … ‹ بعدی" in Farsi — so no ancestor, browser or cached
+   stylesheet can turn them around. *@
+
+<nav class="pg-bar pg-v2" dir="@(L.IsRtl ? "rtl" : "ltr")" aria-label="@L["pg.aria"]">
+    <button type="button" class="pg-prev" disabled="@(Page <= 0 || Busy)" @onclick="@(() => Go(Page - 1))">
+        @* Chevrons are DRAWN (CSS border), not typed: ‹ and › are bidi-mirrored characters,
+           so in an RTL paragraph the browser flips their shape — a typed › came out as ‹. *@
+        <span class="pg-arrow @(L.IsRtl ? "r" : "l")" aria-hidden="true"></span><span class="pg-lbl">@L["pg.prev"]</span>
+    </button>
+    <span class="pg-info">
+        @(Pages > 0 ? string.Format(L["pg.of"], Page + 1, Pages) : string.Format(L["pg.page"], Page + 1))
+    </span>
+    <button type="button" class="pg-next" disabled="@(!CanNext || Busy)" @onclick="@(() => Go(Page + 1))">
+        <span class="pg-lbl">@L["pg.next"]</span><span class="pg-arrow @(L.IsRtl ? "l" : "r")" aria-hidden="true"></span>
+    </button>
+</nav>
+
+@code {
+    /// <summary>Zero-based page the list is showing.</summary>
+    [Parameter] public int Page { get; set; }
+
+    /// <summary>Total pages when the list is fully in memory; 0 when the server pages ("has more").</summary>
+    [Parameter] public int Pages { get; set; }
+
+    /// <summary>For server paging (Pages == 0): is there a page after this one?</summary>
+    [Parameter] public bool HasMore { get; set; } = true;
+
+    /// <summary>A page is loading — both arrows wait.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+
+    private bool CanNext => Pages > 0 ? Page + 1 < Pages && HasMore : HasMore;
+
+    private Task Go(int page) => PageChanged.InvokeAsync(page);
+}
