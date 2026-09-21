@@ -247,6 +247,8 @@ Full, verified reference with examples: https://partner.orderorange.com/api.html
 * The partner guide is generated: `doc-src/gen3.py → host.py → seo.py` (screens, HOW/NOTES/FAQ, per-language heads, robots, sitemap) into `RestaurantWeb/wwwroot/guide*.html`.
 * House style: copy names **restaurants, cafés and shops** — never "restaurants" alone — and does not tie the product to one country.
 
+The full SEO reference — every page, tag, redirect, the sitemap, Search Console status and the checklist for new pages — is in [docs/SEO.md](docs/SEO.md).
+
 ---
 
 ## Deployment & operations
