@@ -3216,7 +3216,7 @@
     "pbot.langAlready":  "Wir sind bereits auf {0}.",
     "bot.langNow":  "Erledigt — ich habe auf {0} umgestellt.",
     "bot.langAlready":  "Wir sind bereits auf {0}.",
-    "seo.siteTitle":  "OrderOrange — Food Delivery App & Free Restaurant POS",
+    "seo.siteTitle":  "OrderOrange — Food Delivery App & Free Open-Source POS",
     "seo.siteBlurb":  "Essenslieferungs-App. Bestellen Sie online bei Restaurants, Cafés, Märkten und Apotheken: Grill, Burger, Pizza, arabische, indische und iranische Küche, geliefert oder zur Abholung. Kostenlos für Restaurants, ohne Provision. Bestellen Sie per Chat oder Sprache mit dem OrderOrange-KI-Assistenten. OrderOrange ist auch ein kostenloses Restaurant-Kassensystem: Kasse, Küchenmonitor, QR-Speisekarte, Lager und Berichte.",
     "seo.storeTitle":  "{0} — {1} | OrderOrange",
     "seo.storeDesc":  "Online bestellen bei {0} — {1}. Lieferung oder Abholung, mit OrderOrange.",
@@ -3364,7 +3364,7 @@
     "bots.botPartner":  "Partner-Assistent",
     "bots.botPos":  "Kassen-Assistent",
     "bots.unknownIp":  "Unbekannt",
-    "pos.h1":  "Free POS system for restaurants, cafés & shops — any country, any currency",
+    "pos.h1":  "Free, open-source POS system for restaurants, cafés & shops — any country, any currency",
     "pos.lede":  "OrderOrange is two things in one account. It is the till your staff use all day — orders, tables, payments, printed bills, stock, staff and reports — and it is the page your customers order from online. Nothing is typed twice, because both read the same menu.",
     "pos.free":  "Free POS. No monthly fee, no setup fee, no commission.",
     "pos.start":  "Open your account free",
@@ -3415,8 +3415,8 @@
     "pos.a6":  "Yes. There is a documented REST API with tokens, so another system can read your orders and invoices or push products in.",
     "pos.alsoTitle":  "Also a food delivery app",
     "pos.alsoBody":  "The same account puts your shop in front of everyone ordering food, with no commission taken from the order.",
-    "seo.posTitle":  "Free POS System for Restaurants, Cafés & Shops | OrderOrange",
-    "seo.posDesc":  "Free POS for restaurants, cafés, bakeries, markets and shops: till on any tablet, kitchen display, QR menu, online orders with 0% commission. No monthly fee. Any currency, 14 languages.",
+    "seo.posTitle":  "Free Open-Source POS for Restaurants, Cafés & Shops | OrderOrange",
+    "seo.posDesc":  "Free, open-source POS for restaurants, cafés and shops: till on any tablet, kitchen display, QR menu, online orders with 0% commission. No monthly fee, any currency, 14 languages. Code on GitHub.",
     "kds.title":  "Kitchen display",
     "kds.tagline":  "The pass, on one screen.",
     "kds.station":  "Station",
@@ -3749,5 +3749,7 @@
     "pos.close":  "Close",
     "pos.bandTitle":  "Ready to run your place on a free POS?",
     "pos.bandBody":  "Open the account now, add your menu today and take the first order tonight. No card, no contract, no monthly fee.",
-    "pos.openSource":  "Open Source auf GitHub"
+    "pos.openSource":  "Open Source auf GitHub",
+    "pos.q13":  "Is OrderOrange open source?",
+    "pos.a13":  "Yes. The whole platform — the POS, the kitchen display, the customer site, the admin panel and the API — is published on GitHub at github.com/majidtek/OrderOrange. You can read the code, report issues, contribute, or host it yourself."
 }
