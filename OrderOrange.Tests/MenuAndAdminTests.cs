@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using OrderOrange.Shared;
 
@@ -53,7 +53,7 @@ public class MenuAndAdminTests : IClassFixture<ApiFactory>
     public async Task Customer_CannotOpenOwnerOrAdminEndpoints()
     {
         var client = _factory.CreateClient();
-        await client.SignInAsync("majed.maniat.p2@gmail.com");
+        await client.SignInAsync("customer@majidfood.com");
 
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("api/menu")).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("api/admin/dashboard")).StatusCode);

@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using OrderOrange.ApiServer.Services;
 using OrderOrange.Shared;
 
@@ -19,7 +19,7 @@ public class CouponTests : IClassFixture<ApiFactory>
     public async Task Validate_AppliesTheRules(string code, double subtotal, bool valid, double discount)
     {
         var client = _factory.CreateClient();
-        await client.SignInAsync("majed.maniat.p2@gmail.com");
+        await client.SignInAsync("customer@majidfood.com");
 
         var response = await client.PostAsJsonAsync("api/coupons/validate",
             new ValidateCouponRequest(code, (decimal)subtotal));
@@ -35,7 +35,7 @@ public class CouponTests : IClassFixture<ApiFactory>
     public async Task PlaceOrder_WithCoupon_DiscountsTheTotal()
     {
         var client = _factory.CreateClient();
-        await client.SignInAsync("majed.maniat.p2@gmail.com");
+        await client.SignInAsync("customer@majidfood.com");
 
         var restaurants = await client.GetFromJsonAsync<List<RestaurantCardDto>>("api/restaurants");
         var bella = restaurants!.Single(r => r.Name == "Bella Napoli");

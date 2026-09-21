@@ -1,4 +1,4 @@
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using OrderOrange.ApiServer.Data;
 using OrderOrange.Shared;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +20,7 @@ public class ChatStorageTests : IClassFixture<ApiFactory>
 
     private async Task<OrderDto> PlaceOrderAsync(HttpClient client)
     {
-        await client.SignInAsync("majed.maniat.p2@gmail.com");
+        await client.SignInAsync("customer@majidfood.com");
         var restaurants = await client.GetFromJsonAsync<List<RestaurantCardDto>>("api/restaurants");
         var bella = restaurants!.Single(r => r.Name == "Bella Napoli");
         var detail = await client.GetFromJsonAsync<RestaurantDetailDto>($"api/restaurants/{bella.Id}");

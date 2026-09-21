@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using OrderOrange.ApiServer.Services;
 using OrderOrange.Shared;
@@ -13,7 +13,7 @@ public class OrderLifecycleTests : IClassFixture<ApiFactory>
 
     private async Task<OrderDto> PlaceOrderAsync(HttpClient client, string dishName = "Margherita", int quantity = 2)
     {
-        await client.SignInAsync("majed.maniat.p2@gmail.com");
+        await client.SignInAsync("customer@majidfood.com");
 
         var restaurants = await client.GetFromJsonAsync<List<RestaurantCardDto>>("api/restaurants");
         var bella = restaurants!.Single(r => r.Name == "Bella Napoli");
@@ -50,7 +50,7 @@ public class OrderLifecycleTests : IClassFixture<ApiFactory>
     public async Task PlaceOrder_BelowMinimum_IsRejected()
     {
         var client = _factory.CreateClient();
-        await client.SignInAsync("majed.maniat.p2@gmail.com");
+        await client.SignInAsync("customer@majidfood.com");
 
         var restaurants = await client.GetFromJsonAsync<List<RestaurantCardDto>>("api/restaurants");
         var bella = restaurants!.Single(r => r.Name == "Bella Napoli");

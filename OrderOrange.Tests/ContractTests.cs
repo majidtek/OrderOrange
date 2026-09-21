@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using OrderOrange.Shared;
 
@@ -93,7 +93,7 @@ public class ContractTests : IClassFixture<ApiFactory>
 
         // A plain customer is not in the room at all.
         var customer = _factory.CreateClient();
-        await customer.SignInAsync("majed.maniat.p2@gmail.com");
+        await customer.SignInAsync("customer@majidfood.com");
         Assert.Equal(HttpStatusCode.Forbidden, (await customer.GetAsync("api/contracts")).StatusCode);
     }
 

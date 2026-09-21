@@ -1,4 +1,4 @@
-using OrderOrange.ApiServer.Models;
+﻿using OrderOrange.ApiServer.Models;
 using OrderOrange.ApiServer.Services;
 using OrderOrange.Shared;
 using Microsoft.EntityFrameworkCore;
@@ -61,7 +61,7 @@ public static class DbSeeder
         var hassan = NewUser("Hassan Al Zadjali", "hassan.driver@majidfood.com", "+968 9310 2002", UserRole.Driver, 150);
         var ali = NewUser("Ali Al Riyami", "ali.driver@majidfood.com", "+968 9310 2003", UserRole.Driver, 90);
 
-        var majed = NewUser("Majed Maniat", "majed.maniat.p2@gmail.com", "+968 9410 3001", UserRole.Customer, 200);
+        var majed = NewUser("Demo Customer", "customer@majidfood.com", "+968 9410 3001", UserRole.Customer, 200);
         var ahmed = NewUser("Ahmed Al Lawati", "ahmed@majidfood.com", "+968 9410 3002", UserRole.Customer, 170);
         var fatima = NewUser("Fatima Al Busaidi", "fatima@majidfood.com", "+968 9410 3003", UserRole.Customer, 140);
         var mariam = NewUser("Mariam Al Hinai", "mariam@majidfood.com", "+968 9410 3004", UserRole.Customer, 60);

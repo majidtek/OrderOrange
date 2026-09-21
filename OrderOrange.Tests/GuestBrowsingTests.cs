@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using OrderOrange.Shared;
 
@@ -88,7 +88,7 @@ public class GuestBrowsingTests : IClassFixture<ApiFactory>
         Assert.True(tooEarly.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden);
 
         // Sign in on the same client — the basket the UI holds is unaffected.
-        await visitor.SignInAsync("majed.maniat.p2@gmail.com");
+        await visitor.SignInAsync("customer@majidfood.com");
         var addresses = await visitor.GetFromJsonAsync<List<AddressDto>>("api/addresses");
 
         var placed = await visitor.PostAsJsonAsync("api/orders", new PlaceOrderRequest(
