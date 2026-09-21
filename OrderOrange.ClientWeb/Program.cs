@@ -80,7 +80,15 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    // the POS slideshow pictures are content-named; let browsers and Cloudflare keep them a year
+    OnPrepareResponse = ctx =>
+    {
+        if (ctx.Context.Request.Path.StartsWithSegments("/pos"))
+            ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+    },
+});
 
 // The PAGE itself must never be reused stale: a cached document keeps pointing at
 // last week's stylesheet, and every deploy looks broken to whoever held the tab.

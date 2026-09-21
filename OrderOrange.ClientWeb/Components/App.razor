@@ -22,6 +22,11 @@
     <meta name="description" content="@Description" />
     <meta name="robots" content="@(IsPrivate ? "noindex, nofollow" : "index, follow, max-image-preview:large")" />
     <link rel="canonical" href="@CanonicalUrl" />
+    @if (_isPos)
+    {
+        @* the first slide of the POS show is above the fold — fetch it before anything else *@
+        <link rel="preload" as="image" href="/pos/@(OrderOrange.ClientWeb.Components.Pages.PosSoftware.Shots[0].File).webp" fetchpriority="high" />
+    }
     @if (Config["Seo:GoogleSiteVerification"] is { Length: > 0 } gsv)
     {
         <meta name="google-site-verification" content="@gsv" />

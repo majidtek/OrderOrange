@@ -57,8 +57,8 @@
                         @foreach (var (file, key) in Shots)
                         {
                             slideNo++;
-                            <figure class="mf-slide">
-                                <a href="/guide/@(file).jpg" target="_blank" rel="noopener"><img src="/guide/@(file).jpg" alt="@L[$"pos.{key}"]" loading="eager" decoding="async" fetchpriority="@(slideNo == 1 ? "high" : "auto")" width="1280" height="800"></a>
+                            <figure class="mf-slide @(slideNo == 1 ? "on" : "")">
+                                <a href="/pos/@(file).webp" target="_blank" rel="noopener"><img src="/pos/@(file).webp" alt="@L[$"pos.{key}"]" loading="eager" decoding="async" fetchpriority="@(slideNo == 1 ? "high" : "low")" width="1280" height="800"></a>
                                 <figcaption><span class="n">@slideNo / @Shots.Length</span>@L[$"pos.{key}"]</figcaption>
                             </figure>
                         }
@@ -71,7 +71,7 @@
                 <div class="mf-slider-thumbs">
                     @foreach (var (file, key) in Shots)
                     {
-                        <button type="button" class="mf-thumb" title="@L[$"pos.{key}"]"><img src="/guide/@(file).jpg" alt="" loading="lazy" width="160" height="100"></button>
+                        <button type="button" class="mf-thumb" title="@L[$"pos.{key}"]"><img src="/pos/@(file)-t.webp" alt="" loading="lazy" width="160" height="100"></button>
                     }
                 </div>
             </div>
