@@ -42,3 +42,12 @@ demo-live-courier.ps1
 # ---- generated documentation pages (rebuilt by doc-src/gen3.py → host.py → seo.py) --
 OrderOrange.RestaurantWeb/wwwroot/guide.*.html
 OrderOrange.RestaurantWeb/wwwroot/sitemap.xml
+
+# ---- customer / personal data and stray publish folders (removed from history 2026-09-21) ----
+staging/
+siraj-menu/
+*.xlsx
+*.xls
+docs/seed/
+till-releases/
+*.pdb
