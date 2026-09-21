@@ -27551,3 +27551,7 @@ html.mf-noscroll,html.mf-noscroll body{overflow:hidden}
 .mf-slider.fade .mf-slide figcaption{transform:translateY(12px);opacity:0;transition:transform .6s .25s cubic-bezier(.22,.8,.26,1),opacity .6s .25s}
 .mf-slider.fade .mf-slide.on figcaption{transform:none;opacity:1}
 @media (prefers-reduced-motion:reduce){.mf-slider.fade .mf-slide img{transform:none}.mf-slider.fade .mf-slide.on img{animation:none}}
+
+/* v782: barely-there zoom (Majed: "not too much zoom in") */
+.mf-slider.fade .mf-slide img{transform:scale(1.02)}
+@keyframes mfZoomSoft{from{opacity:.6;transform:scale(1.025)}25%{opacity:1}to{opacity:1;transform:scale(1)}}
