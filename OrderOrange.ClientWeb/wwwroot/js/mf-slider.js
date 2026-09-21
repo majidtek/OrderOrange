@@ -58,9 +58,13 @@ window.mfSlider = (function () {
     var fullBtn = root.querySelector('.mf-slider-full'), closeBtn = root.querySelector('.mf-slider-close');
     if (fullBtn) fullBtn.addEventListener('click', function () { setFull(!root.classList.contains('full')); });
     if (closeBtn) closeBtn.addEventListener('click', function () { setFull(false); });
+    // a tap on a phone only turns/holds the slide — full screen is the ⛶ button there;
+    // a mouse click on a slide still opens it
+    var touchAt = 0;
+    root.addEventListener('touchstart', function () { touchAt = Date.now(); }, { passive: true });
     slides.forEach(function (s) {
       var a = s.querySelector('a');
-      if (a) a.addEventListener('click', function (e) { e.preventDefault(); setFull(true); });
+      if (a) a.addEventListener('click', function (e) { e.preventDefault(); if (Date.now() - touchAt < 1200) return; setFull(true); });
     });
     root.addEventListener('keydown', function (e) { if (e.key === 'Escape') setFull(false); });
 
