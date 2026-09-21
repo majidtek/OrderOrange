@@ -48,6 +48,22 @@ window.mfSlider = (function () {
     }
     function arm() { clearInterval(timer); timer = setInterval(function () { if (!paused) next(); }, EVERY); }
 
+    // the whole show, full screen — tapping a slide, the ⛶ button; ✕ or Esc to leave
+    function setFull(on) {
+      root.classList.toggle('full', on);
+      document.documentElement.classList.toggle('mf-noscroll', on);
+      if (on) root.focus();
+      paint();
+    }
+    var fullBtn = root.querySelector('.mf-slider-full'), closeBtn = root.querySelector('.mf-slider-close');
+    if (fullBtn) fullBtn.addEventListener('click', function () { setFull(!root.classList.contains('full')); });
+    if (closeBtn) closeBtn.addEventListener('click', function () { setFull(false); });
+    slides.forEach(function (s) {
+      var a = s.querySelector('a');
+      if (a) a.addEventListener('click', function (e) { e.preventDefault(); setFull(true); });
+    });
+    root.addEventListener('keydown', function (e) { if (e.key === 'Escape') setFull(false); });
+
     root.querySelector('.mf-slider-btn.prev').addEventListener('click', function () { go(at - 1, true); });
     root.querySelector('.mf-slider-btn.next').addEventListener('click', function () { go(at + 1, true); });
     root.addEventListener('mouseenter', function () { paused = true; restartBar(); });
@@ -75,5 +91,15 @@ window.mfSlider = (function () {
     } else arm();
     paint();
   }
-  return { init: init };
+  // sections drift in as they scroll into view (CSS only hides them once JS is present)
+  function reveal() {
+    document.documentElement.classList.add('js');
+    var els = document.querySelectorAll('.mf-reveal');
+    if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('in'); }); return; }
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } });
+    }, { threshold: 0.12 });
+    els.forEach(function (e) { io.observe(e); });
+  }
+  return { init: init, reveal: reveal };
 })();

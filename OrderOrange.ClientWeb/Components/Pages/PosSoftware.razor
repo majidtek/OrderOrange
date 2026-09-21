@@ -33,10 +33,15 @@
     <nav class="mf-crumbs" aria-label="Breadcrumb"><a href="/">OrderOrange</a> › <span>@L["pos.h1"]</span></nav>
 
     <header class="mf-pos-hero split">
-        <div class="mf-hero-text">
+        <div class="mf-hero-text mf-reveal">
+            <p class="eyebrow">@L["pos.eyebrow"]</p>
             <h1>@L["pos.h1"]</h1>
             <p class="lede">@L["pos.lede"]</p>
-            <p class="free">@L["pos.free"]</p>
+            <div class="stats">
+                <span><b>0</b><i>@L["pos.stat1"]</i></span>
+                <span><b>0</b><i>@L["pos.stat2"]</i></span>
+                <span><b>0%</b><i>@L["pos.stat3"]</i></span>
+            </div>
             <p class="cta">
                 <a class="go" href="https://partner.orderorange.com/register">@L["pos.start"]</a>
                 <a class="ghost" href="https://partner.orderorange.com/">@L["pos.signIn"]</a>
@@ -46,7 +51,7 @@
         <div class="mf-hero-show" id="screens">
             <div class="mf-glow"></div>
             <div class="mf-slider fade" id="pos-slider" tabindex="0" aria-roledescription="carousel">
-                <div class="mf-device"><div class="mf-device-bar"><i></i><i></i><i></i><b>partner.orderorange.com</b></div><div class="mf-slider-view">
+                <div class="mf-device"><div class="mf-device-bar"><i></i><i></i><i></i><b>partner.orderorange.com</b><button type="button" class="mf-slider-full" title="@L["pos.fullscreen"]" aria-label="@L["pos.fullscreen"]">⛶</button></div><button type="button" class="mf-slider-close" aria-label="@L["pos.close"]">✕</button><div class="mf-slider-view">
                     <div class="mf-slider-track">
                         @{ var slideNo = 0; }
                         @foreach (var (file, key) in Shots)
@@ -74,11 +79,15 @@
         </div>
     </header>
 
-    <h2 class="mf-pos-h2" id="features">@L["pos.whatTitle"]</h2>
+    <p class="mf-pos-eyebrow mf-reveal" id="features">@L["pos.nav.features"]</p>
+    <h2 class="mf-pos-h2 mf-reveal">@L["pos.whatTitle"]</h2>
     <div class="mf-pos-grid">
+        @{ var cardNo = 0; }
         @foreach (var block in Blocks)
         {
-            <section class="mf-pos-card">
+            cardNo++;
+            <section class="mf-pos-card mf-reveal">
+                <span class="num">@cardNo.ToString("00")</span>
                 <h3>@L[$"pos.{block}T"]</h3>
                 <p>@L[$"pos.{block}B"]</p>
             </section>
@@ -86,7 +95,8 @@
     </div>
 
     <section class="mf-pos-free" id="free">
-        <h2>@L["pos.freeTitle"]</h2>
+        <p class="mf-pos-eyebrow mf-reveal">@L["pos.nav.free"]</p>
+        <h2 class="mf-reveal">@L["pos.freeTitle"]</h2>
         <p class="lede">@L["pos.freeLede"]</p>
         <div class="mf-pos-grid">
             @for (var i = 1; i <= FreeCount; i++)
@@ -100,7 +110,8 @@
     </section>
 
     <section class="mf-pos-cmp" id="compare">
-        <h2>@L["pos.cmpTitle"]</h2>
+        <p class="mf-pos-eyebrow mf-reveal">@L["pos.nav.compare"]</p>
+        <h2 class="mf-reveal">@L["pos.cmpTitle"]</h2>
         <div class="mf-pos-table">
             <table>
                 <thead>
@@ -128,11 +139,20 @@
     </section>
 
     <section class="mf-pos-faq" id="faq">
-        <h2>@L["pos.faqTitle"]</h2>
+        <p class="mf-pos-eyebrow mf-reveal">@L["pos.nav.faq"]</p>
+        <h2 class="mf-reveal">@L["pos.faqTitle"]</h2>
         @for (var i = 1; i <= FaqCount; i++)
         {
             <details @open="@(i == 1)"><summary>@L[$"pos.q{i}"]</summary><p>@L[$"pos.a{i}"]</p></details>
         }
+    </section>
+
+    <section class="mf-pos-band mf-reveal">
+        <div>
+            <h2>@L["pos.bandTitle"]</h2>
+            <p>@L["pos.bandBody"]</p>
+        </div>
+        <p class="cta"><a class="go" href="https://partner.orderorange.com/register">@L["pos.start"]</a><a class="ghost" href="https://partner.orderorange.com/">@L["pos.signIn"]</a></p>
     </section>
 
     <section class="mf-pos-also">
@@ -190,7 +210,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender) { try { await JS.InvokeVoidAsync("mfSlider.init", "pos-slider"); } catch { /* prerender: no JS yet */ } }
+        if (firstRender) { try { await JS.InvokeVoidAsync("mfSlider.init", "pos-slider"); await JS.InvokeVoidAsync("mfSlider.reveal"); } catch { /* prerender: no JS yet */ } }
     }
 
     internal const int FreeCount = 8;

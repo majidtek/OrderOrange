@@ -3740,5 +3740,13 @@
     "pos.footerTag":  "A free POS, kitchen display, QR menu and online ordering for restaurants, cafés and shops — any country, any currency, 14 languages.",
     "pos.footerProduct":  "Product",
     "pos.footerStart":  "Get started",
-    "pos.footerMore":  "More"
+    "pos.footerMore":  "More",
+    "pos.eyebrow":  "Free POS · any country · 14 languages",
+    "pos.stat1":  "monthly fee",
+    "pos.stat2":  "setup fee",
+    "pos.stat3":  "commission",
+    "pos.fullscreen":  "Full screen",
+    "pos.close":  "Close",
+    "pos.bandTitle":  "Ready to run your place on a free POS?",
+    "pos.bandBody":  "Open the account now, add your menu today and take the first order tonight. No card, no contract, no monthly fee."
 }
