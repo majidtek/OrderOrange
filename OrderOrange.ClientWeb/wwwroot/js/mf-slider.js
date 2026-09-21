@@ -94,6 +94,27 @@ window.mfSlider = (function () {
   // sections drift in as they scroll into view (CSS only hides them once JS is present)
   function reveal() {
     document.documentElement.classList.add('js');
+    // in-page anchors: the Blazor router would re-render the page and drop the hash, so
+    // scroll ourselves (the href stays a real link for crawlers and no-JS browsers)
+    if (!document.documentElement.dataset.anchors) {
+      document.documentElement.dataset.anchors = '1';
+      // on window, capture phase: that runs before Blazor's own document listener
+      window.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('a[href*="#"]');
+        if (!a) return;
+        var href = a.getAttribute('href') || '', i = href.indexOf('#');
+        if (i < 0) return;
+        var path = href.slice(0, i);
+        if (path && path !== location.pathname) return;
+        var el = document.getElementById(href.slice(i + 1));
+        if (!el) return;
+        e.preventDefault(); e.stopPropagation();
+        window.__anch = (window.__anch || 0) + 1;
+        var top = el.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop) - 70;
+        window.scrollTo({ top: top, behavior: 'smooth' });
+        try { history.replaceState(null, '', location.pathname + '#' + el.id); } catch (x) {}
+      }, true);
+    }
     var els = document.querySelectorAll('.mf-reveal');
     if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('in'); }); return; }
     var io = new IntersectionObserver(function (es) {

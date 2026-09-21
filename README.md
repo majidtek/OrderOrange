@@ -1,6 +1,7 @@
 # OrderOrange
 
-**A free POS system for restaurants, cafés and shops — and the food-ordering marketplace that comes with it.**
+**A free, open-source POS system for restaurants, cafés and shops — and the food-ordering marketplace that comes with it.**
+Source: https://github.com/majidtek/OrderOrange
 Any country, any currency, fourteen languages. Live at [orderorange.com](https://www.orderorange.com) ·
 [orderorange.com/pos](https://www.orderorange.com/pos) · [partner.orderorange.com](https://partner.orderorange.com) ·
 [Partner guide](https://www.orderorange.com/guide) · [API docs](https://partner.orderorange.com/api.html)
@@ -289,4 +290,4 @@ Never committed: `appsettings.json` (all projects — use the `.example.json`), 
 
 ## License
 
-Proprietary — © OrderOrange. All rights reserved.
+Open source — the code is public at https://github.com/majidtek/OrderOrange. © OrderOrange / MajidTek. (A formal licence file is still to be chosen; until then all rights are reserved by the authors.)

@@ -27496,3 +27496,35 @@ html.mf-noscroll,html.mf-noscroll body{overflow:hidden}
 .mf-slider.full .mf-slider-btn{background:rgba(255,255,255,.14);color:#fff;opacity:1}
 .mf-slider.full .mf-slider-btn:hover{background:#FF5A00}
 .mf-slider.full .mf-slide figcaption{background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.7))}
+
+/* v778: smaller show on screen, open-source pill */
+.mf-hero-show{max-width:720px;padding-top:0}
+.mf-device{padding:6px;border-radius:18px}
+.mf-device-bar{height:22px}
+.mf-device-bar b{font-size:9.5px;padding:1px 10px}
+.mf-slider.fade .mf-slider-dots{margin:10px 0 6px}
+.mf-slider.fade .mf-thumb{flex:0 0 84px}
+.mf-slider.fade .mf-thumb img{height:52px}
+.mf-show-hint{font-size:12px}
+.mf-hero-text .eyebrows{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.mf-hero-text .eyebrows .eyebrow{margin:0}
+.mf-hero-text .eyebrow.src{background:#1C1712;color:#fff;text-decoration:none}
+.mf-hero-text .eyebrow.src:hover{background:#FF5A00}
+@media (max-width:760px){.mf-hero-show{max-width:100%}.mf-device{padding:5px;border-radius:14px}.mf-slider.fade .mf-thumb{flex:0 0 72px}.mf-slider.fade .mf-thumb img{height:44px}}
+
+/* v779: table header no longer sticky (it overlapped rows inside the scroll box); anchors; page background */
+.mf-pos-table thead th{position:static}
+.mf-pos-site{position:relative;isolation:isolate;background:#FCF9F5}
+.mf-pos-site::before{content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
+  background:
+    radial-gradient(900px 600px at 8% -10%,rgba(255,90,0,.16),transparent 60%),
+    radial-gradient(700px 500px at 100% 10%,rgba(255,178,115,.28),transparent 60%),
+    radial-gradient(800px 700px at 50% 110%,rgba(255,214,170,.35),transparent 60%),
+    linear-gradient(180deg,#FFF9F3 0%,#FCF9F5 40%,#FBF6F0 100%)}
+.mf-pos-site::after{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;
+  background-image:radial-gradient(rgba(28,23,18,.07) 1px,transparent 1.2px);background-size:22px 22px;
+  -webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,.9),rgba(0,0,0,.25));mask-image:linear-gradient(180deg,rgba(0,0,0,.9),rgba(0,0,0,.25))}
+.mf-posnav{background:rgba(255,249,243,.72)}
+.mf-pos-card,.mf-pos-table,.mf-pos-faq details,.mf-hero-text .stats span,.mf-pos-price{background:rgba(255,255,255,.85);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.mf-pos-price{background:rgba(255,248,243,.9)}
+.mf-pos-footer{position:relative;z-index:1}

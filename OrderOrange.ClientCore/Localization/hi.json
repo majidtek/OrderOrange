@@ -3748,5 +3748,6 @@
     "pos.fullscreen":  "Full screen",
     "pos.close":  "Close",
     "pos.bandTitle":  "Ready to run your place on a free POS?",
-    "pos.bandBody":  "Open the account now, add your menu today and take the first order tonight. No card, no contract, no monthly fee."
+    "pos.bandBody":  "Open the account now, add your menu today and take the first order tonight. No card, no contract, no monthly fee.",
+    "pos.openSource":  "GitHub पर ओपन सोर्स"
 }
