@@ -115,6 +115,36 @@ window.mfSlider = (function () {
         try { history.replaceState(null, '', location.pathname + '#' + el.id); } catch (x) {}
       }, true);
     }
+    // stagger: siblings that reveal together get a growing delay
+    var groups = new Map();
+    document.querySelectorAll('.mf-reveal').forEach(function (el) {
+      var k = el.parentNode, n = groups.get(k) || 0; groups.set(k, n + 1); el.style.setProperty('--i', n);
+    });
+    // headline words rise one after another
+    var h1 = document.querySelector('.mf-hero-text h1');
+    if (h1 && !h1.dataset.split) {
+      h1.dataset.split = '1';
+      var words = h1.textContent.trim().split(/\s+/);
+      h1.innerHTML = words.map(function (w, i) { return '<span class="w" style="--i:' + i + '">' + w + '</span>'; }).join(' ');
+    }
+    // nav condenses on scroll + reading progress + active section (scrollspy)
+    var nav = document.querySelector('.mf-posnav');
+    if (nav && !nav.dataset.live) {
+      nav.dataset.live = '1';
+      var bar = document.createElement('i'); bar.className = 'mf-posnav-progress'; nav.appendChild(bar);
+      var links = Array.prototype.slice.call(nav.querySelectorAll('.links a[href*="#"]'));
+      var targets = links.map(function (a) { var h = a.getAttribute('href'); return document.getElementById(h.slice(h.indexOf('#') + 1)); });
+      function onScroll() {
+        var y = window.pageYOffset || document.documentElement.scrollTop;
+        nav.classList.toggle('scrolled', y > 24);
+        var doc = document.documentElement, max = doc.scrollHeight - doc.clientHeight;
+        bar.style.width = (max > 0 ? Math.min(100, y / max * 100) : 0) + '%';
+        var current = -1;
+        targets.forEach(function (t, i) { if (t && t.getBoundingClientRect().top - 120 <= 0) current = i; });
+        links.forEach(function (a, i) { a.classList.toggle('on', i === current); });
+      }
+      window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+    }
     var els = document.querySelectorAll('.mf-reveal');
     if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('in'); }); return; }
     var io = new IntersectionObserver(function (es) {

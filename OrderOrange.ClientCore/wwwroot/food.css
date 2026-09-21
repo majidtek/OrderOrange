@@ -27555,3 +27555,57 @@ html.mf-noscroll,html.mf-noscroll body{overflow:hidden}
 /* v782: barely-there zoom (Majed: "not too much zoom in") */
 .mf-slider.fade .mf-slide img{transform:scale(1.02)}
 @keyframes mfZoomSoft{from{opacity:.6;transform:scale(1.025)}25%{opacity:1}to{opacity:1;transform:scale(1)}}
+
+/* ---------- v783: more motion on /pos ---------- */
+/* nav */
+.mf-posnav{transition:box-shadow .3s,background .3s}
+.mf-posnav.scrolled{box-shadow:0 10px 30px rgba(60,30,10,.08);background:rgba(255,249,243,.9)}
+.mf-posnav-in{transition:height .3s}
+.mf-posnav.scrolled .mf-posnav-in{height:54px}
+.mf-posnav-progress{position:absolute;left:0;bottom:-1px;height:2px;width:0;background:linear-gradient(90deg,#FF5A00,#FFB273);transition:width .15s linear}
+.mf-posnav .links a{position:relative}
+.mf-posnav .links a::after{content:"";position:absolute;left:11px;right:11px;bottom:4px;height:2px;border-radius:2px;background:#FF5A00;transform:scaleX(0);transform-origin:left;transition:transform .25s cubic-bezier(.22,.8,.26,1)}
+.mf-posnav .links a.on{color:#C44300}
+.mf-posnav .links a.on::after,.mf-posnav .links a:hover::after{transform:scaleX(1)}
+/* headline words */
+html.js .mf-hero-text h1 .w{display:inline-block;opacity:0;transform:translateY(.6em) rotate(2deg);animation:mfWord .7s cubic-bezier(.22,.8,.26,1) forwards;animation-delay:calc(.08s * var(--i))}
+@keyframes mfWord{to{opacity:1;transform:none}}
+/* staggered reveals */
+html.js .mf-reveal{transition-delay:calc(.07s * var(--i,0))}
+html.js .mf-hero-text .stats span{opacity:0;transform:translateY(12px) scale(.96);animation:mfPop .6s cubic-bezier(.22,.8,.26,1) forwards}
+html.js .mf-hero-text .stats span:nth-child(1){animation-delay:.5s}html.js .mf-hero-text .stats span:nth-child(2){animation-delay:.62s}html.js .mf-hero-text .stats span:nth-child(3){animation-delay:.74s}
+@keyframes mfPop{to{opacity:1;transform:none}}
+html.js .mf-hero-text .eyebrows .eyebrow{opacity:0;transform:translateY(-8px);animation:mfPop .5s .15s cubic-bezier(.22,.8,.26,1) forwards}
+html.js .mf-hero-text .eyebrows .eyebrow.src{animation-delay:.28s}
+/* cards: tilt-light on hover, drawn check marks on the free cards */
+.mf-pos-card{transform-style:preserve-3d}
+.mf-pos-card:hover{transform:translateY(-4px) rotateX(1.5deg)}
+html.js .mf-pos-card.free h3::before{transform:scale(0);transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
+.mf-pos-card .num{transition:color .2s}
+.mf-pos-card:hover .num{color:#FF5A00}
+/* buttons: light sweep */
+.mf-pos .cta a.go,.mf-posnav .acts .go,.mf-pos-band .cta a.go{position:relative;overflow:hidden}
+.mf-pos .cta a.go::after,.mf-posnav .acts .go::after{content:"";position:absolute;top:-40%;bottom:-40%;left:-60%;width:40%;background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.45),rgba(255,255,255,0));transform:skewX(-20deg);transition:left .6s ease}
+.mf-pos .cta a.go:hover::after,.mf-posnav .acts .go:hover::after{left:130%}
+/* comparison rows + FAQ unfold */
+.mf-pos-table tbody tr{transition:background .2s}
+.mf-pos-table .us{position:relative}
+.mf-pos-table tbody tr:hover .us{background:#FFF1E6}
+.mf-pos-faq details p{animation:mfUnfold .35s ease-out}
+@keyframes mfUnfold{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.mf-pos-faq summary::after{transition:transform .3s,background .2s}
+.mf-pos-faq details[open] summary::after{transform:rotate(180deg);background:#FF5A00;color:#fff}
+/* CTA band: slow living gradient + floating orbs */
+.mf-pos-band{background:linear-gradient(120deg,#1C1712,#3A2A1C,#5A3418,#3A2A1C,#1C1712);background-size:300% 300%;animation:mfBand 14s ease infinite}
+@keyframes mfBand{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+.mf-pos-band::after{animation:mfOrb 9s ease-in-out infinite alternate}
+@keyframes mfOrb{from{transform:translate(0,0) scale(1)}to{transform:translate(-40px,30px) scale(1.15)}}
+/* page blobs drift very slowly */
+.mf-pos-site::before{animation:mfBg 30s ease-in-out infinite alternate}
+@keyframes mfBg{from{background-position:0 0,0 0,0 0,0 0}to{background-position:40px 30px,-30px 20px,20px -40px,0 0}}
+/* footer links */
+.mf-pos-footer .col a{position:relative;width:max-content}
+.mf-pos-footer .col a::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:1px;background:#FFB273;transform:scaleX(0);transform-origin:left;transition:transform .25s}
+.mf-pos-footer .col a:hover::after{transform:scaleX(1)}
+@media (prefers-reduced-motion:reduce){html.js .mf-hero-text h1 .w,html.js .mf-hero-text .stats span,html.js .mf-hero-text .eyebrows .eyebrow{opacity:1;transform:none;animation:none}.mf-pos-band,.mf-pos-band::after,.mf-pos-site::before{animation:none}}
