@@ -73,15 +73,23 @@ window.mfSlider = (function () {
       if (e.key === 'ArrowLeft') { go(at - 1, true); e.preventDefault(); }
     });
 
-    // swipe (pointer events cover touch and mouse)
-    var x0 = null;
-    track.addEventListener('pointerdown', function (e) { x0 = e.clientX; paused = true; });
-    track.addEventListener('pointerup', function (e) {
+    // swipe: touch events first (a finger that scrolls the page never turns a slide), mouse via pointer events
+    var x0 = null, y0 = null, swiped = false;
+    function swipeStart(x, y) { x0 = x; y0 = y; swiped = false; paused = true; }
+    function swipeEnd(x, y) {
       if (x0 === null) return;
-      var dx = e.clientX - x0; x0 = null; paused = false;
-      if (Math.abs(dx) > 40) go(at + (dx < 0 ? 1 : -1), true); else restartBar();
-    });
-    track.addEventListener('pointercancel', function () { x0 = null; paused = false; restartBar(); });
+      var dx = x - x0, dy = y - y0; x0 = y0 = null; paused = false;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) { swiped = true; go(at + (dx < 0 ? 1 : -1), true); }
+      else restartBar();
+    }
+    track.addEventListener('touchstart', function (e) { var t = e.touches[0]; swipeStart(t.clientX, t.clientY); }, { passive: true });
+    track.addEventListener('touchend', function (e) { var t = e.changedTouches[0]; swipeEnd(t.clientX, t.clientY); }, { passive: true });
+    track.addEventListener('touchcancel', function () { x0 = y0 = null; paused = false; restartBar(); }, { passive: true });
+    track.addEventListener('mousedown', function (e) { swipeStart(e.clientX, e.clientY); e.preventDefault(); });
+    track.addEventListener('mouseup', function (e) { swipeEnd(e.clientX, e.clientY); });
+    track.addEventListener('mouseleave', function () { if (x0 !== null) { x0 = y0 = null; paused = false; restartBar(); } });
+    // a swipe must not also open the full-screen show
+    track.addEventListener('click', function (e) { if (swiped) { e.preventDefault(); e.stopPropagation(); swiped = false; } }, true);
 
     // only run the clock while the slider is on screen
     if ('IntersectionObserver' in window) {

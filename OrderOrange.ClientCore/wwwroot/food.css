@@ -27609,3 +27609,12 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 .mf-pos-footer .col a::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:1px;background:#FFB273;transform:scaleX(0);transform-origin:left;transition:transform .25s}
 .mf-pos-footer .col a:hover::after{transform:scaleX(1)}
 @media (prefers-reduced-motion:reduce){html.js .mf-hero-text h1 .w,html.js .mf-hero-text .stats span,html.js .mf-hero-text .eyebrows .eyebrow{opacity:1;transform:none;animation:none}.mf-pos-band,.mf-pos-band::after,.mf-pos-site::before{animation:none}}
+
+/* v784: arrows always visible; swipe-friendly track */
+.mf-slider.fade .mf-slider-btn{opacity:1;background:rgba(28,23,18,.6);color:#fff;width:42px;height:42px;font-size:26px;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+.mf-slider.fade .mf-slider-btn:hover{background:#FF5A00}
+.mf-slider-track{touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:grab}
+.mf-slider-track:active{cursor:grabbing}
+.mf-slide a{-webkit-user-drag:none}
+.mf-slide img{-webkit-user-drag:none;pointer-events:none}
+@media (max-width:760px){.mf-slider.fade .mf-slider-btn{width:38px;height:38px;font-size:24px}.mf-slider.fade .mf-slider-btn.prev{left:8px}.mf-slider.fade .mf-slider-btn.next{right:8px}}
