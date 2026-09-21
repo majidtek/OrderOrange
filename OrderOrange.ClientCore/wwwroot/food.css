@@ -27618,3 +27618,10 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 .mf-slide a{-webkit-user-drag:none}
 .mf-slide img{-webkit-user-drag:none;pointer-events:none}
 @media (max-width:760px){.mf-slider.fade .mf-slider-btn{width:38px;height:38px;font-size:24px}.mf-slider.fade .mf-slider-btn.prev{left:8px}.mf-slider.fade .mf-slider-btn.next{right:8px}}
+
+/* v785: clearer arrows — solid white disc, bold orange chevron, strong shadow */
+.mf-slider.fade .mf-slider-btn{background:#fff;color:#FF5A00;width:46px;height:46px;font-size:30px;font-weight:900;line-height:44px;box-shadow:0 8px 22px rgba(0,0,0,.35),0 0 0 2px rgba(255,255,255,.6);opacity:1}
+.mf-slider.fade .mf-slider-btn:hover{background:#FF5A00;color:#fff}
+.mf-slider.fade .mf-slider-btn.prev{left:12px}.mf-slider.fade .mf-slider-btn.next{right:12px}
+@media (max-width:760px){.mf-slider.fade .mf-slider-btn{width:42px;height:42px;font-size:28px;line-height:40px}.mf-slider.fade .mf-slider-btn.prev{left:8px}.mf-slider.fade .mf-slider-btn.next{right:8px}}
+.mf-slider.full .mf-slider-btn{background:#fff;color:#FF5A00}
