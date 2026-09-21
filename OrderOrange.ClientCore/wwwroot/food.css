@@ -27540,3 +27540,14 @@ html.mf-noscroll,html.mf-noscroll body{overflow:hidden}
 .mf-slider.fade .mf-slide figcaption{transform:translateX(24px);opacity:0;transition:transform .55s .3s cubic-bezier(.22,.8,.26,1),opacity .55s .3s}
 .mf-slider.fade .mf-slide.on figcaption{transform:none;opacity:1}
 @media (prefers-reduced-motion:reduce){.mf-slider.fade .mf-slide.on img{animation:none}}
+
+/* v781: back to a gentle zoom on each slide (Majed: "make it zoom some, as before") */
+.mf-slider.fade .mf-slide img{transform:scale(1.06);filter:none}
+.mf-slider.fade .mf-slide.on img{animation:mfZoomSoft 5.4s ease-out forwards}
+@keyframes mfZoomSoft{from{opacity:.6;transform:scale(1.07)}25%{opacity:1}to{opacity:1;transform:scale(1)}}
+[dir="rtl"] .mf-slider.fade .mf-slide.on img{animation-name:mfZoomSoft}
+.mf-slider.fade .mf-slide{transition:opacity .8s ease,visibility 0s .8s}
+.mf-slider.fade .mf-slide.on{transition:opacity .8s ease,visibility 0s}
+.mf-slider.fade .mf-slide figcaption{transform:translateY(12px);opacity:0;transition:transform .6s .25s cubic-bezier(.22,.8,.26,1),opacity .6s .25s}
+.mf-slider.fade .mf-slide.on figcaption{transform:none;opacity:1}
+@media (prefers-reduced-motion:reduce){.mf-slider.fade .mf-slide img{transform:none}.mf-slider.fade .mf-slide.on img{animation:none}}
