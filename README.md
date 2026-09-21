@@ -133,7 +133,7 @@ Rule of the house: **go through the API, never the database** — no SQLCMD, no 
 Prerequisites: .NET 10 SDK, SQL Server (LocalDB is enough), MongoDB 8 on `localhost:27017`, Python 3 (only for the guide generator).
 
 ```bash
-git clone https://github.com/<you>/OrderOrange.git
+git clone https://github.com/majidtek/OrderOrange.git
 cd OrderOrange
 
 # 1. configuration — copy every example and fill in the placeholders
