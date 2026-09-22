@@ -122,6 +122,7 @@ window.mfSlider = (function () {
         if (!el) return;
         e.preventDefault(); e.stopPropagation();
         window.__anch = (window.__anch || 0) + 1;
+        var pn = document.querySelector('.mf-posnav.open'); if (pn) { pn.classList.remove('open'); var bb = pn.querySelector('.mf-posnav-burger'); if (bb) bb.setAttribute('aria-expanded', 'false'); }
         var top = el.getBoundingClientRect().top + (window.pageYOffset || document.documentElement.scrollTop) - 70;
         window.scrollTo({ top: top, behavior: 'smooth' });
         try { history.replaceState(null, '', location.pathname + '#' + el.id); } catch (x) {}
@@ -156,6 +157,13 @@ window.mfSlider = (function () {
         links.forEach(function (a, i) { a.classList.toggle('on', i === current); });
       }
       window.addEventListener('scroll', onScroll, { passive: true }); onScroll();
+      // phone menu
+      var burger = nav.querySelector('.mf-posnav-burger');
+      if (burger) {
+        burger.addEventListener('click', function () { var open = nav.classList.toggle('open'); burger.setAttribute('aria-expanded', open ? 'true' : 'false'); });
+        nav.querySelectorAll('.links a').forEach(function (a) { a.addEventListener('click', function () { nav.classList.remove('open'); burger.setAttribute('aria-expanded', 'false'); }); });
+        document.addEventListener('click', function (e) { if (!nav.contains(e.target)) { nav.classList.remove('open'); burger.setAttribute('aria-expanded', 'false'); } });
+      }
     }
     var els = document.querySelectorAll('.mf-reveal');
     if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('in'); }); return; }

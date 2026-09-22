@@ -27698,3 +27698,26 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 body:has(.mf-pos-site) .mf-seo-footer{padding:10px 24px 20px;border-top:0;font-size:11px;opacity:.55}
 body:has(.mf-pos-site) .mf-seo-footer nav{gap:4px 12px;justify-content:center}
 body:has(.mf-pos-site) .mf-seo-footer a{color:#8E8274}
+
+/* v795: phone menu (hamburger → dropdown panel); nav pinned with a compositing hint */
+.mf-posnav{transform:translateZ(0);will-change:transform}
+.mf-posnav-burger{display:none;width:42px;height:42px;border:1.5px solid #E3D9CC;border-radius:11px;background:#fff;padding:0;cursor:pointer;flex-direction:column;align-items:center;justify-content:center;gap:5px}
+.mf-posnav-burger i{display:block;width:18px;height:2px;border-radius:2px;background:#1C1712;transition:transform .25s,opacity .2s}
+.mf-posnav.open .mf-posnav-burger i:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.mf-posnav.open .mf-posnav-burger i:nth-child(2){opacity:0}
+.mf-posnav.open .mf-posnav-burger i:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+.mf-posnav .links .m-only{display:none}
+@media (max-width:900px){
+  .mf-posnav-burger{display:flex}
+  .mf-posnav .links{display:none;position:absolute;left:10px;right:10px;top:calc(100% + 6px);flex-direction:column;gap:2px;padding:10px;border-radius:18px;background:rgba(255,251,247,.96);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid #F0E6DA;box-shadow:0 24px 50px rgba(60,30,10,.18);margin:0}
+  .mf-posnav.open .links{display:flex;animation:mfPop .25s cubic-bezier(.22,.8,.26,1) both}
+  .mf-posnav .links a{padding:12px 14px;font-size:15px;border-radius:12px}
+  .mf-posnav .links a.on{background:#FFF1E6}
+  .mf-posnav .links a::after{display:none}
+  .mf-posnav .links .m-only{display:block;margin-top:6px;border:1.5px solid #E3D9CC;text-align:center;font-weight:800}
+  .mf-posnav .acts .signin{display:none}
+}
+@media (max-width:480px){.mf-posnav .acts .go{padding:9px 12px;font-size:12.5px}}
+
+/* v796: phone menu panel fully opaque so the page never shows through */
+@media (max-width:900px){.mf-posnav .links{background:#FFFBF7}}
