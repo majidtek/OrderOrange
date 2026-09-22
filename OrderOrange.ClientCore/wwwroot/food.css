@@ -27625,3 +27625,7 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 .mf-slider.fade .mf-slider-btn.prev{left:12px}.mf-slider.fade .mf-slider-btn.next{right:12px}
 @media (max-width:760px){.mf-slider.fade .mf-slider-btn{width:42px;height:42px;font-size:28px;line-height:40px}.mf-slider.fade .mf-slider-btn.prev{left:8px}.mf-slider.fade .mf-slider-btn.next{right:8px}}
 .mf-slider.full .mf-slider-btn{background:#fff;color:#FF5A00}
+
+/* v786: arrows visible on light AND dark screens — orange disc, white chevron, white ring */
+.mf-slider.fade .mf-slider-btn,.mf-slider.full .mf-slider-btn{background:#FF5A00;color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.9),0 10px 24px rgba(0,0,0,.35)}
+.mf-slider.fade .mf-slider-btn:hover,.mf-slider.full .mf-slider-btn:hover{background:#1C1712;color:#fff}
