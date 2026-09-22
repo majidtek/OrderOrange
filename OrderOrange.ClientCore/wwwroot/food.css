@@ -27629,3 +27629,16 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 /* v786: arrows visible on light AND dark screens — orange disc, white chevron, white ring */
 .mf-slider.fade .mf-slider-btn,.mf-slider.full .mf-slider-btn{background:#FF5A00;color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.9),0 10px 24px rgba(0,0,0,.35)}
 .mf-slider.fade .mf-slider-btn:hover,.mf-slider.full .mf-slider-btn:hover{background:#1C1712;color:#fff}
+
+/* v787: headline visible again (gradient clip + transformed word spans = invisible text), tidy stats on phones, nav fixed */
+.mf-pos-hero.split h1{background:none;-webkit-background-clip:initial;background-clip:initial;color:#1C1712}
+.mf-hero-text h1 .w:nth-last-child(-n+4){color:#FF5A00}
+.mf-hero-text .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:560px;margin:18px auto 6px}
+.mf-hero-text .stats span{flex-direction:column;align-items:center;gap:2px;padding:12px 8px;text-align:center}
+.mf-hero-text .stats b{font-size:28px}
+.mf-hero-text .stats i{font-size:12px}
+.mf-posnav{position:fixed;top:0;left:0;right:0}
+.mf-pos-site{padding-top:62px}
+.mf-pos-site [id]{scroll-margin-top:84px}
+.mf-slider.full{z-index:1000}
+@media (max-width:480px){.mf-hero-text .stats{gap:8px}.mf-hero-text .stats b{font-size:24px}.mf-hero-text .stats i{font-size:11px}}
