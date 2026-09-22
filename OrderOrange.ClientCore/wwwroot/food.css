@@ -27721,3 +27721,7 @@ body:has(.mf-pos-site) .mf-seo-footer a{color:#8E8274}
 
 /* v796: phone menu panel fully opaque so the page never shows through */
 @media (max-width:900px){.mf-posnav .links{background:#FFFBF7}}
+
+/* v797: the whole picture, never cropped (Majed: "make the image 100%") */
+.mf-slider.fade .mf-slide img{object-fit:contain;object-position:center;background:#0C0906}
+.mf-slider.fade .mf-slider-view{background:#0C0906}
