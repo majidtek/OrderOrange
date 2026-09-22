@@ -27647,3 +27647,14 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 .mf-slider-btn{z-index:6}
 .mf-slider-bar{z-index:5}
 .mf-slider.fade .mf-slider-track{z-index:1}
+
+/* v789: arrows drawn with CSS, dead centre (the text glyph sat low and off-centre) */
+.mf-slider-btn{display:flex;align-items:center;justify-content:center;font-size:0;line-height:0;padding:0}
+.mf-slider-btn::before{content:"";display:block;width:13px;height:13px;border-top:3.5px solid currentColor;border-right:3.5px solid currentColor;border-radius:1px}
+.mf-slider-btn.next::before{transform:translateX(-3px) rotate(45deg)}
+.mf-slider-btn.prev::before{transform:translateX(3px) rotate(-135deg)}
+.mf-slider.full .mf-slider-btn::before{width:16px;height:16px;border-width:4px}
+
+/* v790: slides start at their natural size and zoom IN slowly (Majed: "start from zoom out to zoom in") */
+.mf-slider.fade .mf-slide img{transform:scale(1)}
+@keyframes mfZoomSoft{from{opacity:.6;transform:scale(1)}25%{opacity:1}to{opacity:1;transform:scale(1.035)}}
