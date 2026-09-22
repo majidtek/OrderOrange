@@ -27642,3 +27642,8 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 .mf-pos-site [id]{scroll-margin-top:84px}
 .mf-slider.full{z-index:1000}
 @media (max-width:480px){.mf-hero-text .stats{gap:8px}.mf-hero-text .stats b{font-size:24px}.mf-hero-text .stats i{font-size:11px}}
+
+/* v788: arrows above the slides (the track had been raised over them) */
+.mf-slider-btn{z-index:6}
+.mf-slider-bar{z-index:5}
+.mf-slider.fade .mf-slider-track{z-index:1}
