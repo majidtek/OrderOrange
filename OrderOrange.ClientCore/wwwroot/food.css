@@ -27658,3 +27658,6 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 /* v790: slides start at their natural size and zoom IN slowly (Majed: "start from zoom out to zoom in") */
 .mf-slider.fade .mf-slide img{transform:scale(1)}
 @keyframes mfZoomSoft{from{opacity:.6;transform:scale(1)}25%{opacity:1}to{opacity:1;transform:scale(1.035)}}
+
+/* v791: only the drawn chevron — the text glyph was still showing beside it */
+.mf-slider.fade .mf-slider-btn,.mf-slider.full .mf-slider-btn{font-size:0;line-height:0}
