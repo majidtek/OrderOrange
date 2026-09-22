@@ -11,7 +11,7 @@
 
 <PageTitle>@L["seo.posTitle"]</PageTitle>
 
-<header class="mf-posnav">
+<header class="mf-posnav" id="top">
     <div class="mf-posnav-in">
         <a class="brand" href="/pos"><img src="/logo.svg?v=4" alt="OrderOrange" class="logo"><span>Order<b>Orange</b> <i>POS</i></span></a>
         <nav class="links" aria-label="Sections">
@@ -162,16 +162,23 @@
     </section>
 </div>
 
-<footer class="mf-pos-footer">
+<footer class="mf-pos-footer v2">
     <div class="mf-pos-footer-in">
         <div class="col brand">
-            <div class="name"><img src="/logo.svg?v=4" alt="" class="logo">Order<b>Orange</b> POS</div>
+            <div class="name"><img src="/logo.svg?v=4" alt="" class="logo">Order<b>Orange</b> <span>POS</span></div>
             <p>@L["pos.footerTag"]</p>
+            <div class="socials">
+                <a href="https://www.instagram.com/orderorange.blog" rel="noopener" aria-label="Instagram" title="Instagram"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg></a>
+                <a href="https://github.com/majidtek/OrderOrange" rel="noopener" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.63-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.6 9.6 0 0 1 12 6.84c.85 0 1.7.11 2.5.33 1.9-1.29 2.74-1.02 2.74-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2z"/></svg></a>
+                <a href="mailto:info@orderorange.com" aria-label="Email" title="info@orderorange.com"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/></svg></a>
+            </div>
+            <div class="badges"><span>0 @L["pos.stat1"]</span><span>0% @L["pos.stat3"]</span><span>@L["pos.openSource"]</span></div>
         </div>
         <div class="col">
             <h4>@L["pos.footerProduct"]</h4>
             <a href="/pos#screens">@L["pos.nav.screens"]</a>
             <a href="/pos#features">@L["pos.nav.features"]</a>
+            <a href="/pos#free">@L["pos.nav.free"]</a>
             <a href="/pos#pricing">@L["pos.priceTitle"]</a>
             <a href="/pos#faq">@L["pos.nav.faq"]</a>
         </div>
@@ -190,7 +197,11 @@
             <a href="mailto:info@orderorange.com">info@orderorange.com</a>
         </div>
     </div>
-    <div class="mf-pos-footer-end">© @DateTime.Now.Year OrderOrange · @L["pos.free"]</div>
+    <div class="mf-pos-footer-end">
+        <span>© @DateTime.Now.Year OrderOrange</span>
+        <span class="mid">@L["pos.free"]</span>
+        <a class="top" href="/pos#top" aria-label="Top">↑</a>
+    </div>
 </footer>
 
 @code {

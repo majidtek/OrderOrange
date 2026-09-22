@@ -27664,3 +27664,37 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 
 /* v792: even less zoom — natural size to 1.5% over the slide's life */
 @keyframes mfZoomSoft{from{opacity:.6;transform:scale(1)}25%{opacity:1}to{opacity:1;transform:scale(1.015)}}
+
+/* ---------- v793: /pos footer, modern ---------- */
+.mf-pos-footer.v2{margin:64px 12px 12px;border-radius:28px;position:relative;overflow:hidden;background:linear-gradient(160deg,#1C1712 0%,#241C15 55%,#2E2018 100%);box-shadow:0 30px 60px rgba(60,30,10,.18)}
+.mf-pos-footer.v2::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,#FF5A00 30%,#FFB273 70%,transparent)}
+.mf-pos-footer.v2::after{content:"";position:absolute;right:-160px;bottom:-200px;width:520px;height:520px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,90,0,.35),transparent 70%);pointer-events:none}
+.mf-pos-footer.v2 .mf-pos-footer-in{position:relative;z-index:1;grid-template-columns:1.6fr 1fr 1fr 1fr;padding:48px 36px 32px;gap:36px}
+.mf-pos-footer.v2 .brand .name{display:flex;align-items:center;gap:10px;font-size:22px}
+.mf-pos-footer.v2 .brand .name .logo{width:36px;height:36px;vertical-align:0;margin:0;border-radius:10px;padding:4px;background:#fff}
+.mf-pos-footer.v2 .brand .name span{font-weight:600;color:#B7A896;font-size:16px}
+.mf-pos-footer.v2 .brand p{margin-top:12px}
+.mf-pos-footer.v2 .socials{display:flex;gap:10px;margin-top:18px}
+.mf-pos-footer.v2 .socials a{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.07);color:#EDE4D8;border:1px solid rgba(255,255,255,.08);transition:transform .2s,background .2s,color .2s,border-color .2s;padding:0}
+.mf-pos-footer.v2 .socials a:hover{background:#FF5A00;border-color:#FF5A00;color:#fff;transform:translateY(-3px)}
+.mf-pos-footer.v2 .socials a::after{display:none}
+.mf-pos-footer.v2 .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.mf-pos-footer.v2 .badges span{font-size:11.5px;font-weight:700;color:#FFB273;background:rgba(255,90,0,.12);border:1px solid rgba(255,90,0,.25);border-radius:999px;padding:5px 11px}
+.mf-pos-footer.v2 .col h4{color:#fff;font-size:12.5px;letter-spacing:.12em;margin-bottom:14px;position:relative;padding-bottom:10px}
+.mf-pos-footer.v2 .col h4::after{content:"";position:absolute;left:0;bottom:0;width:22px;height:2px;border-radius:2px;background:#FF5A00}
+[dir="rtl"] .mf-pos-footer.v2 .col h4::after{left:auto;right:0}
+.mf-pos-footer.v2 .col a{color:#CFC4B6;font-size:14px;padding:6px 0;transition:color .2s,transform .2s}
+.mf-pos-footer.v2 .col a:hover{color:#fff;transform:translateX(4px)}
+[dir="rtl"] .mf-pos-footer.v2 .col a:hover{transform:translateX(-4px)}
+.mf-pos-footer.v2 .mf-pos-footer-end{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 36px;border-top:1px solid rgba(255,255,255,.08);font-size:12.5px;color:#B7A896;text-align:start}
+.mf-pos-footer.v2 .mf-pos-footer-end .mid{color:#FFB273;font-weight:700}
+.mf-pos-footer.v2 .mf-pos-footer-end .top{display:inline-flex;align-items:center;gap:6px;color:#fff;text-decoration:none;font-weight:800;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:7px 14px;transition:background .2s,transform .2s}
+.mf-pos-footer.v2 .mf-pos-footer-end .top:hover{background:#FF5A00;border-color:#FF5A00;transform:translateY(-2px)}
+.mf-pos-footer.v2 .mf-pos-footer-end .top span{font-weight:600}
+@media (max-width:900px){.mf-pos-footer.v2 .mf-pos-footer-in{grid-template-columns:1fr 1fr;padding:36px 22px 24px}.mf-pos-footer.v2 .brand{grid-column:1/-1}}
+@media (max-width:520px){.mf-pos-footer.v2{margin:48px 6px 6px;border-radius:22px}.mf-pos-footer.v2 .mf-pos-footer-in{grid-template-columns:1fr;gap:26px}.mf-pos-footer.v2 .mf-pos-footer-end{padding:14px 22px;justify-content:center;text-align:center}}
+
+/* v794: the crawler link strip sits quietly under the POS footer instead of a blank band */
+body:has(.mf-pos-site) .mf-seo-footer{padding:10px 24px 20px;border-top:0;font-size:11px;opacity:.55}
+body:has(.mf-pos-site) .mf-seo-footer nav{gap:4px 12px;justify-content:center}
+body:has(.mf-pos-site) .mf-seo-footer a{color:#8E8274}
