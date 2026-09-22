@@ -27661,3 +27661,6 @@ html.js .mf-pos-card.free.in h3::before{transform:scale(1)}
 
 /* v791: only the drawn chevron — the text glyph was still showing beside it */
 .mf-slider.fade .mf-slider-btn,.mf-slider.full .mf-slider-btn{font-size:0;line-height:0}
+
+/* v792: even less zoom — natural size to 1.5% over the slide's life */
+@keyframes mfZoomSoft{from{opacity:.6;transform:scale(1)}25%{opacity:1}to{opacity:1;transform:scale(1.015)}}
