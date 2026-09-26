@@ -245,7 +245,7 @@ public class Restaurant
     public bool IsApproved { get; set; }
 
     /// <summary>Platform's cut of every order's subtotal, in percent.</summary>
-    public decimal CommissionPercent { get; set; } = 15m;
+    public decimal CommissionPercent { get; set; } = 0m;   // no platform commission by default (Majed, 2026-09-26)
 
     /// <summary>VAT charged on the subtotal. Oman's standard rate, 5%, is the default;
     /// the partner may change it (0 for exempt goods).</summary>

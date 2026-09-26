@@ -767,7 +767,7 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
             IsOpen = false,
             IsApproved = false,
             AllowsPickup = true,
-            CommissionPercent = 15m,
+            CommissionPercent = 0m,
             Lat = req.Lat,
             Lng = req.Lng,
             CreatedAt = DateTime.Now,

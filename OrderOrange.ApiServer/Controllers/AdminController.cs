@@ -464,7 +464,7 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
                     StoreType = req.StoreType,
                     Description = "", Area = "", Street = "", Phone = req.Phone.Trim(),
                     DeliveryFee = 0.500m, MinOrder = 1.000m, AvgPrepMinutes = 20,
-                    IsOpen = false, IsApproved = false, CommissionPercent = 15m, CreatedAt = DateTime.Now
+                    IsOpen = false, IsApproved = false, CommissionPercent = 0m, CreatedAt = DateTime.Now
                 });
                 await db.SaveChangesAsync();
                 return NoContent();
@@ -499,7 +499,7 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
                     StoreType = req.StoreType,
                     Description = "", Area = "", Street = "", Phone = req.Phone.Trim(),
                     DeliveryFee = 0.500m, MinOrder = 1.000m, AvgPrepMinutes = 20,
-                    IsOpen = false, IsApproved = false, CommissionPercent = 15m, CreatedAt = DateTime.Now
+                    IsOpen = false, IsApproved = false, CommissionPercent = 0m, CreatedAt = DateTime.Now
                 });
                 break;
         }
