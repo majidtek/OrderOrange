@@ -176,13 +176,29 @@ public sealed class CatalogStore
 
     // ---------- Partner writes ----------
 
-    /// <summary>Adds a product. Always starts pending — this is the review gate.</summary>
+    /// <summary>
+    /// Lets every product still waiting for review through. Run once at start-up after the
+    /// gate was removed, so nothing a partner added earlier stays hidden; idempotent.
+    /// </summary>
+    public async Task<long> ApproveAllPendingAsync()
+    {
+        var result = await _items.UpdateManyAsync(
+            i => i.Status == ProductStatus.Pending,
+            Builders<MenuItemDoc>.Update.Set(i => i.Status, ProductStatus.Approved).Set(i => i.ReviewedAt, DateTime.Now));
+        return result.ModifiedCount;
+    }
+
+    /// <summary>
+    /// Adds a product, live at once. The review gate was switched off on 2026-09-26
+    /// (Majed: "when a user adds a new product let it be accepted, no need for admin
+    /// approval") — an administrator can still reject a product afterwards.
+    /// </summary>
     public async Task<MenuItemDoc> AddItemAsync(MenuItemDoc item)
     {
         item.Id = await NextIdAsync(CollectionNames.MenuItems);
-        item.Status = ProductStatus.Pending;
+        item.Status = ProductStatus.Approved;
         item.SubmittedAt = DateTime.Now;
-        item.ReviewedAt = null;
+        item.ReviewedAt = DateTime.Now;
         item.ReviewedByUserId = null;
         item.RejectionReason = null;
         await _items.InsertOneAsync(item);

@@ -10,9 +10,9 @@ namespace OrderOrange.ApiServer.Controllers;
 /// Menu management — restaurant owners only, always scoped to their own restaurant.
 /// The catalog lives in MongoDB (<see cref="CatalogStore"/>).
 ///
-/// A newly created product is saved as <see cref="ProductStatus.Pending"/> and stays
-/// invisible to customers until an administrator approves it. Editing an existing
-/// product applies immediately — only creation goes through review.
+/// A newly created product is live at once (<see cref="ProductStatus.Approved"/>); the
+/// review gate was removed on 2026-09-26. An administrator can still reject a product
+/// from the admin panel, which hides it again.
 /// </summary>
 [Authorize(Roles = "RestaurantOwner")]
 [RequirePerm(Perm.Menu, Perm.MenuView)]   // reading the shelf; every write below demands the full key

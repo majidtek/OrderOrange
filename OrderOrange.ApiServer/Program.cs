@@ -216,6 +216,9 @@ using (var scope = app.Services.CreateScope())
             scope.ServiceProvider.GetRequiredService<AppDbContext>(), mongo, app.Logger);
         var catalogStore = scope.ServiceProvider.GetRequiredService<CatalogStore>();
         await catalogStore.EnsureSequencesAsync();
+        // products no longer wait for review (2026-09-26): let through whatever was still pending
+        var released = await catalogStore.ApproveAllPendingAsync();
+        if (released > 0) app.Logger.LogInformation("Catalog: {Count} pending products approved (review gate removed)", released);
     }
     catch (Exception ex)
     {
