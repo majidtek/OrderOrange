@@ -150,6 +150,10 @@ public static class L
             ["cutEscI"] = "Epson full cut (ESC i)",
             ["cutEscM"] = "Epson partial cut (ESC m)",
             ["cutHint"] = "If the paper feeds but is not cut, try the next command and Test print. A built-in printer with only a tear bar cannot cut.",
+            ["overlayOn"] = "Display over other apps: allowed — tickets print correctly while another app is in front.",
+            ["overlayOff"] = "Display over other apps: not allowed — a ticket printed while another app is in front comes out blank. Tap Allow.",
+            ["allowOverlay"] = "Allow display over other apps",
+            ["overlayAsk"] = "To print correctly while another app (such as the web POS) is in front, Android must allow this app to display over other apps. Open the setting now?",
         },
         ["ar"] = new()
         {
@@ -276,6 +280,10 @@ public static class L
             ["cutEscI"] = "قص كامل Epson ‏(ESC i)",
             ["cutEscM"] = "قص جزئي Epson ‏(ESC m)",
             ["cutHint"] = "إذا خرج الورق دون قص، جرّب الأمر التالي ثم «طباعة تجريبية». الطابعة المدمجة ذات شريط التمزيق فقط لا تقص.",
+            ["overlayOn"] = "العرض فوق التطبيقات الأخرى: مسموح — تُطبع التذاكر صحيحة حتى وتطبيق آخر في المقدمة.",
+            ["overlayOff"] = "العرض فوق التطبيقات الأخرى: غير مسموح — التذكرة المطبوعة وتطبيق آخر في المقدمة تخرج فارغة. اضغط «السماح».",
+            ["allowOverlay"] = "السماح بالعرض فوق التطبيقات الأخرى",
+            ["overlayAsk"] = "للطباعة الصحيحة بينما تطبيق آخر (مثل نقطة البيع على الويب) في المقدمة، يجب أن يسمح أندرويد لهذا التطبيق بالعرض فوق التطبيقات الأخرى. فتح الإعداد الآن؟",
         },
         ["fa"] = new()
         {
@@ -402,6 +410,10 @@ public static class L
             ["cutEscI"] = "برش کامل Epson ‏(ESC i)",
             ["cutEscM"] = "برش جزئی Epson ‏(ESC m)",
             ["cutHint"] = "اگر کاغذ بیرون می‌آید اما بریده نمی‌شود، فرمان بعدی را امتحان و «چاپ آزمایشی» کنید. چاپگر داخلی که فقط لبهٔ پاره‌کردن دارد نمی‌تواند ببرد.",
+            ["overlayOn"] = "نمایش روی برنامه‌های دیگر: مجاز — فیش‌ها حتی وقتی برنامهٔ دیگری جلو است درست چاپ می‌شوند.",
+            ["overlayOff"] = "نمایش روی برنامه‌های دیگر: مجاز نیست — فیشی که وقتی برنامهٔ دیگری جلو است چاپ شود خالی درمی‌آید. «اجازه» را بزنید.",
+            ["allowOverlay"] = "اجازهٔ نمایش روی برنامه‌های دیگر",
+            ["overlayAsk"] = "برای چاپ درست وقتی برنامهٔ دیگری (مثل صندوق وب) جلو است، اندروید باید به این برنامه اجازهٔ نمایش روی برنامه‌های دیگر بدهد. تنظیم را الان باز کنیم؟",
         },
     };
 }

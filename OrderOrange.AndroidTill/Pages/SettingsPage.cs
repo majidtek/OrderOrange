@@ -17,6 +17,7 @@ public sealed class SettingsPage : ContentPage
     private readonly Entry _threshold = new() { Keyboard = Keyboard.Numeric, WidthRequest = 80, HorizontalTextAlignment = TextAlignment.End };
     private readonly Picker _lang = new();
     private readonly Label _background = new() { FontSize = 13, TextColor = Colors.Gray };
+    private readonly Label _overlay = new() { FontSize = 13, TextColor = Colors.Gray };
 
     public SettingsPage()
     {
@@ -55,6 +56,8 @@ public sealed class SettingsPage : ContentPage
                     Ui.Caption(L.T("language")), _lang,
                     Ui.Caption(L.T("background")), _background,
                     Ui.Secondary(L.T("allowBackground"), () => { MainActivity.RequestBackgroundAllowed(); return Task.CompletedTask; }),
+                    _overlay,
+                    Ui.Secondary(L.T("allowOverlay"), () => { Printing.HtmlRenderer.RequestOverlay(); return Task.CompletedTask; }),
                     new BoxView { HeightRequest = 8, Color = Colors.Transparent },
                     Ui.Primary(L.T("save"), SaveAsync),
                     Ui.Secondary(L.T("deviceProbe"), () => Navigation.PushAsync(new ProbePage())),
@@ -71,6 +74,9 @@ public sealed class SettingsPage : ContentPage
         var ok = MainActivity.BackgroundAllowed();
         _background.Text = L.T(ok ? "backgroundOn" : "backgroundOff");
         _background.TextColor = ok ? Color.FromArgb("#2E7D32") : Color.FromArgb("#C62828");
+        var ov = Printing.HtmlRenderer.CanUseOverlay();
+        _overlay.Text = L.T(ov ? "overlayOn" : "overlayOff");
+        _overlay.TextColor = ov ? Color.FromArgb("#2E7D32") : Color.FromArgb("#C62828");
     }
 
     private async Task SaveAsync()

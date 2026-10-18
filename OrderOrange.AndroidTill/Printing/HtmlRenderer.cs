@@ -20,14 +20,46 @@ namespace OrderOrange.AndroidTill.Printing;
 public static class HtmlRenderer
 {
     private static bool? _hasArabicFont;
+    private static bool _wholeDocumentDraw;
 
     /// <param name="widthPx">Printer dots across the paper.</param>
     /// <param name="cssWidth">The CSS pixel width of the ticket's root block (302/219 receipt, 270/196 kitchen).</param>
     public static Task<ABitmap> RenderAsync(string html, int widthPx, int cssWidth, int timeoutMs = 15000) =>
         MainThread.InvokeOnMainThreadAsync(() => RenderOnMainAsync(html, widthPx, cssWidth, timeoutMs));
 
+    /// <summary>
+    /// Chromium only paints a WebView that hangs in a VISIBLE window. With the till in the
+    /// background (the web POS open in the terminal's browser, say) the activity's window is
+    /// stopped and the ticket came out as a small blank strip (Majed 2026-10-18). An overlay
+    /// window — "Display over other apps", granted once — is visible to Chromium even then.
+    /// </summary>
+    public static bool CanUseOverlay()
+    {
+        try { return !OperatingSystem.IsAndroidVersionAtLeast(23) || Android.Provider.Settings.CanDrawOverlays(Platform.AppContext); }
+        catch { return false; }
+    }
+
+    private static bool AppInForeground()
+    {
+        try
+        {
+            var activity = Platform.CurrentActivity;
+            var decor = activity?.Window?.DecorView;
+            return activity is not null && !activity.IsFinishing && decor is not null
+                   && decor.IsShown && decor.WindowVisibility == ViewStates.Visible;
+        }
+        catch { return false; }
+    }
+
     private static async Task<ABitmap> RenderOnMainAsync(string html, int widthPx, int cssWidth, int timeoutMs)
     {
+        if (!_wholeDocumentDraw)
+        {
+            // Must run before the first WebView exists: lets draw() paint the whole document, not just the viewport.
+            try { AWebView.EnableSlowWholeDocumentDraw(); } catch { }
+            _wholeDocumentDraw = true;
+        }
+
         var activity = Platform.CurrentActivity;
         Context ctx = activity ?? Platform.AppContext;
         var density = ctx.Resources?.DisplayMetrics?.Density ?? 1f;
@@ -55,15 +87,48 @@ public static class HtmlRenderer
         var client = new Client();
         wv.SetWebViewClient(client);
 
-        // Attached off-screen when an activity exists (the safest way to get Chromium to
-        // paint); detached with a manual layout when the service is running on its own.
+        // Where the WebView hangs while it paints:
+        //   • app in front → off-screen inside the activity's window (the usual case);
+        //   • app in the background and "Display over other apps" granted → an almost invisible
+        //     overlay window of its own, which Chromium treats as visible;
+        //   • otherwise detached with a manual layout (may paint blank — detected below).
         const int provisionalHeight = 4000;
-        var parent = activity?.Window?.DecorView as ViewGroup;
-        if (parent is not null)
+        ViewGroup? parent = null;
+        FrameLayout? overlay = null;
+        IWindowManager? wm = null;
+        var foreground = AppInForeground();
+        if (foreground && activity?.Window?.DecorView is ViewGroup decor)
         {
+            parent = decor;
             wv.TranslationX = -(widthPx + 100);
             parent.AddView(wv, new FrameLayout.LayoutParams(widthPx, provisionalHeight));
         }
+        else if (CanUseOverlay() && Platform.AppContext.GetSystemService(Context.WindowService) is IWindowManager manager)
+        {
+            wm = manager;
+            overlay = new FrameLayout(Platform.AppContext);
+            var type = OperatingSystem.IsAndroidVersionAtLeast(26) ? WindowManagerTypes.ApplicationOverlay : WindowManagerTypes.Phone;
+            var lp = new WindowManagerLayoutParams(widthPx, provisionalHeight, type,
+                WindowManagerFlags.NotFocusable | WindowManagerFlags.NotTouchable | WindowManagerFlags.NotTouchModal | WindowManagerFlags.LayoutNoLimits,
+                Android.Graphics.Format.Translucent)
+            {
+                Gravity = GravityFlags.Top | GravityFlags.Left,
+                X = 0, Y = 0,
+                Alpha = 0.02f,   // present for Chromium, invisible to the cashier
+            };
+            try
+            {
+                wm.AddView(overlay, lp);
+                overlay.AddView(wv, new FrameLayout.LayoutParams(widthPx, provisionalHeight));
+                parent = overlay;
+            }
+            catch (Exception ex)
+            {
+                Services.TillLog.Write($"overlay window refused: {ex.Message}");
+                overlay = null; wm = null;
+            }
+        }
+        if (parent is null) Services.TillLog.Write("rendering detached (app in background, no overlay permission) — may come out blank");
         LayoutTo(wv, widthPx, provisionalHeight);
 
         try
@@ -94,18 +159,61 @@ public static class HtmlRenderer
             }
             LayoutTo(wv, widthPx, layoutH);
 
-            var bmp = ABitmap.CreateBitmap(widthPx, bitmapH, ABitmap.Config.Argb8888!)!;
-            var canvas = new ACanvas(bmp);
-            canvas.DrawColor(AColor.White);
-            if (k != 1f) canvas.Scale(k, k);
-            wv.Draw(canvas);
-            return bmp;
+            // Draw; a blank result means Chromium has not painted yet (or cannot, detached) —
+            // give it a few more chances before giving up, and never send white paper.
+            ABitmap? bmp = null;
+            for (var attempt = 0; attempt < 4; attempt++)
+            {
+                bmp?.Recycle();
+                bmp = ABitmap.CreateBitmap(widthPx, bitmapH, ABitmap.Config.Argb8888!)!;
+                var canvas = new ACanvas(bmp);
+                canvas.DrawColor(AColor.White);
+                if (k != 1f) canvas.Scale(k, k);
+                wv.Draw(canvas);
+                if (!IsBlank(bmp)) return bmp;
+                wv.Invalidate();
+                await Task.Delay(400 + attempt * 300);
+            }
+            bmp?.Recycle();
+            throw new InvalidOperationException(parent is null
+                ? "The ticket rendered blank: the till is in the background and \"Display over other apps\" is not allowed — grant it in Settings → Running in the background."
+                : "The ticket rendered blank — will retry on the next check.");
         }
         finally
         {
             try { parent?.RemoveView(wv); } catch { }
+            try { if (overlay is not null) wm?.RemoveView(overlay); } catch { }
             try { wv.StopLoading(); wv.Destroy(); } catch { }
         }
+    }
+
+    /// <summary>True when nothing darker than near-white was painted (sampled every 4th pixel).</summary>
+    private static bool IsBlank(ABitmap bmp)
+    {
+        var w = bmp.Width; var h = bmp.Height;
+        var px = new int[w * h];
+        bmp.GetPixels(px, 0, w, 0, 0, w, h);
+        for (var i = 0; i < px.Length; i += 4)
+        {
+            var c = px[i];
+            if (((c >> 24) & 0xFF) < 16) continue;   // transparent counts as white
+            if (((c >> 16) & 0xFF) < 200 || ((c >> 8) & 0xFF) < 200 || (c & 0xFF) < 200) return false;
+        }
+        return true;
+    }
+
+    /// <summary>Opens Android's "Display over other apps" page for this app (no-op when already allowed).</summary>
+    public static void RequestOverlay()
+    {
+        if (CanUseOverlay()) return;
+        try
+        {
+            var ctx = Platform.AppContext;
+            var intent = new Intent(Android.Provider.Settings.ActionManageOverlayPermission, Android.Net.Uri.Parse($"package:{ctx.PackageName}"))
+                .AddFlags(ActivityFlags.NewTask);
+            ctx.StartActivity(intent);
+        }
+        catch (Exception ex) { Services.TillLog.Write($"overlay settings: {ex.Message}"); }
     }
 
     private static void LayoutTo(AWebView wv, int w, int h)

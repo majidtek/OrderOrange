@@ -14,6 +14,9 @@
 	<!-- Keep printing with the screen off and come back after a reboot -->
 	<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+	<!-- Tickets are rasterised by a WebView; Chromium only paints in a visible window, so with the
+	     till in the background the WebView hangs in a near-invisible overlay window of its own -->
+	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 	<!-- Bluetooth printers, incl. the terminal's own "InnerPrinter": classic permissions up to Android 11, CONNECT from 12 -->
 	<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
 	<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />

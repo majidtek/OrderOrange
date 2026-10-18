@@ -125,6 +125,13 @@ public sealed class MainPage : ContentPage
             Preferences.Default.Set("till.batteryAsked", true);
             if (await Ui.Confirm(L.T("backgroundAsk"))) MainActivity.RequestBackgroundAllowed();
         }
+        // Once: "Display over other apps" — without it a ticket printed while another app is
+        // in front comes out blank (Chromium does not paint in a hidden window).
+        else if (!Printing.HtmlRenderer.CanUseOverlay() && !Preferences.Default.Get("till.overlayAsked", false))
+        {
+            Preferences.Default.Set("till.overlayAsked", true);
+            if (await Ui.Confirm(L.T("overlayAsk"))) Printing.HtmlRenderer.RequestOverlay();
+        }
     }
 
     private void OnChanged() => MainThread.BeginInvokeOnMainThread(Render);

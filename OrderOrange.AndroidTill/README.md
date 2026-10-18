@@ -73,6 +73,13 @@ or `adb install -r <apk>`.
    `BootReceiver` restarts the service after a reboot or an app update when a session is saved;
    swiping the app out of Recents schedules a restart. Some
    ROMs also need the app marked "auto-start" / "no restrictions" in their own battery screen.
+   **Blank tickets in the background (1.3.1):** Chromium paints a WebView only inside a
+   visible window, so a ticket rendered while another app was in front (web POS in the
+   terminal's browser) came out as a small blank strip. `HtmlRenderer` now hangs the WebView
+   in a near-invisible overlay window when the app is not in front ("Display over other apps",
+   `SYSTEM_ALERT_WINDOW`, asked once and shown in Settings), draws with
+   `enableSlowWholeDocumentDraw`, and refuses to send a blank bitmap (retries, then fails the
+   job so the next poll tries again).
    **Cutter:** the printer form's "Cut paper" switch has a *Cut command* picker (standard
    GS V 66 / GS V 65, older GS V 1 / GS V 0, Epson ESC i / ESC m — `EscPos.CutBytes`). A printer
    that feeds but does not cut wants another command; built-in printers with a tear bar have
