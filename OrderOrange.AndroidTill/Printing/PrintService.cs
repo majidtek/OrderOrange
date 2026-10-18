@@ -18,7 +18,7 @@ public static class PrintService
         {
             var s = AppSettings.Current;
             using var bitmap = await HtmlRenderer.RenderAsync(html, printer.WidthDots, cssWidth);
-            var bytes = EscPos.Encode(bitmap, s.Dither, s.Threshold, feedLines: 4, cut: printer.Cut);
+            var bytes = EscPos.Encode(bitmap, s.Dither, s.Threshold, feedLines: 4, cut: printer.Cut, cutMode: printer.CutMode);
             var transport = PrinterTransports.For(printer);
             for (var copy = 0; copy < Math.Max(1, printer.Copies); copy++)
                 await transport.SendAsync(bytes, ct);

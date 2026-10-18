@@ -19,7 +19,7 @@ public static class EscPos
     /// </summary>
     /// <param name="threshold">Grey level (0–255) below which a pixel prints black. ~160 suits text.</param>
     /// <param name="dither">Floyd–Steinberg instead of a plain threshold — smoother photo logos, speckled text.</param>
-    public static byte[] Encode(Bitmap bitmap, bool dither, int threshold, int feedLines, bool cut)
+    public static byte[] Encode(Bitmap bitmap, bool dither, int threshold, int feedLines, bool cut, Models.CutMode cutMode = Models.CutMode.Partial)
     {
         var (rows, widthBytes, height) = ToOneBit(bitmap, dither, threshold);
 
@@ -34,9 +34,23 @@ public static class EscPos
             ms.Write(rows, y * widthBytes, n * widthBytes);
         }
         ms.Write([0x1B, 0x64, (byte)Math.Clamp(feedLines, 0, 12)]);   // print and feed n lines
-        if (cut) ms.Write([0x1D, 0x56, 0x42, 0x00]);                 // feed and partial cut
+        if (cut) ms.Write(CutBytes(cutMode));
         return ms.ToArray();
     }
+
+    /// <summary>
+    /// The cut sequence for a mode. The "function B" forms feed to the cutter by themselves;
+    /// the older forms cut where the paper stands, so they get three extra lines first.
+    /// </summary>
+    public static byte[] CutBytes(Models.CutMode mode) => mode switch
+    {
+        Models.CutMode.Full => [0x1D, 0x56, 0x41, 0x00],
+        Models.CutMode.PartialA => [0x1B, 0x64, 0x03, 0x1D, 0x56, 0x01],
+        Models.CutMode.FullA => [0x1B, 0x64, 0x03, 0x1D, 0x56, 0x00],
+        Models.CutMode.EscI => [0x1B, 0x64, 0x03, 0x1B, 0x69],
+        Models.CutMode.EscM => [0x1B, 0x64, 0x03, 0x1B, 0x6D],
+        _ => [0x1D, 0x56, 0x42, 0x00],
+    };
 
     /// <summary>
     /// 1 bit per pixel, MSB first, one byte per 8 pixels, rows top to bottom; 1 = black.

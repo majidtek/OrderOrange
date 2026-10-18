@@ -19,6 +19,27 @@ public enum PrinterConnection
     Bluetooth = 4,
 }
 
+/// <summary>
+/// Which ESC/POS cut command the printer understands. Most take the standard one; a printer
+/// that feeds but never cuts wants one of the others (Majed 2026-10-18: "the printer not cut
+/// the page").
+/// </summary>
+public enum CutMode
+{
+    /// <summary>GS V 66 0 — partial cut after feeding to the cutter (the common one).</summary>
+    Partial = 0,
+    /// <summary>GS V 65 0 — full cut after feeding to the cutter.</summary>
+    Full = 1,
+    /// <summary>GS V 1 — partial cut, older "function A" form.</summary>
+    PartialA = 2,
+    /// <summary>GS V 0 — full cut, older "function A" form.</summary>
+    FullA = 3,
+    /// <summary>ESC i — full cut on Epson-compatible firmware.</summary>
+    EscI = 4,
+    /// <summary>ESC m — partial cut on Epson-compatible firmware.</summary>
+    EscM = 5,
+}
+
 /// <summary>What a printer is FOR. The role decides what gets printed on it.</summary>
 public enum PrinterRole
 {
@@ -50,6 +71,8 @@ public sealed class PrinterConfig
     public int Copies { get; set; } = 1;
     /// <summary>Send a partial cut after the ticket. Off for a built-in printer with no cutter.</summary>
     public bool Cut { get; set; } = true;
+    /// <summary>The cut command to send when <see cref="Cut"/> is on.</summary>
+    public CutMode CutMode { get; set; } = CutMode.Partial;
     public bool Enabled { get; set; } = true;
 
     /// <summary>Printer dots across the paper: 80 mm → 576, 58 mm → 384.</summary>

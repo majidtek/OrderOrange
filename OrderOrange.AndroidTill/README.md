@@ -73,6 +73,10 @@ or `adb install -r <apk>`.
    `BootReceiver` restarts the service after a reboot or an app update when a session is saved;
    swiping the app out of Recents schedules a restart. Some
    ROMs also need the app marked "auto-start" / "no restrictions" in their own battery screen.
+   **Cutter:** the printer form's "Cut paper" switch has a *Cut command* picker (standard
+   GS V 66 / GS V 65, older GS V 1 / GS V 0, Epson ESC i / ESC m — `EscPos.CutBytes`). A printer
+   that feeds but does not cut wants another command; built-in printers with a tear bar have
+   no cutter at all (Find printers presets them with Cut off).
 4. If the built-in printer does not answer, open Settings → Device & printer probe and send the
    report (model, USB devices, serial nodes, loopback port): a vendor SDK can then be added as one
    more transport. If the terminal's ROM has no Arabic font, drop `arabic.ttf` into

@@ -20,6 +20,8 @@ public sealed class PrinterEditPage : ContentPage
     private readonly Stepper _copies = new() { Minimum = 1, Maximum = 5, Increment = 1 };
     private readonly Label _copiesLabel = new() { VerticalOptions = LayoutOptions.Center, WidthRequest = 28, HorizontalTextAlignment = TextAlignment.Center };
     private readonly Switch _cut = new();
+    private readonly Picker _cutMode = new();
+    private readonly VerticalStackLayout _cutRows = new();
     private readonly Switch _enabled = new();
     private readonly VerticalStackLayout _wifiRows = new();
     private readonly VerticalStackLayout _serialRows = new();
@@ -34,6 +36,7 @@ public sealed class PrinterEditPage : ContentPage
         [PrinterConnection.BuiltIn, PrinterConnection.Bluetooth, PrinterConnection.WiFi, PrinterConnection.Usb, PrinterConnection.Serial];
     private static readonly PrinterRole[] Roles = [PrinterRole.Cashier, PrinterRole.Kitchen, PrinterRole.Bar];
     private static readonly int[] Papers = [58, 80];
+    private static readonly CutMode[] CutModes = [CutMode.Partial, CutMode.Full, CutMode.PartialA, CutMode.FullA, CutMode.EscI, CutMode.EscM];
 
     /// <param name="existing">The printer being edited, or null for a new one.</param>
     /// <param name="template">For a new printer: a pre-filled form (what "Find printers" found).</param>
@@ -65,6 +68,17 @@ public sealed class PrinterEditPage : ContentPage
         _copiesLabel.Text = ((int)_copies.Value).ToString();
         _copies.ValueChanged += (_, e) => _copiesLabel.Text = ((int)e.NewValue).ToString();
         _cut.IsToggled = p.Cut;
+        foreach (var m in CutModes) _cutMode.Items.Add(L.T(m switch
+        {
+            CutMode.Full => "cutFull", CutMode.PartialA => "cutPartialA", CutMode.FullA => "cutFullA",
+            CutMode.EscI => "cutEscI", CutMode.EscM => "cutEscM", _ => "cutPartial",
+        }));
+        _cutMode.SelectedIndex = Math.Max(0, Array.IndexOf(CutModes, p.CutMode));
+        _cutRows.Children.Add(Ui.Caption(L.T("cutMode")));
+        _cutRows.Children.Add(_cutMode);
+        _cutRows.Children.Add(new Label { Text = L.T("cutHint"), TextColor = Colors.Gray, FontSize = 13 });
+        _cutRows.IsVisible = p.Cut;
+        _cut.Toggled += (_, e) => _cutRows.IsVisible = e.Value;
         _enabled.IsToggled = p.Enabled;
         _builtInHint.Text = L.T("builtInHint");
         UsbLabel();
@@ -115,6 +129,7 @@ public sealed class PrinterEditPage : ContentPage
                     Ui.Caption(L.T("paper")), _paper,
                     Ui.Row(L.T("copies"), copiesRow),
                     Ui.Row(L.T("cut"), _cut),
+                    _cutRows,
                     Ui.Row(L.T("enabled"), _enabled),
                     new BoxView { HeightRequest = 8, Color = Colors.Transparent },
                     actions,
@@ -219,6 +234,7 @@ public sealed class PrinterEditPage : ContentPage
         Paper = Papers[Math.Max(0, _paper.SelectedIndex)],
         Copies = (int)_copies.Value,
         Cut = _cut.IsToggled,
+        CutMode = CutModes[Math.Max(0, _cutMode.SelectedIndex)],
         Enabled = _enabled.IsToggled,
     };
 

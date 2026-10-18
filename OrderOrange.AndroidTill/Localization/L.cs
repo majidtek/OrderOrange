@@ -142,6 +142,14 @@ public static class L
             ["backgroundOff"] = "Not allowed yet — Android may pause the till when the screen sleeps. Tap Allow and choose \"Allow\" / \"Don't optimise\".",
             ["allowBackground"] = "Allow running in the background",
             ["backgroundAsk"] = "To keep printing while the screen is off, Android must leave this app out of battery optimisation. Open the setting now?",
+            ["cutMode"] = "Cut command",
+            ["cutPartial"] = "Standard partial cut (GS V 66)",
+            ["cutFull"] = "Standard full cut (GS V 65)",
+            ["cutPartialA"] = "Partial cut, older form (GS V 1)",
+            ["cutFullA"] = "Full cut, older form (GS V 0)",
+            ["cutEscI"] = "Epson full cut (ESC i)",
+            ["cutEscM"] = "Epson partial cut (ESC m)",
+            ["cutHint"] = "If the paper feeds but is not cut, try the next command and Test print. A built-in printer with only a tear bar cannot cut.",
         },
         ["ar"] = new()
         {
@@ -260,6 +268,14 @@ public static class L
             ["backgroundOff"] = "غير مسموح بعد — قد يوقف أندرويد الكاشير عند إطفاء الشاشة. اضغط «السماح» ثم اختر «السماح» / «عدم التحسين».",
             ["allowBackground"] = "السماح بالعمل في الخلفية",
             ["backgroundAsk"] = "لمواصلة الطباعة والشاشة مطفأة يجب استثناء هذا التطبيق من تحسين البطارية. فتح الإعداد الآن؟",
+            ["cutMode"] = "أمر القص",
+            ["cutPartial"] = "قص جزئي قياسي (GS V 66)",
+            ["cutFull"] = "قص كامل قياسي (GS V 65)",
+            ["cutPartialA"] = "قص جزئي، الصيغة القديمة (GS V 1)",
+            ["cutFullA"] = "قص كامل، الصيغة القديمة (GS V 0)",
+            ["cutEscI"] = "قص كامل Epson ‏(ESC i)",
+            ["cutEscM"] = "قص جزئي Epson ‏(ESC m)",
+            ["cutHint"] = "إذا خرج الورق دون قص، جرّب الأمر التالي ثم «طباعة تجريبية». الطابعة المدمجة ذات شريط التمزيق فقط لا تقص.",
         },
         ["fa"] = new()
         {
@@ -378,6 +394,14 @@ public static class L
             ["backgroundOff"] = "هنوز مجاز نیست — اندروید ممکن است با خاموش شدن صفحه صندوق را متوقف کند. «اجازه» را بزنید و «مجاز» / «بهینه‌سازی نشود» را انتخاب کنید.",
             ["allowBackground"] = "اجازهٔ اجرا در پس‌زمینه",
             ["backgroundAsk"] = "برای ادامهٔ چاپ با صفحهٔ خاموش، این برنامه باید از بهینه‌سازی باتری مستثنا شود. تنظیم را الان باز کنیم؟",
+            ["cutMode"] = "فرمان برش",
+            ["cutPartial"] = "برش جزئی استاندارد (GS V 66)",
+            ["cutFull"] = "برش کامل استاندارد (GS V 65)",
+            ["cutPartialA"] = "برش جزئی، شکل قدیمی (GS V 1)",
+            ["cutFullA"] = "برش کامل، شکل قدیمی (GS V 0)",
+            ["cutEscI"] = "برش کامل Epson ‏(ESC i)",
+            ["cutEscM"] = "برش جزئی Epson ‏(ESC m)",
+            ["cutHint"] = "اگر کاغذ بیرون می‌آید اما بریده نمی‌شود، فرمان بعدی را امتحان و «چاپ آزمایشی» کنید. چاپگر داخلی که فقط لبهٔ پاره‌کردن دارد نمی‌تواند ببرد.",
         },
     };
 }
