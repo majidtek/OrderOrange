@@ -116,9 +116,13 @@ public sealed class ApiService
     /// <summary>The tables with an open, unpaid invoice. Null = server unreachable.</summary>
     public Task<List<StoreTabDto>?> OpenTabsAsync() => GetAsync<List<StoreTabDto>>("api/storetabs");
 
-    /// <summary>The shop's menu — order lines carry product NAMES, so this maps them back to ids.</summary>
+    /// <summary>
+    /// The shop's menu — order lines carry product NAMES, so this maps them back to ids.
+    /// <c>basic=true</c>: ids, names in every language, prices — no photos. The full menu with
+    /// its pictures took the terminal a long time to download ("this take time", 2026-10-18).
+    /// </summary>
     public async Task<List<MenuCategoryDto>> MenuAsync() =>
-        await GetAsync<List<MenuCategoryDto>>("api/menu") ?? [];
+        await GetAsync<List<MenuCategoryDto>>("api/menu?basic=true") ?? [];
 
     /// <summary>The receipt the owner laid out in the partner designer; the stock design when never set.</summary>
     public async Task<ReceiptDesignDto> ReceiptDesignAsync() =>

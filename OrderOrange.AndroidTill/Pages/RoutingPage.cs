@@ -70,6 +70,11 @@ public sealed class RoutingPage : ContentPage
         try
         {
             _menu = await TillEngine.Instance.Api.MenuAsync();
+            if (_menu.Count == 0)
+            {
+                _status.Text = TillEngine.Instance.Api.LastError ?? L.T("foundNone0");
+                return;
+            }
             var s = AppSettings.Current;
             foreach (var cat in _menu)
                 foreach (var item in cat.Items)
@@ -170,6 +175,7 @@ public sealed class RoutingPage : ContentPage
 
     private Task SaveAsync()
     {
+        if (_menu.Count == 0) return Task.CompletedTask;   // nothing loaded — never wipe the saved rules
         var s = AppSettings.Current;
         s.ProductPrinters.Clear();
         foreach (var (productId, ids) in _ticks)
