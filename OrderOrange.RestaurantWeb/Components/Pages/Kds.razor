@@ -143,7 +143,7 @@ else
     {
         null => ticket.Lines,
         "none" => ticket.Lines.Where(l => string.IsNullOrEmpty(l.Station)).ToList(),
-        var s => ticket.Lines.Where(l => l.Station == s).ToList(),
+        var s => ticket.Lines.Where(l => l.Station == s || l.Station == "both").ToList(),
     };
 
     protected override async Task OnInitializedAsync()

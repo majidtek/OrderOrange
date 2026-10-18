@@ -483,15 +483,26 @@ public sealed class TillEngine
     }
 
     /// <summary>
-    /// Which printers a line goes to: the web portal's route ("bar" → bar printers, anything
+    /// Which printers a line goes to. The ticks made on this terminal's Product printers
+    /// screen win (product rule, else category rule — like the Windows till); otherwise the
+    /// web portal's route ("bar" → bar printers, "both" → kitchen AND bar printers, anything
     /// else → kitchen printers). No printer of that role → the first kitchen/bar printer, so
-    /// a dish is never silently unprinted. Cashier printers never get work tickets.
+    /// a dish is never silently unprinted. Cashier printers get work tickets only when ticked.
     /// </summary>
     private List<PrinterConfig> PrintersFor(OrderItemDto item)
     {
         var pid = _menuIdByName.GetValueOrDefault(item.Name, item.Id);
-        var role = _routes.TryGetValue(pid, out var station) && station == "bar" ? PrinterRole.Bar : PrinterRole.Kitchen;
-        var list = Settings.WithRole(role);
+        var categoryId = _menuByName.TryGetValue(item.Name, out var menuItem) ? menuItem.CategoryId : 0;
+        var local = Settings.LocalPrintersFor(pid, categoryId);
+        if (local.Count > 0) return local;
+
+        var station = _routes.GetValueOrDefault(pid);
+        var list = station switch
+        {
+            "bar" => Settings.WithRole(PrinterRole.Bar),
+            "both" => [.. Settings.WithRole(PrinterRole.Kitchen), .. Settings.WithRole(PrinterRole.Bar)],
+            _ => Settings.WithRole(PrinterRole.Kitchen),
+        };
         if (list.Count == 0)
         {
             var any = Settings.Printers.FirstOrDefault(p => p.Enabled && p.Role is PrinterRole.Kitchen or PrinterRole.Bar);

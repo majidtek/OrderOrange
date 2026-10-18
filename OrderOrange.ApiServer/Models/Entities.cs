@@ -1333,8 +1333,9 @@ public class Coupon
 
 /// <summary>
 /// Which print station a product's kitchen ticket goes to on the shop's till
-/// (LocalHandler). "kitchen" / "bar"; a product with no row prints nowhere special —
-/// the till's own defaults decide. The cashier RECEIPT always prints everything.
+/// (LocalHandler / Android till). "kitchen" / "bar" / "both" (both printers); a product with
+/// no row prints nowhere special — the till's own defaults decide. The cashier RECEIPT always
+/// prints everything.
 /// </summary>
 public class PrintRoute
 {

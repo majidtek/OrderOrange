@@ -137,6 +137,29 @@ public sealed class AppSettings
     /// <summary>The route that last reached the built-in printer ("usb", "tcp:127.0.0.1:9100", "serial:/dev/ttyS1").</summary>
     public string BuiltInRoute { get; set; } = "";
 
+    /// <summary>
+    /// Product id → the printers (PrinterConfig.Id) its work ticket goes to, ticked on this
+    /// terminal's Product printers screen — same idea as the Windows till's routing grid
+    /// (Majed 2026-10-18: "make it same to windows"). A product with no entry follows
+    /// <see cref="CategoryPrinters"/>, then the web map (Kitchen/Bar roles).
+    /// </summary>
+    public Dictionary<int, List<string>> ProductPrinters { get; set; } = [];
+
+    /// <summary>
+    /// Category id → printers every product of that category shared when routing was saved,
+    /// so a dish added later on the web lands on the same printers without a visit here.
+    /// </summary>
+    public Dictionary<int, List<string>> CategoryPrinters { get; set; } = [];
+
+    /// <summary>The local ticks for a product: its own rule, else its category's. Empty = not routed here.</summary>
+    public List<PrinterConfig> LocalPrintersFor(int productId, int categoryId)
+    {
+        var ids = ProductPrinters.TryGetValue(productId, out var own) && own.Count > 0 ? own
+                : CategoryPrinters.GetValueOrDefault(categoryId) ?? [];
+        if (ids.Count == 0) return [];
+        return Printers.Where(p => p.Enabled && ids.Contains(p.Id)).ToList();
+    }
+
     private const string Key = "settings";
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     private static AppSettings? _current;

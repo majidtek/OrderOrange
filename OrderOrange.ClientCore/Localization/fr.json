@@ -4064,5 +4064,7 @@
     "till.android.sub":  "La caisse OrderOrange pour un terminal POS Android : tickets sur l'imprimante intégrée, bons cuisine et bar sur imprimantes Wi-Fi, avec vos propres modèles de ticket.",
     "till.android.download":  "Télécharger pour Android (APK)",
     "till.android.reqs":  "Android 8 ou plus récent. Autorisez l'installation depuis cette source, ouvrez l'APK, connectez-vous avec votre compte partenaire.",
-    "till.android.soon":  "Bientôt disponible"
+    "till.android.soon":  "Bientôt disponible",
+    "pr.both":  "Les deux",
+    "pr.bothHint":  "Activez Cuisine et Bar ensemble pour imprimer un produit sur les deux imprimantes."
 }

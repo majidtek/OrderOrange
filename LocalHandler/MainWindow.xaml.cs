@@ -643,10 +643,17 @@ public partial class MainWindow : MetroWindow
             : [];
         if (stations.Count == 0 && _serverRoutes.TryGetValue(pid, out var role))
         {
+            // "both" = every enabled kitchen and bar station; otherwise the one role, with a fallback
+            // to any work station so a dish is never silently unprinted.
             var wanted = role == "bar" ? Models.StationRole.Bar : Models.StationRole.Kitchen;
-            var s = _setup.Stations.FirstOrDefault(x => x.Enabled && x.Role == wanted)
-                 ?? _setup.Stations.FirstOrDefault(x => x.Enabled && x.Role is Models.StationRole.Kitchen or Models.StationRole.Bar);
-            if (s is not null) stations = [s];
+            if (role == "both")
+                stations = _setup.Stations.Where(x => x.Enabled && x.Role is Models.StationRole.Kitchen or Models.StationRole.Bar).ToList();
+            else
+            {
+                var s = _setup.Stations.FirstOrDefault(x => x.Enabled && x.Role == wanted)
+                     ?? _setup.Stations.FirstOrDefault(x => x.Enabled && x.Role is Models.StationRole.Kitchen or Models.StationRole.Bar);
+                if (s is not null) stations = [s];
+            }
         }
         if (stations.Count == 0) stations = _setup.StationsFor(pid, CategoryOf(item.Name));
         return stations;

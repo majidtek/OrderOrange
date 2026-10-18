@@ -716,7 +716,7 @@ public record PendingProductPageDto(List<PendingProductDto> Items, int Total);
 
 public record RejectProductRequest(string? Reason);
 
-/// <summary>One product's kitchen-ticket destination on the shop's till ("kitchen"/"bar").</summary>
+/// <summary>One product's kitchen-ticket destination on the shop's till ("kitchen" / "bar" / "both").</summary>
 public record PrintRouteDto(int MenuItemId, string Station);
 
 /// <summary>An amount the web POS asks the till (LocalHandler) to charge on the card terminal.</summary>

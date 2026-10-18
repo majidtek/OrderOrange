@@ -4064,5 +4064,7 @@
     "till.android.sub":  "A caixa OrderOrange para um terminal POS Android: recibos na impressora integrada, talões de cozinha e bar em impressoras Wi-Fi, com os seus próprios modelos de recibo e talão.",
     "till.android.download":  "Transferir para Android (APK)",
     "till.android.reqs":  "Android 8 ou superior. Permita instalar desta origem, abra o APK e inicie sessão com a conta de parceiro.",
-    "till.android.soon":  "Em breve"
+    "till.android.soon":  "Em breve",
+    "pr.both":  "Ambos",
+    "pr.bothHint":  "Ative Cozinha e Bar em conjunto para imprimir um produto nas duas impressoras."
 }

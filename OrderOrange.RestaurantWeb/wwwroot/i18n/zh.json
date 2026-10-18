@@ -4064,5 +4064,7 @@
     "till.android.sub":  "适用于 Android POS 终端的 OrderOrange 收银：小票用内置打印机，厨房和吧台单用 Wi-Fi 打印机，支持您自己的小票和单据设计。",
     "till.android.download":  "下载 Android 版 (APK)",
     "till.android.reqs":  "Android 8 或更高。允许从此来源安装，打开 APK，用合作伙伴账号登录。",
-    "till.android.soon":  "即将推出"
+    "till.android.soon":  "即将推出",
+    "pr.both":  "两者",
+    "pr.bothHint":  "同时选中“厨房”和“吧台”，该商品会在两台打印机上打印。"
 }

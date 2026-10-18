@@ -4064,5 +4064,7 @@
     "till.android.sub":  "Die OrderOrange-Kasse für ein Android-POS-Terminal: Bons auf dem eingebauten Drucker, Küchen- und Barzettel auf WLAN-Druckern, mit Ihren eigenen Bon- und Zetteldesigns.",
     "till.android.download":  "Für Android herunterladen (APK)",
     "till.android.reqs":  "Android 8 oder neuer. Installation aus dieser Quelle erlauben, APK öffnen, mit dem Partnerkonto anmelden.",
-    "till.android.soon":  "Demnächst"
+    "till.android.soon":  "Demnächst",
+    "pr.both":  "Beide",
+    "pr.bothHint":  "Küche und Bar zusammen antippen, damit ein Produkt auf beiden Druckern gedruckt wird."
 }

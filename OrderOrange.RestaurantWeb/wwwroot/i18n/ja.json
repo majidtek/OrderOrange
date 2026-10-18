@@ -4064,5 +4064,7 @@
     "till.android.sub":  "Android POS 端末向け OrderOrange レジ：レシートは内蔵プリンター、キッチン・バー伝票は Wi-Fi プリンターへ。レシートと伝票のデザインは自由に設定できます。",
     "till.android.download":  "Android 版をダウンロード (APK)",
     "till.android.reqs":  "Android 8 以降。この提供元からのインストールを許可し、APK を開いてパートナーアカウントでサインインしてください。",
-    "till.android.soon":  "近日公開"
+    "till.android.soon":  "近日公開",
+    "pr.both":  "両方",
+    "pr.bothHint":  "キッチンとバーを両方オンにすると、その商品は両方のプリンターに印刷されます。"
 }

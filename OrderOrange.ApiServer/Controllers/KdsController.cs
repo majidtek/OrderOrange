@@ -131,7 +131,9 @@ public class KdsController(AppDbContext db, KdsStore kds) : ApiControllerBase
             }
         }
 
-        var stations = routes.Values.Distinct().OrderBy(s => s).ToList();
+        // "both" is kitchen AND bar — the filter row shows the two real stations, never a "both" tab.
+        var stations = routes.Values.SelectMany(s => s == "both" ? ["kitchen", "bar"] : new[] { s })
+            .Distinct().OrderBy(s => s).ToList();
         var target = await db.Restaurants.Where(r => r.Id == storeId)
             .Select(r => r.AvgPrepMinutes).FirstOrDefaultAsync();
 

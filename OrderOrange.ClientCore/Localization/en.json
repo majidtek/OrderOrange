@@ -4064,5 +4064,7 @@
     "till.android.sub":  "The OrderOrange till for an Android POS terminal: receipts on the built-in printer, kitchen and bar tickets on Wi-Fi printers, your own receipt and ticket designs.",
     "till.android.download":  "Download for Android (APK)",
     "till.android.reqs":  "Android 8 or later. Allow installing from this source, open the APK, sign in with your partner account.",
-    "till.android.soon":  "Coming soon"
+    "till.android.soon":  "Coming soon",
+    "pr.both":  "Both",
+    "pr.bothHint":  "Tap Kitchen and Bar together to print a product on both printers."
 }

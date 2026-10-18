@@ -2084,7 +2084,7 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
     {
         var mine = CurrentRestaurantId;
         db.PrintRoutes.RemoveRange(db.PrintRoutes.Where(p => p.RestaurantId == mine));
-        foreach (var route in routes.Where(r => r.Station is "kitchen" or "bar"))
+        foreach (var route in routes.Where(r => r.Station is "kitchen" or "bar" or "both"))
             db.PrintRoutes.Add(new Models.PrintRoute { RestaurantId = mine, MenuItemId = route.MenuItemId, Station = route.Station });
         await db.SaveChangesAsync();
         return NoContent();

@@ -129,6 +129,13 @@ public static class L
             ["btNoPermission"] = "Bluetooth permission was not granted. Allow it under App info → Permissions → Nearby devices.",
             ["btNone"] = "This terminal has no Bluetooth.",
             ["btOff"] = "Bluetooth is switched off — turn it on in Android Settings.",
+            ["routing"] = "Product printers",
+            ["routingHint"] = "Tick which printers each product's ticket goes to. A category row ticks all its products. Grey products are not set here and follow the web map (Kitchen/Bar).",
+            ["routingSearch"] = "Search products…",
+            ["loadingMenu"] = "Loading the menu…",
+            ["unsaved"] = "Unsaved changes",
+            ["discardChanges"] = "Leave without saving?",
+            ["foundNone0"] = "Nothing matches.",
         },
         ["ar"] = new()
         {
@@ -234,6 +241,13 @@ public static class L
             ["btNoPermission"] = "لم يُمنح إذن البلوتوث. فعّله من معلومات التطبيق ← الأذونات ← الأجهزة القريبة.",
             ["btNone"] = "هذا الجهاز لا يدعم البلوتوث.",
             ["btOff"] = "البلوتوث مطفأ — شغّله من إعدادات أندرويد.",
+            ["routing"] = "طابعات الأصناف",
+            ["routingHint"] = "حدّد الطابعات التي تذهب إليها تذكرة كل صنف. صف الفئة يحدّد كل أصنافها. الأصناف الرمادية غير محددة هنا وتتبع خريطة الموقع (المطبخ/البار).",
+            ["routingSearch"] = "ابحث عن صنف…",
+            ["loadingMenu"] = "جارٍ تحميل القائمة…",
+            ["unsaved"] = "تغييرات غير محفوظة",
+            ["discardChanges"] = "الخروج دون حفظ؟",
+            ["foundNone0"] = "لا توجد نتائج.",
         },
         ["fa"] = new()
         {
@@ -339,6 +353,13 @@ public static class L
             ["btNoPermission"] = "مجوز بلوتوث داده نشد. از اطلاعات برنامه ← مجوزها ← دستگاه‌های نزدیک فعالش کنید.",
             ["btNone"] = "این دستگاه بلوتوث ندارد.",
             ["btOff"] = "بلوتوث خاموش است — آن را در تنظیمات اندروید روشن کنید.",
+            ["routing"] = "چاپگر محصولات",
+            ["routingHint"] = "مشخص کنید فیش هر محصول به کدام چاپگرها برود. ردیف دسته، همهٔ محصولاتش را تیک می‌زند. محصولات خاکستری اینجا تنظیم نشده‌اند و از نقشهٔ سایت (آشپزخانه/بار) پیروی می‌کنند.",
+            ["routingSearch"] = "جستجوی محصول…",
+            ["loadingMenu"] = "در حال بارگذاری منو…",
+            ["unsaved"] = "تغییرات ذخیره‌نشده",
+            ["discardChanges"] = "بدون ذخیره خارج شوید؟",
+            ["foundNone0"] = "موردی پیدا نشد.",
         },
     };
 }

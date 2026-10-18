@@ -59,15 +59,18 @@ public sealed class MainPage : ContentPage
         var buttons = new Grid
         {
             ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
-            RowDefinitions = { new RowDefinition(), new RowDefinition(), new RowDefinition() },
+            RowDefinitions = { new RowDefinition(), new RowDefinition(), new RowDefinition(), new RowDefinition() },
             ColumnSpacing = 8, RowSpacing = 8,
         };
         buttons.Add(Ui.Primary(L.T("checkNow"), () => E.RefreshAsync()), 0, 0);
         buttons.Add(Ui.Primary(L.T("printers"), () => Navigation.PushAsync(new PrintersPage())), 1, 0);
-        buttons.Add(Ui.Secondary(L.T("reprintReceipt"), async () => { var e = await E.ReprintLastReceiptAsync(); if (e is not null) await Ui.Alert(e); }), 0, 1);
-        buttons.Add(Ui.Secondary(L.T("reprintKitchen"), async () => { var e = await E.ReprintLastTicketsAsync(); if (e is not null) await Ui.Alert(e); }), 1, 1);
-        buttons.Add(Ui.Secondary(L.T("settings"), () => Navigation.PushAsync(new SettingsPage())), 0, 2);
-        buttons.Add(Ui.Danger(L.T("signOut"), SignOutAsync), 1, 2);
+        buttons.Add(Ui.Primary(L.T("routing"), () => Navigation.PushAsync(new RoutingPage())), 0, 1);
+        buttons.Add(Ui.Secondary(L.T("reprintReceipt"), async () => { var e = await E.ReprintLastReceiptAsync(); if (e is not null) await Ui.Alert(e); }), 1, 1);
+        buttons.Add(Ui.Secondary(L.T("reprintKitchen"), async () => { var e = await E.ReprintLastTicketsAsync(); if (e is not null) await Ui.Alert(e); }), 0, 2);
+        buttons.Add(Ui.Secondary(L.T("settings"), () => Navigation.PushAsync(new SettingsPage())), 1, 2);
+        var signOut = Ui.Danger(L.T("signOut"), SignOutAsync);
+        buttons.Add(signOut, 0, 3);
+        Grid.SetColumnSpan(signOut, 2);
 
         Content = new Grid
         {
