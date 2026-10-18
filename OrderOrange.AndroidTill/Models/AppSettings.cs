@@ -149,6 +149,12 @@ public sealed class AppSettings
     /// <summary>UI language: en, ar or fa.</summary>
     public string Language { get; set; } = "en";
     public bool AutoPrintReceipt { get; set; } = true;
+    /// <summary>
+    /// Also print the bill each time an open table is SAVED (a round sent), not only when it
+    /// is closed — a running bill for the table (Majed 2026-10-18: "cashier will print two
+    /// times, on save open and on close table").
+    /// </summary>
+    public bool ReceiptOnTabSave { get; set; }
     public bool AutoPrintKitchen { get; set; } = true;
     /// <summary>
     /// What happens to a product with no tick on the Product printers screen: true = it still

@@ -11,6 +11,7 @@ public sealed class SettingsPage : ContentPage
     private readonly Entry _url = new() { Keyboard = Keyboard.Url };
     private readonly Entry _client = new() { Keyboard = Keyboard.Url };
     private readonly Switch _autoReceipt = new();
+    private readonly Switch _receiptOnSave = new();
     private readonly Switch _autoKitchen = new();
     private readonly Entry _poll = new() { Keyboard = Keyboard.Numeric, WidthRequest = 80, HorizontalTextAlignment = TextAlignment.End };
     private readonly Switch _dither = new();
@@ -28,6 +29,7 @@ public sealed class SettingsPage : ContentPage
         _url.Text = s.ApiBaseUrl;
         _client.Text = s.ClientUrl;
         _autoReceipt.IsToggled = s.AutoPrintReceipt;
+        _receiptOnSave.IsToggled = s.ReceiptOnTabSave;
         _autoKitchen.IsToggled = s.AutoPrintKitchen;
         _poll.Text = s.PollSeconds.ToString();
         _dither.IsToggled = s.Dither;
@@ -49,6 +51,7 @@ public sealed class SettingsPage : ContentPage
                     Ui.Caption(L.T("apiUrl")), _url,
                     Ui.Caption(L.T("clientUrl")), _client,
                     Ui.Row(L.T("autoReceipt"), _autoReceipt),
+                    Ui.Row(L.T("receiptOnSave"), _receiptOnSave),
                     Ui.Row(L.T("autoKitchen"), _autoKitchen),
                     Ui.Row(L.T("pollSeconds"), _poll),
                     Ui.Row(L.T("dither"), _dither),
@@ -87,6 +90,7 @@ public sealed class SettingsPage : ContentPage
         if (url.Length > 0) { s.ApiBaseUrl = url; TillEngine.Instance.Api.BaseUrl = url; }
         if (!string.IsNullOrWhiteSpace(_client.Text)) s.ClientUrl = _client.Text.Trim();
         s.AutoPrintReceipt = _autoReceipt.IsToggled;
+        s.ReceiptOnTabSave = _receiptOnSave.IsToggled;
         s.AutoPrintKitchen = _autoKitchen.IsToggled;
         if (int.TryParse(_poll.Text, out var poll)) s.PollSeconds = Math.Clamp(poll, 3, 300);
         s.Dither = _dither.IsToggled;

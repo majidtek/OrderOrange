@@ -459,6 +459,9 @@ public sealed class TillEngine
             var pseudo = TabToOrder(round.Tab, round.Items);
             var ok = await PrintTicketsCore(pseudo, round.Edited ? round.Changes : null, L.T("round"));
             if (!ok) { failedTabs.Add(round.Tab.Id); continue; }
+            // The running bill: the whole table so far, on the cashier printer, every time it is saved.
+            if (Settings.ReceiptOnTabSave && Settings.AutoPrintReceipt && Settings.Cashier is { } cashier)
+                await PrintReceiptAsync(TabBill(round.Tab), cashier);
             foreach (var it in round.Items)
             {
                 if (_seenTabLines.Add(it.Id)) freshlySeen.Add(it.Id);
@@ -494,6 +497,25 @@ public sealed class TillEngine
         Subtotal: 0, DeliveryFee: 0, ServiceFee: 0, Discount: 0, Total: 0,
         Notes: null, CancelReason: null, EstimatedMinutes: 0, IsPaid: false, PaymentRef: null,
         HasReview: false, Items: items, History: [],
+        TableName: tab.TableName);
+
+    /// <summary>The open table's bill so far — every line and the server's totals — as an unpaid order for the receipt layout.</summary>
+    private OrderDto TabBill(StoreTabDto tab) => new(
+        Id: tab.Id,
+        Number: tab.Id.ToString(),
+        Status: OrderStatus.Pending, PlacedAt: tab.OpenedAt,
+        CustomerId: 0, CustomerName: tab.CustomerName ?? tab.GuestName ?? "", CustomerPhone: "",
+        RestaurantId: Api.RestaurantId ?? 0, RestaurantName: "", RestaurantLogoEmoji: "",
+        RestaurantArea: "", RestaurantPhone: "",
+        DriverId: null, DriverName: null, DriverPhone: null,
+        DeliveryAddress: $"Dine-in — {tab.TableName}", DeliveryLat: null, DeliveryLng: null,
+        PaymentMethod: PaymentMethod.CashOnDelivery,
+        Subtotal: tab.Subtotal, DeliveryFee: 0, ServiceFee: tab.ServiceFee, Discount: 0, Total: tab.Total,
+        Notes: null, CancelReason: null, EstimatedMinutes: 0, IsPaid: false, PaymentRef: null,
+        HasReview: false,
+        Items: tab.Lines.Select(l => new OrderItemDto(l.Id, l.Name, l.UnitPrice, l.Quantity, l.Notes)).ToList(),
+        History: [],
+        TaxPercent: tab.TaxPercent, TaxAmount: tab.TaxAmount,
         TableName: tab.TableName);
 
     private void TallyKitchen(string? table, string name, int qty)
