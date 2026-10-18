@@ -23,8 +23,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#F26B1D" />
-    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#F26B1D" BaseSize="128,128" />
+    <!-- The OrderOrange mark (orange invoice + leaf) on white: launcher icon, splash, and the sign-in header. -->
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#FFFFFF" />
+    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#FFFFFF" BaseSize="128,128" />
+    <MauiImage Include="Resources\Images\*" />
     <!-- Optional fonts for the ticket renderer (e.g. an Arabic/Persian face when the terminal has none). -->
     <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>

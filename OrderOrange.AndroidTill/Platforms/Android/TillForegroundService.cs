@@ -107,7 +107,7 @@ public class TillForegroundService : Service
             : new Notification.Builder(this);
         builder.SetContentTitle("OrderOrange Till")
                .SetContentText($"{store} — watching for orders")
-               .SetSmallIcon(Resource.Mipmap.appicon)
+               .SetSmallIcon(Resource.Drawable.tillnotif)   // monochrome glyph: Android tints status-bar icons white
                .SetOngoing(true);
         if (open is not null) builder.SetContentIntent(open);
         return builder.Build();

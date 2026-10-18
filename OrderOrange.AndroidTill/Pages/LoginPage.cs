@@ -42,6 +42,7 @@ public sealed class LoginPage : ContentPage
                 Spacing = 8,
                 Children =
                 {
+                    new Image { Source = "oologo.png", HeightRequest = 84, HorizontalOptions = LayoutOptions.Start, Margin = new Thickness(0, 8, 0, 0) },
                     Ui.Title(L.T("appName")),
                     Ui.Caption(L.T("language")), lang,
                     Ui.Caption(L.T("apiUrl")), _url,
