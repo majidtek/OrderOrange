@@ -1,37 +1,17 @@
 @namespace OrderOrange.ClientCore.Components
+@inject IDialogService Dialogs
 
 @* A phone number the modern way: a searchable country drop with real flags, the
    digits grouped as they land, "+968 9512 0250" emitted upward. Kept COMPACT. *@
 
 <div class="pf-field @(_focus ? "on" : "")">
     <div class="pf-ccwrap">
-        <button type="button" class="pf-ccbtn" @onclick="@(() => _open = !_open)">
+        <button type="button" class="pf-ccbtn" @onclick="OpenPicker">
             <img class="pf-flag" src="https://flagcdn.com/w40/@(_country.Code).png" alt="@_country.Name" />
             <span class="cd mf-ascii">@_country.Dial</span>
             <MudIcon Icon="@Icons.Material.Filled.ExpandMore" Style="width:13px;height:13px;" />
         </button>
-        @if (_open)
-        {
-            <div class="pf-veil" @onclick="@(() => _open = false)"></div>
-            <div class="pf-drop">
-                <input class="q" value="@_query" @oninput="@(e => _query = e.Value?.ToString() ?? "")"
-                       placeholder="🔍" autocomplete="off" />
-                <div class="list">
-                    @foreach (var option in Filtered)
-                    {
-                        var country = option;
-                        <button type="button" class="@(country.Code == _country.Code ? "on" : "")"
-                                @onclick="@(() => PickCountry(country))">
-                            <img class="pf-flag" src="https://flagcdn.com/w40/@(country.Code).png" alt="" />
-                            <b>@country.Name</b>
-                            <i>@country.Dial</i>
-                        </button>
-                    }
-                </div>
-            </div>
-        }
-    </div>
-    <div class="pf-in">
+    </div>    <div class="pf-in">
         <label>@Label</label>
         @* @onchange, NOT @oninput: typing stays in the browser at native speed and
            the grouping lands when the finger leaves — no per-keystroke round trip. *@
@@ -83,11 +63,33 @@
         new("it", "Italy", "+39", 10, "3XX XXX XXXX"),
         new("us", "USA", "+1", 10, "XXX XXX XXXX"),
         new("ca", "Canada", "+1", 10, "XXX XXX XXXX"),
+        new("az", "Azerbaijan", "+994", 9, "XX XXX XX XX"),
+        new("af", "Afghanistan", "+93", 9, "7X XXX XXXX"),
+        new("jp", "Japan", "+81", 10, "90 XXXX XXXX"),
+        new("nl", "Netherlands", "+31", 9, "6 XXXX XXXX"),
+        new("pt", "Portugal", "+351", 9, "9XX XXX XXX"),
+        new("au", "Australia", "+61", 9, "4XX XXX XXX"),
     ];
+
+    /// <summary>
+    /// The shop's own country leads an empty number (Majed 2026-10-09: "if user select country
+    /// like usa then show number also usa by default"). The partner layout sets this from the
+    /// store's region; a static is safe there because the partner app is WebAssembly.
+    /// </summary>
+    public static string DefaultCountryCode { get; set; } = "om";
+
+    /// <summary>The default country's dialling code, for plain phone boxes' "+1 ..." hints.</summary>
+    public static string DefaultDial => Find(DefaultCountryCode)?.Dial ?? "+968";
+
+    private static Country? Find(string? code) =>
+        string.IsNullOrWhiteSpace(code) ? null
+            : Countries.FirstOrDefault(c => c.Code.Equals(code.Trim(), StringComparison.OrdinalIgnoreCase));
 
     [Parameter] public string Value { get; set; } = "";
     [Parameter] public EventCallback<string> ValueChanged { get; set; }
     [Parameter] public string Label { get; set; } = "";
+    /// <summary>ISO-2 country to start an EMPTY number on (e.g. the country picked on the same form).</summary>
+    [Parameter] public string? DefaultCountry { get; set; }
 
     private Country _country = Countries[0];
     private string _number = "";
@@ -95,6 +97,7 @@
     private bool _focus;
     private bool _open;
     private bool _parsed;
+    private bool _userPicked;
 
     private IEnumerable<Country> Filtered =>
         string.IsNullOrWhiteSpace(_query)
@@ -107,10 +110,20 @@
     /// <summary>An incoming "+971 5x…" picks its own flag; digits fall into groups.</summary>
     protected override void OnParametersSet()
     {
-        if (_parsed) return;
+        if (_parsed)
+        {
+            // An empty number follows the form's country until the person picks a flag themselves.
+            if (!_userPicked && Digits(_number).Length == 0 && Find(DefaultCountry ?? DefaultCountryCode) is { } follow)
+                _country = follow;
+            return;
+        }
         _parsed = true;
         var value = (Value ?? "").Trim();
-        if (value.Length == 0) return;
+        if (value.Length == 0)
+        {
+            _country = Find(DefaultCountry ?? DefaultCountryCode) ?? Countries[0];
+            return;
+        }
         var match = Countries.OrderByDescending(c => c.Dial.Length).FirstOrDefault(c => value.StartsWith(c.Dial));
         if (match is not null)
         {
@@ -126,9 +139,20 @@
         string.Join(" ", Enumerable.Range(0, (digits.Length + 3) / 4)
             .Select(i => digits.Substring(i * 4, Math.Min(4, digits.Length - i * 4))));
 
+    /// <summary>The country list opens as its own dialog so no surrounding dialog can clip it.</summary>
+    private async Task OpenPicker()
+    {
+        var parameters = new DialogParameters<PhoneCountryDialog> { { d => d.Current, _country.Code } };
+        var dialog = await Dialogs.ShowAsync<PhoneCountryDialog>(null, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true, NoHeader = true });
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: Country picked }) await PickCountry(picked);
+    }
+
     private async Task PickCountry(Country country)
     {
         _country = country;
+        _userPicked = true;
         _open = false;
         _query = "";
         var digits = Digits(_number);

@@ -25,6 +25,11 @@
                      DebounceInterval="350" ResetValueOnEmptyText="true" />
 </MudPaper>
 
+@if (_restaurantId != 0 && _selected is null && !string.IsNullOrWhiteSpace(StoreName))
+{
+    @* Arrived from Partner reports with the partner already chosen. *@
+    <MudChip T="string" Color="Color.Primary" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Storefront" Class="mb-3">@StoreName</MudChip>
+}
 @if (_restaurantId == 0)
 {
     <EmptyState Emoji="🍽️" Title="@L["admin.chooseRestaurant"]" />
@@ -67,8 +72,7 @@ else
                                     <div class="flex-grow-1" style="min-width: 0;">
                                         <MudText Typo="Typo.subtitle2">@dish.Name @(dish.IsPopular ? "★" : "")</MudText>
                                         <MudText Typo="Typo.body2" Color="Color.Primary">@Fmt.Rial(dish.Price)</MudText>
-                                        <MudSwitch T="bool" Value="@dish.IsAvailable" ValueChanged="@(_ => ToggleAvailable(dish))"
-                                                   Color="Color.Success" Size="Size.Small"
+                                        <MudSwitch Color="Color.Success" T="bool" Value="@dish.IsAvailable" ValueChanged="@(_ => ToggleAvailable(dish))" Size="Size.Small"
                                                    Label="@(dish.IsAvailable ? L["partner.available"] : L["partner.soldout"])" />
                                     </div>
                                     <div class="d-flex flex-column">
@@ -88,6 +92,19 @@ else
 }
 
 @code {
+    /// <summary>Opened from Partner reports: ?store=&lt;id&gt;&amp;name=&lt;name&gt; preselects that partner.</summary>
+    [SupplyParameterFromQuery(Name = "store")] public int? StoreId { get; set; }
+    [SupplyParameterFromQuery(Name = "name")] public string? StoreName { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (StoreId is > 0)
+        {
+            _restaurantId = StoreId.Value;
+            await Reload();
+        }
+    }
+
     private AdminRestaurantDto? _selected;
     private List<MenuCategoryDto>? _menu;
     private int _restaurantId;

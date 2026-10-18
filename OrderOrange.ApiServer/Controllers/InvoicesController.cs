@@ -195,44 +195,13 @@ public class InvoicesController(AppDbContext db) : ApiControllerBase
 
     [HttpGet("daily")]
     [RequirePerm(Perm.Reports)]
-    public async Task<DailyInvoicesDto> Daily(DateTime? date = null)
+    public Task<DailyInvoicesDto> Daily(DateTime? date = null, DateTime? from = null, DateTime? to = null)
     {
-        var day = (date ?? DateTime.Today).Date;
-        var next = day.AddDays(1);
-
-        var rows = await db.Orders
-            .Where(o => o.RestaurantId == CurrentRestaurantId && o.PlacedAt >= day && o.PlacedAt < next)
-            .OrderByDescending(o => o.PlacedAt)
-            .Select(o => new
-            {
-                o.Id, o.Number, o.PlacedAt, o.Total, o.Status, o.TableName, o.IsPaid,
-                o.ReplacesOrderId,
-                CustomerName = o.Customer.FullName,
-                ItemCount = o.Items.Count,
-            })
-            .ToListAsync();
-
-        var ids = rows.Select(r => r.Id).ToList();
-        var replacedBy = await db.InvoiceAudits
-            .Where(a => a.RestaurantId == CurrentRestaurantId
-                        && a.ReplacementOrderId != null && ids.Contains(a.OrderId))
-            .ToDictionaryAsync(a => a.OrderId, a => a.ReplacementNumber);
-
-        var live = rows.Where(r => r.Status != OrderStatus.Cancelled).ToList();
-        var summary = new DailyInvoicesSummaryDto(
-            rows.Count,
-            live.Count,
-            rows.Count - live.Count,
-            live.Sum(r => r.Total),
-            rows.Where(r => r.Status == OrderStatus.Cancelled).Sum(r => r.Total),
-            live.Sum(r => r.ItemCount));
-
-        return new DailyInvoicesDto(summary, rows.Select(r => new InvoiceRowDto(
-            r.Id, r.Number, r.PlacedAt, r.Total, r.Status.ToString(), r.TableName,
-            r.CustomerName, r.ItemCount, r.IsPaid,
-            r.ReplacesOrderId, replacedBy.GetValueOrDefault(r.Id))).ToList());
+        // A whole day by default; or any span the owner picks, to the minute (Majed 2026-10-14).
+        // Same numbers as the admin's partner reports — see Services/SalesReport.
+        var (start, end) = Services.SalesReport.Span(date, from, to);
+        return Services.SalesReport.ForStoreAsync(db, CurrentRestaurantId, start, end);
     }
-
     // ---------- Report 1: what was removed ----------
 
     [HttpGet("cancelled")]

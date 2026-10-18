@@ -211,7 +211,7 @@ public class Restaurant
 
     public decimal DeliveryFee { get; set; }
     public decimal MinOrder { get; set; }
-    public int AvgPrepMinutes { get; set; } = 20;
+    public int AvgPrepMinutes { get; set; }   // 0 until the owner sets it (Majed 2026-10-15: "all this 0 by default")
 
     /// <summary>Owner-controlled: are we taking orders right now?</summary>
     public bool IsOpen { get; set; } = true;
@@ -249,7 +249,7 @@ public class Restaurant
 
     /// <summary>VAT charged on the subtotal. Oman's standard rate, 5%, is the default;
     /// the partner may change it (0 for exempt goods).</summary>
-    public decimal TaxPercent { get; set; } = 5m;
+    public decimal TaxPercent { get; set; }   // 0 until the owner sets it
 
     public DateTime CreatedAt { get; set; }
 
@@ -1317,6 +1317,14 @@ public class Coupon
     public string Code { get; set; } = "";
     public decimal Percent { get; set; }
     public decimal MinOrder { get; set; }
+    /// <summary>The most this coupon takes off one order, in OMR; 0 = no limit (Majed 2026-10-14:
+    /// "this discount coming just for 2 rials at last — for 100 OMR the discount is just 2").</summary>
+    public decimal MaxDiscount { get; set; }
+    /// <summary>A flat discount in OMR; when above 0 it replaces the percent (Majed 2026-10-14:
+    /// "just make it 1 rials discount for first order").</summary>
+    public decimal Amount { get; set; }
+    /// <summary>Only a customer's first order may use it.</summary>
+    public bool FirstOrderOnly { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public bool IsActive { get; set; } = true;
     public int MaxUses { get; set; }

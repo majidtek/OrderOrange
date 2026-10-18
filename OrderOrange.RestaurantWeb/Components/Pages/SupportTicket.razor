@@ -35,7 +35,7 @@ else
                 <span class="prio" style="--c:@SupportUi.PriorityColor(t.Priority)">● @L[$"tk.p.{t.Priority}"]</span>
             </div>
             <h2>@t.Subject</h2>
-            <small>@SupportUi.CategoryEmoji(t.Category) @L[$"tk.c.{t.Category}"] · @string.Format(L["tk.created"], t.CreatedAt.ToString("yyyy-MM-dd HH:mm"))@(t.AssignedTo is not null ? " · " + string.Format(L["tk.a.assigned"], t.AssignedTo) : "")</small>
+            <small>@SupportUi.CategoryEmoji(t.Category) @L[$"tk.c.{t.Category}"] · @string.Format(L["tk.created"], Fmt.DateTimeText(t.CreatedAt))@(t.AssignedTo is not null ? " · " + string.Format(L["tk.a.assigned"], t.AssignedTo) : "")</small>
         </div>
         <div class="acts">
             @if (t.Status is "open" or "in_progress" or "waiting")

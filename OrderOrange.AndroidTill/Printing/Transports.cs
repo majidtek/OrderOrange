@@ -1,0 +1,260 @@
+using System.Net.Sockets;
+using Android.App;
+using Android.Content;
+using Android.Hardware.Usb;
+using Microsoft.Maui.ApplicationModel;
+using OrderOrange.AndroidTill.Models;
+using OrderOrange.AndroidTill.Services;
+
+namespace OrderOrange.AndroidTill.Printing;
+
+/// <summary>One way of getting bytes into a printer. Each physical route is one class.</summary>
+public interface IPrinterTransport
+{
+    string Describe();
+    Task SendAsync(byte[] data, CancellationToken ct);
+}
+
+public static class PrinterTransports
+{
+    public static IPrinterTransport For(PrinterConfig p) => p.Connection switch
+    {
+        PrinterConnection.WiFi => new TcpPrinterTransport(p.Host.Trim(), p.Port),
+        PrinterConnection.Usb => new UsbPrinterTransport(p.UsbVendorId, p.UsbProductId),
+        PrinterConnection.Serial => new SerialPrinterTransport(p.SerialPath.Trim()),
+        _ => new BuiltInPrinterTransport(),
+    };
+
+    /// <summary>A pause proportional to the job so the printer's buffer drains before the link is closed.</summary>
+    internal static Task DrainAsync(int bytes, CancellationToken ct) =>
+        Task.Delay(Math.Clamp(200 + bytes / 100, 200, 1500), ct);
+}
+
+/// <summary>Raw ESC/POS over TCP — every Wi-Fi/LAN thermal printer listens on 9100.</summary>
+public sealed class TcpPrinterTransport(string host, int port) : IPrinterTransport
+{
+    public string Describe() => $"{host}:{port}";
+
+    public async Task SendAsync(byte[] data, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(host)) throw new InvalidOperationException("No printer IP address set.");
+        using var client = new TcpClient { NoDelay = true, SendTimeout = 15000 };
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(5000);
+        try { await client.ConnectAsync(host, port, cts.Token); }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        { throw new IOException($"Printer {host}:{port} not reachable."); }
+        catch (SocketException ex)
+        { throw new IOException($"Printer {host}:{port} not reachable ({ex.SocketErrorCode})."); }
+
+        using var stream = client.GetStream();
+        await stream.WriteAsync(data, ct);
+        await stream.FlushAsync(ct);
+        await PrinterTransports.DrainAsync(data.Length, ct);
+    }
+}
+
+/// <summary>A serial device node (e.g. /dev/ttyS1) — how some terminals expose their own printer.</summary>
+public sealed class SerialPrinterTransport(string path) : IPrinterTransport
+{
+    public string Describe() => path;
+
+    public Task SendAsync(byte[] data, CancellationToken ct) => Task.Run(() =>
+    {
+        if (string.IsNullOrWhiteSpace(path)) throw new InvalidOperationException("No serial device path set.");
+        if (!File.Exists(path)) throw new FileNotFoundException($"{path} does not exist.");
+        using var fs = new Java.IO.FileOutputStream(path);
+        const int chunk = 4096;
+        for (var off = 0; off < data.Length; off += chunk)
+        {
+            ct.ThrowIfCancellationRequested();
+            fs.Write(data, off, Math.Min(chunk, data.Length - off));
+        }
+        fs.Flush();
+        Thread.Sleep(Math.Clamp(100 + data.Length / 50, 100, 2000));
+    }, ct);
+}
+
+/// <summary>
+/// A printer on the terminal's USB host port (or the built-in printer when the vendor
+/// wired it as a USB printer-class device). Vendor/product 0 means "any printer-class device".
+/// </summary>
+public sealed class UsbPrinterTransport(int vendorId, int productId) : IPrinterTransport
+{
+    private const string ActionPermission = "com.orderorange.till.USB_PERMISSION";
+
+    public string Describe() => vendorId == 0 ? "USB printer" : $"USB {vendorId:X4}:{productId:X4}";
+
+    public static UsbManager? Manager => Platform.AppContext.GetSystemService(Context.UsbService) as UsbManager;
+
+    /// <summary>Every attached USB device, printer-class ones first.</summary>
+    public static List<UsbDevice> Devices()
+    {
+        var mgr = Manager;
+        if (mgr?.DeviceList is null) return [];
+        return mgr.DeviceList.Values.OrderByDescending(IsPrinterClass).ToList();
+    }
+
+    public static bool IsPrinterClass(UsbDevice d)
+    {
+        if (d.DeviceClass == UsbClass.Printer) return true;
+        for (var i = 0; i < d.InterfaceCount; i++)
+            if (d.GetInterface(i).InterfaceClass == UsbClass.Printer) return true;
+        return false;
+    }
+
+    public static string Label(UsbDevice d)
+    {
+        var name = d.ProductName ?? d.DeviceName ?? "USB device";
+        return $"{name} ({d.VendorId:X4}:{d.ProductId:X4}){(IsPrinterClass(d) ? " · printer" : "")}";
+    }
+
+    private UsbDevice? Find()
+    {
+        var all = Devices();
+        if (vendorId != 0)
+            return all.FirstOrDefault(d => d.VendorId == vendorId && d.ProductId == productId);
+        return all.FirstOrDefault(IsPrinterClass) ?? all.FirstOrDefault(d => BulkOut(d) is not null);
+    }
+
+    public async Task SendAsync(byte[] data, CancellationToken ct)
+    {
+        var mgr = Manager ?? throw new InvalidOperationException("This device has no USB host.");
+        var dev = Find() ?? throw new IOException("No USB printer is connected.");
+        if (!mgr.HasPermission(dev) && !await RequestPermissionAsync(mgr, dev, ct))
+            throw new IOException("USB permission was not granted.");
+        await Task.Run(() => Write(mgr, dev, data, ct), ct);
+    }
+
+    private static (UsbInterface Intf, UsbEndpoint Ep)? BulkOut(UsbDevice dev)
+    {
+        (UsbInterface, UsbEndpoint)? fallback = null;
+        for (var i = 0; i < dev.InterfaceCount; i++)
+        {
+            var intf = dev.GetInterface(i);
+            for (var e = 0; e < intf.EndpointCount; e++)
+            {
+                var ep = intf.GetEndpoint(e);
+                if (ep is null || ep.Type != UsbAddressing.XferBulk || ep.Direction != UsbAddressing.Out) continue;
+                if (intf.InterfaceClass == UsbClass.Printer) return (intf, ep);
+                fallback ??= (intf, ep);
+            }
+        }
+        return fallback;
+    }
+
+    private static void Write(UsbManager mgr, UsbDevice dev, byte[] data, CancellationToken ct)
+    {
+        var route = BulkOut(dev) ?? throw new IOException("The USB device has no bulk-out endpoint.");
+        using var conn = mgr.OpenDevice(dev) ?? throw new IOException("Could not open the USB device.");
+        if (!conn.ClaimInterface(route.Intf, true)) throw new IOException("Could not claim the USB printer interface.");
+        try
+        {
+            const int chunk = 16384;
+            var buffer = new byte[chunk];
+            for (var off = 0; off < data.Length;)
+            {
+                ct.ThrowIfCancellationRequested();
+                var len = Math.Min(chunk, data.Length - off);
+                Array.Copy(data, off, buffer, 0, len);
+                var sent = conn.BulkTransfer(route.Ep, buffer, len, 10000);
+                if (sent < 0) throw new IOException("USB write failed (printer offline or out of paper?).");
+                off += sent;
+            }
+        }
+        finally
+        {
+            try { conn.ReleaseInterface(route.Intf); } catch { }
+        }
+    }
+
+    private static async Task<bool> RequestPermissionAsync(UsbManager mgr, UsbDevice dev, CancellationToken ct)
+    {
+        var ctx = Platform.AppContext;
+        var receiver = new PermissionReceiver();
+        var filter = new IntentFilter(ActionPermission);
+        if (OperatingSystem.IsAndroidVersionAtLeast(33)) ctx.RegisterReceiver(receiver, filter, ReceiverFlags.NotExported);
+        else ctx.RegisterReceiver(receiver, filter);
+        try
+        {
+            var flags = PendingIntentFlags.UpdateCurrent;
+            if (OperatingSystem.IsAndroidVersionAtLeast(31)) flags |= PendingIntentFlags.Mutable;
+            var intent = new Intent(ActionPermission).SetPackage(ctx.PackageName);
+            var pi = PendingIntent.GetBroadcast(ctx, 0, intent, flags);
+            mgr.RequestPermission(dev, pi);
+            var done = await Task.WhenAny(receiver.Result.Task, Task.Delay(60000, ct));
+            return done == receiver.Result.Task && receiver.Result.Task.Result;
+        }
+        finally
+        {
+            try { ctx.UnregisterReceiver(receiver); } catch { }
+        }
+    }
+
+    private sealed class PermissionReceiver : BroadcastReceiver
+    {
+        public readonly TaskCompletionSource<bool> Result = new();
+        public override void OnReceive(Context? context, Intent? intent) =>
+            Result.TrySetResult(intent?.GetBooleanExtra(UsbManager.ExtraPermissionGranted, false) ?? false);
+    }
+}
+
+/// <summary>
+/// The terminal's own printer, whose wiring is unknown until tried: a USB printer-class
+/// device, a loopback TCP port, or a serial node. Tries each; the route that works is
+/// remembered and used first next time. (A vendor SDK, once the model is known, slots in
+/// here as one more route.)
+/// </summary>
+public sealed class BuiltInPrinterTransport : IPrinterTransport
+{
+    public static readonly string[] SerialCandidates =
+    [
+        "/dev/ttyS1", "/dev/ttyS0", "/dev/ttyS2", "/dev/ttyS3", "/dev/ttyS4",
+        "/dev/ttyMT1", "/dev/ttyMT0", "/dev/ttyMT2", "/dev/ttyHSL1", "/dev/ttyHS1",
+        "/dev/ttyUSB0", "/dev/ttyACM0", "/dev/ttyGS0", "/dev/usb/lp0", "/dev/lp0",
+    ];
+
+    public string Describe() => "built-in";
+
+    /// <summary>Every route worth a try, the remembered one first.</summary>
+    public static List<(string Key, IPrinterTransport Transport)> Routes()
+    {
+        var list = new List<(string, IPrinterTransport)>
+        {
+            ("usb", new UsbPrinterTransport(0, 0)),
+            ("tcp:127.0.0.1:9100", new TcpPrinterTransport("127.0.0.1", 9100)),
+        };
+        foreach (var path in SerialCandidates)
+            if (File.Exists(path)) list.Add(($"serial:{path}", new SerialPrinterTransport(path)));
+
+        var remembered = AppSettings.Current.BuiltInRoute;
+        if (remembered.Length > 0)
+        {
+            var at = list.FindIndex(r => r.Item1 == remembered);
+            if (at > 0) { var r = list[at]; list.RemoveAt(at); list.Insert(0, r); }
+        }
+        return list;
+    }
+
+    public async Task SendAsync(byte[] data, CancellationToken ct)
+    {
+        var errors = new List<string>();
+        foreach (var (key, transport) in Routes())
+        {
+            try
+            {
+                await transport.SendAsync(data, ct);
+                if (AppSettings.Current.BuiltInRoute != key)
+                {
+                    AppSettings.Current.BuiltInRoute = key;
+                    AppSettings.Current.Save();
+                    TillLog.Write($"built-in printer reached via {key}");
+                }
+                return;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) { errors.Add($"{key}: {ex.Message}"); }
+        }
+        throw new IOException("Built-in printer not found. Tried " + string.Join("; ", errors));
+    }
+}

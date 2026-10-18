@@ -1,0 +1,2 @@
+
+  (F('0202_'), 'Bill report', 'Where your money goes: every bill you recorded, grouped by category, by month or by company, with paid, unpaid and overdue totals. Pick a date range or keep the last 12 months.'),

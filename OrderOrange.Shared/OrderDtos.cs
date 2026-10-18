@@ -130,5 +130,11 @@ public record PublicBillDto(
 /// <summary>A dine-in order from a scanned table QR — placed without an account.</summary>
 public record PlaceTableOrderRequest(int RestaurantId, int Table, List<PlaceOrderItem> Items, string? GuestName = null);
 
+/// <summary>An order from the shop's own QR, no account: a pickup, optionally to a car (plate).</summary>
+public record PlaceQrOrderRequest(int RestaurantId, List<PlaceOrderItem> Items, string? GuestName = null, string? Phone = null, string? CarPlate = null, string? Notes = null);
+
 /// <summary>What the table-order endpoint hands back: the number the guest quotes.</summary>
-public record TableOrderResultDto(int Id, string Number, decimal Total);
+public record TableOrderResultDto(int Id, string Number, decimal Total, string? Key = null);
+
+/// <summary>A guest's QR order as the guest may see it: where it stands, nothing more.</summary>
+public record GuestOrderStatusDto(int Id, string Number, OrderStatus Status, int EstimatedMinutes, string? Reason);

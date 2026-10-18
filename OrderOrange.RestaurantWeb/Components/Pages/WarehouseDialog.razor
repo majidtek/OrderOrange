@@ -37,8 +37,8 @@
         <MudTextField @bind-Value="_notes" Label="@L["wh.notes"]" Variant="Variant.Outlined"
                       Margin="Margin.Dense" Class="mt-3" MaxLength="200" />
 
-        <MudSwitch T="bool" @bind-Value="_default" Color="Color.Primary" Class="mt-2" Label="@L["wh.makeDefault"]" />
-        <MudSwitch T="bool" @bind-Value="_central" Color="Color.Dark" Class="mt-1" Label="@L["wh.makeCentral"]" />
+        <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_default" Class="mt-2" Label="@L["wh.makeDefault"]" />
+        <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_central" Class="mt-1" Label="@L["wh.makeCentral"]" />
         <p class="wh-dialog-hint">@L["wh.centralHint"]</p>
     </DialogContent>
     <DialogActions>

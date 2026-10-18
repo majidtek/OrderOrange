@@ -66,7 +66,7 @@ else
                         <button type="button" class="@(_onlineOnly ? "" : "on")" @onclick="@(() => _onlineOnly = false)">@L["common.all"]</button>
                         <button type="button" class="@(_onlineOnly ? "on" : "")" @onclick="@(() => _onlineOnly = true)">@L["ua.online"]</button>
                     </div>
-                    <span class="upd">@_lastRefresh.ToString("HH:mm:ss")</span>
+                    <span class="upd">@Fmt.TimeSeconds(_lastRefresh)</span>
                     <button type="button" class="rf" @onclick="Refresh" title="@L["ua.refresh"]">
                         <MudIcon Icon="@Icons.Material.Filled.Refresh" />
                     </button>
@@ -131,7 +131,7 @@ else
                                         <span class="pill off">@L["ua.offline"]</span>
                                     }
                                 </td>
-                                <td><span class="tm mf-ltr">@Fmt(row.LastLoginAt)</span></td>
+                                <td><span class="tm mf-ltr">@Stamp(row.LastLoginAt)</span></td>
                                 <td><span class="rel @(row.IsOnline ? "live" : "")">@Rel(row.LastSeenAt)</span></td>
                                 <td>
                                     @if (string.IsNullOrWhiteSpace(row.CurrentPage))
@@ -215,7 +215,7 @@ else
                                 <span class="vdot"></span>
                                 <div class="vmain">
                                     <div class="vpg mf-ltr">@v.Page</div>
-                                    <div class="vtm mf-ltr">@v.At.ToString("yyyy-MM-dd  HH:mm:ss")</div>
+                                    <div class="vtm mf-ltr">@($"{Fmt.Date(v.At)}  {Fmt.TimeSeconds(v.At)}")</div>
                                 </div>
                             </div>
                         }
@@ -230,7 +230,7 @@ else
     private List<TeamActivityDto>? _rows;
     private string _search = "";
     private bool _onlineOnly;
-    private DateTime _lastRefresh = DateTime.Now;
+    private DateTime _lastRefresh = Fmt.ServerNow;
     private System.Threading.Timer? _timer;
 
     /// <summary>How often the board re-reads itself. The bar counts down the same span.</summary>
@@ -241,7 +241,7 @@ else
 
     /// <summary>How far through the current wait we are, 0–100.</summary>
     private double Value =>
-        Math.Clamp((DateTime.Now - _lastRefresh).TotalSeconds / RefreshSeconds * 100, 0, 100);
+        Math.Clamp((Fmt.ServerNow - _lastRefresh).TotalSeconds / RefreshSeconds * 100, 0, 100);
 
     /// <summary>The buffer runs a little ahead — the shape MudBlazor's buffered bar wants.</summary>
     private double BufferValue => Math.Clamp(Value + 8, 0, 100);
@@ -280,7 +280,7 @@ else
     private async Task Load()
     {
         _rows = await Api.GetTeamActivityAsync() ?? [];
-        _lastRefresh = DateTime.Now;
+        _lastRefresh = Fmt.ServerNow;
     }
 
     /// <summary>A manual read also restarts the clock — the bar must not lie.</summary>
@@ -317,7 +317,7 @@ else
         try
         {
             _visits = await Api.GetTeamVisitsAsync(_picked.UserId,
-                DateTime.Today.AddDays(-(_days - 1)), DateTime.Today) ?? [];
+                Fmt.ServerToday.AddDays(-(_days - 1)), Fmt.ServerToday) ?? [];
         }
         catch { _visits = []; }
         finally { _visitsLoading = false; StateHasChanged(); }
@@ -326,16 +326,16 @@ else
     private string RoleLabel(string role) =>
         L[$"trole.{role}"] is { } t && !t.StartsWith("trole.") ? t : role;
 
-    private static string Fmt(DateTime? d) => d?.ToString("yyyy-MM-dd HH:mm") ?? "—";
+    private static string Stamp(DateTime? d) => d is { } v ? Fmt.DateTimeText(v) : "—";
 
     private string Rel(DateTime? d)
     {
         if (d is null) return "—";
-        var diff = DateTime.Now - d.Value;
+        var diff = Fmt.ServerNow - d.Value;
         if (diff.TotalSeconds < 60) return L["time.justNow"];
         if (diff.TotalMinutes < 60) return string.Format(L["time.minAgo"], (int)diff.TotalMinutes);
         if (diff.TotalHours < 24) return string.Format(L["time.hAgo"], (int)diff.TotalHours);
-        return d.Value.ToString("dd MMM");
+        return Fmt.DayMonth(d.Value);
     }
 
     private static string Initials(string name)

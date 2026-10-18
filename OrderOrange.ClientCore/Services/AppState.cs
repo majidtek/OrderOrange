@@ -91,6 +91,16 @@ public class AppState
         Changed?.Invoke();
     }
 
+    /// <summary>Unread messages from the OrderOrange team (admin ↔ partner chat).</summary>
+    public int AdminChatUnread { get; private set; }
+
+    public void SetAdminChatUnread(int count)
+    {
+        if (AdminChatUnread == count) return;
+        AdminChatUnread = count;
+        Changed?.Invoke();
+    }
+
     public void SignIn(LoginResponse r)
     {
         Session = r;

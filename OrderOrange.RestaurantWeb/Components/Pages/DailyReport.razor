@@ -3,143 +3,266 @@
 @inject LanguageService L
 
 <PageTitle>Partner — Daily report</PageTitle>
-<PageHeader Title="@L["drep.title"]" Subtitle="@L["drep.sub"]" />
+<PageHeader Title="@L["drep.title"]" Subtitle="@L["drep.sub2"]" />
 
-@* One day, every invoice, in full: pick the day, read the totals, and open any invoice in
-   place to see exactly what was on it. *@
-<div class="d-flex align-center mb-4" style="gap: 10px; flex-wrap: wrap;">
-    <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Class="mf-flip-rtl"
-                   OnClick="@(() => ShiftDay(-1))" />
-    <div style="max-width: 190px;">
-        <MfDatePicker DateFormat="yyyy-MM-dd" Date="_date" DateChanged="OnDate" Variant="Variant.Outlined" Margin="Margin.Dense"
-                   MaxDate="DateTime.Today" />
-    </div>
-    <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Class="mf-flip-rtl"
-                   Disabled="@(_date >= DateTime.Today)" OnClick="@(() => ShiftDay(1))" />
-    @if (_date.Date == DateTime.Today)
+@* The daily report (Majed 2026-10-14: "in daily report create like this, with modern filter,
+   and user can set from which date and time to which date and time"). A filter card with
+   quick periods and an exact from/to date + time; then the Report Summary and the Sales
+   Items of that span, and every invoice underneath, openable in place. *@
+
+<div class="dr-page">
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-4 dr-filter">
+        <div class="pv-seg dr-presets">
+            @foreach (var (key, label) in Presets)
+            {
+                var k = key;
+                <button type="button" class="@(_preset == k ? "on" : "")" @onclick="@(() => ApplyPreset(k))">@L[label]</button>
+            }
+        </div>
+        <div class="dr-range">
+            <div class="dr-end">
+                <span class="dr-lbl">@L["drep.from"]</span>
+                <div class="dr-pair">
+                    <MfDatePicker DateFormat="yyyy-MM-dd" Date="_fromDate" DateChanged="@(d => { _fromDate = d?.Date ?? _fromDate; _preset = "custom"; })"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    @* MudBlazor's own clock, not the browser's dropdown (Majed 2026-10-15: "use Mud in all reports"). *@
+                    <MudTimePicker Time="@ParseTime(_fromTime, TimeSpan.Zero)" TimeChanged="SetFromTime" AmPm="@Fmt.Clock12"
+                                   PickerVariant="PickerVariant.Dialog" Variant="Variant.Outlined" Margin="Margin.Dense" Class="dr-time" />
+                </div>
+            </div>
+            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Class="dr-arrow mf-flip-rtl" />
+            <div class="dr-end">
+                <span class="dr-lbl">@L["drep.to"]</span>
+                <div class="dr-pair">
+                    <MfDatePicker DateFormat="yyyy-MM-dd" Date="_toDate" DateChanged="@(d => { _toDate = d?.Date ?? _toDate; _preset = "custom"; })"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTimePicker Time="@ParseTime(_toTime, new TimeSpan(23, 59, 0))" TimeChanged="SetToTime" AmPm="@Fmt.Clock12"
+                                   PickerVariant="PickerVariant.Dialog" Variant="Variant.Outlined" Margin="Margin.Dense" Class="dr-time" />
+                </div>
+            </div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FilterAlt"
+                       Disabled="_loading" OnClick="Load" Class="dr-apply">@L["drep.apply"]</MudButton>
+        </div>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </MudPaper>
+
+    @if (_report is null)
     {
-        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Text">@L["inv.today"]</MudChip>
-    }
-    <span style="flex: 1;"></span>
-    <ReportExport Title="@L["drep.title"]" RangeLabel="@_date.ToString("yyyy-MM-dd")"
-                  Columns="@ExportColumns" Fetch="ExportRows" />
-</div>
-
-@if (_report is null)
-{
-    <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
-}
-else
-{
-    <MudGrid Spacing="3" Class="mb-2">
-        <MudItem xs="6" md="3">
-            <StatCard Label="@L["drep.invoices"]" Value="@_report.Summary.Live.ToString()" Icon="@Icons.Material.Filled.ReceiptLong" Color="Color.Primary" />
-        </MudItem>
-        <MudItem xs="6" md="3">
-            <StatCard Label="@L["drep.revenue"]" Value="@Fmt.RialShort(_report.Summary.Total).Value" Icon="@Icons.Material.Filled.Payments" Color="Color.Success" />
-        </MudItem>
-        <MudItem xs="6" md="3">
-            <StatCard Label="@L["drep.items"]" Value="@_report.Summary.ItemCount.ToString()" Icon="@Icons.Material.Filled.Fastfood" Color="Color.Info" />
-        </MudItem>
-        <MudItem xs="6" md="3">
-            <StatCard Label="@L["inv.cancelled"]" Value="@_report.Summary.Cancelled.ToString()" Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" />
-        </MudItem>
-    </MudGrid>
-
-    @if (_report.Rows.Count == 0)
-    {
-        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="my-8" Align="Align.Center">@L["inv.none"]</MudText>
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+        }
     }
     else
     {
-        <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow-x: auto;">
-            @foreach (var row in _report.Rows)
+        var s = _report.Summary;
+        <div class="d-flex align-center flex-wrap mb-3" style="gap: 10px;">
+            <span class="dr-span"><MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" />
+                <b>@SpanText</b></span>
+            <span style="flex: 1;"></span>
+            <ReportExport Title="@L["drep.title"]" RangeLabel="@SpanText" Columns="@ExportColumns" Fetch="ExportRows" />
+        </div>
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-4">
+            <div class="dr-h">@L["drep.summary"]</div>
+            <div class="dr-sum">
+                <div><span>@L["drep.claimQty"]</span><b class="mf-ltr">@s.ClaimQuantity</b></div>
+                <div><span>@L["drep.claimAmount"]</span><b class="mf-ltr">@Fmt.Rial(s.CancelledTotal)</b></div>
+                <div><span>@L["drep.taxCollected"]</span><b class="mf-ltr">@Fmt.Rial(s.Tax)</b></div>
+                <div><span>@L["drep.discounts"]</span><b class="mf-ltr">@Fmt.Rial(s.Discounts)</b></div>
+                <div class="strong"><span>@L["inv.total"]</span><b class="mf-ltr">@Fmt.Rial(s.Total)</b></div>
+                <div><span>@L["drep.totalQty"]</span><b class="mf-ltr">@s.Quantity</b></div>
+                <div><span>@L["drep.credit"]</span><b class="mf-ltr">@Fmt.Rial(s.Credit)</b></div>
+                <div><span>@L["drep.deliveryFee"]</span><b class="mf-ltr">@Fmt.Rial(s.DeliveryFees)</b></div>
+                <div><span>@L["drep.invoices"]</span><b class="mf-ltr">@s.Live</b></div>
+                <div><span>@L["drep.cancelledInv"]</span><b class="mf-ltr">@s.Cancelled</b></div>
+                <div><span>@L["drep.cash"]</span><b class="mf-ltr">@Fmt.Rial(s.Cash)</b></div>
+                <div><span>@L["drep.card"]</span><b class="mf-ltr">@Fmt.Rial(s.Card)</b></div>
+            </div>
+            <div class="dr-note">@L["drep.claimHint"]</div>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-4">
+            <div class="dr-h">@L["drep.salesItems"]</div>
+            @if (_report.Items is not { Count: > 0 })
             {
-                var r = row;
-                var open = _openId == r.Id;
-                <div class="drep-row @(open ? "open" : "") @(r.Status == "Cancelled" ? "dead" : "")"
-                     @onclick="@(() => Toggle(r.Id))">
-                    <span class="no mf-ascii">@r.Number</span>
-                    <span class="tm">@r.PlacedAt.ToString("HH:mm")</span>
-                    <span class="cu">@r.CustomerName@(r.TableName is not null ? $" · {r.TableName}" : "")</span>
-                    <span class="ct">@r.ItemCount @L["inv.items"]</span>
-                    <span class="st">
-                        @if (r.Status == "Cancelled")
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">
-                                @L["inv.cancelled"]@(r.ReplacedByNumber is not null ? $" → {r.ReplacedByNumber}" : "")
-                            </MudChip>
-                        }
-                        else if (r.IsPaid)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">@L["w.paid"]</MudChip>
-                        }
-                        else
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@L["w.unpaid"]</MudChip>
-                        }
-                    </span>
-                    <b class="tt">@Fmt.Rial(r.Total)</b>
-                    <MudIcon Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="my-4">@L["inv.none"]</MudText>
+            }
+            else
+            {
+                <div class="dr-items">
+                    <div class="hd"><span>@L["drep.item"]</span><span>@L["drep.qty"]</span><span>@L["drep.amount"]</span></div>
+                    @foreach (var it in _report.Items.Skip(_itemsPage * ItemsPerPage).Take(ItemsPerPage))
+                    {
+                        <div class="rw"><span class="nm">@it.Name</span><span class="mf-ltr">@it.Quantity</span><b class="mf-ltr">@Fmt.Rial(it.Amount)</b></div>
+                    }
+                    <div class="ft"><span>@L["inv.total"]</span><span class="mf-ltr">@_report.Items.Sum(i => i.Quantity)</span><b class="mf-ltr">@Fmt.Rial(_report.Items.Sum(i => i.Amount))</b></div>
                 </div>
-                @if (open)
+                @if (_report.Items.Count > ItemsPerPage)
                 {
-                    <div class="drep-detail">
-                        @if (_detail is null)
-                        {
-                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="my-2" />
-                        }
-                        else
-                        {
-                            @foreach (var line in _detail.Lines)
-                            {
-                                <div class="ln">
-                                    <span class="q">@line.Quantity ×</span>
-                                    <span class="nm">@line.Name@(line.Notes is { Length: > 0 } ? $" — {line.Notes}" : "")</span>
-                                    <span class="pr">@Fmt.Rial(line.UnitPrice * line.Quantity)</span>
-                                </div>
-                            }
-                            <div class="ln sum"><span class="q"></span><span class="nm">@L["common.subtotal"]</span><span class="pr">@Fmt.Rial(_detail.Subtotal)</span></div>
-                            @if (_detail.TaxAmount > 0)
-                            {
-                                <div class="ln sum"><span class="q"></span><span class="nm">@L["drep.tax"] (@_detail.TaxPercent.ToString("0.#")%)</span><span class="pr">@Fmt.Rial(_detail.TaxAmount)</span></div>
-                            }
-                            <div class="ln sum total"><span class="q"></span><span class="nm">@L["inv.total"]</span><span class="pr">@Fmt.Rial(_detail.Total)</span></div>
-                        }
-                    </div>
+                    <Pager Page="_itemsPage" Pages="@PagesOf(_report.Items.Count, ItemsPerPage)" PageChanged="@(p => _itemsPage = p)" />
                 }
             }
         </MudPaper>
+
+        <div class="dr-h mb-2">@L["drep.invoices"] (@_report.Rows.Count)</div>
+        @if (_report.Rows.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="my-8" Align="Align.Center">@L["inv.none"]</MudText>
+        }
+        else
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow-x: auto;">
+                @foreach (var row in _report.Rows.Skip(_rowsPage * RowsPerPage).Take(RowsPerPage))
+                {
+                    var r = row;
+                    var open = _openId == r.Id;
+                    <div class="drep-row @(open ? "open" : "") @(r.Status == "Cancelled" ? "dead" : "")"
+                         @onclick="@(() => Toggle(r.Id))">
+                        <span class="no mf-ascii">@r.Number</span>
+                        <span class="tm">@(MultiDay ? Fmt.DayMonthTime(r.PlacedAt) : Fmt.Time(r.PlacedAt))</span>
+                        <span class="cu">@r.CustomerName@(r.TableName is not null ? $" · {r.TableName}" : "")</span>
+                        <span class="ct">@r.ItemCount @L["inv.items"]</span>
+                        <span class="st">
+                            @if (r.Status == "Cancelled")
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">
+                                    @L["inv.cancelled"]@(r.ReplacedByNumber is not null ? $" → {r.ReplacedByNumber}" : "")
+                                </MudChip>
+                            }
+                            else if (r.IsPaid)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">@L["w.paid"]</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@L["w.unpaid"]</MudChip>
+                            }
+                        </span>
+                        <b class="tt">@Fmt.Rial(r.Total)</b>
+                        <MudIcon Icon="@(open ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+                    </div>
+                    @if (open)
+                    {
+                        <div class="drep-detail">
+                            @if (_detail is null)
+                            {
+                                <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="my-2" />
+                            }
+                            else
+                            {
+                                @foreach (var line in _detail.Lines)
+                                {
+                                    <div class="ln">
+                                        <span class="q">@line.Quantity ×</span>
+                                        <span class="nm">@line.Name@(line.Notes is { Length: > 0 } ? $" — {line.Notes}" : "")</span>
+                                        <span class="pr">@Fmt.Rial(line.UnitPrice * line.Quantity)</span>
+                                    </div>
+                                }
+                                <div class="ln sum"><span class="q"></span><span class="nm">@L["common.subtotal"]</span><span class="pr">@Fmt.Rial(_detail.Subtotal)</span></div>
+                                @if (_detail.TaxAmount > 0)
+                                {
+                                    <div class="ln sum"><span class="q"></span><span class="nm">@L["drep.tax"] (@_detail.TaxPercent.ToString("0.#")%)</span><span class="pr">@Fmt.Rial(_detail.TaxAmount)</span></div>
+                                }
+                                <div class="ln sum total"><span class="q"></span><span class="nm">@L["inv.total"]</span><span class="pr">@Fmt.Rial(_detail.Total)</span></div>
+                            }
+                        </div>
+                    }
+                }
+            </MudPaper>
+            @if (_report.Rows.Count > RowsPerPage)
+            {
+                <Pager Page="_rowsPage" Pages="@PagesOf(_report.Rows.Count, RowsPerPage)" PageChanged="@(p => { _rowsPage = p; _openId = null; _detail = null; })" />
+            }
+        }
     }
-}
+</div>
 
 @code {
-    private DateTime _date = DateTime.Today;
+    private static readonly (string Key, string Label)[] Presets =
+    [
+        ("today", "inv.today"), ("yesterday", "drep.yesterday"), ("week", "drep.last7"), ("month", "drep.thisMonth"), ("custom", "drep.custom"),
+    ];
+
+    private string _preset = "today";
+    private DateTime _fromDate = Fmt.ServerToday;
+    private string _fromTime = "00:00";
+    private DateTime _toDate = Fmt.ServerToday;
+    private string _toTime = "23:59";
+    private bool _loading;
+    private string? _error;
+
     private DailyInvoicesDto? _report;
     private int? _openId;
+
+    // Paging (Majed 2026-10-14: "in daily-report add paging"). The report arrives whole,
+    // so pages are cut in the browser — instant, and the totals always cover the full span.
+    private const int RowsPerPage = 20;
+    private const int ItemsPerPage = 15;
+    private int _rowsPage;
+    private int _itemsPage;
+    private static int PagesOf(int count, int per) => Math.Max(1, (count + per - 1) / per);
     private InvoiceDetailDto? _detail;
 
     protected override Task OnInitializedAsync() => Load();
 
+    private void ApplyPreset(string key)
+    {
+        _preset = key;
+        var today = Fmt.ServerToday;
+        (_fromDate, _toDate) = key switch
+        {
+            "yesterday" => (today.AddDays(-1), today.AddDays(-1)),
+            "week" => (today.AddDays(-6), today),
+            "month" => (new DateTime(today.Year, today.Month, 1), today),
+            "custom" => (_fromDate, _toDate),
+            _ => (today, today),
+        };
+        if (key != "custom") { _fromTime = "00:00"; _toTime = "23:59"; _ = Load(); }
+    }
+
+    private void SetFromTime(TimeSpan? t) { _fromTime = Hhmm(t ?? TimeSpan.Zero); _preset = "custom"; }
+    private void SetToTime(TimeSpan? t) { _toTime = Hhmm(t ?? new TimeSpan(23, 59, 0)); _preset = "custom"; }
+    private static string Hhmm(TimeSpan t) => $"{t.Hours:00}:{t.Minutes:00}";
+
+    private static TimeSpan ParseTime(string? hhmm, TimeSpan fallback) =>
+        TimeSpan.TryParse(hhmm, System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : fallback;
+
+    private DateTime From => _fromDate.Date + ParseTime(_fromTime, TimeSpan.Zero);
+    /// <summary>"To 23:59" means the whole of that last minute.</summary>
+    private DateTime To => _toDate.Date + ParseTime(_toTime, new TimeSpan(23, 59, 0)) + TimeSpan.FromMinutes(1);
+
+    private bool MultiDay => _report?.From is { } f && _report.To is { } t && (t - f).TotalHours > 24.1;
+
+    private string SpanText => _report?.From is { } f && _report.To is { } t
+        ? $"{Fmt.DayMonthYear(f, shift: false)} {f:HH:mm} → {Fmt.DayMonthYear(t.AddMinutes(-1), shift: false)} {t.AddMinutes(-1):HH:mm}"
+        : "";
+
     private async Task Load()
     {
+        _error = null;
+        if (To <= From) { _error = L["drep.badRange"]; return; }
+        _loading = true;
         _report = null;
         _openId = null;
         _detail = null;
-        _report = await Api.GetDailyInvoicesAsync(_date);
-    }
-
-    private async Task OnDate(DateTime? value)
-    {
-        _date = value?.Date ?? DateTime.Today;
-        await Load();
-    }
-
-    private async Task ShiftDay(int by)
-    {
-        _date = _date.AddDays(by);
-        if (_date > DateTime.Today) _date = DateTime.Today;
-        await Load();
+        _rowsPage = 0;
+        _itemsPage = 0;
+        StateHasChanged();
+        try
+        {
+            _report = await Api.GetInvoiceReportAsync(From, To);
+            // Never leave the spinner up: no answer means "try again", not an endless wait.
+            if (_report is null) _error = L["drep.loadFail"];
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
     }
 
     /// <summary>Open an invoice in place; open another and the first folds shut.</summary>
@@ -152,22 +275,30 @@ else
         _detail = await Api.GetInvoiceAsync(id);
     }
 
-    // ---------- Excel / print ----------
+    // ---------- Excel / print: the sales items of the span ----------
     private List<ExportColumnDto> ExportColumns =>
     [
-        new(L["inv.number"]),
-        new(L["inv.when"]),
-        new(L["inv.customer"]),
-        new(L["inv.items"], Numeric: true),
-        new(L["inv.status"]),
-        new(L["inv.total"], Numeric: true),
+        new(L["drep.item"]),
+        new(L["drep.qty"], Numeric: true),
+        new(L["drep.amount"], Numeric: true),
     ];
 
-    private Task<List<List<string>>> ExportRows() =>
-        Task.FromResult((_report?.Rows ?? []).Select(r => new List<string>
+    private Task<List<List<string>>> ExportRows()
+    {
+        var rows = (_report?.Items ?? []).Select(i => new List<string> { i.Name, i.Quantity.ToString(), i.Amount.ToString("0.000") }).ToList();
+        if (_report is { } r)
         {
-            r.Number, r.PlacedAt.ToString("HH:mm"),
-            r.CustomerName + (r.TableName is not null ? $" · {r.TableName}" : ""),
-            r.ItemCount.ToString(), r.Status, r.Total.ToString("0.000"),
-        }).ToList());
+            var s = r.Summary;
+            rows.Add(["", "", ""]);
+            rows.Add([L["drep.claimQty"], s.ClaimQuantity.ToString(), ""]);
+            rows.Add([L["drep.claimAmount"], "", s.CancelledTotal.ToString("0.000")]);
+            rows.Add([L["drep.taxCollected"], "", s.Tax.ToString("0.000")]);
+            rows.Add([L["drep.discounts"], "", s.Discounts.ToString("0.000")]);
+            rows.Add([L["drep.totalQty"], s.Quantity.ToString(), ""]);
+            rows.Add([L["drep.credit"], "", s.Credit.ToString("0.000")]);
+            rows.Add([L["drep.deliveryFee"], "", s.DeliveryFees.ToString("0.000")]);
+            rows.Add([L["inv.total"], "", s.Total.ToString("0.000")]);
+        }
+        return Task.FromResult(rows);
+    }
 }

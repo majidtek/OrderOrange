@@ -49,7 +49,7 @@
         <button type="button" title="@L["kds.sound"]" class="@(_sound ? "on" : "")" @onclick="ToggleSound">@(_sound ? "🔔" : "🔕")</button>
         <button type="button" title="@L["kds.fullscreen"]" @onclick="ToggleFullscreen">⛶</button>
         <a href="/orders" title="@L["kds.exit"]">✕</a>
-        <span class="clock">@Now.ToString("HH:mm")</span>
+        <span class="clock">@Fmt.Time(Now)</span>
     </div>
 </header>
 
@@ -239,7 +239,7 @@ else
         }
         @if (ticket.ScheduledFor is { } when)
         {
-            <p class="kds-when">@L["kds.scheduled"] @when.ToString("dd MMM HH:mm")</p>
+            <p class="kds-when">@L["kds.scheduled"] @Fmt.DayMonthTime(when)</p>
         }
 
         <button type="button" class="kds-bump" disabled="@_busy" @onclick="@(() => Bump(ticket, started))">

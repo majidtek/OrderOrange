@@ -77,11 +77,11 @@
                               Margin="Margin.Dense" Lines="4" Class="mt-3" Counter="2200" MaxLength="2200" />
 
                 <div class="igm-when mt-3">
-                    <MudSwitch T="bool" @bind-Value="_later" Color="Color.Primary" Label="@L["igm.later"]" />
+                    <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_later" Label="@L["igm.later"]" />
                     @if (_later)
                     {
                         <div class="igp-when mt-2">
-                            <MfDatePicker @bind-Date="_date" Label="@L["igp.date"]" MinDate="DateTime.Today" Class="flex-grow-1" />
+                            <MfDatePicker @bind-Date="_date" Label="@L["igp.date"]" MinDate="Fmt.ServerToday" Class="flex-grow-1" />
                             <MfTimePicker @bind-Time="_time" Label="@L["igp.time"]" Class="flex-grow-1" />
                         </div>
                     }
@@ -133,8 +133,8 @@
     private string _caption = "";
     private string? _preview, _error;
     private bool _loading = true, _busy, _later, _drawn;
-    private DateTime? _date = DateTime.Today;
-    private TimeSpan? _time = new TimeSpan(DateTime.Now.Hour + 1, 0, 0);
+    private DateTime? _date = Fmt.ServerToday;
+    private TimeSpan? _time = new TimeSpan(Fmt.ServerNow.Hour + 1, 0, 0);
 
     private List<MenuItemDto> Candidates => _menu
         .Where(c => _categoryId == 0 || c.Id == _categoryId)
@@ -220,7 +220,7 @@
             {
                 if (_date is not { } d || _time is not { } t) { _error = L["igp.past"]; return; }
                 var when = d.Date + t;
-                if (when <= DateTime.Now) { _error = L["igp.past"]; return; }
+                if (when <= Fmt.ServerNow) { _error = L["igp.past"]; return; }
                 var (post, error) = await Api.SchedulePostAsync(new SchedulePostRequest(_caption.Trim(), when, null, null, _preview));
                 if (post is null) { _error = error ?? L["common.saveFail"]; return; }
                 Snackbar.Add(L["igp.scheduled"], Severity.Success);

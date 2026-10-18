@@ -49,6 +49,7 @@ public partial class MainWindow : MetroWindow
 
     /// <summary>The receipt the owner designed in the partner panel — refreshed on sign-in.</summary>
     private ReceiptDesignDto _design = ReceiptDesignDto.Default;
+    private KitchenDesignDto _kitchenDesign = KitchenDesignDto.Default;
 
     /// <summary>The store facts printed on the bill (name, address, CR/VAT) + the QR host.</summary>
     private StoreProfile _store = StoreProfile.Fallback("", "https://orderorange.com");
@@ -207,6 +208,7 @@ public partial class MainWindow : MetroWindow
     private async Task LoadDesignAsync()
     {
         _design = await _api.ReceiptDesignAsync();
+        _kitchenDesign = await _api.KitchenDesignAsync();
         var clientUrl = string.IsNullOrWhiteSpace(_setup.ClientUrl) ? "https://orderorange.com" : _setup.ClientUrl;
         var profile = await _api.ProfileAsync();
         _serverKitchenLang = profile?.KitchenLanguage ?? "";
@@ -584,7 +586,8 @@ public partial class MainWindow : MetroWindow
         try
         {
             _webPrinter ??= new WebReceiptPrinter(this);
-            var html = HtmlReceipt.BuildTicket(order, items, descs, _design.PaperWidth == 58 ? 58 : 80, names, changes, strings);
+            var html = HtmlReceipt.BuildTicket(order, items, descs, _design.PaperWidth == 58 ? 58 : 80, names, changes, strings,
+                _kitchenDesign, station.Name);
             var err = await _webPrinter.PrintAsync(html, station.PrinterName, _design.PaperWidth == 58 ? 58 : 80);
             if (err is not null)
             {

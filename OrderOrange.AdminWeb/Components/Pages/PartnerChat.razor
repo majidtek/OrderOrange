@@ -1,0 +1,205 @@
+﻿@page "/partner-chat"
+@inject ApiClient Api
+@inject LanguageService L
+@implements IDisposable
+
+@* Admin ↔ partner chat (Majed 2026-10-14: "I need to chat with partner as admin. They
+   can send me message and photo … and voice"). Left: every store that has a
+   conversation, plus a search to start one with any store. Right: the thread, with
+   text, photos, files and voice notes. On a phone the two take turns. *@
+
+<PageTitle>Admin — Partner chat</PageTitle>
+
+<div class="pch-desk @(_open is null ? "list" : "thread")">
+    <div class="pch-list">
+        <div class="pch-top">
+            <b>💬 @L["pchat.title"]</b>
+            <small>@L["pchat.sub"]</small>
+        </div>
+        <div class="pch-search">
+            <MudTextField T="string" Value="_search" ValueChanged="OnSearch" Immediate="true" DebounceInterval="300"
+                          Placeholder="@L["pchat.search"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" />
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_search))
+        {
+            <div class="pch-label">@L["pchat.startWith"]</div>
+            @if (_found is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else if (_found.Count == 0)
+            {
+                <div class="pch-none">@L["pchat.noFound"]</div>
+            }
+            @foreach (var s in _found ?? [])
+            {
+                var store = s;
+                <button type="button" class="pch-row" @onclick="@(() => Open(store))">
+                    <span class="lg">@store.LogoEmoji</span>
+                    <span class="mid">
+                        <b>@store.StoreName</b>
+                        <small>@store.OwnerName · #@store.RestaurantId</small>
+                    </span>
+                </button>
+            }
+        }
+        else if (_threads is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_threads.Count == 0)
+        {
+            <div class="pch-none">
+                <div style="font-size: 40px;">💬</div>
+                @L["pchat.none"]
+            </div>
+        }
+        else
+        {
+            @foreach (var t in _threads)
+            {
+                var thread = t;
+                <button type="button" class="pch-row @(_open?.RestaurantId == thread.RestaurantId ? "on" : "")" @onclick="@(() => Open(thread))">
+                    <span class="lg">@thread.LogoEmoji</span>
+                    <span class="mid">
+                        <span class="top">
+                            <b>@thread.StoreName</b>
+                            @if (thread.LastAt is { } at)
+                            {
+                                <small class="@(thread.Unread > 0 ? "hot" : "")">@Clock(at)</small>
+                            }
+                        </span>
+                        <span class="bot">
+                            <span class="pv @(thread.Unread > 0 ? "unread" : "")">@(thread.LastFrom == "me" ? "✓ " : "")@(thread.LastText.StartsWith('§') ? L[thread.LastText[1..]] : thread.LastText)</span>
+                            @if (thread.Unread > 0)
+                            {
+                                <span class="wa-unread">@(thread.Unread > 99 ? "99+" : thread.Unread.ToString())</span>
+                            }
+                        </span>
+                    </span>
+                </button>
+            }
+        }
+    </div>
+
+    <div class="pch-thread">
+        @if (_open is { } open)
+        {
+            <DirectChatPane ThreadKey="open.RestaurantId"
+                            Title="@($"{open.LogoEmoji} {open.StoreName}")"
+                            Subtitle="@($"{open.OwnerName} · #{open.RestaurantId}")"
+                            Avatar="@Initials(open.StoreName)"
+                            Empty="@string.Format(L["pchat.empty"], open.StoreName)"
+                            MineIsAdmin="true"
+                            OnBack="@(() => { _open = null; })"
+                            OnSynced="RefreshThreads"
+                            SyncFn="@((after, stamp) => Api.SyncPartnerChatAsync(open.RestaurantId, after, stamp))"
+                            SendFn="@(req => Api.SendPartnerChatAsync(open.RestaurantId, req))"
+                            EditFn="@((id, text) => Api.EditPartnerChatAsync(open.RestaurantId, id, text))"
+                            DeleteFn="@(id => Api.DeletePartnerChatAsync(open.RestaurantId, id))" />
+        }
+        else
+        {
+            <div class="pch-pick">
+                <div style="font-size: 56px;">🍊</div>
+                <b>@L["pchat.pick"]</b>
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .pch-desk { display: grid; grid-template-columns: 340px 1fr; height: calc(100vh - 120px); min-height: 460px;
+                border: 1px solid var(--mud-palette-lines-default); border-radius: 16px; overflow: hidden; background: var(--mud-palette-surface); }
+    .pch-list { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; border-inline-end: 1px solid var(--mud-palette-lines-default); }
+    .pch-top { padding: 14px 16px 6px; display: flex; flex-direction: column; }
+    .pch-top b { font-size: 16px; }
+    .pch-top small { font-size: 12px; color: var(--mud-palette-text-secondary); }
+    .pch-search { padding: 4px 12px 8px; }
+    .pch-label { padding: 4px 16px; font-size: 11.5px; font-weight: 700; color: var(--mud-palette-text-secondary); text-transform: uppercase; }
+    .pch-none { padding: 30px 16px; text-align: center; color: var(--mud-palette-text-secondary); font-size: 13px; }
+    .pch-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: 0; background: none;
+               text-align: start; cursor: pointer; border-bottom: 1px solid var(--mud-palette-lines-default); color: inherit; font: inherit; }
+    .pch-row:hover { background: rgba(255, 90, 0, .05); }
+    .pch-row.on { background: rgba(255, 90, 0, .10); }
+    .pch-row .lg { width: 38px; height: 38px; border-radius: 50%; background: #fff3ea; display: flex; align-items: center; justify-content: center; font-size: 20px; flex: none; }
+    .pch-row .mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pch-row .mid > b, .pch-row .top b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pch-row .mid > small { font-size: 11.5px; color: var(--mud-palette-text-secondary); }
+    .pch-row .top, .pch-row .bot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+    .pch-row .top small { font-size: 11px; color: var(--mud-palette-text-secondary); flex: none; }
+    .pch-row .top small.hot { color: #FF5A00; font-weight: 700; }
+    .pch-row .pv { font-size: 12.5px; color: var(--mud-palette-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pch-row .pv.unread { color: var(--mud-palette-text-primary); font-weight: 700; }
+    .pch-thread { min-height: 0; display: flex; flex-direction: column; }
+    .pch-thread .wa-pane { height: 100%; }
+    .pch-pick { margin: auto; text-align: center; display: flex; flex-direction: column; gap: 8px; color: var(--mud-palette-text-secondary); }
+    @@media (max-width: 899px) {
+        .pch-desk { grid-template-columns: 1fr; height: calc(100vh - 96px); }
+        .pch-desk.list .pch-thread { display: none; }
+        .pch-desk.thread .pch-list { display: none; }
+    }
+</style>
+
+@code {
+    [SupplyParameterFromQuery(Name = "store")] public int? StoreId { get; set; }
+
+    private List<PartnerChatThreadDto>? _threads;
+    private List<PartnerChatThreadDto>? _found;
+    private PartnerChatThreadDto? _open;
+    private string _search = "";
+    private System.Threading.Timer? _poll;
+    private DateTime _lastRefresh;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _threads = await Api.GetPartnerChatThreadsAsync() ?? [];
+        // A push notification links here with ?store=… — open that conversation straight away.
+        if (StoreId is { } id)
+        {
+            _open = _threads.FirstOrDefault(t => t.RestaurantId == id)
+                    ?? (await Api.SearchPartnerChatStoresAsync(id.ToString()))?.FirstOrDefault();
+        }
+        _poll = new System.Threading.Timer(async _ => await InvokeAsync(RefreshThreads), null, 10000, 10000);
+    }
+
+    private async Task OnSearch(string value)
+    {
+        _search = value ?? "";
+        if (string.IsNullOrWhiteSpace(_search)) { _found = null; return; }
+        _found = null;
+        _found = await Api.SearchPartnerChatStoresAsync(_search.Trim()) ?? [];
+    }
+
+    private void Open(PartnerChatThreadDto store)
+    {
+        _open = store;
+        _search = "";
+        _found = null;
+    }
+
+    /// <summary>Re-reads the inbox (unread counts, previews) at most every few seconds.</summary>
+    private async Task RefreshThreads()
+    {
+        if (DateTime.Now - _lastRefresh < TimeSpan.FromSeconds(6)) return;
+        _lastRefresh = DateTime.Now;
+        try
+        {
+            var fresh = await Api.GetPartnerChatThreadsAsync();
+            if (fresh is not null) { _threads = fresh; StateHasChanged(); }
+        }
+        catch { }
+    }
+
+    private string Clock(DateTime at) =>
+        at.Date == DateTime.Today ? at.ToString("HH:mm")
+        : at.Date == DateTime.Today.AddDays(-1) ? L["qc.yesterday"]
+        : at.ToString("dd MMM");
+
+    private static string Initials(string s) =>
+        string.IsNullOrWhiteSpace(s) ? "•" : s.Trim().Length <= 2 ? s.Trim() : s.Trim()[..2];
+
+    public void Dispose() => _poll?.Dispose();
+}

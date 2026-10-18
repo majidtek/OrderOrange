@@ -538,6 +538,40 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     // ---------- What people ask the assistants ----------
     public Task<(bool ok, string? error)> LogBotChatAsync(BotChatLogRequest req) =>
         SendAsync(HttpMethod.Post, "api/track/bot", req);
+    /// <summary>The API's public origin as this app reaches it — for plain links such as the till download.</summary>
+    public string ApiBase => http.BaseAddress?.ToString().TrimEnd('/') ?? "";
+    /// <summary>The current Windows till release; null when none is published.</summary>
+    public Task<TillVersionDto?> GetTillVersionAsync() => GetAsync<TillVersionDto>("api/till/version");
+
+    /// <summary>The Android till (APK) on offer, or null when none has been published.</summary>
+    public Task<TillVersionDto?> GetAndroidTillVersionAsync() => GetAsync<TillVersionDto>("api/till/android/version");
+    /// <summary>The partner assistant: Grok with store-scoped MCP tools (reads and the two store actions).</summary>
+    public Task<(AnalystReplyDto? data, string? error)> AskPartnerAssistantAsync(AnalystAskRequest req) =>
+        SendForAsync<AnalystReplyDto>(HttpMethod.Post, "api/assistant/partner", req);
+    /// <summary>The administrators' data analyst (Grok + the OrderOrange MCP tools).</summary>
+    // ---------- Admin: disk space ----------
+    public Task<DiskStatusDto?> GetDiskStatusAsync() => GetAsync<DiskStatusDto>("api/admin/disk");
+    public Task<(bool, string?)> ScanDiskAsync() => SendAsync(HttpMethod.Post, "api/admin/disk/scan", new { });
+    public Task<(DiskCleanResultDto? data, string? error)> CleanDiskAsync(DiskCleanRequest req) =>
+        SendForAsync<DiskCleanResultDto>(HttpMethod.Post, "api/admin/disk/clean", req);
+
+    // ---------- Admin: backups ----------
+    public Task<BackupStatusDto?> GetBackupStatusAsync() => GetAsync<BackupStatusDto>("api/admin/backup");
+    public Task<(bool, string?)> SaveBackupSettingsAsync(BackupSettingsRequest req) => SendAsync(HttpMethod.Put, "api/admin/backup", req);
+    public Task<(bool, string?)> RunBackupNowAsync() => SendAsync(HttpMethod.Post, "api/admin/backup/run", new { });
+    public Task<List<BackupFileDto>?> GetBackupFilesAsync() => GetAsync<List<BackupFileDto>>("api/admin/backup/files");
+    public Task<(BackupLinkDto? data, string? error)> GetBackupLinkAsync(string name) =>
+        SendForAsync<BackupLinkDto>(HttpMethod.Post, $"api/admin/backup/files/{Uri.EscapeDataString(name)}/link", new { });
+
+    /// <summary>Names in more languages, from one name (Grok). Empty dictionary on failure.</summary>
+    public Task<(Dictionary<string, string>? data, string? error)> TranslateNamesAsync(TranslateNamesRequest req) =>
+        SendForAsync<Dictionary<string, string>>(HttpMethod.Post, "api/assistant/translate", req);
+
+    public Task<(AnalystReplyDto? data, string? error)> AskAnalystAsync(AnalystAskRequest req) =>
+        SendForAsync<AnalystReplyDto>(HttpMethod.Post, "api/assistant/analyst", req);
+    /// <summary>The language model's answer, or null when it has none (no key, outage, throttled).</summary>
+    public async Task<AssistantReplyDto?> AskAssistantAsync(AssistantAskRequest req) =>
+        (await SendForAsync<AssistantReplyDto>(HttpMethod.Post, "api/assistant/reply", req)).data;
     public Task<BotChatIpsDto?> AdminBotChatsAsync(int skip = 0, int take = 50, string? search = null) =>
         GetAsync<BotChatIpsDto>($"api/admin/bot-chats?skip={skip}&take={take}&search={Uri.EscapeDataString(search ?? "")}");
     public Task<BotChatTurnsDto?> AdminBotChatTurnsAsync(string ip, int limit = 500) =>
@@ -699,9 +733,10 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     /// Offer only real, hand-onboarded kitchens. The ordering assistant sets this — it
     /// puts food in a basket, and a generated demo shop cannot cook.
     /// </param>
-    public Task<SearchResultsDto?> SearchAsync(string query, bool realOnly = false) =>
+    /// <param name="storeId">Search inside one store only (the assistant on a store page).</param>
+    public Task<SearchResultsDto?> SearchAsync(string query, bool realOnly = false, int? storeId = null) =>
         GetAsync<SearchResultsDto>($"api/restaurants/search?query={Uri.EscapeDataString(query)}" +
-            (realOnly ? "&realOnly=true" : ""));
+            (realOnly ? "&realOnly=true" : "") + (storeId is > 0 ? $"&storeId={storeId}" : ""));
     public Task<List<int>?> GetFavoriteRestaurantIdsAsync() => GetAsync<List<int>>("api/restaurants/favorites");
     public Task<(bool, string?)> ToggleFavoriteAsync(int id) => SendAsync(HttpMethod.Post, $"api/restaurants/{id}/favorite");
     public Task<List<PromoDto>?> GetPromosAsync() => GetAsync<List<PromoDto>>("api/coupons/promos");
@@ -748,6 +783,8 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     /// <summary>A dine-in order from a scanned table QR — no account needed.</summary>
     public Task<(TableOrderResultDto? result, string? error)> PlaceTableOrderAsync(PlaceTableOrderRequest req) =>
         PostForAsync<TableOrderResultDto>("api/orders/table", req);
+    public Task<(TableOrderResultDto? result, string? error)> PlaceQrOrderAsync(PlaceQrOrderRequest req) =>
+        PostForAsync<TableOrderResultDto>("api/orders/qr", req);
 
     // ---------- Invoices: cancel, edit, and the paper trail ----------
     public Task<List<InvoiceRowDto>?> GetInvoicesAsync(int days = 7, string? search = null, int skip = 0, int take = 25) =>
@@ -764,6 +801,15 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
         GetAsync<List<InvoiceEditDto>>($"api/invoices/edits?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}&skip={skip}&take={take}");
     public Task<DailyInvoicesDto?> GetDailyInvoicesAsync(DateTime date) =>
         GetAsync<DailyInvoicesDto>($"api/invoices/daily?date={date:yyyy-MM-dd}");
+    // ---------- Admin: partner reports ----------
+    public Task<AllStoresReportDto?> GetAllStoresReportAsync(DateTime from, DateTime to) =>
+        GetAsync<AllStoresReportDto>($"api/admin/reports/stores?from={from:yyyy-MM-ddTHH:mm}&to={to:yyyy-MM-ddTHH:mm}");
+    public Task<DailyInvoicesDto?> GetStoreReportAsync(int storeId, DateTime from, DateTime to) =>
+        GetAsync<DailyInvoicesDto>($"api/admin/reports/stores/{storeId}?from={from:yyyy-MM-ddTHH:mm}&to={to:yyyy-MM-ddTHH:mm}");
+
+    /// <summary>The report for any span, to the minute (from inclusive, to exclusive).</summary>
+    public Task<DailyInvoicesDto?> GetInvoiceReportAsync(DateTime from, DateTime to) =>
+        GetAsync<DailyInvoicesDto>($"api/invoices/daily?from={from:yyyy-MM-ddTHH:mm}&to={to:yyyy-MM-ddTHH:mm}");
 
     /// <summary>A printed card's table NUMBER → the signed /reserve code for that table.</summary>
     public Task<TableCodeDto?> ResolveTableAsync(int storeId, int table) =>
@@ -810,6 +856,11 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     public Task<(StoreSummaryDto? store, string? error)> CreateMyStoreAsync(CreateMyStoreRequest req) =>
         PostForAsync<StoreSummaryDto>("api/restaurants/my-stores", req);
     public Task<(bool, string?)> UpdateMyRestaurantAsync(UpdateRestaurantRequest req) => SendAsync(HttpMethod.Put, "api/restaurants/mine", req);
+    /// <summary>The time zones the pickers offer (labelled with their current UTC offset).</summary>
+    public Task<List<TimeZoneOptionDto>?> GetTimeZonesAsync() => GetAsync<List<TimeZoneOptionDto>>("api/restaurants/timezones");
+    /// <summary>The post-registration country + currency answer.</summary>
+    public Task<(bool, string?)> SetMyRegionAsync(RegionRequest req) => SendAsync(HttpMethod.Put, "api/restaurants/mine/region", req);
+    public Task<(bool, string?)> SetMyBasicsAsync(StoreBasicsRequest req) => SendAsync(HttpMethod.Put, "api/restaurants/mine/basics", req);
 
     // ---------- Product → printer routing + till charge ----------
     public Task<List<PrintRouteDto>?> GetPrintRoutesAsync() => GetAsync<List<PrintRouteDto>>("api/restaurants/mine/print-routes");
@@ -967,6 +1018,8 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     // ---------- Receipt design ----------
     public Task<ReceiptDesignDto?> GetMyReceiptDesignAsync() => GetAsync<ReceiptDesignDto>("api/restaurants/mine/receipt");
     public Task<(bool, string?)> SaveMyReceiptDesignAsync(ReceiptDesignDto design) => SendAsync(HttpMethod.Put, "api/restaurants/mine/receipt", design);
+    public Task<KitchenDesignDto?> GetMyKitchenDesignAsync() => GetAsync<KitchenDesignDto>("api/restaurants/mine/kitchen-design");
+    public Task<(bool, string?)> SaveMyKitchenDesignAsync(KitchenDesignDto design) => SendAsync(HttpMethod.Put, "api/restaurants/mine/kitchen-design", design);
 
     // ---------- Anonymous visit analytics ----------
     public Task TrackStoreVisitAsync(int restaurantId, int? itemId = null, string? itemName = null) =>
@@ -1125,6 +1178,53 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
 
     public Task<List<ChatMessageDto>?> GetAdminChatMessagesAsync(int orderId) =>
         GetAsync<List<ChatMessageDto>>($"api/admin/chats/{orderId}");
+
+    // ---------- Partner ↔ admin direct chat, partner side (api/adminchat) ----------
+    public async Task<int> GetAdminChatUnreadAsync() =>
+        (await GetAsync<int?>("api/adminchat/unread")).GetValueOrDefault();
+    public Task<CommunityChatSyncDto?> SyncAdminChatAsync(int afterId, long stamp) =>
+        GetAsync<CommunityChatSyncDto>($"api/adminchat/sync?afterId={afterId}&stamp={stamp}");
+    public Task<(CommunityChatMessageDto? message, string? error)> SendAdminChatAsync(SendTableChatRequest req) =>
+        PostForAsync<CommunityChatMessageDto>("api/adminchat", req);
+    public Task<(CommunityChatMessageDto? message, string? error)> EditAdminChatAsync(int id, string text) =>
+        SendForAsync<CommunityChatMessageDto>(HttpMethod.Put, $"api/adminchat/messages/{id}", new EditTableChatRequest(text));
+    public Task<(CommunityChatMessageDto? message, string? error)> DeleteAdminChatAsync(int id) =>
+        DeleteForAsync<CommunityChatMessageDto>($"api/adminchat/messages/{id}");
+
+    // ---------- Partner ↔ admin direct chat, admin side (api/admin/chat) ----------
+    public async Task<int> GetPartnerChatUnreadAsync() =>
+        (await GetAsync<int?>("api/admin/chat/unread")).GetValueOrDefault();
+    public Task<List<PartnerChatThreadDto>?> GetPartnerChatThreadsAsync() =>
+        GetAsync<List<PartnerChatThreadDto>>("api/admin/chat/threads");
+    public Task<List<PartnerChatThreadDto>?> SearchPartnerChatStoresAsync(string search) =>
+        GetAsync<List<PartnerChatThreadDto>>("api/admin/chat/stores?search=" + Uri.EscapeDataString(search ?? ""));
+    public Task<CommunityChatSyncDto?> SyncPartnerChatAsync(int restaurantId, int afterId, long stamp) =>
+        GetAsync<CommunityChatSyncDto>($"api/admin/chat/{restaurantId}/sync?afterId={afterId}&stamp={stamp}");
+    public Task<(CommunityChatMessageDto? message, string? error)> SendPartnerChatAsync(int restaurantId, SendTableChatRequest req) =>
+        PostForAsync<CommunityChatMessageDto>($"api/admin/chat/{restaurantId}", req);
+    public Task<(CommunityChatMessageDto? message, string? error)> EditPartnerChatAsync(int restaurantId, int id, string text) =>
+        SendForAsync<CommunityChatMessageDto>(HttpMethod.Put, $"api/admin/chat/{restaurantId}/messages/{id}", new EditTableChatRequest(text));
+    public Task<(CommunityChatMessageDto? message, string? error)> DeletePartnerChatAsync(int restaurantId, int id) =>
+        DeleteForAsync<CommunityChatMessageDto>($"api/admin/chat/{restaurantId}/messages/{id}");
+
+    // ---------- Admin mailbox (api/admin/mail) ----------
+    public Task<MailStatusDto?> GetMailStatusAsync() => GetAsync<MailStatusDto>("api/admin/mail/status");
+    public async Task<int> GetMailUnreadAsync() =>
+        (await GetAsync<int?>("api/admin/mail/unread")).GetValueOrDefault();
+    public Task<List<MailFolderDto>?> GetMailFoldersAsync() => GetAsync<List<MailFolderDto>>("api/admin/mail/folders");
+    public Task<MailPageDto?> GetMailMessagesAsync(string folder, int skip, int take, string? search, bool unread) =>
+        GetAsync<MailPageDto>($"api/admin/mail/messages?folder={Uri.EscapeDataString(folder)}&skip={skip}&take={take}&search={Uri.EscapeDataString(search ?? "")}&unread={unread}");
+    public Task<MailMessageDto?> GetMailMessageAsync(string folder, uint uid) =>
+        GetAsync<MailMessageDto>($"api/admin/mail/messages/{uid}?folder={Uri.EscapeDataString(folder)}");
+    public Task<MailFileDto?> GetMailAttachmentAsync(string folder, uint uid, int index) =>
+        GetAsync<MailFileDto>($"api/admin/mail/messages/{uid}/attachments/{index}?folder={Uri.EscapeDataString(folder)}");
+    public Task<(bool, string?)> MarkMailAsync(MailMarkRequest req) => SendAsync(HttpMethod.Post, "api/admin/mail/mark", req);
+    public Task<(bool, string?)> DeleteMailAsync(MailDeleteRequest req) => SendAsync(HttpMethod.Post, "api/admin/mail/delete", req);
+    public Task<(bool, string?)> SendMailAsync(MailSendRequest req) => SendAsync(HttpMethod.Post, "api/admin/mail/send", req);
+
+    // ---------- Table-QR guest order: where it stands ----------
+    public Task<GuestOrderStatusDto?> GetQrOrderStatusAsync(int id, string key) =>
+        GetAsync<GuestOrderStatusDto>($"api/orders/qr/{id}/status?key={Uri.EscapeDataString(key)}");
 
     public Task<(bool, string?)> AdminAdvanceOrderAsync(int id) =>
         SendAsync(HttpMethod.Post, $"api/admin/orders/{id}/advance");

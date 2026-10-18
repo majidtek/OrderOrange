@@ -72,7 +72,7 @@ else
                         }
                         @if (promo.EndsAt is DateTime end)
                         {
-                            <span class="pill @(end < DateTime.Now ? "wait" : "closed")">⏳ @string.Format(L["dc.c.until"], end.ToString("yyyy-MM-dd"))</span>
+                            <span class="pill @(end < Fmt.ServerNow ? "wait" : "closed")">⏳ @string.Format(L["dc.c.until"], Fmt.Date(end, shift: false))</span>
                         }
                         @if (!promo.IsPublic)
                         {
@@ -82,7 +82,7 @@ else
                     <div class="foot">
                         <small>@string.Format(L["dc.usedTimes"], promo.Uses)@(promo.MaxUses > 0 ? $" / {promo.MaxUses}" : "") · @string.Format(L["dc.saved"], promo.Saved.ToString("0.###"))</small>
                         <MudSpacer />
-                        <MudSwitch T="bool" Value="promo.IsActive" ValueChanged="@(async (bool _) => await Toggle(promo))" Color="Color.Success" Size="Size.Small" Label="@(promo.IsActive ? L["dc.on"] : L["dc.off"])" />
+                        <MudSwitch Color="Color.Success" T="bool" Value="promo.IsActive" ValueChanged="@(async (bool _) => await Toggle(promo))" Size="Size.Small" Label="@(promo.IsActive ? L["dc.on"] : L["dc.off"])" />
                         <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
                             <MudMenuItem Icon="@Icons.Material.Filled.Edit" OnClick="@(() => BeginEdit(promo))">@L["common.edit"]</MudMenuItem>
                             <MudMenuItem Icon="@Icons.Material.Filled.DeleteOutline" IconColor="Color.Error" OnClick="@(() => Delete(promo))">@L["common.delete"]</MudMenuItem>
@@ -136,7 +136,7 @@ else
                 {
                     <MudNumericField T="decimal" @bind-Value="_f.MaxDiscount" Label="@L["dc.f.maxDiscount"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Step="0.5m" Class="mf-ltr" HelperText="@L["dc.f.zeroUnlimited"]" />
                 }
-                <MudNumericField T="decimal" @bind-Value="_f.MinOrder" Label="@L["dc.f.minOrder"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Step="0.5m" Class="mf-ltr" />
+                <MudNumericField T="decimal" @bind-Value="_f.MinOrder" Label="@($"{L["partner.minOrder"]} ({Fmt.Symbol})")" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Step="0.5m" Class="mf-ltr" />
 
                 <label class="dc-field span2"><span>@L["dc.f.rule"]</span>
                     <select class="dc-sel" @bind="_f.Rule">
@@ -190,8 +190,8 @@ else
                 <MudNumericField T="int" @bind-Value="_f.MaxUsesPerCustomer" Label="@L["dc.f.perCustomer"]" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Class="mf-ltr" HelperText="@L["dc.f.zeroUnlimited"]" />
 
                 <div class="dc-switches span2">
-                    <MudSwitch T="bool" @bind-Value="_f.IsActive" Color="Color.Success" Size="Size.Small" Label="@L["dc.f.active"]" />
-                    <MudSwitch T="bool" @bind-Value="_f.IsPublic" Color="Color.Primary" Size="Size.Small" Label="@L["dc.f.public"]" />
+                    <MudSwitch Color="Color.Success" T="bool" @bind-Value="_f.IsActive" Size="Size.Small" Label="@L["dc.f.active"]" />
+                    <MudSwitch Color="Color.Success" T="bool" @bind-Value="_f.IsPublic" Size="Size.Small" Label="@L["dc.f.public"]" />
                 </div>
             </div>
 

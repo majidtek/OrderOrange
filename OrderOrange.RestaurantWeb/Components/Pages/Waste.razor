@@ -173,7 +173,7 @@ else
                             </span>
                             <span class="qt">@Fmt.Amount(e.Quantity) @e.Unit</span>
                             <span class="val">@Fmt.Money(e.Cost)</span>
-                            <span class="who">@e.By · @e.At.ToString("dd MMM HH:mm")</span>
+                            <span class="who">@e.By · @Fmt.DayMonthTime(e.At)</span>
                             <button type="button" class="undo" title="@L["waste.undo"]" @onclick="@(() => Undo(e))">↺</button>
                         </div>
                     }

@@ -281,12 +281,37 @@ public record InvoiceSnapshotDto(
     List<InvoiceLineDto> Lines);
 
 /// <summary>One day of invoices, totalled — the partner's daily report.</summary>
-public record DailyInvoicesDto(DailyInvoicesSummaryDto Summary, List<InvoiceRowDto> Rows);
+public record DailyInvoicesDto(DailyInvoicesSummaryDto Summary, List<InvoiceRowDto> Rows,
+    List<SalesItemDto>? Items = null, DateTime? From = null, DateTime? To = null);
 
+/// <summary>
+/// The report summary (Majed 2026-10-14, modelled on his POS "Daily Report": claim quantity /
+/// amount, tax collected, discounts, total, total quantity, credit, delivery fee).
+/// Claim = cancelled invoices; Credit = live invoices not yet paid.
+/// </summary>
 public record DailyInvoicesSummaryDto(
     int Count,
     int Live,
     int Cancelled,
     decimal Total,
     decimal CancelledTotal,
-    int ItemCount);
+    int ItemCount,
+    int Quantity = 0,
+    int ClaimQuantity = 0,
+    decimal Tax = 0,
+    decimal Discounts = 0,
+    decimal DeliveryFees = 0,
+    decimal Credit = 0,
+    decimal Subtotal = 0,
+    decimal Cash = 0,
+    decimal Card = 0);
+
+/// <summary>One dish in the period: how many were sold and for how much (live invoices only).</summary>
+public record SalesItemDto(string Name, int Quantity, decimal Amount);
+
+/// <summary>Admin: one partner's line in the all-partners report.</summary>
+public record StoreReportRowDto(int StoreId, string Name, string Emoji, int Invoices, int Cancelled, int Quantity,
+    decimal Total, decimal Tax, decimal Discounts, decimal DeliveryFees, decimal Credit, decimal CancelledTotal);
+
+/// <summary>Admin: every partner with sales in the span.</summary>
+public record AllStoresReportDto(DateTime From, DateTime To, List<StoreReportRowDto> Stores);

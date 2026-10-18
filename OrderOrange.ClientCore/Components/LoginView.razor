@@ -75,7 +75,12 @@
                 <MudTextField @bind-Value="_name" Label="@(PartnerRegister ? Lang["login.ownerName"] : Lang["login.fullname"])"
                               HelperText="@(PartnerRegister ? Lang["login.ownerNameHint"] : null)"
                               Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-3" Immediate="true" />
-                <MudTextField @bind-Value="_phone" Label="@Lang["common.phone"]" Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-3 mf-ltr" Placeholder="+968 ..." Immediate="true" />
+                @* Country flag + dialling code (Majed 2026-10-14: "when user on login change country,
+                   like to Oman, then automatically change phone number to +968"). Starts on the
+                   visitor's own country, guessed from the device's time zone. *@
+                <div class="mb-3">
+                    <PhoneField @bind-Value="_phone" Label="@Lang["common.phone"]" DefaultCountry="@_phoneCountry" />
+                </div>
                 @if (PartnerRegister)
                 {
                     <MudSelect T="StoreType" @bind-Value="_regStoreType" Label="@Lang["partner.storeType"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
@@ -136,11 +141,11 @@
             {
                 @* Staff portals: plain credentials, controlled by the shop. The register
                    tab is the application form, where the password is CHOSEN. *@
-                @* Staff think of this as a USERNAME (it happens to be their email). The
-                   customer register tab says username too — an email works, but nothing
-                   demands one. Only the driver application keeps saying "email": there a
-                   real contact address is being collected. Both fields are hard LTR. *@
-                <MudTextField @bind-Value="_email" Label="@(_tab == 0 || PartnerRegister || ShowRegister ? Lang["login.username"] : Lang["common.email"])"
+                @* Staff think of this as a USERNAME (it happens to be their email). Every
+                   register tab says username too — the rider application as well (Majed
+                   2026-10-14: "in register it asks for email, not username"); an email works,
+                   but nothing demands one. Both fields are hard LTR. *@
+                <MudTextField @bind-Value="_email" Label="@Lang["login.username"]"
                               UserAttributes="@NoAutofill"
                               Variant="Variant.Outlined" Margin="Margin.Dense" ShrinkLabel="true" Class="mb-3 mf-ltr"
                               InputType="InputType.Email" Immediate="true" />
@@ -348,6 +353,8 @@
     private int _tab;
     private string _name = "";
     private string _phone = "";
+    /// <summary>ISO-2 country the phone box starts on — from the device's time zone, Oman when unknown.</summary>
+    private string? _phoneCountry;
     private string _restName = "";
     private string _area = "";
     private Dictionary<string, string> _regNames = [];
@@ -362,7 +369,7 @@
     }
 
     private string NamesSummary =>
-        _regNames.Count == 0 ? "" : string.Join(" · ", new[] { "ar", "en" }
+        _regNames.Count == 0 ? "" : string.Join(" · ", new[] { "en", "ar" }
             .Where(_regNames.ContainsKey).Select(c => _regNames[c])
             .Concat(_regNames.Count > 2 ? [$"+{_regNames.Count - 2}"] : Array.Empty<string>()));
 
@@ -535,6 +542,43 @@
         if (firstRender)
         {
             await Lang.EnsureLoadedAsync();
+
+            // Arrivals from the POS sales page (www.orderorange.com/pos) are prospects, not
+            // regulars: they land on "Open your business", whichever link they tapped
+            // (Majed 2026-10-15). A plain ?open=1 on the address does the same for any link.
+            if (PartnerRegister && RegisterHref is not null)
+            {
+                try
+                {
+                    var uri = new Uri(Nav.Uri);
+                    var wantsRegister = uri.Query.Contains("open=1", StringComparison.OrdinalIgnoreCase);
+                    if (!wantsRegister)
+                    {
+                        var referrer = await JS.InvokeAsync<string>("eval", "document.referrer || ''");
+                        wantsRegister = referrer.Contains("orderorange.com/pos", StringComparison.OrdinalIgnoreCase);
+                    }
+                    if (wantsRegister && !uri.AbsolutePath.StartsWith(RegisterHref, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Nav.NavigateTo(RegisterHref);
+                        return;
+                    }
+                }
+                catch { /* no JS — the sign-in tab is still fine */ }
+            }
+
+            // Which country is this visitor in? The phone box starts on it (a phone in Muscat
+            // reports Asia/Muscat). Per visitor — never the shared static default, which on
+            // the Blazor Server customer site would be one value for everybody.
+            try
+            {
+                var zone = await JS.InvokeAsync<string>("eval", "Intl.DateTimeFormat().resolvedOptions().timeZone");
+                if (StoreRegions.FromTimeZone(zone) is { } region && region.Code.Length == 2)
+                {
+                    _phoneCountry = region.Code.ToLowerInvariant();
+                    StateHasChanged();
+                }
+            }
+            catch { /* prerender or no JS — the box keeps its default */ }
 
             // A dedicated code page: the code is already in the inbox, so there is
             // nothing to ask the server and no Google button to draw.
@@ -861,7 +905,7 @@
         _success = null;
         if (string.IsNullOrWhiteSpace(_email))
         {
-            _error = Lang["login.enterEmail"];
+            _error = PasswordOnly ? Lang["rg.needAcc"] : Lang["login.enterEmail"];
             return;
         }
         // A password-only portal's application must CHOOSE the password here — there is
@@ -896,9 +940,9 @@
             // profile, where the business photos are waiting to be added.
             if (PartnerRegister)
             {
-                if (!_regNames.ContainsKey("ar"))
+                if (!_regNames.ContainsKey("en"))
                 {
-                    _error = Lang["nm.needAr"];
+                    _error = Lang["nm.needEn"];
                     return;
                 }
                 var (ok, applyError) = await Api.RegisterPartnerAsync(

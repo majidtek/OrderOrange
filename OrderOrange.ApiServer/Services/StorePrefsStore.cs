@@ -11,6 +11,18 @@ public sealed class StorePrefsDoc
 
     /// <summary>What money is called on this shop's screens: "OMR", "﷼", "$", "د.إ".</summary>
     public string Currency { get; set; } = "";
+
+    /// <summary>ISO 3166 country the shop trades in ("OM"); empty = never answered.</summary>
+    public string Country { get; set; } = "";
+
+    /// <summary>IANA time zone ("Asia/Muscat"); empty = the server's own.</summary>
+    public string TimeZone { get; set; } = "";
+
+    /// <summary>"dmy" | "mdy" | "ymd"; empty = dmy.</summary>
+    public string DateFormat { get; set; } = "";
+
+    /// <summary>"24" | "12"; empty = 24.</summary>
+    public string TimeFormat { get; set; } = "";
 }
 
 /// <summary>
@@ -29,6 +41,30 @@ public sealed class StorePrefsStore
     {
         var doc = await _prefs.Find(p => p.Id == storeId).FirstOrDefaultAsync();
         return doc?.Currency ?? "";
+    }
+
+    /// <summary>Everything at once (currency and country) — one read for the owner's own store.</summary>
+    public async Task<StorePrefsDoc> GetAsync(int storeId) =>
+        await _prefs.Find(p => p.Id == storeId).FirstOrDefaultAsync() ?? new StorePrefsDoc { Id = storeId };
+
+    /// <summary>Time zone, date order and clock in one write; a blank value leaves that one unchanged.</summary>
+    public Task SetClockAsync(int storeId, string? timeZone, string? dateFormat, string? timeFormat)
+    {
+        var updates = new List<UpdateDefinition<StorePrefsDoc>> { Builders<StorePrefsDoc>.Update.SetOnInsert(p => p.Id, storeId) };
+        if (!string.IsNullOrWhiteSpace(timeZone)) updates.Add(Builders<StorePrefsDoc>.Update.Set(p => p.TimeZone, timeZone.Trim()));
+        if (dateFormat is "dmy" or "mdy" or "ymd") updates.Add(Builders<StorePrefsDoc>.Update.Set(p => p.DateFormat, dateFormat));
+        if (timeFormat is "24" or "12") updates.Add(Builders<StorePrefsDoc>.Update.Set(p => p.TimeFormat, timeFormat));
+        return _prefs.UpdateOneAsync(p => p.Id == storeId, Builders<StorePrefsDoc>.Update.Combine(updates), new UpdateOptions { IsUpsert = true });
+    }
+
+    public Task SetCountryAsync(int storeId, string? code)
+    {
+        var clean = (code ?? "").Trim().ToUpperInvariant();
+        if (clean.Length > 2) clean = clean[..2];
+        return _prefs.UpdateOneAsync(
+            p => p.Id == storeId,
+            Builders<StorePrefsDoc>.Update.Set(p => p.Country, clean).SetOnInsert(p => p.Id, storeId),
+            new UpdateOptions { IsUpsert = true });
     }
 
     /// <summary>Reads many at once, for a list that shows several shops.</summary>

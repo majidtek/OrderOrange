@@ -1,12 +1,13 @@
 @inject ApiClient Api
 @inject LanguageService L
 
-@* A category speaks every tongue the store does: Arabic anchors the set,
-   any other language is added by choice — same as product names. *@
+@* A category speaks every tongue the store does: English anchors the set and every other
+   language stands in the form, with one-tap translation (Majed 2026-10-13: "in product
+   group we need all language"). *@
 
 <MudDialog>
     <DialogContent>
-        <StoreNameFields @bind-Value="_names" />
+        <StoreNameFields @bind-Value="_names" ShowAll="true" Translate="true" />
         <MudNumericField @bind-Value="_sortOrder" Label="@L["partner.sortOrder"]" Variant="Variant.Outlined" Margin="Margin.Dense"
                          Class="mt-3" HelperText="@L["partner.sortHint"]" />
         @if (_error is not null)
@@ -35,18 +36,18 @@
         // A category from before the multilingual days claims its Arabic row.
         _names = Existing.Names is { Count: > 0 }
             ? new Dictionary<string, string>(Existing.Names)
-            : new Dictionary<string, string> { ["ar"] = Existing.Name };
+            : new Dictionary<string, string> { [NameScript.LangOf(Existing.Name)] = Existing.Name };
         _sortOrder = Existing.SortOrder;
     }
 
     private async Task Save()
     {
-        if (!_names.ContainsKey("ar")) { _error = L["nm.needAr"]; return; }
+        if (!_names.ContainsKey("en")) { _error = L["nm.needEn"]; return; }
         _error = null;
         _busy = true;
         try
         {
-            var canonical = _names.GetValueOrDefault("en") ?? _names["ar"];
+            var canonical = _names["en"];
             var request = new SaveCategoryRequest(canonical, _sortOrder, _names);
             var (ok, error) = Existing is null
                 ? await Api.CreateCategoryAsync(request)

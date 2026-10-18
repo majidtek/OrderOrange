@@ -640,6 +640,10 @@ public static partial class PosBotNlu
 
     private static readonly HashSet<string> QuestionWords =
         new[] { "کدام", "کدوم", "چند", "چندتا", "چقدر", "چنده", "چیه", "چیست", "کی", "کجا", "چطور", "چطوره", "چیکار", "تعداد",
+                // how / why / where in everyday Persian, Urdu, Hindi and Arabic (2026-10-13)
+                "چطوری", "چطوریه", "چجوری", "چجوریه", "چگونه", "جوری", "چرا", "چی", "چکار", "کجاست", "کجان", "آیا", "مگه",
+                "کیسے", "کیوں", "کہاں", "कैसे", "क्यों", "कहाँ", "कहां", "ليش", "لماذا", "لیه", "ليه", "وين", "فين", "هل", "متى",
+                "where", "why", "when",
                 "what", "which", "how", "many", "much", "كم", "أي", "اي", "ايش", "وش", "شنو", "بكم", "كيف", "شلون",
                 "hangi", "kaç", "kac", "nasıl", "nasil", "ne", "mı", "mi", "mu", "что", "какие", "сколько", "как",
                 "qué", "que", "cuál", "cual", "cuánto", "cuanto", "cuántas", "cuantas", "quelles", "quelle", "quel",

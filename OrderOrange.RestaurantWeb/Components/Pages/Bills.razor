@@ -93,7 +93,7 @@
                                 </div>
                             </td>
                             <td>
-                                <div>@b.DueDate.ToString("d MMM yyyy")</div>
+                                <div>@Fmt.DayMonthYear(b.DueDate, shift: false)</div>
                                 @if (!b.IsPaid)
                                 {
                                     <div class="bl-sub @(b.IsOverdue ? "late" : "")">

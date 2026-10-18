@@ -1,0 +1,162 @@
+@page "/settings"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+@* Admin settings. First section: backups (Majed 2026-10-09: "in admin settings add path
+   to get backup for sql and mongodb, each 1 hour"). The API does the work: one full SQL
+   backup a day plus a small differential every run, and a gzipped Mongo dump, into the
+   folder below; old ones are removed after the "keep" window. *@
+
+<PageTitle>Admin — Settings</PageTitle>
+
+<PageHeader Title="@L["set.title"]" Subtitle="@L["set.sub"]" />
+
+<MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl" Style="max-width: 860px;">
+    <div class="d-flex align-center mb-1" style="gap: 10px;">
+        <MudIcon Icon="@Icons.Material.Filled.Backup" Color="Color.Primary" />
+        <MudText Typo="Typo.h6">@L["bk.title"]</MudText>
+    </div>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@L["bk.sub"]</MudText>
+
+    @if (_status is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        <MudSwitch Color="Color.Success" T="bool" @bind-Value="_enabled" Size="Size.Small" Label="@L["bk.enabled"]" Class="mb-3" />
+
+        <MudTextField @bind-Value="_folder" Label="@L["bk.folder"]" Placeholder="C:\OrderOrangeBackups"
+                      HelperText="@L["bk.folderHint"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr" />
+
+        <div class="d-flex flex-wrap mb-3" style="gap: 12px;">
+            <MudSelect T="int" @bind-Value="_interval" Label="@L["bk.every"]" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 180px; flex: 1;">
+                @foreach (var h in new[] { 1, 2, 3, 6, 12, 24 })
+                {
+                    <MudSelectItem T="int" Value="@h">@string.Format(L["bk.hours"], h)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect T="int" @bind-Value="_keep" Label="@L["bk.keep"]" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 180px; flex: 1;">
+                @foreach (var h in new[] { 6, 12, 24, 48, 72, 168 })
+                {
+                    <MudSelectItem T="int" Value="@h">@string.Format(L["bk.hours"], h)</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
+
+        <div class="d-flex flex-wrap" style="gap: 10px;">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                       Disabled="_busy" OnClick="Save">@L["common.save"]</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PlayArrow"
+                       Disabled="@(_busy || _status.Running || string.IsNullOrWhiteSpace(_status.Folder))" OnClick="RunNow">@L["bk.runNow"]</MudButton>
+        </div>
+
+        <MudDivider Class="my-4" />
+
+        @if (_status.Running)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                @L["bk.running"] @(_status.Step switch { "mongo" => "MongoDB", "sql" => "SQL", "zip" => "ZIP", _ => "" })
+            </MudAlert>
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-3" />
+        }
+        else if (_status.LastRunAt is { } last)
+        {
+            <MudAlert Severity="@(_status.LastOk ? Severity.Success : Severity.Error)" Dense="true" Class="mb-3">
+                <b>@Fmt.DateTimeText(last, shift: false)</b> · @_status.LastMessage
+            </MudAlert>
+        }
+
+        <div class="bk-grid">
+            <div><span>@L["bk.dbs"]</span><b class="mf-ltr">SQL @_status.SqlDatabase · Mongo @_status.MongoDatabase</b></div>
+            <div><span>@L["bk.next"]</span><b>@(_status.NextRunAt is { } n ? Fmt.DateTimeText(n, shift: false) : "—")</b></div>
+            <div><span>@L["bk.lastFull"]</span><b>@(_status.LastFullAt is { } f ? Fmt.DateTimeText(f, shift: false) : "—")</b></div>
+            <div><span>@L["bk.lastSize"]</span><b class="mf-ltr">ZIP @HumanSize(_status.LastZipBytes) (SQL @HumanSize(_status.LastSqlBytes) + Mongo @HumanSize(_status.LastMongoBytes)) · @($"{_status.LastSeconds:0}s")</b></div>
+            <div><span>@L["bk.folderUse"]</span><b class="mf-ltr">@_status.FolderFiles files · @HumanSize(_status.FolderBytes)</b></div>
+            <div><span>@L["bk.free"]</span><b class="mf-ltr">@(_status.FreeBytes >= 0 ? HumanSize(_status.FreeBytes) : "—")</b></div>
+            @if (_status.LastZipFile.Length > 0)
+            {
+                <div class="wide"><span>@L["bk.lastFiles"]</span><b class="mf-ltr" style="word-break: break-all;">@_status.LastZipFile</b></div>
+            }
+        </div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-3">@L["bk.restoreHint"]</MudText>
+    }
+</MudPaper>
+
+<style>
+    .bk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px 18px; }
+    .bk-grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .bk-grid > div.wide { grid-column: 1 / -1; }
+    .bk-grid span { font-size: 11.5px; color: var(--mud-palette-text-secondary); }
+    .bk-grid b { font-size: 13px; font-weight: 600; }
+</style>
+
+@code {
+    private BackupStatusDto? _status;
+    private bool _enabled;
+    private string _folder = "";
+    private int _interval = 1;
+    private int _keep = 24;
+    private bool _busy;
+    private Timer? _poll;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load(fill: true);
+        // While a backup runs (or right after "Back up now"), refresh the status every few seconds.
+        _poll = new Timer(async _ =>
+        {
+            if (_status is { Running: true } || _watch > 0)
+            {
+                if (_watch > 0) _watch--;
+                await InvokeAsync(async () => { await Load(fill: false); StateHasChanged(); });
+            }
+        }, null, 3000, 3000);
+    }
+
+    private int _watch;
+
+    private async Task Load(bool fill)
+    {
+        _status = await Api.GetBackupStatusAsync();
+        if (fill && _status is not null)
+        {
+            _enabled = _status.Enabled;
+            _folder = _status.Folder;
+            _interval = _status.IntervalHours;
+            _keep = _status.KeepHours;
+        }
+    }
+
+    private async Task Save()
+    {
+        _busy = true;
+        var (ok, error) = await Api.SaveBackupSettingsAsync(new BackupSettingsRequest(_enabled, _folder ?? "", _interval, _keep));
+        _busy = false;
+        if (ok) { Snackbar.Add(L["bk.saved"], Severity.Success); await Load(fill: true); }
+        else Snackbar.Add(error ?? L["common.error"], Severity.Error);
+    }
+
+    private async Task RunNow()
+    {
+        _busy = true;
+        var (ok, error) = await Api.RunBackupNowAsync();
+        _busy = false;
+        if (!ok) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+        _watch = 400;   // keep polling ~20 min, a full SQL backup can take a while
+        await Task.Delay(800);
+        await Load(fill: false);
+    }
+
+    private static string HumanSize(long bytes) => bytes switch
+    {
+        <= 0 => "0",
+        < 1024 * 1024 => $"{bytes / 1024d:0} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / 1024d / 1024:0.0} MB",
+        _ => $"{bytes / 1024d / 1024 / 1024:0.00} GB",
+    };
+
+    public void Dispose() => _poll?.Dispose();
+}

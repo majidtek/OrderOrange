@@ -79,7 +79,7 @@
                     {
                         <i class="ed">@L["qc.edited"] · </i>
                     }
-                    @msg.At.ToString("HH:mm")
+                    @Fmt.Time(msg.At)
                     @if (own && !msg.Deleted)
                     {
                         <i class="tick @(msg.Id <= _otherReadId ? "seen" : "")">✓✓</i>
@@ -102,7 +102,7 @@
             </div>
             @if (own && msg.Id == lastSeenOwnId && _otherReadAt is not null && lastSeenOwnId > 0)
             {
-                <div class="qc-seenline">@string.Format(L["qc.seen"], _otherReadAt.Value.ToString("HH:mm"))</div>
+                <div class="qc-seenline">@string.Format(L["qc.seen"], Fmt.Time(_otherReadAt.Value))</div>
             }
         }
     </div>
@@ -235,9 +235,9 @@
     private System.Threading.Timer? _poll;
 
     private string DayLabel(DateTime at) =>
-        at.Date == DateTime.Today ? L["qc.today"]
-        : at.Date == DateTime.Today.AddDays(-1) ? L["qc.yesterday"]
-        : at.ToString("dd/MM/yyyy");
+        at.Date == Fmt.ServerToday ? L["qc.today"]
+        : at.Date == Fmt.ServerToday.AddDays(-1) ? L["qc.yesterday"]
+        : Fmt.Date(at);
 
     protected override async Task OnParametersSetAsync()
     {

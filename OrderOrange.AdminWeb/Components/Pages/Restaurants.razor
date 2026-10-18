@@ -18,43 +18,99 @@
     </MudAlert>
 }
 
-@* The customer home's "Suggested" strip, in running order. The star on each table row
-   puts a shop in (at the end) or takes it out; the arrows here decide who leads. *@
-<MudPaper Elevation="0" Outlined="true" Class="rounded-xl pa-4 mb-4">
-    <div class="d-flex align-center mb-2" style="gap: 8px;">
-        <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" />
-        <MudText Typo="Typo.subtitle1"><b>@L["admin.suggestedStrip"]</b></MudText>
+@* The customer home's "Suggested" strip, in running order — as CARDS, the way the customer
+   sees it (Majed 2026-10-15: "this way is not good"). Drag a card or use its arrows to
+   reorder; ✕ takes it out; the search box adds any store at the end. *@
+<MudPaper Elevation="0" Outlined="true" Class="rounded-xl pa-4 mb-4 sg-wrap">
+    <div class="sg-head">
+        <div class="d-flex align-center" style="gap: 8px;">
+            <MudIcon Icon="@Icons.Material.Filled.Star" Color="Color.Warning" />
+            <MudText Typo="Typo.subtitle1"><b>@L["admin.suggestedStrip"]</b></MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">· @string.Format(L["admin.suggestedCount"], _suggested.Count)</MudText>
+        </div>
+        <MudAutocomplete T="PartnerChatThreadDto" Value="null" ValueChanged="AddSuggested" SearchFunc="SearchStores"
+                         ToStringFunc="@(s => s is null ? "" : s.StoreName)" Placeholder="@L["admin.suggestedAdd"]"
+                         Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Clearable="true" ResetValueOnEmptyText="true"
+                         CoerceText="false" MinCharacters="1" DebounceInterval="300" Class="sg-add"
+                         Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.AddCircleOutline">
+            <ItemTemplate Context="s">
+                <div class="d-flex align-center" style="gap: 8px;"><span>@s.LogoEmoji</span><b>@s.StoreName</b><small style="opacity:.6;">#@s.RestaurantId</small></div>
+            </ItemTemplate>
+        </MudAutocomplete>
     </div>
     @if (_suggested.Count == 0)
     {
-        <MudText Typo="Typo.body2" Color="Color.Secondary">@L["admin.suggestedEmpty"]</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">@L["admin.suggestedEmpty"]</MudText>
     }
     else
     {
-        @for (var i = 0; i < _suggested.Count; i++)
-        {
-            var pos = i;
-            var s = _suggested[pos];
-            <div class="d-flex align-center py-1" style="gap: 8px;">
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Style="width: 24px; text-align: center;">@(pos + 1)</MudText>
-                <div style="font-size: 20px;">@s.LogoEmoji</div>
-                <MudText Typo="Typo.body2" Style="flex: 1;">
-                    <b>@s.Name</b>
-                    @if (!s.IsApproved)
-                    {
-                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text" Class="ms-1">@L["admin.pendingApproval"]</MudChip>
-                    }
-                </MudText>
-                <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowUp" Size="Size.Small"
-                               Disabled="@(pos == 0)" OnClick="@(() => MoveSuggested(pos, -1))" />
-                <MudIconButton Icon="@Icons.Material.Filled.KeyboardArrowDown" Size="Size.Small"
-                               Disabled="@(pos == _suggested.Count - 1)" OnClick="@(() => MoveSuggested(pos, +1))" />
-                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error"
-                               OnClick="@(() => ToggleSuggested(s.Id, s.Name))" />
-            </div>
-        }
+        <div class="sg-grid">
+            @for (var i = 0; i < _suggested.Count; i++)
+            {
+                var pos = i;
+                var s = _suggested[pos];
+                <div class="sg-card @(_dragFrom == pos ? "lift" : "") @(_dragOver == pos && _dragFrom != pos ? "over" : "")"
+                     draggable="true" @key="s.Id"
+                     @ondragstart="@(() => _dragFrom = pos)" @ondragend="@(() => { _dragFrom = null; _dragOver = null; })"
+                     @ondragenter="@(() => _dragOver = pos)" @ondragover:preventDefault="true" @ondrop="@(() => DropSuggested(pos))">
+                    <span class="sg-no">@(pos + 1)</span>
+                    <div class="sg-logo">
+                        @if (!string.IsNullOrEmpty(s.LogoPhoto))
+                        {
+                            <img src="@s.LogoPhoto" alt="" />
+                        }
+                        else
+                        {
+                            <span>@s.LogoEmoji</span>
+                        }
+                    </div>
+                    <div class="sg-tx">
+                        <b title="@s.Name">@s.Name</b>
+                        <small>@(string.IsNullOrWhiteSpace(s.Area) ? $"#{s.Id}" : s.Area)</small>
+                        @if (!s.IsApproved)
+                        {
+                            <span class="sg-pend">⏳ @L["admin.pendingApproval"]</span>
+                        }
+                    </div>
+                    <div class="sg-acts">
+                        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" Size="Size.Small" Class="sg-prev" title="@L["pg.prev"]"
+                                       Disabled="@(pos == 0)" OnClick="@(() => MoveSuggested(pos, -1))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" Class="sg-next" title="@L["pg.next"]"
+                                       Disabled="@(pos == _suggested.Count - 1)" OnClick="@(() => MoveSuggested(pos, +1))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Color="Color.Error" title="@L["common.remove"]"
+                                       OnClick="@(() => ToggleSuggested(s.Id, s.Name))" />
+                    </div>
+                </div>
+            }
+        </div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["admin.suggestedHint"]</MudText>
     }
 </MudPaper>
+
+<style>
+    .sg-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+    .sg-add { min-width: 280px; max-width: 420px; flex: 1; }
+    .sg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+    .sg-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 12px 8px;
+               border: 1px solid var(--mud-palette-lines-default); border-radius: 16px; background: var(--mud-palette-surface);
+               cursor: grab; transition: transform .15s, box-shadow .15s, border-color .15s; }
+    .sg-card:hover { box-shadow: 0 8px 22px rgba(60, 40, 20, .10); transform: translateY(-2px); }
+    .sg-card.lift { opacity: .45; cursor: grabbing; }
+    .sg-card.over { border-color: #FF5A00; box-shadow: 0 0 0 3px rgba(255, 90, 0, .18); }
+    .sg-no { position: absolute; top: 8px; inset-inline-start: 10px; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 999px;
+             background: #FF5A00; color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+    .sg-card:first-child .sg-no { background: #f5b000; color: #241F1B; }
+    .sg-logo { width: 64px; height: 64px; border-radius: 50%; background: #fff3ea; display: flex; align-items: center; justify-content: center;
+               font-size: 30px; overflow: hidden; border: 1px solid var(--mud-palette-lines-default); }
+    .sg-logo img { width: 100%; height: 100%; object-fit: cover; }
+    .sg-tx { display: flex; flex-direction: column; align-items: center; text-align: center; min-width: 0; width: 100%; }
+    .sg-tx b { font-size: 13.5px; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sg-tx small { font-size: 11.5px; color: var(--mud-palette-text-secondary); }
+    .sg-pend { font-size: 11px; color: #b26a00; background: #fff4e0; border-radius: 999px; padding: 1px 8px; margin-top: 3px; }
+    .sg-acts { display: flex; align-items: center; gap: 0; margin-top: 2px; }
+    html[dir="rtl"] .sg-prev .mud-icon-root, html[dir="rtl"] .sg-next .mud-icon-root,
+    .mud-application-layout-rtl .sg-prev .mud-icon-root, .mud-application-layout-rtl .sg-next .mud-icon-root { transform: scaleX(-1); }
+</style>
 
 <div class="d-flex align-center mb-2" style="gap: 10px; flex-wrap: wrap;">
     <MudTextField T="string" @bind-Value="_search" Placeholder="@L["admin.searchStores"]"
@@ -222,6 +278,37 @@
         else Snackbar.Add(error ?? L["common.updateFail"], Severity.Error);
         await ReloadSuggested();
         await Refresh();
+    }
+
+    // Drag-and-drop ordering of the strip cards.
+    private int? _dragFrom;
+    private int? _dragOver;
+
+    private async Task DropSuggested(int target)
+    {
+        var from = _dragFrom;
+        _dragFrom = null;
+        _dragOver = null;
+        if (from is null || from == target || target < 0 || target >= _suggested.Count) return;
+        var item = _suggested[from.Value];
+        _suggested.RemoveAt(from.Value);
+        _suggested.Insert(target, item);
+        var (ok, error) = await Api.SetSuggestedOrderAsync(_suggested.Select(s => s.Id).ToList());
+        if (!ok) { Snackbar.Add(error ?? L["common.error"], Severity.Error); await ReloadSuggested(); }
+    }
+
+    /// <summary>The add box: any store the search finds goes to the end of the strip.</summary>
+    private async Task<IEnumerable<PartnerChatThreadDto>> SearchStores(string value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return [];
+        var found = await Api.SearchPartnerChatStoresAsync(value.Trim()) ?? [];
+        return found.Where(f => _suggested.All(s => s.Id != f.RestaurantId));
+    }
+
+    private async Task AddSuggested(PartnerChatThreadDto? store)
+    {
+        if (store is null || _suggested.Any(s => s.Id == store.RestaurantId)) return;
+        await ToggleSuggested(store.RestaurantId, store.StoreName);
     }
 
     private async Task MoveSuggested(int index, int delta)

@@ -5,7 +5,7 @@ using MudBlazor;
 namespace OrderOrange.ClientCore.Services;
 
 /// <summary>Display helpers shared by all four apps, so money and statuses look identical everywhere.</summary>
-public static class Fmt
+public static partial class Fmt
 {
     /// <summary>The rial, and what every shop shows until it says otherwise.</summary>
     public const string DefaultSymbol = "OMR";
@@ -89,11 +89,13 @@ public static class Fmt
     /// <summary>"just now" / "5 min ago" / "3 h ago" in the user's language.</summary>
     public static string TimeAgo(DateTime at, LanguageService lang)
     {
-        var span = DateTime.Now - at;
+        // ServerNow, not DateTime.Now: in the WebAssembly apps DateTime.Now is UTC, which made
+        // every fresh event read "4 h ago" in Oman.
+        var span = ServerNow - at;
         return span.TotalMinutes < 1 ? lang["time.justNow"]
             : span.TotalMinutes < 60 ? string.Format(lang["time.minAgo"], (int)span.TotalMinutes)
             : span.TotalHours < 24 ? string.Format(lang["time.hAgo"], (int)span.TotalHours)
-            : at.ToString("dd MMM, HH:mm");
+            : DayMonthTime(at);
     }
 
     public static string StatusLabel(OrderStatus status, LanguageService lang) => lang[$"status.{status}"];

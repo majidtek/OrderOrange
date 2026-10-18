@@ -1,0 +1,27 @@
+@page "/admin-chat"
+@layout Layout.ChatLayout
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+
+@* The store's chat with the OrderOrange team (Majed 2026-10-14: "I need to chat with
+   partner as admin. They can send me message and photo … and voice"). One thread per
+   store, shared by the owner and the team; full screen like the team chat. *@
+
+<PageTitle>Partner — OrderOrange chat</PageTitle>
+
+<div class="wa-screen dchat-screen">
+    <DirectChatPane ThreadKey="1"
+                    Title="@L["achat.title"]"
+                    Subtitle="@L["achat.sub"]"
+                    Avatar="🍊"
+                    Empty="@L["achat.empty"]"
+                    HeaderClass="oo"
+                    MineIsAdmin="false"
+                    ShowOwnNames="true"
+                    OnBack="@(() => Nav.NavigateTo("/"))"
+                    SyncFn="Api.SyncAdminChatAsync"
+                    SendFn="Api.SendAdminChatAsync"
+                    EditFn="Api.EditAdminChatAsync"
+                    DeleteFn="Api.DeleteAdminChatAsync" />
+</div>

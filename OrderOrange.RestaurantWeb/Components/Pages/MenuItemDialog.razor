@@ -78,7 +78,7 @@
             }
         </MudSelect>
         <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">@L["partner.productName"]</MudText>
-        <StoreNameFields @bind-Value="_dishNames" />
+        <StoreNameFields @bind-Value="_dishNames" Translate="true" />
         <MudTextField @bind-Value="_description" Label="@L["partner.description"]" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Class="mb-3" />
 
         @* ---------- How it is sold, and what it is made of ---------- *@
@@ -328,7 +328,7 @@
         _name = Existing.Name;
         _dishNames = Existing.Names ?? [];
         // A product born before languages keeps its old name as the Arabic entry.
-        if (_dishNames.Count == 0 && Existing.Name.Length > 0) _dishNames["ar"] = Existing.Name;
+        if (_dishNames.Count == 0 && Existing.Name.Length > 0) _dishNames[NameScript.LangOf(Existing.Name)] = Existing.Name;
         _description = Existing.Description;
         _price = Existing.Price;
         _discount = Existing.DiscountPercent;
@@ -363,7 +363,7 @@
         _busy = true;
         try
         {
-            if (!_dishNames.ContainsKey("ar")) { _error = L["nm.needAr"]; _busy = false; return; }
+            if (!_dishNames.ContainsKey("en")) { _error = L["nm.needEn"]; _busy = false; return; }
             _name = _dishNames.GetValueOrDefault("en") ?? _dishNames.GetValueOrDefault("ar") ?? _name;
             var request = new SaveMenuItemRequest(_categoryId, _name, _description, _price, _emoji, _isPopular, _isAvailable,
                 Photos: _photos.ToList(), MainPhoto: _mainIndex, DiscountPercent: _discount,

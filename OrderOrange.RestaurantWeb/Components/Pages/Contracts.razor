@@ -49,7 +49,7 @@ else
                     <b>@contract.Lines.Sum(l => l.Quantity) × @L["ct.products"]</b>
                     <small>@string.Format(L["ct.terms"], contract.TimesPerMonth)</small>
                     <small>
-                        🗓️ @contract.StartDate.ToString("dd MMM yyyy")
+                        🗓️ @Fmt.DayMonthYear(contract.StartDate, shift: false)
                         · @(contract.Months == 0 ? L["ct.openEnded"] : $"{contract.Months} {L["w.month"]}")
                     </small>
                 </div>
@@ -59,13 +59,13 @@ else
                     {
                         <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled"
                                  title="@contract.AcceptedBy">
-                            ✓ @L["ct.acceptedTitle"] @accepted.ToString("dd MMM")
+                            ✓ @L["ct.acceptedTitle"] @Fmt.DayMonth(accepted)
                         </MudChip>
                     }
                     else if (contract.SentAt is { } sent)
                     {
                         <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">
-                            ✉️ @sent.ToString("dd MMM HH:mm")
+                            ✉️ @Fmt.DayMonthTime(sent)
                         </MudChip>
                     }
                     @if (contract.Replies is { Count: > 0 } replies)

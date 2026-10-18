@@ -1,4 +1,4 @@
-﻿/* MajidFood — shared styles for all four apps. */
+/* MajidFood — shared styles for all four apps. */
 
 .mf-login-bg {
     min-height: 100vh;
@@ -12277,7 +12277,6 @@ body.pf .mud-menu-list, body.pf .mud-popover { border-radius: 14px; }
 body.pf .mud-dialog { border-radius: 20px; }
 body.pf .mud-snackbar { border-radius: 14px; font-weight: 600; }
 body.pf .mud-table, body.pf .mud-paper.rounded-xl { border-radius: 18px; }
-body.pf .mud-switch-span { transition: background .2s ease; }
 
 /* Tables and lists breathe on touch. */
 body.pf .mud-table-row { transition: background .12s ease; }
@@ -15290,14 +15289,8 @@ body:has(.mf-basket-bar) .mud-main-content { padding-bottom: 190px !important; }
 /* 2. sign-in button: white on orange, icon included */
 .mf-signin-btn .mud-icon-root, .mf-signin-btn { color: #fff !important; }
 
-/* 3. the open/closed switch */
-.mud-switch .mud-switch-track { background: #d9d2c7 !important; opacity: 1 !important; }
-.mud-switch .mud-switch-thumb, .mud-switch .mud-switch-thumb .mud-icon-button {
-    color: #fff !important; background: #fff !important;
-    box-shadow: 0 1px 4px rgba(23, 15, 8, .35) !important;
-}
-.mud-switch.mud-checked .mud-switch-track { background: #22a05e !important; }
-.mud-switch .mud-switch-label { font-weight: 800 !important; color: #2b1d12 !important; }
+/* 3. (removed 2026-10-09) switches use MudBlazor's own look — Majed: "do not change style" */
+
 
 /* ═══════════════════════════════════════════════════════════════════════════
    v312 — ADMIN INSIGHTS. A dark mission-control hero carrying the five numbers
@@ -24257,7 +24250,6 @@ body {
 .pmn-dish-ph { height: 64px; }
 .pmn-dish-ph .em { font-size: 28px; }
 .pmn-dish-body { padding: 7px 9px 5px; }
-.pmn-dish-foot .mud-switch { transform: scale(.85); transform-origin: left center; }
 .pmn-dish-foot .mud-icon-button { padding: 4px; }
 .pmn-dish-foot .mud-icon-button svg { width: 16px; height: 16px; }
 
@@ -24369,8 +24361,6 @@ body {
 .cp-launch { padding: 5px 12px !important; font-size: .74rem !important; border-radius: 999px; }
 .cp-launch svg { width: 14px; height: 14px; }
 .oo-spark { transform: scale(.82); }
-.mf-appbar .mud-switch { transform: scale(.82); }
-.mf-appbar .mud-switch .mud-switch-label, .mf-appbar .mud-input-control-boolean-input + * { font-size: .8rem; }
 .mf-appbar .mud-avatar { width: 30px; height: 30px; font-size: .85rem; }
 .mf-full-btn { transform: scale(.82); }
 
@@ -24408,7 +24398,6 @@ body {
 .mf-brand-mark img { border-radius: 8px; }
 .mf-brand-name { font-size: 12px; }
 .mf-appbar.mud-appbar .mud-toolbar { min-height: 38px; height: 38px; }
-.mf-appbar .mud-switch { transform: scale(.68); margin-inline: -6px; }
 
 /* Down again: the POS mode buttons and category pills at pocket size. */
 .pos-mode button { padding: 3px 8px; font-size: 10px; border-radius: 8px; border-width: 1px; }
@@ -24434,13 +24423,11 @@ body {
     min-width: 24px !important; max-width: 24px !important;
     min-height: 24px !important; max-height: 24px !important;
 }
-.mf-appbar .mud-switch { transform: scale(.58); margin-inline: -9px; }
 .pos-mode button { padding: 2px 7px; font-size: 9.5px; }
 .pos-custbtn { padding: 2px 7px !important; font-size: 9.5px !important; }
 
 /* The switch uses MudBlazor's own Small size now — no scale hacks. And the POS
    mode buttons get a hard height so the emoji can't inflate them. */
-.mf-appbar .mud-switch { transform: none; margin-inline: 0; }
 .pos-mode button { padding: 2px 8px !important; font-size: 9.5px !important; line-height: 1.2 !important; height: 24px; min-height: 0 !important; }
 .pos-custbtn { height: 24px !important; min-height: 0 !important; line-height: 1.2 !important; }
 .pos-mode { margin-bottom: 6px; }
@@ -24521,7 +24508,6 @@ body {
 .pmn-dish-body { padding: 5px 7px 3px !important; }
 .pmn-dish-body .mud-typography-subtitle2 { font-size: 11px !important; line-height: 1.15 !important; }
 .pmn-dish-body .mud-typography-body2 { font-size: 10.5px !important; }
-.pmn-dish-foot .mud-switch { transform: scale(.72); margin-inline-start: -6px; }
 .pmn-dish-foot .mud-icon-button { padding: 3px !important; }
 .pmn-dish-foot .mud-icon-button svg { width: 14px !important; height: 14px !important; }
 .pmn-star { transform: scale(.8); }
@@ -25484,7 +25470,6 @@ div.tk-stat { cursor: default; } div.tk-stat:hover { transform: none; box-shadow
 .dc-card .foot { display: flex; align-items: center; gap: 4px; border-top: 1px solid #f3eee7; padding-top: 4px; margin-top: 2px; }
 .dc-card .foot small { color: #a99e8d; font-size: .7rem; }
 .dc-card .foot .mud-switch { margin: 0; }
-.dc-card .foot .mud-switch .mud-typography { font-size: .7rem; }
 
 .dc-sheet { max-width: 720px; }
 .dc-templates { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
@@ -25517,7 +25502,6 @@ div.tk-stat { cursor: default; } div.tk-stat:hover { transform: none; box-shadow
 .dc-form .mud-input-label-outlined.mud-shrink { font-size: .66rem; transform: translate(12px, -6px) scale(.9); }
 .dc-form .mud-input-helper-text { font-size: .64rem; margin-top: 1px; line-height: 1.3; }
 .dc-form .mud-select .mud-input-adornment-end .mud-icon-root { width: 18px; height: 18px; }
-.dc-form .mud-switch .mud-typography { font-size: .78rem; }
 .dc-form .mud-input-numeric-spin .mud-button-root { transform: scale(.85); }
 /* v693: the discount editor, really small this time. MudBlazor's outlined inputs keep a
    54px box and a 16px floating label whatever the font-size says — so the box, the
@@ -25538,7 +25522,6 @@ div.tk-stat { cursor: default; } div.tk-stat:hover { transform: none; box-shadow
 .dc-form .mud-input-numeric-spin { transform: scale(.8); right: -2px; }
 .dc-form .mud-input-numeric-spin .mud-icon-button { padding: 0 !important; }
 .dc-form .mud-picker-inline-input .mud-input-adornment { margin: 0 !important; }
-.dc-form .mud-switch .mud-typography { font-size: 12.5px !important; }
 .dc-sheet .head b { font-size: .95rem; }
 /* v694: the v692 padding rule out-specified v693's, so the <input> stayed 54px inside a
    36px box. Same specificity, later in the file, border-box — the box and the input agree. */
@@ -26161,8 +26144,7 @@ html:has(.qm-head) { overflow-x: clip; }
 .mud-dialog:has(.pmn-pe) .mud-input-outlined-border { border-radius: 9px !important; }
 .mud-dialog:has(.pmn-pe) .mud-input-adornment .mud-icon-button, .mud-dialog:has(.pmn-pe) .mud-input-adornment img { width: 22px !important; height: 22px !important; padding: 2px !important; }
 .mud-dialog:has(.pmn-pe) .mud-typography-subtitle2, .mud-dialog:has(.pmn-pe) .mud-typography-body2, .mud-dialog:has(.pmn-pe) .mud-typography-caption { font-size: 12px !important; }
-.mud-dialog:has(.pmn-pe) .mud-switch .mud-switch-span, .mud-dialog:has(.pmn-pe) .mud-checkbox .mud-typography, .mud-dialog:has(.pmn-pe) .mud-switch .mud-typography { font-size: 12.5px !important; }
-.mud-dialog:has(.pmn-pe) .mud-switch-base { transform: scale(.85); }
+.mud-dialog:has(.pmn-pe) .mud-checkbox .mud-typography { font-size: 12.5px !important; }
 .mud-dialog:has(.pmn-pe) .oo-daychips button { font-size: 11px !important; padding: 3px 8px !important; }
 .mud-dialog:has(.pmn-pe) .mi-ing .tag { font-size: 11.5px !important; padding: 2px 8px !important; }
 .mud-dialog:has(.pmn-pe) .qc-upload { padding: 6px 10px !important; font-size: 11.5px !important; }
@@ -26413,7 +26395,7 @@ html:has(.qm-head) { overflow-x: clip; }
 .st-page .mud-typography-body1{font-size:13.5px}
 .st-page .mud-typography-body2{font-size:12.5px}
 .st-page .mud-button-root{font-size:13px}
-.st-page .mud-switch-label,.st-page .mud-checkbox .mud-typography{font-size:13px}
+.st-page .mud-checkbox .mud-typography {font-size:13px}
 .st-page .mud-chip{font-size:11.5px}
 .st-page .mud-list-item-text .mud-typography{font-size:13.5px}
 .st-page .ig-steps{font-size:12.5px;line-height:1.6}
@@ -26436,7 +26418,7 @@ html:has(.qm-head) { overflow-x: clip; }
 .st-page .mud-input-helper-text{font-size:11px !important}
 .st-page .mud-typography-h6{font-size:15.5px !important}
 .st-page .mud-button-root{font-size:12.5px !important}
-.st-page .mud-switch-label,.st-page .mud-checkbox .mud-typography{font-size:12.5px !important}
+.st-page .mud-checkbox .mud-typography {font-size:12.5px !important}
 
 /* v757 — the Instagram planner: a picture, a caption, a day and an hour. */
 .igp{max-width:1180px;margin:0 auto;padding:4px 2px 40px}
@@ -27725,3 +27707,444 @@ body:has(.mf-pos-site) .mf-seo-footer a{color:#8E8274}
 /* v797: the whole picture, never cropped (Majed: "make the image 100%") */
 .mf-slider.fade .mf-slide img{object-fit:contain;object-position:center;background:#0C0906}
 .mf-slider.fade .mf-slider-view{background:#0C0906}
+
+/* v798: partner bar on phones — ten items were wider than a 360-400px screen, so the
+   language and account buttons fell off the right edge (Majed: "some item in top menu
+   not coming for some mobile"). Fullscreen moves into the account menu (markup), the rest
+   sits closer together and the Closed chip gets small. */
+@media (max-width: 599.98px) {
+  .mf-appbar-partner.mud-appbar .mud-toolbar { gap: 3px !important; padding-left: 6px !important; padding-right: 6px !important; }
+  .mf-appbar-partner .mud-toolbar > .ml-2 { margin-left: 2px !important; margin-right: 0 !important; }
+  .mf-appbar-partner .mud-toolbar > .mud-spacer { min-width: 0; }
+  .mf-appbar-partner .mf-closed-chip { height: 20px !important; padding: 0 6px !important; margin: 0 !important; font-size: 10.5px !important; flex: none; }
+  .mf-appbar-partner .mf-closed-chip .mud-chip-content { padding: 0 !important; }
+  .mf-appbar-partner .mud-avatar { flex: none; }
+}
+@media (max-width: 359.98px) {
+  .mf-appbar-partner.mud-appbar .mud-toolbar { gap: 1px !important; padding-left: 3px !important; padding-right: 3px !important; }
+  .mf-appbar-partner .mud-icon-button { width: 28px !important; min-width: 28px !important; max-width: 28px !important; }
+  .mf-appbar-partner .oo-spark { transform: scale(.64); margin: -6px; }
+}
+/* v798: the partner assistant opened UNDER the app bar on phones — both sat at z-index 1300
+   (MudBlazor's app-bar level), so the bar covered the assistant's header and close button
+   (Majed: "chat boot coming like this"). Above the bar, still below dialogs (1400). */
+.pb-veil { z-index: 1350; }
+.pb-panel { z-index: 1360; }
+/* v799: phones — logo, Closed chip and avatar left the bar for the ☰ menu (markup);
+   the menu opens with the shop's identity and its state. */
+.pnav-store { align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 4px 10px; }
+.pnav-store .pnav-id { flex: 1; min-width: 0; }
+.pnav-store .pnav-id .lg { width: 38px; height: 38px; border-radius: 12px; font-size: 20px; flex: none; }
+.pnav-store .pnav-id b { font-size: 15px; max-width: none; }
+.pnav-store .st { flex: none; border: 0; border-radius: 999px; padding: 4px 11px; font: 700 12px/1.3 inherit; font-family: inherit; color: #fff; }
+.pnav-store .st.closed { background: #D32F2F; cursor: pointer; }
+.pnav-store .st.wait { background: #ED6C02; }
+/* v800: phone app bar, modern pass (Majed: "modern ui"). The loose peach circles become
+   one white dock with soft depth; the assistant keeps its gradient as the dock's jewel.
+   Desktop: the dock wrapper is display:contents, so nothing changes there. */
+.mf-dock { display: contents; }
+@media (max-width: 599.98px) {
+  .mf-appbar-partner .mf-dock {
+    display: flex; align-items: center; gap: 2px; flex: none;
+    padding: 3px; border-radius: 999px;
+    background: rgba(255, 255, 255, .92);
+    border: 1px solid rgba(60, 40, 20, .07);
+    box-shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 6px 18px rgba(255, 90, 0, .12);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .mf-appbar-partner .mf-dock .mud-icon-button {
+    width: 34px !important; height: 34px !important; min-width: 34px !important; max-width: 34px !important;
+    min-height: 34px !important; max-height: 34px !important; padding: 8px !important; margin: 0 !important;
+    background: transparent !important; border: 0 !important; box-shadow: none !important;
+    color: #3b2b20 !important; border-radius: 50% !important;
+    transition: background .18s ease, color .18s ease, transform .12s ease;
+  }
+  .mf-appbar-partner .mf-dock .mud-icon-button svg { width: 19px !important; height: 19px !important; }
+  .mf-appbar-partner .mf-dock .mud-icon-button:hover,
+  .mf-appbar-partner .mf-dock .mud-icon-button:focus-visible { background: rgba(255, 90, 0, .10) !important; color: #E04E00 !important; transform: none; }
+  .mf-appbar-partner .mf-dock .mud-icon-button:active { background: rgba(255, 90, 0, .16) !important; transform: scale(.92); }
+  .mf-appbar-partner .mf-dock .nb-bell { display: inline-flex; }
+  .mf-appbar-partner .mf-dock .oo-spark {
+    width: 32px; height: 32px; margin: 0 2px; transform: none;
+    box-shadow: 0 3px 10px rgba(90, 70, 230, .40);
+  }
+  .mf-appbar-partner .mf-dock .oo-spark::after { inset: -3px; }
+  .mf-appbar-partner .mf-dock .oo-spark .mud-icon-root,
+  .mf-appbar-partner .mf-dock .oo-spark svg { width: 17px !important; height: 17px !important; }
+  /* Badges sit on the dock's edge, not on the glyph. */
+  .mf-appbar-partner .mf-dock .nb-bell .nb-count2, .mf-appbar-partner .mf-dock .nb-bell .nb-count {
+    top: -1px !important; inset-inline-end: -1px !important; box-shadow: 0 0 0 2px #fff;
+  }
+  /* The ☰ button matches: same white, same depth, a soft square so it reads as "menu". */
+  .mf-appbar-partner .mud-toolbar > .mud-icon-button:first-child {
+    width: 40px !important; height: 40px !important; min-width: 40px !important; max-width: 40px !important;
+    min-height: 40px !important; max-height: 40px !important; padding: 10px !important;
+    border-radius: 14px !important; color: #3b2b20 !important;
+    background: rgba(255, 255, 255, .92) !important; border: 1px solid rgba(60, 40, 20, .07) !important;
+    box-shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 6px 18px rgba(255, 90, 0, .12) !important;
+  }
+  .mf-appbar-partner .mud-toolbar > .mud-icon-button:first-child svg { width: 20px !important; height: 20px !important; }
+  .mf-appbar-partner.mud-appbar .mud-toolbar { padding-left: 10px !important; padding-right: 10px !important; }
+}
+@media (max-width: 359.98px) {
+  .mf-appbar-partner .mf-dock .mud-icon-button {
+    width: 31px !important; height: 31px !important; min-width: 31px !important; max-width: 31px !important;
+    min-height: 31px !important; max-height: 31px !important; padding: 7px !important;
+  }
+  .mf-appbar-partner .mf-dock .oo-spark { width: 29px; height: 29px; }
+}
+
+/* v803: the partner portal's modern loader (Majed: "make page loader in partner modern").
+   Everywhere else .mf-ml stays hidden and the customer hopper is untouched.
+   body.pf only:  inside the app frame -> slim top line + shimmering page outline, below the
+   44px bar so the app never blinks away;  before the frame (session restore) -> soft splash
+   with the logo in a spinning gradient ring. */
+.mf-ml, .mf-ml-inline { display: none; }
+body.pf .mf-loader-page {
+  background: radial-gradient(1200px 600px at 50% -10%, #FFF1E6 0%, rgba(255,241,230,0) 60%), #FBF8F5;
+  gap: 10px;
+}
+body.pf .mf-loader-page .mf-loader-blob,
+body.pf .mf-loader-page .mf-hop-stage,
+body.pf .mf-loader-page .mf-loader-bar,
+body.pf .mf-loader-page .mf-loader-dots { display: none !important; }
+body.pf .mf-loader-page .mf-ml { display: contents; }
+body.pf .mf-loader-page .mf-loader-label { color: #8a7766; font-size: 12.5px; letter-spacing: .01em; }
+
+/* slim indeterminate line at the very top of the loader */
+body.pf .mf-ml-line { position: absolute; top: 0; left: 0; right: 0; height: 3px; overflow: hidden; background: rgba(255, 90, 0, .08); }
+body.pf .mf-ml-line i { position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 3px;
+  background: linear-gradient(90deg, rgba(255,138,61,0), #FF8A3D 30%, #FF5A00 70%, rgba(255,90,0,0));
+  animation: mfMlLine 1.25s cubic-bezier(.45, 0, .25, 1) infinite; }
+@keyframes mfMlLine { from { left: -40%; } to { left: 100%; } }
+
+/* splash (no app frame yet) */
+body.pf .mf-ml-splash { display: flex; flex-direction: column; align-items: center; gap: 16px; position: relative; z-index: 2; animation: mfMlIn .45s cubic-bezier(.2, .8, .2, 1) both; }
+body.pf .mf-ml-mark { position: relative; width: 84px; height: 84px; display: grid; place-items: center; }
+body.pf .mf-ml-mark img { width: 52px; height: 52px; position: relative; z-index: 1;
+  filter: drop-shadow(0 6px 14px rgba(255, 90, 0, .25)); animation: mfMlBreathe 2.4s ease-in-out infinite; }
+body.pf .mf-ml-mark::before { content: ''; position: absolute; inset: 8px; border-radius: 24px; background: #fff;
+  box-shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 12px 30px rgba(255, 90, 0, .14); }
+body.pf .mf-ml-mark .ring { position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(255,90,0,0) 0deg, rgba(255,138,61,.15) 120deg, #FF8A3D 280deg, #FF5A00 360deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  animation: mfMlSpin 1s linear infinite; }
+body.pf .mf-ml-name { font: 600 15px/1.2 Inter, system-ui, sans-serif; color: #3b2b20; letter-spacing: -.01em; }
+body.pf .mf-ml-name b { font-weight: 800; color: #FF5A00; }
+@keyframes mfMlSpin { to { transform: rotate(360deg); } }
+@keyframes mfMlBreathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(.94); } }
+@keyframes mfMlIn { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* skeleton: only inside the app frame */
+body.pf .mf-ml-skel { display: none; }
+body.pf .mud-main-content .mf-loader-page {
+  top: 44px; justify-content: flex-start; align-items: stretch; overflow-y: hidden;
+  padding: 22px clamp(14px, 4vw, 48px) 0; background: #FBF8F5; z-index: 1250;
+}
+body.pf .mud-main-content .mf-loader-page .mf-ml-splash,
+body.pf .mud-main-content .mf-loader-page .mf-loader-footer { display: none; }
+body.pf .mud-main-content .mf-loader-page .mf-loader-label { order: -1; align-self: center; margin-bottom: 4px; }
+body.pf .mud-main-content .mf-ml-skel { display: flex; flex-direction: column; gap: 16px; width: 100%; max-width: 1440px; margin: 0 auto; animation: mfMlIn .35s ease both; }
+body.pf .mf-ml-skel i, body.pf .mf-ml-inline i {
+  display: block; border-radius: 12px;
+  background: linear-gradient(100deg, #EFE8E0 0%, #EFE8E0 38%, #F8F4EF 50%, #EFE8E0 62%, #EFE8E0 100%);
+  background-size: 250% 100%; animation: mfMlShimmer 1.4s ease-in-out infinite;
+}
+@keyframes mfMlShimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+body.pf .mf-ml-skel .hd { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+body.pf .mf-ml-skel .hd .t { width: min(260px, 55%); height: 26px; }
+body.pf .mf-ml-skel .hd .a { width: 110px; height: 34px; border-radius: 999px; }
+body.pf .mf-ml-skel .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+body.pf .mf-ml-skel .cards i { height: 96px; border-radius: 18px; }
+body.pf .mf-ml-skel .panels { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
+body.pf .mf-ml-skel .p { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 20px; background: #fff; border: 1px solid rgba(60, 40, 20, .06); }
+body.pf .mf-ml-skel .p .l { height: 16px; width: 50%; }
+body.pf .mf-ml-skel .p .l.w40 { width: 40%; } body.pf .mf-ml-skel .p .l.w60 { width: 60%; }
+body.pf .mf-ml-skel .p .chart { height: 210px; border-radius: 14px; }
+body.pf .mf-ml-skel .p .r { height: 38px; }
+body.pf .mf-ml-skel .rows { display: flex; flex-direction: column; gap: 10px; }
+body.pf .mf-ml-skel .rows i { height: 54px; border-radius: 16px; }
+@media (max-width: 900px) {
+  body.pf .mf-ml-skel .cards { grid-template-columns: repeat(2, 1fr); }
+  body.pf .mf-ml-skel .panels { grid-template-columns: 1fr; }
+  body.pf .mf-ml-skel .p .chart { height: 150px; }
+}
+@media (max-width: 599.98px) {
+  body.pf .mud-main-content .mf-loader-page { padding-top: 16px; }
+  body.pf .mf-ml-skel { gap: 12px; }
+  body.pf .mf-ml-skel .cards { gap: 10px; }
+  body.pf .mf-ml-skel .cards i { height: 78px; border-radius: 16px; }
+}
+
+/* inline (inside a card): three shimmering lines instead of the logo ring */
+body.pf .mf-loader-ring-sm, body.pf .mf-loader-bar-sm { display: none !important; }
+body.pf .mf-ml-inline { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 520px; }
+body.pf .mf-ml-inline i { height: 14px; }
+body.pf .mf-ml-inline i:nth-child(1) { width: 70%; }
+body.pf .mf-ml-inline i:nth-child(3) { width: 45%; }
+
+/* WebAssembly boot screen (partner index.html) — same family as the splash */
+.mf-boot2 { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: radial-gradient(1200px 600px at 50% -10%, #FFF1E6 0%, rgba(255,241,230,0) 60%), #FBF8F5; font-family: Inter, system-ui, sans-serif; }
+.mf-boot2 .mk { position: relative; width: 84px; height: 84px; display: grid; place-items: center; }
+.mf-boot2 .mk::before { content: ''; position: absolute; inset: 8px; border-radius: 24px; background: #fff; box-shadow: 0 1px 2px rgba(60,40,20,.06), 0 12px 30px rgba(255,90,0,.14); }
+.mf-boot2 .mk svg { position: relative; z-index: 1; width: 52px; height: 52px; animation: mfMlBreathe 2.4s ease-in-out infinite; }
+.mf-boot2 .mk .ring { position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(255,90,0,0) 0deg, rgba(255,138,61,.15) 120deg, #FF8A3D 280deg, #FF5A00 360deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+  animation: mfMlSpin 1s linear infinite; }
+.mf-boot2 .nm { font-weight: 600; font-size: 15px; color: #3b2b20; letter-spacing: -.01em; }
+.mf-boot2 .nm b { font-weight: 800; color: #FF5A00; }
+.mf-boot2 .bar { width: 180px; height: 4px; border-radius: 999px; background: rgba(255,90,0,.10); overflow: hidden; }
+.mf-boot2 .bar i { display: block; height: 100%; width: var(--blazor-load-percentage, 0%); border-radius: inherit; background: linear-gradient(90deg, #FF8A3D, #FF5A00); transition: width .3s ease; }
+.mf-boot2 .pc { font-size: 12px; color: #8a7766; font-variant-numeric: tabular-nums; min-height: 15px; }
+/* v804: links inside chat-bot replies (partner assistant + customer bot). Kept in its own
+   direction so an English URL reads correctly inside a Persian/Arabic sentence. */
+.mf-link { color: #E04E00; text-decoration: underline; text-underline-offset: 2px; font-weight: 600;
+  overflow-wrap: anywhere; word-break: break-word; unicode-bidi: isolate; direction: ltr; }
+.mf-link:hover { color: #B83F00; }
+.mf-bot-row.mine .mf-link, .pb-msg.me .mf-link { color: inherit; }
+/* v805: assistant replies with tables, links, bold and bullets (ChatText). The bubble keeps its
+   own colours; tables scroll sideways inside it on a phone instead of stretching it. */
+.mf-chat-md { display: flex; flex-direction: column; gap: 4px; white-space: normal; }
+.mf-chat-p, .mf-chat-li, .mf-chat-h { overflow-wrap: anywhere; }
+.mf-chat-li { padding-inline-start: 4px; }
+.mf-chat-h { font-weight: 800; margin-top: 2px; }
+.mf-chat-table-wrap { max-width: 100%; overflow-x: auto; margin: 4px 0; border-radius: 10px; border: 1px solid rgba(60, 40, 20, .10); background: rgba(255, 255, 255, .7); }
+.mf-chat-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.mf-chat-table th, .mf-chat-table td { padding: 5px 9px; text-align: start; white-space: nowrap; border-bottom: 1px solid rgba(60, 40, 20, .08); }
+.mf-chat-table th { font-weight: 700; background: rgba(255, 90, 0, .07); }
+.mf-chat-table tr:last-child td { border-bottom: 0; }
+/* v806: name fields — translate row */
+.nf-err { font-size: 12px; color: #C62828; }
+/* v807: invoice designer — receipt / kitchen ticket switch and the kitchen ticket preview */
+.kd-mode { max-width: 420px; }
+.kd-paper { display: flex; justify-content: center; padding: 18px 10px; }
+.kd-frame { width: 300px; height: 640px; border: 0; background: #fff; border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 12px 32px rgba(60,40,20,.16); }
+
+/* v808: phone country list as its own dialog (Majed 2026-10-14, "Can not select": the old
+   drop-down was cut off by the dialog that held the phone field). */
+.pf-pick { display: flex; flex-direction: column; max-height: min(72vh, 560px); }
+.pf-pick .q { flex: none; width: 100%; border: 0; outline: 0; border-bottom: 1px solid #f3ece2; padding: 14px 16px; font-size: 16px; background: #fffaf5; }
+.pf-pick .list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px; }
+.pf-pick .list button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px; border: 0; background: transparent; border-radius: 10px; cursor: pointer; text-align: start; }
+.pf-pick .list button:hover { background: #faf6f0; }
+.pf-pick .list button.on { background: #fdf0e5; }
+.pf-pick .list button b { flex: 1; font-size: 14px; font-weight: 600; color: #2f2a23; }
+.pf-pick .list button i { font-style: normal; font-size: 13px; color: #97907f; font-variant-numeric: tabular-nums; direction: ltr; }
+.pf-pick .pf-flag { width: 26px; height: auto; border-radius: 3px; }
+
+/* v809: daily report — filter card, report summary, sales items (Majed 2026-10-14) */
+.dr-page { max-width: 1100px; margin-inline: auto; }
+.dr-presets { max-width: 620px; margin-bottom: 12px; }
+.dr-range { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.dr-end { display: flex; flex-direction: column; gap: 4px; }
+.dr-lbl { font-size: 12px; font-weight: 700; color: var(--mud-palette-text-secondary); }
+.dr-pair { display: flex; gap: 8px; align-items: center; }
+.dr-pair > :first-child { width: 160px; }
+.dr-time { width: 120px; }
+.dr-arrow { margin-bottom: 10px; color: #c9b8a6; }
+.dr-apply { height: 40px; margin-bottom: 2px; }
+.dr-span { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--mud-palette-text-secondary); }
+.dr-span b { color: var(--mud-palette-text-primary); font-weight: 700; }
+.dr-h { font-weight: 800; font-size: 16px; text-align: center; margin-bottom: 12px; }
+.dr-sum { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 36px; }
+.dr-sum > div { display: flex; align-items: baseline; gap: 8px; padding: 6px 2px; border-bottom: 1px dashed var(--mud-palette-lines-default); }
+.dr-sum > div span { color: var(--mud-palette-text-secondary); font-size: 14px; }
+.dr-sum > div span::after { content: ' :'; }
+.dr-sum > div b { margin-inline-start: auto; font-size: 15px; font-weight: 800; white-space: nowrap; }
+.dr-sum > div.strong b { color: #E04E00; font-size: 17px; }
+.dr-note { margin-top: 10px; font-size: 11.5px; color: var(--mud-palette-text-secondary); text-align: center; }
+.dr-items { display: flex; flex-direction: column; }
+.dr-items > div { display: grid; grid-template-columns: 1fr 70px 120px; gap: 10px; padding: 8px 4px; align-items: center; }
+.dr-items > div > :nth-child(n+2) { text-align: end; }
+.dr-items .hd { font-size: 12px; font-weight: 700; color: var(--mud-palette-text-secondary); border-bottom: 2px solid var(--mud-palette-lines-default); }
+.dr-items .rw { border-bottom: 1px dashed var(--mud-palette-lines-default); font-size: 14px; }
+.dr-items .rw .nm { overflow: hidden; text-overflow: ellipsis; }
+.dr-items .ft { font-weight: 800; border-top: 2px solid var(--mud-palette-lines-default); }
+@media (max-width: 640px) {
+  .dr-sum { grid-template-columns: 1fr; gap: 2px; }
+  .dr-range { flex-direction: column; align-items: stretch; }
+  .dr-arrow { display: none; }
+  .dr-pair > :first-child { flex: 1; width: auto; }
+  .dr-apply { width: 100%; }
+  .dr-items > div { grid-template-columns: 1fr 48px 92px; }
+}
+/* v810: admin partner reports */
+.pr-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.pr-tiles > div { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: #fff; border: 1px solid var(--mud-palette-lines-default); }
+.pr-tiles > div span { font-size: 12px; color: var(--mud-palette-text-secondary); }
+.pr-tiles > div b { font-size: 18px; font-weight: 800; }
+.pr-tiles > div.strong b { color: #E04E00; }
+.pr-table > div { display: grid; grid-template-columns: minmax(180px, 2fr) repeat(5, minmax(80px, 1fr)) minmax(100px, 1fr); gap: 10px; padding: 10px 14px; align-items: center; min-width: 760px; }
+.pr-table > div > :nth-child(n+2) { text-align: end; }
+.pr-table .hd { font-size: 12px; font-weight: 700; color: var(--mud-palette-text-secondary); border-bottom: 2px solid var(--mud-palette-lines-default); }
+.pr-table .rw { border-bottom: 1px solid var(--mud-palette-lines-default); cursor: pointer; font-size: 13.5px; }
+.pr-table .rw:hover { background: #FFF6EE; }
+.pr-table .rw .nm { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pr-store { font-weight: 800; font-size: 16px; }
+/* v811: logo editor dialog */
+.le-stage { display: flex; justify-content: center; }
+.le-canvas { width: min(280px, 72vw); aspect-ratio: 1; border-radius: 14px; touch-action: none; cursor: grab;
+  box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 10px 26px rgba(60,40,20,.16); }
+.le-canvas:active { cursor: grabbing; }
+
+/* v812: map picker — 'my location' button (zooms to street level) */
+.mfmap .box .mloc { position: absolute; inset-inline-end: 14px; bottom: 84px; z-index: 1000; width: 46px; height: 46px; border-radius: 50%; border: 0;
+  background: #fff; color: #1a73e8; display: grid; place-items: center; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+.mfmap .box .mloc:hover { background: #f4f8ff; }
+.mfmap .box .mloc.busy svg { animation: mfMlSpin 1s linear infinite; }
+
+/* v813 - admin <-> partner chat (DirectChatPane): sender names, orange header on the
+   partner's full-screen thread, the pane fitted inside the admin page. */
+.dchat .dchat-name { display: block; font-size: 10.5px; font-weight: 700; color: #FF5A00; margin-bottom: 2px; }
+.dchat .qc-bubble.me .dchat-name { color: #9a4a12; }
+.chatonly .wa-screen.dchat-screen { max-width: 760px; margin: 0 auto; }
+.wa-pane.dchat.oo .wa-head { background: linear-gradient(135deg, #ff8a2a, #f4511e) !important; color: #fff !important; }
+.wa-pane.dchat.oo .wa-head .who b,
+.wa-pane.dchat.oo .wa-head .who small,
+.wa-pane.dchat.oo .wa-head .mud-icon-button { color: #fff !important; }
+.wa-pane.dchat.oo .wa-head .ava { background: rgba(255, 255, 255, .25); }
+.pch-thread .wa-pane.dchat { border-radius: 0; }
+
+/* v814 - floating "OrderOrange chat" button on the partner home page: slides in, floats,
+   pulses, the headset wiggles now and then, and the red count shows unread messages
+   from the OrderOrange team. End corner; the order assistant's button owns the start one. */
+.oo-chat-fab { position: fixed; z-index: 1270; inset-inline-end: 16px; bottom: 16px;
+  display: inline-flex; align-items: center; gap: 9px; padding: 9px 18px 9px 10px; border-radius: 999px;
+  text-decoration: none !important; color: #fff !important; font-weight: 800; font-size: .9rem; letter-spacing: .01em;
+  background: linear-gradient(135deg, #ff8a2a, #f4511e);
+  box-shadow: 0 10px 26px rgba(244, 81, 30, .40), 0 0 0 0 rgba(255, 138, 42, .55);
+  animation: ooFabIn .5s cubic-bezier(.2, .9, .3, 1.25) both, ooFabFloat 3s ease-in-out 1.2s infinite, ooFabPulse 3.4s ease-out 1.6s infinite;
+  transition: transform .15s, filter .15s; }
+.oo-chat-fab:hover { filter: brightness(1.06); animation-play-state: paused, paused, running; transform: translateY(-3px) scale(1.04); }
+.oo-chat-fab:active { transform: scale(.97); }
+.oo-chat-fab .ic { width: 36px; height: 36px; border-radius: 50%; background: rgba(255, 255, 255, .22); display: flex; align-items: center; justify-content: center; flex: none; }
+.oo-chat-fab .ic .mud-icon-root { width: 21px; height: 21px; animation: ooFabWiggle 4s ease-in-out 2s infinite; }
+.oo-chat-fab .n { position: absolute; top: -7px; inset-inline-end: -5px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px;
+  background: #d32f2f; color: #fff; font-size: 11.5px; font-weight: 800; font-style: normal; display: flex; align-items: center; justify-content: center;
+  border: 2px solid #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .22); animation: ooFabBadge .45s cubic-bezier(.2, .9, .3, 1.4) both; }
+@keyframes ooFabIn { from { opacity: 0; transform: translateY(26px) scale(.8); } to { opacity: 1; transform: none; } }
+@keyframes ooFabFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes ooFabPulse { 0% { box-shadow: 0 10px 26px rgba(244, 81, 30, .40), 0 0 0 0 rgba(255, 138, 42, .55); }
+  70% { box-shadow: 0 10px 26px rgba(244, 81, 30, .40), 0 0 0 16px rgba(255, 138, 42, 0); }
+  100% { box-shadow: 0 10px 26px rgba(244, 81, 30, .40), 0 0 0 0 rgba(255, 138, 42, 0); } }
+@keyframes ooFabWiggle { 0%, 78%, 100% { transform: rotate(0); } 84% { transform: rotate(-14deg); } 90% { transform: rotate(12deg); } 96% { transform: rotate(-5deg); } }
+@keyframes ooFabBadge { from { transform: scale(0); } to { transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .oo-chat-fab { animation: ooFabIn .3s ease both; } .oo-chat-fab .ic .mud-icon-root, .oo-chat-fab .n { animation: none; } }
+@media (max-width: 599.98px) { .oo-chat-fab { bottom: 14px; inset-inline-end: 12px; padding: 8px 14px 8px 8px; font-size: .84rem; } .oo-chat-fab .ic { width: 32px; height: 32px; } }
+
+/* v815 - store page headline in two languages: "Samakani - سماكاني". The second name is
+   quieter so the English one still leads; both read in their own direction. */
+h1.nm .nm-alt { font-weight: 600; opacity: .78; unicode-bidi: plaintext; white-space: nowrap; }
+
+/* v816 - /pos on phones: Sign in + Get started as a fixed frosted bar at the bottom; the
+   header keeps only the burger there. Desktop (>=900px) keeps the header buttons, no bar. */
+.mf-pos-dock{position:fixed;left:50%;bottom:calc(12px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:70;
+  display:flex;gap:8px;padding:8px;border-radius:999px;background:rgba(255,255,255,.84);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid rgba(60,40,20,.09);box-shadow:0 14px 40px rgba(60,40,20,.20),0 2px 6px rgba(60,40,20,.06);
+  max-width:calc(100vw - 24px);animation:posDockIn .55s cubic-bezier(.2,.9,.3,1.2) .15s both}
+.mf-pos-dock a{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:0 22px;border-radius:999px;
+  font-weight:800;font-size:15px;text-decoration:none;white-space:nowrap;transition:transform .15s,box-shadow .15s}
+.mf-pos-dock a:active{transform:scale(.97)}
+.mf-pos-dock a.signin{color:#241F1B;background:#fff;border:1.5px solid rgba(60,40,20,.14)}
+.mf-pos-dock a.go{color:#fff;background:linear-gradient(135deg,#FF8A2A,#F4511E);box-shadow:0 8px 20px rgba(244,81,30,.38)}
+@keyframes posDockIn{from{opacity:0;transform:translateX(-50%) translateY(28px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@media (min-width:900px){.mf-pos-dock{display:none}}
+@media (max-width:899.98px){
+  .mf-posnav .acts .signin,.mf-posnav .acts .go{display:none}
+  .mf-posnav .links .m-only{display:none}
+  .mf-pos-footer{padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+}
+@media (max-width:360px){.mf-pos-dock a{padding:0 16px;font-size:14px}}
+
+/* v817 - report filter on phones (Majed 2026-10-15 "fix this UI"): the date box had shrunk to
+   "202" beside a wide time box, and the preset pills ran off the screen. Now: presets scroll
+   sideways in one row; date and time share the row 55/45 so the full date always shows. */
+.dr-pair .dr-time, .dr-pair .dr-time.mud-picker { width: 130px; flex: 0 0 130px; }
+.dr-pair > .mf-date, .dr-pair > .mud-picker:first-child { width: 170px; flex: 0 0 170px; }
+@media (max-width: 640px) {
+  .dr-presets { display: flex; flex-wrap: nowrap; overflow-x: auto; max-width: none; gap: 4px; padding: 4px; margin-inline: -4px;
+                scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .dr-presets::-webkit-scrollbar { display: none; }
+  .dr-presets button { flex: 0 0 auto; white-space: nowrap; }
+  .dr-pair { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 8px; align-items: center; }
+  .dr-pair > *, .dr-pair > .mf-date, .dr-pair > .mud-picker:first-child, .dr-pair .dr-time, .dr-pair .dr-time.mud-picker { width: 100% !important; min-width: 0; flex: none; }
+  .dr-pair .mud-input-control, .dr-pair .mud-input { width: 100%; min-width: 0; }
+  .dr-pair input { min-width: 0; }
+}
+
+/* v818 - partner menu tiles: a long business name (one unbroken word, e.g. an email-style
+   store name) spilled out of its tile (Majed 2026-10-16). Names now wrap inside the tile,
+   break anywhere when there is no space, and stop at two lines with an ellipsis. */
+.pnav-tile { min-width: 0; overflow: hidden; }
+.pnav-tile .lb { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+                 max-width: 100%; overflow-wrap: anywhere; word-break: break-word; line-height: 1.25; text-align: center; }
+
+/* v819 - store headline in two languages as two lines (replaces the v815 one-liner): the
+   English name, then the other-language name underneath, smaller and quieter, each in its
+   own writing direction — no dash to end up on the wrong side. */
+h1.nm { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+h1.nm .nm-main { display: block; overflow-wrap: anywhere; }
+h1.nm .nm-alt { display: block; font-size: .62em; font-weight: 600; line-height: 1.3; opacity: .72; letter-spacing: 0;
+                unicode-bidi: plaintext; white-space: normal; overflow-wrap: anywhere; }
+
+/* v820 - store tagline card (replaces the grey .oo-hero-about line): spark + up to two
+   language lines, slides up on arrival, the accent shimmers slowly, the spark breathes. */
+.oo-tagline { position: relative; display: flex; align-items: flex-start; gap: 12px; margin: 12px 4px 14px; padding: 12px 14px 12px 14px;
+              border-radius: 16px; background: linear-gradient(135deg, rgba(255, 138, 42, .14), rgba(255, 90, 0, .04) 60%, rgba(255, 255, 255, 0));
+              border: 1px solid rgba(255, 90, 0, .14); overflow: hidden; animation: ooTagIn .6s cubic-bezier(.2, .9, .3, 1.1) .1s both; }
+.oo-tagline::before { content: ""; position: absolute; inset-inline-start: 0; top: 10px; bottom: 10px; width: 4px; border-radius: 4px;
+                      background: linear-gradient(180deg, #FF8A2A, #F4511E); }
+.oo-tagline::after { content: ""; position: absolute; top: -60%; bottom: -60%; width: 46%; left: -60%; transform: skewX(-18deg);
+                     background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .55), rgba(255, 255, 255, 0));
+                     animation: ooTagShine 5.5s ease-in-out 1.2s infinite; pointer-events: none; }
+.oo-tagline-spark { flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                    color: #fff; font-size: 16px; background: linear-gradient(135deg, #FF8A2A, #F4511E); box-shadow: 0 6px 16px rgba(244, 81, 30, .35);
+                    animation: ooTagBreath 3s ease-in-out 1s infinite; margin-inline-start: 6px; }
+.oo-tagline-tx { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; padding-top: 4px; }
+.oo-tagline-tx span { display: block; font-size: 15.5px; font-weight: 700; color: #3A322B; line-height: 1.35; overflow-wrap: anywhere; unicode-bidi: plaintext; }
+.oo-tagline-tx span + span { font-size: 14px; font-weight: 600; color: #8a7c6c; }
+@keyframes ooTagIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes ooTagShine { 0% { left: -60%; } 40%, 100% { left: 130%; } }
+@keyframes ooTagBreath { 0%, 100% { transform: scale(1); box-shadow: 0 6px 16px rgba(244, 81, 30, .35); } 50% { transform: scale(1.08); box-shadow: 0 8px 22px rgba(244, 81, 30, .5); } }
+@media (prefers-reduced-motion: reduce) { .oo-tagline, .oo-tagline::after, .oo-tagline-spark { animation: none; } }
+
+/* v821 - tagline card without the icon; and script fonts for text tagged by its own language
+   (store title lines and tagline lines carry lang="ar|fa|ur|hi"), regardless of the page's UI
+   language: Arabic → Cairo, Persian/Urdu → Vazirmatn, Hindi → Noto Sans Devanagari. */
+.oo-tagline-spark { display: none; }
+.oo-tagline { padding: 12px 16px 12px 18px; gap: 0; }
+.oo-tagline-tx { padding-top: 0; }
+.oo-tagline-tx span[lang="ar"], h1.nm span[lang="ar"] { font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+.oo-tagline-tx span[lang="fa"], .oo-tagline-tx span[lang="ur"], h1.nm span[lang="fa"], h1.nm span[lang="ur"] { font-family: 'Vazirmatn', 'Cairo', 'Segoe UI', Tahoma, sans-serif; }
+.oo-tagline-tx span[lang="hi"], h1.nm span[lang="hi"] { font-family: 'Noto Sans Devanagari', 'Segoe UI', sans-serif; }
+.oo-tagline-tx span[lang="ar"], .oo-tagline-tx span[lang="fa"], .oo-tagline-tx span[lang="ur"] { font-size: 15.5px; line-height: 1.6; }
+h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { font-size: .68em; line-height: 1.5; }
+
+/* v822 - store hero on phones (Majed 2026-10-16 "this UI is not good"): the title block was a
+   2-line clamp box, so the other-language name slid to the right; the tagline shouted in bold;
+   the contact chips were big and stacked. Now: both name lines start-aligned, a quieter
+   tagline, compact chips, logo aligned with the name. */
+.oo-hero-plate .nm { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; overflow: visible; -webkit-line-clamp: unset; }
+.oo-hero-plate .nm .nm-main { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-align: start; }
+.oo-hero-plate .nm .nm-alt { align-self: flex-start; text-align: start; font-size: .64em; font-weight: 600; opacity: .7; }
+.oo-hero-plate .tags { gap: 5px; margin-top: 8px; }
+.oo-hero-plate .tag { font-size: .72rem; padding: 4px 9px; border-radius: 9px; }
+.oo-hero-plate .tag.map-btn { max-width: 100%; white-space: normal; line-height: 1.25; }
+.oo-tagline { margin: 10px 12px 12px; padding: 10px 14px 10px 16px; border-radius: 14px;
+              background: linear-gradient(135deg, rgba(255, 138, 42, .09), rgba(255, 90, 0, .03) 60%, rgba(255, 255, 255, 0)); border-color: rgba(255, 90, 0, .10); }
+.oo-tagline::before { width: 3px; }
+.oo-tagline-tx span { font-size: 14px; font-weight: 500; color: #5c5247; line-height: 1.5; }
+.oo-tagline-tx span + span { font-size: 13.5px; font-weight: 500; color: #8a7c6c; }
+.oo-tagline-tx span[lang="ar"], .oo-tagline-tx span[lang="fa"], .oo-tagline-tx span[lang="ur"] { font-size: 14px; line-height: 1.7; font-weight: 500; }
+@media (max-width: 700px) {
+  .oo-hero-plate { align-items: flex-start; gap: 12px; }
+  .oo-hero-plate .mark { margin-top: 2px; }
+  .oo-hero-plate .nm { font-size: 1.12rem; }
+  .oo-hero-plate .tag { font-size: .7rem; padding: 3px 8px; }
+  .oo-hero-plate .tag .mud-icon-root { width: 12px; height: 12px; }
+}

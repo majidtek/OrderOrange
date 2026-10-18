@@ -1,4 +1,4 @@
-@page "/register"
+﻿@page "/register"
 @layout Layout.RegisterLayout
 @inject ApiClient Api
 @inject LanguageService L
@@ -42,12 +42,15 @@
                 {
                     <div class="mf-or"><span>@L["login.or"]</span></div>
                 }
+                @* Immediate: every keystroke lands in the field — without it, typing and tapping the
+                   button (or the eye) straight away sent a stale value: "at least 6 characters" for an
+                   11-character password, and a sign-in that did not match (Majed 2026-10-15). *@
                 <MudTextField @bind-Value="_username" Label="@L["login.username"]"
-                              UserAttributes="@NoAutofill"
+                              UserAttributes="@NoAutofill" Immediate="true"
                               Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr" />
                 <MudTextField @bind-Value="_password" Label="@L["common.password"]"
                               InputType="@(_showPassword ? InputType.Text : InputType.Password)"
-                              UserAttributes="@NoAutofillPassword"
+                              UserAttributes="@NoAutofillPassword" Immediate="true"
                               Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-1 mf-ltr"
                               Adornment="Adornment.End"
                               AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
@@ -154,7 +157,8 @@
     private async Task EnterAsync()
     {
         try { await Api.SetSetupStepAsync(-1); } catch { }
-        Nav.NavigateTo("/");
+        // ?welcome=1: the layout asks for country and currency once (only if never answered).
+        Nav.NavigateTo("/?welcome=1");
     }
 
     private async Task Finish()
@@ -197,7 +201,15 @@
                 return false;
             }
 
-            var (session, loginError) = await Api.LoginAsync(user, _password);
+            // The account exists now; the sign-in that follows must not fail on a hiccup
+            // (Majed hit "Wrong username or password" here while the API was restarting for
+            // a release, 2026-10-15). Three tries, a couple of seconds apart.
+            LoginResponse? session = null; string? loginError = null;
+            for (var attempt = 0; attempt < 3 && session is null; attempt++)
+            {
+                if (attempt > 0) await Task.Delay(2500);
+                (session, loginError) = await Api.LoginAsync(user, _password);
+            }
             if (session is null) { _error = loginError ?? L["common.signinFail"]; return false; }
             State.SignIn(session);
             try { await Persistence.SaveAsync(session); } catch { }

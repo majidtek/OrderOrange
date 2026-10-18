@@ -1,0 +1,126 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+
+@* The kitchen / bar ticket's own designer (Majed 2026-10-13: "in designer add kitchen UI
+   also"). The preview is the till's real ticket: KitchenTicket.Html in OrderOrange.Shared
+   builds it here and on the till, shown in an iframe so its styles stand alone. *@
+
+@if (_design is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <div class="rd">
+        <div class="rd-controls">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-1">👨‍🍳 @L["kd.title"]</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@L["kd.tillHint"]</MudText>
+
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.textSize"]</MudText>
+                <div class="pv-seg" style="max-width: 380px;">
+                    @foreach (var (v, k) in new[] { ("small", "des.small"), ("normal", "des.normal"), ("large", "des.large"), ("xlarge", "kd.xlarge") })
+                    {
+                        var val = v;
+                        <button type="button" class="@(_design.TextSize == val ? "on" : "")" @onclick="@(() => Set(_design with { TextSize = val }))">@L[k]</button>
+                    }
+                </div>
+
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["kd.numberSize"]</MudText>
+                <div class="pv-seg" style="max-width: 300px;">
+                    @foreach (var (v, k) in new[] { ("normal", "des.normal"), ("big", "kd.big"), ("huge", "kd.huge") })
+                    {
+                        var val = v;
+                        <button type="button" class="@(_design.NumberSize == val ? "on" : "")" @onclick="@(() => Set(_design with { NumberSize = val }))">@L[k]</button>
+                    }
+                </div>
+
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-3 mb-1">@L["des.paperWidth"]</MudText>
+                <div class="pv-seg" style="max-width: 220px;">
+                    <button type="button" class="@(PaperWidth == 80 ? "on" : "")" disabled>80 mm</button>
+                    <button type="button" class="@(PaperWidth == 58 ? "on" : "")" disabled>58 mm</button>
+                </div>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">@L["kd.paperHint"]</MudText>
+            </MudPaper>
+
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-2">✅ @L["kd.show"]</MudText>
+                <MudSwitch T="bool" Color="Color.Success" Size="Size.Small" Value="_design.ShowStation" ValueChanged="@(v => Set(_design with { ShowStation = v }))" Label="@L["kd.station"]" />
+                <MudSwitch T="bool" Color="Color.Success" Size="Size.Small" Value="_design.ShowTime" ValueChanged="@(v => Set(_design with { ShowTime = v }))" Label="@L["kd.time"]" />
+                <MudSwitch T="bool" Color="Color.Success" Size="Size.Small" Value="_design.ShowTable" ValueChanged="@(v => Set(_design with { ShowTable = v }))" Label="@L["kd.table"]" />
+                <MudSwitch T="bool" Color="Color.Success" Size="Size.Small" Value="_design.ShowCustomer" ValueChanged="@(v => Set(_design with { ShowCustomer = v }))" Label="@L["kd.customer"]" />
+                <MudSwitch T="bool" Color="Color.Success" Size="Size.Small" Value="_design.ShowNotes" ValueChanged="@(v => Set(_design with { ShowNotes = v }))" Label="@L["kd.notes"]" />
+                <MudSwitch T="bool" Color="Color.Success" Size="Size.Small" Value="_design.ShowItemNotes" ValueChanged="@(v => Set(_design with { ShowItemNotes = v }))" Label="@L["kd.itemNotes"]" />
+                <MudSwitch T="bool" Color="Color.Success" Size="Size.Small" Value="_design.UpperCase" ValueChanged="@(v => Set(_design with { UpperCase = v }))" Label="@L["kd.upper"]" />
+            </MudPaper>
+
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-2">✨ @L["des.style"]</MudText>
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mb-1">@L["kd.separator"]</MudText>
+                <div class="pv-seg" style="max-width: 380px;">
+                    @foreach (var (v, k) in new[] { ("line", "kd.sepLine"), ("dashed", "kd.sepDashed"), ("double", "kd.sepDouble"), ("none", "kd.sepNone") })
+                    {
+                        var val = v;
+                        <button type="button" class="@(_design.Separator == val ? "on" : "")" @onclick="@(() => Set(_design with { Separator = val }))">@L[k]</button>
+                    }
+                </div>
+                <MudTextField T="string" Value="_design.Header" ValueChanged="@(v => Set(_design with { Header = v ?? "" }))" Immediate="true" DebounceInterval="250"
+                              Label="@L["kd.header"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="80" Class="mt-3" />
+                <MudTextField T="string" Value="_design.Footer" ValueChanged="@(v => Set(_design with { Footer = v ?? "" }))" Immediate="true" DebounceInterval="250"
+                              Label="@L["kd.footer"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="120" Class="mt-3" />
+            </MudPaper>
+        </div>
+
+        <div class="rd-stage">
+            <div class="rdx-toolbar">
+                <span class="rd-stage-label">@L["des.livePreview"]</span>
+            </div>
+            <div class="kd-paper">
+                <iframe class="kd-frame" title="@L["kd.title"]" srcdoc="@PreviewHtml" sandbox=""></iframe>
+            </div>
+        </div>
+    </div>
+
+    <div class="rdx-bar">
+        <MudButton Variant="Variant.Text" Style="color: rgba(255,255,255,.8);"
+                   StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="@(() => Set(KitchenDesignDto.Default))">@L["des.reset"]</MudButton>
+        <MudButton Variant="Variant.Filled" Size="Size.Large" Class="rdx-save"
+                   StartIcon="@Icons.Material.Filled.Save" OnClick="Save" Disabled="_saving">
+            @(_saving ? "…" : L["des.save"])
+        </MudButton>
+    </div>
+}
+
+@code {
+    /// <summary>The receipt's paper width — the till prints kitchen tickets on the same roll size.</summary>
+    [Parameter] public int PaperWidth { get; set; } = 80;
+    /// <summary>The shop's kitchen language (Settings), so the preview reads like the real ticket.</summary>
+    [Parameter] public string? KitchenLanguage { get; set; }
+
+    private KitchenDesignDto? _design;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync() =>
+        _design = await Api.GetMyKitchenDesignAsync() ?? KitchenDesignDto.Default;
+
+    private void Set(KitchenDesignDto next) => _design = next;
+
+    private string PreviewHtml => KitchenTicket.Html(
+        "MF-1042", Fmt.ServerNow, "5", "Ahmed", "Allergy: nuts",
+        [
+            new KitchenTicket.Line(1, 2, "Chelo Kabab Koobideh", "No onion"),
+            new KitchenTicket.Line(2, 1, "Shirazi Salad", null),
+            new KitchenTicket.Line(3, 3, "Fresh Lemonade", "Less ice"),
+        ],
+        PaperWidth == 58 ? 58 : 80, _design, "KITCHEN", strings: TicketStrings.For(KitchenLanguage));
+
+    private async Task Save()
+    {
+        if (_design is null) return;
+        _saving = true;
+        var (ok, error) = await Api.SaveMyKitchenDesignAsync(_design);
+        _saving = false;
+        Snackbar.Add(ok ? L["kd.saved"] : error ?? L["common.error"], ok ? Severity.Success : Severity.Error);
+    }
+}

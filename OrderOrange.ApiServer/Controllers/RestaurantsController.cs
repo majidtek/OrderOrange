@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace OrderOrange.ApiServer.Controllers;
 
 public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfiguration config,
-    AdminAlerts alerts, StorePrefsStore prefs) : ApiControllerBase
+    AdminAlerts alerts, StorePrefsStore prefs, KitchenDesignStore kitchenDesigns) : ApiControllerBase
 {
     /// <summary>
     /// The shops the platform is putting forward, in their running order. Lives on the
@@ -539,6 +539,64 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
     /// </summary>
     private int RealStoreFloor => config.GetValue("Seo:RealStoreMinId", 5_000_200);
 
+    /// <summary>Words that are part of many store names and never identify one.</summary>
+    private static readonly HashSet<string> GenericStoreWords = new(StringComparer.Ordinal)
+    {
+        "restaurant", "restaurants", "cafe", "coffee", "kitchen", "house", "catering", "grill", "shop", "store", "food", "foods", "the", "and",
+        "رستوران", "کافه", "کافی", "مطعم", "كافيه", "كافي", "مقهى", "آشپزخانه", "خانه", "فروشگاه", "محل", "مطبخ",
+    };
+
+    /// <summary>
+    /// Rough Persian/Arabic → Latin spelling of a word, enough to recognise a store name the
+    /// owner only typed in English: «نیکان» → "nikan", «امیران» → "amiran", «شیرین» → "shirin".
+    /// Empty when the word is not Perso-Arabic.
+    /// </summary>
+    private static string Translit(string word)
+    {
+        if (!word.Any(ch => ch >= '؀' && ch <= 'ۿ')) return "";
+        var sb = new System.Text.StringBuilder();
+        for (var i = 0; i < word.Length; i++)
+        {
+            var ch = word[i];
+            var first = i == 0;
+            sb.Append(ch switch
+            {
+                'ا' or 'أ' or 'إ' or 'آ' => "a",
+                'ب' => "b", 'پ' => "p", 'ت' or 'ط' or 'ة' => "t", 'ث' or 'س' or 'ص' => "s",
+                'ج' => "j", 'چ' => "ch", 'ح' or 'ه' or 'ھ' => "h", 'خ' => "kh",
+                'د' => "d", 'ذ' or 'ز' or 'ض' or 'ظ' => "z", 'ر' => "r", 'ژ' => "zh", 'ش' => "sh",
+                'ع' => first ? "a" : "", 'غ' => "gh", 'ف' => "f", 'ق' => "gh", 'ک' or 'ك' => "k", 'گ' => "g",
+                'ل' => "l", 'م' => "m", 'ن' => "n", 'و' or 'ؤ' => first ? "v" : "o", 'ی' or 'ي' or 'ئ' or 'ى' => first ? "y" : "i",
+                '‌' or 'ً' or 'ٌ' or 'ٍ' or 'َ' or 'ُ' or 'ِ' or 'ّ' or 'ْ' => "",
+                _ => char.IsLetterOrDigit(ch) ? ch.ToString() : "",
+            });
+        }
+        return sb.ToString();
+    }
+
+    private static int Levenshtein(string a, string b)
+    {
+        var d = new int[a.Length + 1, b.Length + 1];
+        for (var i = 0; i <= a.Length; i++) d[i, 0] = i;
+        for (var j = 0; j <= b.Length; j++) d[0, j] = j;
+        for (var i = 1; i <= a.Length; i++)
+            for (var j = 1; j <= b.Length; j++)
+                d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
+        return d[a.Length, b.Length];
+    }
+
+    /// <summary>The values of the {"en":"…","ar":"…"} name map, as plain words.</summary>
+    private static string LocalizedNames(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json) || json.Length < 5) return "";
+        try
+        {
+            var map = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+            return map is null ? "" : string.Join(' ', map.Values);
+        }
+        catch (System.Text.Json.JsonException) { return ""; }
+    }
+
     /// <param name="realOnly">
     /// Offer only real kitchens. The ordering assistant sets this: sending a customer to
     /// a generated demo shop means promising food nobody can cook. Browse and the search
@@ -546,10 +604,17 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
     /// </param>
     [HttpGet("search")]
     [AllowAnonymous]
-    public async Task<SearchResultsDto> Search(string query = "", bool realOnly = false)
+    /// <param name="storeId">
+    /// Search inside ONE store only: the assistant on a store's page treats that store as
+    /// the main one (Majed 2026-10-01) and widens to the platform only when asked. Dishes
+    /// of that store alone, no store cards, a longer list.
+    /// </param>
+    public async Task<SearchResultsDto> Search(string query = "", bool realOnly = false, int? storeId = null)
     {
         var s = (query ?? "").Trim();
         if (s.Length < 2) return new SearchResultsDto([], []);
+        var onlyStore = storeId is > 0 ? storeId.Value : 0;
+        var dishTake = onlyStore > 0 ? 20 : 12;
 
         // A real shop is one created above the floor that has a menu — the same test the
         // sitemap applies, so a shop the bot will offer is exactly a shop Google is told about.
@@ -565,6 +630,13 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
         foreach (var alias in SearchAliases.Expand(s).Skip(1))
             tokenList.AddRange(SmartSearch.Tokens(alias));
         var queryTokens = tokenList.Where(t => t.Length >= 2).Distinct().ToArray();
+
+        // "Shirazi salad Nikan": a real store's name INSIDE the query means "that dish, at that
+        // store" (Majed 2026-10-01). The store word is lifted out, the search is scoped to the
+        // store, and the remaining words find the dish. Generic words (restaurant, cafe…) are
+        // never taken as a store name.
+        var storeNameWords = new HashSet<string>(StringComparer.Ordinal);
+        var storeByName = onlyStore == 0 && queryTokens.Length >= 2;   // resolved once the dishes are loaded, below
 
         // Candidates come from capped SQL lookups — never the whole catalog.
         var candidates = new Dictionary<int, Models.Restaurant>();
@@ -608,6 +680,7 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
 
         var allDishes = await db.MenuItems
             .Where(i => i.IsAvailable && i.Restaurant.IsApproved && i.RestaurantId >= floor)
+            .Where(i => onlyStore == 0 || i.RestaurantId == onlyStore)
             .Select(i => new
             {
                 Dto = new DishHitDto(i.Id, i.Name, i.Description, i.ImageEmoji, i.Price,
@@ -617,6 +690,54 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
                 i.SearchKeywords
             })
             .ToListAsync();
+
+        if (storeByName)
+        {
+            // Which stores' DISH names carry each word: "pizza" is in many menus, so it can
+            // never name Pizza One; "amiran" only appears in Amiran's own dishes, so it can.
+            var wordStores = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+            foreach (var d in allDishes)
+                foreach (var w in SmartSearch.Normalize(d.Dto.Name).Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    (wordStores.TryGetValue(w, out var set) ? set : wordStores[w] = []).Add(d.Dto.RestaurantId);
+            var rawWords = SmartSearch.Tokens(s).Where(t => t.Length >= 3 && !GenericStoreWords.Contains(t)).ToList();
+            if (rawWords.Count >= 2)
+            {
+                var realStores = await db.Restaurants.AsNoTracking()
+                    .Where(r => r.IsApproved && r.Id >= RealStoreFloor)
+                    .Select(r => new { r.Id, r.Name, r.NameLocalized, r.Slug }).ToListAsync();
+                // A store word hits when it is literally in the store's names, or when its
+                // Persian/Arabic spelling transliterates to a Latin word of the name («نیکان» →
+                // "nikan") — many stores never typed a localized name.
+                var named = realStores
+                    .Select(r =>
+                    {
+                        var storeWords = SmartSearch.Normalize($"{r.Name} {r.Slug} {LocalizedNames(r.NameLocalized)}")
+                            .Split(' ', StringSplitOptions.RemoveEmptyEntries).Distinct().ToList();
+                        var hits = rawWords.Where(w =>
+                        {
+                            var matched = storeWords.Contains(w) ? w
+                                : Translit(w) is { Length: >= 3 } tw
+                                    ? storeWords.FirstOrDefault(sw => sw == tw || (sw.Length >= 4 && Levenshtein(sw, tw) <= 1))
+                                    : null;
+                            return matched is not null
+                                   && (!wordStores.TryGetValue(matched, out var inDishes) || inDishes.All(id => id == r.Id));
+                        }).ToList();
+                        return (r.Id, Hits: hits);
+                    })
+                    .Where(x => x.Hits.Count > 0)
+                    .OrderByDescending(x => x.Hits.Count)
+                    .FirstOrDefault();
+                // Some other word must remain — "Nikan" alone is a store search, not a dish at it.
+                if (named.Hits is { Count: > 0 } && rawWords.Count > named.Hits.Count)
+                {
+                    onlyStore = named.Id;
+                    dishTake = 20;
+                    foreach (var w in named.Hits) storeNameWords.Add(w);
+                    queryTokens = queryTokens.Where(t => !storeNameWords.Contains(t)).ToArray();
+                    allDishes = allDishes.Where(d => d.Dto.RestaurantId == onlyStore).ToList();
+                }
+            }
+        }
 
         // A shop actually CALLED what was typed must beat a generated chain that merely
         // shares a word — and one chain must not swallow every slot, or the single real
@@ -635,15 +756,44 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
             .ThenByDescending(x => x.Restaurant.IsOpen)
             .Take(8)
             .ToList();
+        if (onlyStore > 0) rankedRestaurants = [];           // inside one store, store cards are noise
 
+        // A query word sitting in the dish's NAME outranks the same word buried in keywords
+        // or a description: "Shirazi salad" is the Shirazi Salad, not every salad.
         var rankedDishes = allDishes
             .Select(d => (d.Dto, d.IsPopular, Score: SmartSearch.Score(
-                $"{d.Dto.Name} {d.SearchKeywords} {d.Dto.Description} {d.Dto.RestaurantName}", queryTokens)))
+                $"{d.Dto.Name} {d.SearchKeywords} {d.Dto.Description} {d.Dto.RestaurantName}", queryTokens)
+                + 25 * queryTokens.Count(t => t.Length >= 3 && SmartSearch.Normalize(d.Dto.Name).Contains(t))))
             .Where(x => x.Score >= 45)
             .OrderByDescending(x => x.Score)
             .ThenByDescending(x => x.IsPopular)
-            .Take(12)
+            .Take(dishTake)
             .ToList();
+        if (onlyStore > 0 && rankedDishes.Count > 0)
+        {
+            // Inside one store a search must read like the menu: "doogh" is the doogh, not
+            // every platter whose description mentions it, and "sushi" is NOT the water just
+            // because the analyzer saw "su" (Turkish for water) in it. A dish stays only when a
+            // real word of the query (or of its known translations) appears in its name or
+            // as a whole keyword. Short Latin fragments do not count.
+            var words = SmartSearch.Tokens(s).Concat(SearchAliases.Expand(s).SelectMany(SmartSearch.Tokens))
+                .Where(t => t.Length >= (t.All(ch => ch < 128) ? 3 : 2) && !storeNameWords.Contains(t)).Distinct().ToList();
+            if (words.Count == 0) words = queryTokens.ToList();      // the query was only the store's name: its whole menu is fair
+            var keywordsOf = allDishes.ToDictionary(d => d.Dto.MenuItemId, d => d.SearchKeywords ?? "");
+            bool Strong(DishHitDto d)
+            {
+                var name = SmartSearch.Normalize(d.Name);
+                var kws = SmartSearch.Normalize(keywordsOf.GetValueOrDefault(d.MenuItemId, "")).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                return words.Any(w => name.Contains(w) || kws.Contains(w) || (w.Length >= 4 && kws.Any(k => k.StartsWith(w))));
+            }
+            rankedDishes = rankedDishes.Where(x => Strong(x.Dto))
+                // The search mirror can hold the same dish twice (re-synced menus): one card per name.
+                .GroupBy(x => SmartSearch.Normalize(x.Dto.Name)).Select(g => g.First()).ToList();
+            // When the word is in some dish NAMES, those are the answer; dishes that merely
+            // list it as a keyword ("Sosis Bandari" served with doogh) step aside.
+            var byName = rankedDishes.Where(x => words.Any(w => SmartSearch.Normalize(x.Dto.Name).Contains(w))).ToList();
+            if (byName.Count > 0) rankedDishes = byName;
+        }
 
         var ids = rankedRestaurants.Select(x => x.Restaurant.Id).ToList();
         var ratings = await RatingsFor(ids);
@@ -658,7 +808,7 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
         var scored = rankedDishes.Select(x => (x.Dto, x.Score)).ToList();
         // These belong to the generated vertical stores, so they have no place in an
         // answer that promised real kitchens only.
-        var virtualHits = realOnly ? [] : MenuTemplates.VerticalItems
+        var virtualHits = realOnly || onlyStore > 0 ? [] : MenuTemplates.VerticalItems
             .Select(v => (v, Score: SmartSearch.Score($"{v.Item.Name} {v.Keywords} {v.Category}", queryTokens)))
             .Where(x => x.Score >= 45)
             .OrderByDescending(x => x.Score)
@@ -677,7 +827,7 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
                     v.Item.Emoji, MenuTemplates.PriceFor(store.Id, v.Slot, v.Item.Price),
                     store.Id, store.Name, store.LogoEmoji, true, group.Key), score));
         }
-        var dishResults = scored.OrderByDescending(x => x.Item2).Take(12).Select(x => x.Dto).ToList();
+        var dishResults = scored.OrderByDescending(x => x.Item2).Take(dishTake).Select(x => x.Dto).ToList();
 
         // Results answer in the query's language: پیتزا in → پیتزا out, whatever
         // the app language is. Recognized words are swapped for the typed alias.
@@ -748,10 +898,11 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
             return BadRequest(new { message = "This account already has the maximum number of businesses." });
 
         var createNames = CleanNames(req.Names);
-        if (req.Names is not null && !createNames.ContainsKey("ar"))
-            return BadRequest(new { message = "The Arabic name is required." });
+        if (req.Names is not null && !createNames.ContainsKey("en"))
+            return BadRequest(new { message = "The English name is required." });
         var store = new Restaurant
         {
+            TaxPercent = 0m,   // new businesses start with no tax; the owner sets it in Settings (Majed 2026-10-11)
             OwnerUserId = CurrentUserId,
             Name = CanonicalName(createNames) ?? name,
             NameLocalized = NamesToJson(createNames),
@@ -763,9 +914,9 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
             Phone = "",
             DeliveryFee = 0.500m,
             MinOrder = 1.000m,
-            AvgPrepMinutes = 20,
+            AvgPrepMinutes = 0,
             IsOpen = false,
-            IsApproved = false,
+            IsApproved = true,    // a second branch is live at once, like the first (Majed 2026-10-16)
             AllowsPickup = true,
             CommissionPercent = 0m,
             Lat = req.Lat,
@@ -830,6 +981,7 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
         var cuisineIds = new List<int> { r.CuisineId };
         cuisineIds.AddRange(await db.RestaurantCuisines
             .Where(rc => rc.RestaurantId == r.Id).Select(rc => rc.CuisineId).ToListAsync());
+        var storePrefs = await prefs.GetAsync(r.Id);
         return new MyRestaurantDto(r.Id, r.Name, r.Description, r.CuisineId, r.Cuisine.Name,
             r.LogoEmoji, r.BannerColor, r.Area, r.Street, r.Phone, r.DeliveryFee, r.MinOrder,
             r.AvgPrepMinutes, r.IsOpen, r.IsApproved, r.CommissionPercent, rating, count, r.StoreType,
@@ -839,8 +991,39 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
             cuisineIds, r.Slug, r.DirectPrint, r.VatNumber, r.OnlineReservations,
             r.ReservePricePerTable, r.ReservePricePerMinute,
             r.SmtpHost, r.SmtpPort, r.SmtpUser, r.SmtpPassword, r.SmtpFrom, r.QrCardText,
-            r.DishStockPhotos, r.KitchenLanguage, await prefs.CurrencyAsync(r.Id));
+            r.DishStockPhotos, r.KitchenLanguage, storePrefs.Currency, storePrefs.Country,
+            storePrefs.TimeZone, storePrefs.DateFormat, storePrefs.TimeFormat,
+            ZoneOffsetMinutes(storePrefs.TimeZone), ServerOffsetMinutes());
     }
+
+    /// <summary>The server's own UTC offset right now — the clock every API timestamp is on.</summary>
+    private static int ServerOffsetMinutes() => (int)TimeZoneInfo.Local.GetUtcOffset(DateTime.Now).TotalMinutes;
+
+    /// <summary>A zone's UTC offset right now; an unknown or blank zone reads as the server's.</summary>
+    internal static int ZoneOffsetMinutes(string? zone)
+    {
+        if (string.IsNullOrWhiteSpace(zone)) return ServerOffsetMinutes();
+        try { return (int)TimeZoneInfo.FindSystemTimeZoneById(zone.Trim()).GetUtcOffset(DateTime.UtcNow).TotalMinutes; }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException) { return ServerOffsetMinutes(); }
+    }
+
+    private static bool KnownZone(string? zone)
+    {
+        if (string.IsNullOrWhiteSpace(zone)) return false;
+        try { TimeZoneInfo.FindSystemTimeZoneById(zone.Trim()); return true; }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException) { return false; }
+    }
+
+    /// <summary>The time zones the pickers offer, labelled with their offset right now, west to east.</summary>
+    [HttpGet("timezones")]
+    [AllowAnonymous]
+    public ActionResult<List<TimeZoneOptionDto>> TimeZones() =>
+        StoreClock.Zones.Where(KnownZone)
+            .Select(z => (Id: z, Off: ZoneOffsetMinutes(z)))
+            .OrderBy(x => x.Off).ThenBy(x => x.Id)
+            .Select(x => new TimeZoneOptionDto(x.Id,
+                $"(UTC{(x.Off < 0 ? "−" : "+")}{Math.Abs(x.Off) / 60:00}:{Math.Abs(x.Off) % 60:00}) {x.Id.Replace('_', ' ')}", x.Off))
+            .ToList();
 
     /// <summary>
     /// Words a shop may not take as its handle: every first path segment the client app
@@ -884,6 +1067,74 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
         if (r is null) return NotFound();
         r.QrCardText = (req.Text ?? "").Trim() is { Length: > 300 } long_ ? long_[..300] : (req.Text ?? "").Trim();
         await db.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>
+    /// The welcome dialog's second step: the shop's name (English required, other languages
+    /// optional) plus an optional mobile and landline. Nothing else changes; numbers already
+    /// saved in Settings stay behind the new ones.
+    /// </summary>
+    [HttpPut("mine/basics")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<IActionResult> SetBasics(StoreBasicsRequest req)
+    {
+        var r = await db.Restaurants.FindAsync(CurrentRestaurantId);
+        if (r is null) return NotFound();
+        var names = CleanNames(req.Names ?? []);
+        if (!names.ContainsKey("en")) return BadRequest(new { message = "The English name is required." });
+
+        // Both numbers are optional; one that is given must look like a number.
+        var mobile = (req.Mobile ?? "").Trim();
+        var phone = (req.Phone ?? "").Trim();
+        foreach (var n in new[] { mobile, phone })
+            if (n.Length > 0 && (n.Count(char.IsDigit) < 6 || n.Length > 40))
+                return BadRequest(new { message = "Enter a valid phone number." });
+
+        r.NameLocalized = NamesToJson(names);
+        r.Name = CanonicalName(names) ?? names["en"];
+        // The category the owner picked in the welcome dialog (Majed 2026-10-15: no default
+        // cuisine — "user has to set it after register"). 0 = the dialog did not ask.
+        if (req.CuisineId > 0)
+        {
+            if (!await db.Cuisines.AnyAsync(c => c.Id == req.CuisineId))
+                return BadRequest(new { message = "Pick a category from the list." });
+            r.CuisineId = req.CuisineId;
+        }
+        // Settings reads the list as "mobile first, then the other numbers" (';'-joined).
+        var given = new[] { mobile, phone }.Where(n => n.Length > 0).ToList();
+        if (given.Count > 0)
+        {
+            var kept = (r.Phone ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Skip(given.Count).Where(p => !given.Contains(p));
+            r.Phone = string.Join("; ", given.Concat(kept).Take(4));
+        }
+        await db.SaveChangesAsync();
+        // The name the owner just typed must be findable at once, in every language they filled.
+        await StoreWordIndex.ReindexAsync(db, r);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// The "where is your business?" answer given right after registration: the country it
+    /// trades in and what its money is called. Majed 2026-10-02.
+    /// </summary>
+    [HttpPut("mine/region")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<IActionResult> SetRegion(RegionRequest req)
+    {
+        if (await db.Restaurants.FindAsync(CurrentRestaurantId) is null) return NotFound();
+        var country = StoreRegions.Find(req.Country);
+        if (country is null) return BadRequest(new { message = "Pick a country from the list." });
+        var currency = string.IsNullOrWhiteSpace(req.Currency) ? country.Currency : req.Currency.Trim();
+        if (currency.Length == 0) return BadRequest(new { message = "Pick or type a currency." });
+        await prefs.SetCountryAsync(CurrentRestaurantId, country.Code);
+        await prefs.SetCurrencyAsync(CurrentRestaurantId, currency);
+        // The clock: the chosen zone, else the country's own; date order and 12/24 h likewise.
+        var zone = KnownZone(req.TimeZone) ? req.TimeZone.Trim() : country.TimeZones.FirstOrDefault(KnownZone);
+        await prefs.SetClockAsync(CurrentRestaurantId, zone,
+            req.DateFormat is "dmy" or "mdy" or "ymd" ? req.DateFormat : StoreClock.DefaultDateFormat(country.Code),
+            req.TimeFormat is "24" or "12" ? req.TimeFormat : StoreClock.DefaultTimeFormat(country.Code));
         return NoContent();
     }
 
@@ -971,8 +1222,8 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
         if (req.Names is not null)
         {
             var names = CleanNames(req.Names);
-            if (!names.ContainsKey("ar"))
-                return BadRequest(new { message = "The Arabic name is required." });
+            if (!names.ContainsKey("en"))
+                return BadRequest(new { message = "The English name is required." });
             r.NameLocalized = NamesToJson(names);
             r.Name = CanonicalName(names) ?? req.Name.Trim();
         }
@@ -980,7 +1231,7 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
         {
             var addresses = CleanNames(req.Addresses);
             r.AddressLocalized = NamesToJson(addresses);
-            r.Area = addresses.GetValueOrDefault("ar") ?? CanonicalName(addresses) ?? r.Area;
+            r.Area = CanonicalName(addresses) ?? r.Area;
         }
         else
         {
@@ -995,7 +1246,7 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
         r.Phone = req.Phone.Trim();
         r.DeliveryFee = req.DeliveryFee;
         r.MinOrder = req.MinOrder;
-        r.AvgPrepMinutes = req.AvgPrepMinutes;
+        r.AvgPrepMinutes = Math.Clamp(req.AvgPrepMinutes, 0, 240);
         r.StoreType = req.StoreType;
         r.AllowsPickup = req.AllowsPickup;
         r.TaxPercent = Math.Clamp(req.TaxPercent, 0m, 25m);
@@ -1009,6 +1260,9 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
         // a new SQL column: this schema is EnsureCreated, which never adds a column to a
         // database that already exists.
         await prefs.SetCurrencyAsync(r.Id, req.Currency);
+        // Country: an empty value means "the form did not touch it", never "forget it".
+        if (StoreRegions.Find(req.Country) is { } country) await prefs.SetCountryAsync(r.Id, country.Code);
+        await prefs.SetClockAsync(r.Id, KnownZone(req.TimeZone) ? req.TimeZone : null, req.DateFormat, req.TimeFormat);
         // A price the house never set stays nothing; negatives are simply refused.
         r.ReservePricePerTable = Math.Max(0m, req.ReservePricePerTable);
         r.ReservePricePerMinute = Math.Max(0m, req.ReservePricePerMinute);
@@ -1684,6 +1938,29 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
         return new CustomerSalesPageDto(total, customers);
     }
 
+    // ---------- Kitchen ticket design (partner "Invoice designer" → Kitchen ticket) ----------
+
+    [HttpGet("mine/kitchen-design")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public Task<KitchenDesignDto> GetKitchenDesign() => kitchenDesigns.GetAsync(CurrentRestaurantId);
+
+    [HttpPut("mine/kitchen-design")]
+    [Authorize(Roles = "RestaurantOwner")]
+    public async Task<IActionResult> SaveKitchenDesign(KitchenDesignDto req)
+    {
+        static string Pick(string? v, string fallback, params string[] allowed) => allowed.Contains(v) ? v! : fallback;
+        static string Clip(string? v, int max) => (v ?? "").Trim() is var t && t.Length > max ? t[..max] : (v ?? "").Trim();
+        var clean = req with
+        {
+            TextSize = Pick(req.TextSize, "normal", "small", "normal", "large", "xlarge"),
+            NumberSize = Pick(req.NumberSize, "big", "normal", "big", "huge"),
+            Separator = Pick(req.Separator, "line", "line", "dashed", "double", "none"),
+            Header = Clip(req.Header, 80),
+            Footer = Clip(req.Footer, 120),
+        };
+        await kitchenDesigns.SaveAsync(CurrentRestaurantId, clean);
+        return NoContent();
+    }
     // ---------- Receipt design (partner "Invoice designer") ----------
 
     [HttpGet("mine/receipt")]

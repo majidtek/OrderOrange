@@ -1,0 +1,172 @@
+@inject ApiClient Api
+@inject CartState Cart
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+@* Checkout for a guest who scanned the SHOP's own QR (Majed 2026-10-09: "user by scan
+   market qr do order without login, and can enter car plate number"). No account, no
+   address: it is a pickup. A car plate tells staff to bring it out to the car; a name and
+   phone are optional so the shop can call out or ring. Paid on collection. *@
+<MudDialog>
+    <DialogContent>
+        @if (_placed is null)
+        {
+            <MudText Typo="Typo.h6" Class="mb-1">🛍️ @L["qorder.title"]</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">@StoreName</MudText>
+
+            @foreach (var line in Lines)
+            {
+                <div class="d-flex justify-space-between py-1">
+                    <MudText Typo="Typo.body2">@line.Quantity × @(line.Item.Names is { Count: > 0 } ? line.Item.NameFor(L.Locale) : L.Product(line.Item.Name))</MudText>
+                    <MudText Typo="Typo.body2">@Fmt.Rial(line.Item.FinalPrice * line.Quantity)</MudText>
+                </div>
+            }
+            <MudDivider Class="my-2" />
+            <div class="d-flex justify-space-between mb-3">
+                <MudText Typo="Typo.subtitle2">@L["common.subtotal"]</MudText>
+                <MudText Typo="Typo.subtitle2">@Fmt.Rial(Subtotal)</MudText>
+            </div>
+
+            <MudTextField @bind-Value="_plate" Label="@($"🚗 {L["qorder.plate"]} — {L["nm.optional"]}")" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" MaxLength="20" HelperText="@L["qorder.plateHint"]" Class="mb-3 mf-ltr"
+                          UserAttributes="@NoAutofill" />
+            <MudTextField @bind-Value="_name" Label="@L["torder.name"]" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" MaxLength="40" Class="mb-3" />
+            <MudTextField @bind-Value="_phone" Label="@($"{L["common.phone"]} — {L["nm.optional"]}")" Variant="Variant.Outlined"
+                          Margin="Margin.Dense" MaxLength="30" Class="mf-ltr" InputType="InputType.Telephone" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["qorder.payNote"]</MudText>
+        }
+        else
+        {
+            @* Live status (Majed 2026-10-14: "when someone visits by QR and I do not accept,
+               show waiting for accept"): the order only counts once the shop accepts it, so
+               the guest watches it go Waiting → Accepted → Ready, or sees it declined. *@
+            var st = _status?.Status ?? OrderStatus.Pending;
+            <div class="d-flex flex-column align-center py-4 qo-live" style="gap: 10px;">
+                <div style="font-size: 64px;" class="@(st == OrderStatus.Pending ? "qo-pulse" : "")">@StatusEmoji(st)</div>
+                <MudText Typo="Typo.h6" Align="Align.Center">@StatusTitle(st)</MudText>
+                <MudText Typo="Typo.h5" Class="mf-ascii" Color="Color.Primary">@_placed</MudText>
+                @if (st == OrderStatus.Pending)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Warning" Rounded="true" Style="width: 70%;" />
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">@L["qwait.pendingSub"]</MudText>
+                }
+                else if (st is OrderStatus.Accepted or OrderStatus.Preparing)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                        @(_status!.EstimatedMinutes > 0 ? string.Format(L["qwait.readyIn"], _status.EstimatedMinutes) : L["qwait.preparingSub"])
+                    </MudText>
+                }
+                else if (st == OrderStatus.Ready)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                        @(_sentPlate.Length > 0 ? string.Format(L["qorder.sentCar"], _sentPlate) : L["qorder.sentPickup"])
+                    </MudText>
+                }
+                else if (st is OrderStatus.Cancelled or OrderStatus.Rejected)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                        @(string.IsNullOrWhiteSpace(_status!.Reason) ? L["qwait.declinedSub"] : _status.Reason)
+                    </MudText>
+                }
+            </div>
+            <style>
+                .qo-pulse { animation: qoPulse 1.6s ease-in-out infinite; }
+                @@keyframes qoPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.12); opacity: .75; } }
+            </style>
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_placed is null)
+        {
+            <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large" Disabled="_busy"
+                       StartIcon="@Icons.Material.Filled.Send" OnClick="Place">
+                @L["qorder.place"] · @Fmt.Rial(Subtotal)
+            </MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" FullWidth="true" OnClick="@(() => Dialog.Close())">
+                @L["common.done"]
+            </MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter, EditorRequired] public int RestaurantId { get; set; }
+    [Parameter] public string StoreName { get; set; } = "";
+
+    private static readonly Dictionary<string, object?> NoAutofill = new() { ["autocomplete"] = "off", ["autocapitalize"] = "characters" };
+
+    private string _plate = "";
+    private string _name = "";
+    private string _phone = "";
+    private string _sentPlate = "";
+    private bool _busy;
+    private string? _placed;
+
+    private List<CartState.Line> Lines =>
+        Cart.Groups.FirstOrDefault(g => g.Restaurant.Id == RestaurantId)?.Lines ?? [];
+
+    private decimal Subtotal => Lines.Sum(l => l.Item.FinalPrice * l.Quantity);
+
+    private async Task Place()
+    {
+        if (Lines.Count == 0) { Dialog.Cancel(); return; }
+        _busy = true;
+        var items = Lines.Select(l => new PlaceOrderItem(l.Item.Id, l.Quantity, l.Notes)).ToList();
+        var (result, error) = await Api.PlaceQrOrderAsync(
+            new PlaceQrOrderRequest(RestaurantId, items, _name, _phone, _plate));
+        _busy = false;
+        if (result is not null)
+        {
+            _placed = result.Number;
+            _sentPlate = (_plate ?? "").Trim().ToUpperInvariant();
+            Cart.ClearGroup(RestaurantId);
+            if (!string.IsNullOrEmpty(result.Key)) StartWatching(result.Id, result.Key);
+        }
+        else
+        {
+            Snackbar.Add(L.ServerError(error) ?? L["common.error"], Severity.Error);
+        }
+    }
+
+    private GuestOrderStatusDto? _status;
+    private Timer? _watch;
+
+    /// <summary>Asks every 5 s where the order stands, until it is ready or declined.</summary>
+    private void StartWatching(int id, string key)
+    {
+        _watch = new Timer(async _ =>
+        {
+            var fresh = await Api.GetQrOrderStatusAsync(id, key);
+            if (fresh is null) return;
+            await InvokeAsync(() => { _status = fresh; StateHasChanged(); });
+            if (fresh.Status >= OrderStatus.Ready) _watch?.Dispose();
+        }, null, 2000, 5000);
+    }
+
+    private static string StatusEmoji(OrderStatus s) => s switch
+    {
+        OrderStatus.Pending => "⏳",
+        OrderStatus.Accepted or OrderStatus.Preparing => "👨‍🍳",
+        OrderStatus.Ready => "✅",
+        OrderStatus.Cancelled or OrderStatus.Rejected => "❌",
+        _ => "🎉",
+    };
+
+    private string StatusTitle(OrderStatus s) => s switch
+    {
+        OrderStatus.Pending => L["qwait.pending"],
+        OrderStatus.Accepted or OrderStatus.Preparing => L["qwait.accepted"],
+        OrderStatus.Ready => L["qwait.ready"],
+        OrderStatus.Cancelled or OrderStatus.Rejected => L["qwait.declined"],
+        _ => L["qwait.done"],
+    };
+
+    public void Dispose() => _watch?.Dispose();
+}

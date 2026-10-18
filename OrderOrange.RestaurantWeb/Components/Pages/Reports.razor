@@ -18,7 +18,7 @@
     <MfDateRangePicker DateFormat="yyyy-MM-dd" DateRange="_range" DateRangeChanged="OnRangeChanged"
                         Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
                         Class="rp-range" PlaceholderStart="@L["w.date"]" PlaceholderEnd="@L["w.date"]"
-                        MaxDate="DateTime.Today" />
+                        MaxDate="Fmt.ServerToday" />
     <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">@RangeLabel · @L["rep.maxMonth"]</MudChip>
     <span style="flex: 1;"></span>
     <ReportExport Title="@L["rep.revenue"]" Subtitle="@L["rep.sub"]" RangeLabel="@RangeLabel"
@@ -102,7 +102,7 @@
     private SalesSummaryDto? _sales;
 
     private string RangeLabel => _range is { Start: not null, End: not null }
-        ? $"{_range.Start:d MMM} – {_range.End:d MMM yyyy}"
+        ? $"{Fmt.DayMonth(_range.Start, shift: false)} – {Fmt.DayMonthYear(_range.End, shift: false)}"
         : _period switch
         {
             "day" => L["vis.todayHour"],

@@ -84,7 +84,7 @@
                     </div>
                     <div class="st-rows">
                         <div><span class="k">@L["w.salary"]</span><span class="v">@Fmt.RialShort(m.MonthlySalary)</span></div>
-                        <div><span class="k">@L["staff.hired"]</span><span class="v">@m.HiredOn.ToString("d MMM yyyy")</span></div>
+                        <div><span class="k">@L["staff.hired"]</span><span class="v">@Fmt.DayMonthYear(m.HiredOn, shift: false)</span></div>
                         @if (!string.IsNullOrWhiteSpace(m.Phone))
                         {
                             <div><span class="k">@L["common.phone"]</span><span class="v"><PhoneMask Phone="@m.Phone" Hint="@L["ph.tapShow"]" /></span></div>

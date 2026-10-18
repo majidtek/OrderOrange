@@ -61,7 +61,7 @@
                 {
                     <div class="tr">
                         <span class="n">@L["pay.step"] @index</span>
-                        <span class="d mf-ltr">@step.DueDate.ToString("dd MMM yyyy")</span>
+                        <span class="d mf-ltr">@Fmt.DayMonthYear(step.DueDate, shift: false)</span>
                         <span class="a mf-ltr">@Fmt.Rial(step.Amount)</span>
                     </div>
                     index++;
@@ -127,7 +127,7 @@
                 : "tbd";
         }
     }
-    private DateTime _dueDate = DateTime.Today.AddDays(30);
+    private DateTime _dueDate = Fmt.ServerToday.AddDays(30);
     private int _steps = 3;
     private int _intervalDays = 30;
 
@@ -143,7 +143,7 @@
             for (var i = 0; i < _steps; i++)
             {
                 var amount = i == _steps - 1 ? Total - each * (_steps - 1) : each;
-                list.Add(new PlanInstallmentRequest(amount, DateTime.Today.AddDays((i + 1) * _intervalDays)));
+                list.Add(new PlanInstallmentRequest(amount, Fmt.ServerToday.AddDays((i + 1) * _intervalDays)));
             }
             return list;
         }
@@ -151,8 +151,8 @@
 
     private string Summary => (_timing, _method) switch
     {
-        ("later", "tbd") => string.Format(L["pay.sumLater2"], Fmt.Money(Total), _dueDate.ToString("dd MMM yyyy")),
-        ("later", _) => string.Format(L["pay.sumLater"], Fmt.Money(Total), L[$"pay.m.{_method}"], _dueDate.ToString("dd MMM yyyy")),
+        ("later", "tbd") => string.Format(L["pay.sumLater2"], Fmt.Money(Total), Fmt.DayMonthYear(_dueDate, shift: false)),
+        ("later", _) => string.Format(L["pay.sumLater"], Fmt.Money(Total), L[$"pay.m.{_method}"], Fmt.DayMonthYear(_dueDate, shift: false)),
         ("plan", "tbd") => string.Format(L["pay.sumPlan2"], Fmt.Money(Total), _steps,
             _intervalDays == 7 ? L["pay.weekly"] : L["pay.monthly"]),
         ("plan", _) => string.Format(L["pay.sumPlan"], Fmt.Money(Total), _steps,

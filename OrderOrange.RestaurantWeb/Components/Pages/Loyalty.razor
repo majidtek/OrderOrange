@@ -60,7 +60,7 @@ else
                     }
                     @foreach (var (d, i) in _board.Days.Select((d, i) => (d, i)))
                     {
-                        <span class="b" style="--i:@i;height:@(Math.Max(4, d.Earned * 100 / max))%" title="@d.Day.ToString("dd MMM") · +@d.Earned / −@d.Redeemed">
+                        <span class="b" style="--i:@i;height:@(Math.Max(4, d.Earned * 100 / max))%" title="@Fmt.DayMonth(d.Day, shift: false) · +@d.Earned / −@d.Redeemed">
                             @if (d.Redeemed > 0)
                             {
                                 <i style="height:@(Math.Min(100, d.Redeemed * 100 / Math.Max(1, d.Earned)))%"></i>
@@ -114,7 +114,7 @@ else
                                 var mm = m;
                                 <button type="button" class="ly-chip" @onclick="@(() => Pick(mm))">
                                     <span class="av tier-@m.Tier">@Initials(m.Name)</span>
-                                    <span class="t">@m.Name<small>@m.Balance @L["ly.pts"] · @(m.LastAt?.ToString("dd MMM"))</small></span>
+                                    <span class="t">@m.Name<small>@m.Balance @L["ly.pts"] · @Fmt.DayMonth(m.LastAt)</small></span>
                                     <span class="wa" title="@L["ly.nudge"]" @onclick="@(() => Nudge(mm, false))" @onclick:stopPropagation="true">
                                         <MudIcon Icon="@Icons.Custom.Brands.WhatsApp" Size="Size.Small" />
                                     </span>
@@ -131,7 +131,7 @@ else
             <div class="ly-card ly-online">
                 <div class="ly-head">
                     <h3><i class="dot"></i> @L["ly.onlineNow"] <span class="n">@(_live?.Online.Count ?? 0)</span></h3>
-                    <span class="tick">@L["ly.autoRefresh"] @(_live is null ? "" : $"· {_liveAt:HH:mm:ss}")</span>
+                    <span class="tick">@L["ly.autoRefresh"] @(_live is null ? "" : $"· {Fmt.TimeSeconds(_liveAt)}")</span>
                 </div>
                 @if (_live is null)
                 {
@@ -273,14 +273,14 @@ else
                         </div>
                         <div class="who">
                             <div class="nm">@mem.Name <em class="tier">@L[$"ly.tier.{mem.Tier}"]</em></div>
-                            <div class="ph">@mem.Phone @if (mem.JoinedAt is { } j) { <span>· @L["ly.since"] @j.ToString("MMM yyyy")</span> }</div>
+                            <div class="ph">@mem.Phone @if (mem.JoinedAt is { } j) { <span>· @L["ly.since"] @Fmt.MonthYear(j, longMonth: false)</span> }</div>
                             <div class="facts">
                                 <span><b>@mem.Visits</b> @L["ly.visits"]</span>
                                 <span><b>@mem.Lifetime.ToString("N0")</b> @L["ly.lifetime"]</span>
                                 <span><b>@mem.Redeemed.ToString("N0")</b> @L["ly.redeemedShort"]</span>
                                 @if (mem.LastAt is { } last)
                                 {
-                                    <span>@L["ly.last"] <b>@last.ToString("dd MMM")</b></span>
+                                    <span>@L["ly.last"] <b>@Fmt.DayMonth(last)</b></span>
                                 }
                             </div>
                             <div class="next">
@@ -368,7 +368,7 @@ else
                                         @if (e.Amount is { } amt) { <small>@Fmt.Money(amt)</small> }
                                         @if (!string.IsNullOrWhiteSpace(e.Note)) { <small>· @e.Note</small> }
                                     </span>
-                                    <span class="who">@e.By · @e.At.ToString("dd MMM HH:mm")</span>
+                                    <span class="who">@e.By · @Fmt.DayMonthTime(e.At)</span>
                                 </div>
                             }
                         </div>
@@ -395,7 +395,7 @@ else
                                     @if (e.Amount is { } amt) { <small>@Fmt.Money(amt)</small> }
                                     @if (!string.IsNullOrWhiteSpace(e.Note)) { <small>· @e.Note</small> }
                                 </span>
-                                <span class="who">@e.By · @e.At.ToString("dd MMM HH:mm")</span>
+                                <span class="who">@e.By · @Fmt.DayMonthTime(e.At)</span>
                             </div>
                         }
                     </div>

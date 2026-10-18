@@ -37,7 +37,7 @@
                     <div class="pb-stack">
                     @if (m.Text is not null)
                     {
-                        <div class="pb-bubble">@m.Text</div>
+                        <div class="pb-bubble"><ChatText Text="@m.Text" /></div>
                     }
                     @if (m.Card is { } card)
                     {
@@ -277,8 +277,8 @@
                 _messages.Add(new Msg { FromBot = false, Text = label });
                 if (_booking is { } b)
                 {
-                    var at = DateTime.Today.AddHours(int.Parse(parts[1]));
-                    if (at <= DateTime.Now) at = at.AddDays(1);
+                    var at = Fmt.ServerToday.AddHours(int.Parse(parts[1]));
+                    if (at <= Fmt.ServerNow) at = at.AddDays(1);
                     _booking = (b.TableId, b.TableName, at, b.Guests);
                     ContinueBooking();
                 }
@@ -399,6 +399,32 @@
             if (PosBotNlu.WantsRemove(raw)) { RemoveFromDraft(raw); return; }
         }
 
+        // Majed 2026-10-01: "also ai in partner, to grok, and can do everything". Floor
+        // commands (tables, bills, bookings, ringing an order) stay with the engine — they
+        // are instant and touch the till. Everything else goes to Grok, which reads this
+        // store's live data through the MCP tools and can flip the open sign or mark an
+        // item sold out. The rule-based answers below remain the fallback when it is down.
+        var intent = PosBotNlu.DetectIntent(raw);
+        // DetectIntent answers Order when nothing special was said — the parser below decides.
+        var floorCommand = intent is PosBotNlu.Intent.OpenTable or PosBotNlu.Intent.CloseTable or PosBotNlu.Intent.Tables
+            or PosBotNlu.Intent.FreeTables or PosBotNlu.Intent.BusyTables or PosBotNlu.Intent.TableBill
+            or PosBotNlu.Intent.MakeReservation or PosBotNlu.Intent.Reserved
+            or PosBotNlu.Intent.Greeting or PosBotNlu.Intent.Thanks or PosBotNlu.Intent.Help;
+        if (!floorCommand)
+        {
+            var probe = PosBotNlu.Parse(raw);
+            // Majed 2026-10-13 ("AI in other languages, like Persian, not working well"): every
+            // sentence without a known question word used to count as an order, so
+            // «چطوری محصولمو ثبت کنم» was looked up as a DISH and Grok never saw it. An
+            // order now has to name something on the menu, give a table, or carry a count.
+            var namesMenu = probe.Items.Any(w => MatchItem(w.Query).Best is not null);
+            var hasCount = raw.Any(char.IsDigit) || probe.Items.Any(w => w.Qty > 1);
+            var isOrder = probe.Table is not null
+                          || (probe.Items.Count > 0 && (namesMenu || hasCount)
+                              && !PosBotNlu.LooksLikeQuestion(raw) && intent is PosBotNlu.Intent.Order);
+            if (!isOrder && await TryGrokAsync(raw)) return;
+        }
+
         // Beyond ordering: the assistant runs the floor and answers its questions.
         // Questions about the BUSINESS — stock, staff, salaries, money owed, reputation,
         // traffic, the open sign. This pass declines everything the order parser owns, so
@@ -445,7 +471,7 @@
             _draftTable = ResolveTable(command.Table);
             if (_draftTable is null)
             {
-                Bot(string.Format(TT("pbot.noSuchTable"), command.Table), FreeTableChips());
+                Bot(string.Format(TT("pbot.noSuchTable"), Shown(command.Table)), FreeTableChips());
                 return;
             }
         }
@@ -480,7 +506,7 @@
             {
                 // "Did you mean…" only makes sense for something that WAS an order.
                 _pendingQty = want.Qty;
-                Bot(string.Format(TT("pbot.didYouMean"), want.Query),
+                Bot(string.Format(TT("pbot.didYouMean"), Shown(want.Query)),
                     close.Take(3).Select(i => new Chip(i.NameFor(L.Locale), $"add:{i.Id}")).ToArray());
                 return;
             }
@@ -489,11 +515,58 @@
                 // A question that reached the menu matcher was never an order —
                 // answer with what the assistant CAN do instead of "not on the menu".
                 if (PosBotNlu.LooksLikeQuestion(raw)) { HelpFlow(); return; }
-                Bot(string.Format(TT("pbot.notFound"), want.Query));
+                // A whole sentence with no count is not a dish name — if Grok could not take it,
+                // show what the assistant can do rather than "not on the menu".
+                if (!raw.Any(char.IsDigit) && want.Query.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 3) { HelpFlow(); return; }
+                Bot(string.Format(TT("pbot.notFound"), Shown(want.Query)));
                 return;
             }
         }
         ShowDraft();
+    }
+
+    /// <summary>
+    /// Text the matcher folded, shown back to a Persian or Urdu reader with their own
+    /// letters: folding turns ی/ک into the Arabic ي/ك for matching, which reads as a
+    /// misspelling when echoed («چطوري ويرايش كنم»).
+    /// </summary>
+    private string Shown(string folded) =>
+        (_replyLocale ?? L.Locale) is "fa" or "ur" ? folded.Replace('ي', 'ی').Replace('ك', 'ک') : folded;
+
+    private DateTime _grokDownUntil = DateTime.MinValue;
+
+    /// <summary>
+    /// One turn through Grok with this store's MCP tools. The answer is printed as the
+    /// bot's line; every tool it used is listed underneath as a row, so a number can be
+    /// checked and an action (open sign, sold-out) is visible. False = unavailable.
+    /// </summary>
+    private async Task<bool> TryGrokAsync(string raw)
+    {
+        if (Fmt.ServerNow < _grokDownUntil) return false;
+        var history = _messages.Take(_messages.Count - 1)
+            .Where(m => !string.IsNullOrWhiteSpace(m.Text))
+            .TakeLast(8)
+            .Select(m => new AssistantTurnDto(m.FromBot ? "assistant" : "user", m.Text!.Length > 1500 ? m.Text[..1500] : m.Text))
+            .ToList();
+        AnalystReplyDto? reply;
+        try { (reply, _) = await Api.AskPartnerAssistantAsync(new AnalystAskRequest(raw, history, _replyLocale ?? L.Locale)); }
+        catch { reply = null; }
+        if (reply is null || string.IsNullOrWhiteSpace(reply.Answer))
+        {
+            if (reply is null) _grokDownUntil = Fmt.ServerNow.AddSeconds(30);
+            return false;
+        }
+        _messages.Add(new Msg
+        {
+            FromBot = true,
+            Text = reply.Answer.Trim(),
+            Rows = reply.ToolCalls.Select(c => new Row(
+                c.Error ? "⚠️" : "🔧",
+                c.Tool,
+                c.Arguments.Length > 90 ? c.Arguments[..90] + "…" : c.Arguments,
+                c.Error ? L["common.error"] : $"{reply.ElapsedMs / 1000.0:0.0}s")).ToList(),
+        });
+        return true;
     }
 
     private void ShowDraft()
@@ -677,7 +750,7 @@
                 $"🍽️ {r.TableName}",
                 r.Name,
                 $"👥 {r.Guests}" + (r.Status == "confirmed" ? " · ✓" : ""),
-                r.At.Date == DateTime.Today ? r.At.ToString("HH:mm") : r.At.ToString("ddd HH:mm"))).ToList(),
+                r.At.Date == Fmt.ServerToday ? Fmt.Time(r.At) : $"{Fmt.Weekday(r.At, false)} {Fmt.Time(r.At)}")).ToList(),
             Chips = [new Chip($"📅 {L["nav.reservations"]}", "nav:/reservations")],
         });
     }
@@ -713,7 +786,7 @@
                 $"🍽️ {t.Name}",
                 t.GuestName ?? t.CustomerName ?? L["pos.walkin"],
                 $"👥 {t.Seats}" + (t.Floor.Length > 0 ? $" · {t.Floor}" : ""),
-                t.OccupiedAt is { } at ? at.ToString("HH:mm") : "—")).ToList(),
+                t.OccupiedAt is { } at ? Fmt.Time(at) : "—")).ToList(),
             Chips = busy.Take(4).Select(t => new Chip($"💵 {t.Name}", $"closetbl:{t.Id}")).ToList(),
         });
     }
@@ -725,10 +798,10 @@
         var history = await Api.GetRestaurantHistoryAsync(0, 500) ?? [];
         var (from, to, labelKey) = period switch
         {
-            PosBotNlu.Period.Yesterday => (DateTime.Today.AddDays(-1), DateTime.Today, "pbot.yesterday"),
-            PosBotNlu.Period.Week => (DateTime.Today.AddDays(-6), DateTime.Today.AddDays(1), "pbot.thisweek"),
-            PosBotNlu.Period.Month => (DateTime.Today.AddDays(-29), DateTime.Today.AddDays(1), "pbot.thismonth"),
-            _ => (DateTime.Today, DateTime.Today.AddDays(1), "pbot.today"),
+            PosBotNlu.Period.Yesterday => (Fmt.ServerToday.AddDays(-1), Fmt.ServerToday, "pbot.yesterday"),
+            PosBotNlu.Period.Week => (Fmt.ServerToday.AddDays(-6), Fmt.ServerToday.AddDays(1), "pbot.thisweek"),
+            PosBotNlu.Period.Month => (Fmt.ServerToday.AddDays(-29), Fmt.ServerToday.AddDays(1), "pbot.thismonth"),
+            _ => (Fmt.ServerToday, Fmt.ServerToday.AddDays(1), "pbot.today"),
         };
         var slice = history.Where(o => o.PlacedAt >= from && o.PlacedAt < to && o.Status == OrderStatus.Delivered).ToList();
         Bot($"{L[labelKey]} — " + string.Format(TT("pbot.revenue"), slice.Count, Fmt.Money(slice.Sum(o => o.Total))),
@@ -740,7 +813,7 @@
     {
         var history = await Api.GetRestaurantHistoryAsync(0, 500) ?? [];
         var top = history
-            .Where(o => o.Status == OrderStatus.Delivered && o.PlacedAt >= DateTime.Today.AddDays(-29))
+            .Where(o => o.Status == OrderStatus.Delivered && o.PlacedAt >= Fmt.ServerToday.AddDays(-29))
             .SelectMany(o => o.Items)
             .GroupBy(i => i.Name)
             .Select(g => (Name: g.Key, Qty: g.Sum(i => i.Quantity), Money: g.Sum(i => i.UnitPrice * i.Quantity)))
@@ -771,8 +844,8 @@
         DateTime? at = null;
         if (PosBotNlu.ExtractTime(raw) is (int h, int m))
         {
-            at = DateTime.Today.AddHours(h).AddMinutes(m);
-            if (at <= DateTime.Now) at = at.Value.AddDays(1);   // that time already passed → tomorrow
+            at = Fmt.ServerToday.AddHours(h).AddMinutes(m);
+            if (at <= Fmt.ServerNow) at = at.Value.AddDays(1);   // that time already passed → tomorrow
         }
         if (table is null)
         {
@@ -793,7 +866,7 @@
                 new[] { 18, 19, 20, 21 }.Select(h => new Chip($"🕗 {h}:00", $"booktime:{h}")).ToArray());
             return;
         }
-        Bot(string.Format(TT("pbot.bookConfirm"), b.TableName, b.At.Value.ToString(b.At.Value.Date == DateTime.Today ? "HH:mm" : "ddd HH:mm"), b.Guests),
+        Bot(string.Format(TT("pbot.bookConfirm"), b.TableName, (b.At.Value.Date == Fmt.ServerToday ? Fmt.Time(b.At.Value, shift: false) : $"{Fmt.Weekday(b.At.Value, false, shift: false)} {Fmt.Time(b.At.Value, shift: false)}"), b.Guests),
             new Chip($"✅ {TT("pbot.bookIt")}", "bookgo"),
             new Chip($"❌ {L["common.cancel"]}", "bookno"));
     }
@@ -815,7 +888,7 @@
             Text = string.Format(TT("pbot.booked"), reservation.TableName),
             Rows = [new Row($"🍽️ {reservation.TableName}", reservation.Name,
                 $"👥 {reservation.Guests} · ✓",
-                reservation.At.Date == DateTime.Today ? reservation.At.ToString("HH:mm") : reservation.At.ToString("ddd HH:mm"))],
+                reservation.At.Date == Fmt.ServerToday ? Fmt.Time(reservation.At) : $"{Fmt.Weekday(reservation.At, false)} {Fmt.Time(reservation.At)}")],
             Chips = [new Chip($"📅 {L["nav.reservations"]}", "nav:/reservations")],
         });
     }
@@ -834,7 +907,7 @@
                 MatchItem(query).Best?.Id == d.Item.Id);
             if (hit.Item is not null) { _draft.Remove(hit); removed = true; }
         }
-        if (!removed) { Bot(string.Format(TT("pbot.notFound"), string.Join(" ", command.Items.Select(i => i.Query)))); return; }
+        if (!removed) { Bot(string.Format(TT("pbot.notFound"), Shown(string.Join(" ", command.Items.Select(i => i.Query))))); return; }
         if (_draft.Count == 0) { _draftTable = null; Bot(TT("pbot.cancelled")); return; }
         ShowDraft();
     }
@@ -1106,7 +1179,7 @@
     /// </summary>
     private void ShowClock(PosBotNlu.Clock kind)
     {
-        var now = DateTime.Now;
+        var now = Fmt.StoreNow;
         var locale = _replyLocale ?? L.Locale;
 
         var (text, pill, detail) = kind switch
@@ -1357,8 +1430,8 @@
 
     private async Task PayrollAsync()
     {
-        var from = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        var report = await Api.GetSalaryReportAsync(from, DateTime.Today);
+        var from = new DateTime(Fmt.ServerToday.Year, Fmt.ServerToday.Month, 1);
+        var report = await Api.GetSalaryReportAsync(from, Fmt.ServerToday);
         if (report is null) { Bot(TT("pbot.noData")); return; }
         Bot(string.Format(TT("pbot.payroll"), Fmt.Money(report.Total), report.Payments),
             new Chip($"📊 {L["nav.salaryReport"]}", "nav:/staff/salary-report"),

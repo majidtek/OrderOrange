@@ -58,19 +58,19 @@ else
                         <small class="mf-ltr">@row.Invoice.Number · @StepLabel(row)</small>
                     </div>
                     <div class="when">
-                        <b class="mf-ltr">@row.Step.DueDate.ToString("dd MMM yyyy")</b>
+                        <b class="mf-ltr">@Fmt.DayMonthYear(row.Step.DueDate, shift: false)</b>
                         <small>
                             @if (row.Step.IsPaid)
                             {
-                                @($"{MethodIcon(row.Step.Method)} {L["pay.paidOn"]} {row.Step.PaidAt!.Value:dd MMM}")
+                                @($"{MethodIcon(row.Step.Method)} {L["pay.paidOn"]} {Fmt.DayMonth(row.Step.PaidAt!.Value)}")
                             }
                             else if (row.Step.IsOverdue)
                             {
-                                @string.Format(L["payp.daysLate"], (DateTime.Today - row.Step.DueDate.Date).Days)
+                                @string.Format(L["payp.daysLate"], (Fmt.ServerToday - row.Step.DueDate.Date).Days)
                             }
                             else
                             {
-                                @string.Format(L["payp.daysToGo"], (row.Step.DueDate.Date - DateTime.Today).Days)
+                                @string.Format(L["payp.daysToGo"], (row.Step.DueDate.Date - Fmt.ServerToday).Days)
                             }
                         </small>
                     </div>
@@ -115,7 +115,7 @@ else
             var rows = AllRows.Where(r => _filter switch
             {
                 "overdue" => r.Step.IsOverdue,
-                "week" => !r.Step.IsPaid && r.Step.DueDate.Date <= DateTime.Today.AddDays(7),
+                "week" => !r.Step.IsPaid && r.Step.DueDate.Date <= Fmt.ServerToday.AddDays(7),
                 "paid" => r.Step.IsPaid,
                 _ => !r.Step.IsPaid,
             });
@@ -130,7 +130,7 @@ else
     {
         get
         {
-            var monthStart = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            var monthStart = new DateTime(Fmt.ServerToday.Year, Fmt.ServerToday.Month, 1);
             return AllRows.Where(r => r.Step.PaidAt >= monthStart).Sum(r => r.Step.Amount);
         }
     }

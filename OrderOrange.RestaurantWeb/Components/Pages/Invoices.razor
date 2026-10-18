@@ -60,7 +60,7 @@
                             <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">@L["inv.correction"]</MudChip>
                         }
                     </MudTd>
-                    <MudTd>@context.PlacedAt.ToString("MM-dd HH:mm")</MudTd>
+                    <MudTd>@Fmt.DayMonthTime(context.PlacedAt)</MudTd>
                     <MudTd>@context.CustomerName</MudTd>
                     <MudTd>@context.ItemCount</MudTd>
                     <MudTd>@Fmt.Rial(context.Total)</MudTd>
@@ -132,9 +132,9 @@ else if (_tab == 1)
                 <RowTemplate>
                     <MudTd Class="mf-ascii">@context.Number</MudTd>
                     <MudTd>@context.PlacedBy</MudTd>
-                    <MudTd>@context.PlacedAt.ToString("MM-dd HH:mm")</MudTd>
+                    <MudTd>@Fmt.DayMonthTime(context.PlacedAt)</MudTd>
                     <MudTd>@context.CancelledBy</MudTd>
-                    <MudTd>@context.CancelledAt.ToString("MM-dd HH:mm")</MudTd>
+                    <MudTd>@Fmt.DayMonthTime(context.CancelledAt)</MudTd>
                     <MudTd>@Fmt.Rial(context.Total)</MudTd>
                     <MudTd>@(context.Reason ?? "—")</MudTd>
                     <MudTd Class="mf-ascii">@(context.ReplacedByNumber ?? "—")</MudTd>
@@ -166,7 +166,7 @@ else
                     <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Class="mf-flip-rtl" />
                     <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text" Class="mf-ascii">@e.ReplacementNumber</MudChip>
                     <MudText Typo="Typo.caption" Color="Color.Secondary">
-                        @string.Format(L["inv.editLine"], e.EditedBy, e.EditedAt.ToString("yyyy-MM-dd HH:mm"))
+                        @string.Format(L["inv.editLine"], e.EditedBy, Fmt.DateTimeText(e.EditedAt))
                     </MudText>
                     @if (e.Reason is not null)
                     {
@@ -174,7 +174,7 @@ else
                     }
                 </div>
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
-                    @string.Format(L["inv.addLine"], e.Before.By, e.Before.At.ToString("yyyy-MM-dd HH:mm"))
+                    @string.Format(L["inv.addLine"], e.Before.By, Fmt.DateTimeText(e.Before.At))
                 </MudText>
 
                 <div class="inv-diff">
@@ -238,7 +238,7 @@ else
     {
         // The EXPORT wants the whole 30-day report, not the page on screen.
         var all = await Api.GetCancelledInvoicesAsync(
-            DateTime.Today.AddDays(-30), DateTime.Today, 0, 500) ?? [];
+            Fmt.ServerToday.AddDays(-30), Fmt.ServerToday, 0, 500) ?? [];
         return all.Select(c => new List<string>
         {
             c.Number, c.PlacedBy, c.PlacedAt.ToString("yyyy-MM-dd HH:mm"),
@@ -258,14 +258,14 @@ else
     private async Task LoadCancelled()
     {
         _cancelled = await Api.GetCancelledInvoicesAsync(
-            DateTime.Today.AddDays(-30), DateTime.Today, _cancPage * PageSize, PageSize) ?? [];
+            Fmt.ServerToday.AddDays(-30), Fmt.ServerToday, _cancPage * PageSize, PageSize) ?? [];
         _cancHasMore = _cancelled.Count == PageSize;
     }
 
     private async Task LoadEdits()
     {
         _edits = await Api.GetInvoiceEditsAsync(
-            DateTime.Today.AddDays(-30), DateTime.Today, _editsPage * PageSize, PageSize) ?? [];
+            Fmt.ServerToday.AddDays(-30), Fmt.ServerToday, _editsPage * PageSize, PageSize) ?? [];
         _editsHasMore = _edits.Count == PageSize;
     }
 

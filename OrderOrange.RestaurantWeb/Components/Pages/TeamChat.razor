@@ -119,9 +119,9 @@
         string.IsNullOrWhiteSpace(s) ? "•" : s.Trim().Length <= 2 ? s.Trim() : s.Trim()[..2];
 
     private string ChatClock(DateTime at) =>
-        at.Date == DateTime.Today ? at.ToString("HH:mm")
-        : at.Date == DateTime.Today.AddDays(-1) ? L["qc.yesterday"]
-        : at.ToString("dd/MM");
+        at.Date == Fmt.ServerToday ? Fmt.Time(at)
+        : at.Date == Fmt.ServerToday.AddDays(-1) ? L["qc.yesterday"]
+        : Fmt.DayMonth(at);
 
     public void Dispose() => _poll?.Dispose();
 }

@@ -134,9 +134,9 @@
                         <tr>
                             <td>
                                 <div class="strong">@p.StaffName</div>
-                                <div class="bl-sub">@p.PaidAt.ToString("d MMM yyyy · HH:mm")</div>
+                                <div class="bl-sub">@Fmt.DayMonthYearTime(p.PaidAt)</div>
                             </td>
-                            <td>@(new DateTime(p.Year, p.Month, 1).ToString("MMM yyyy"))</td>
+                            <td>@Fmt.MonthYear(new DateTime(p.Year, p.Month, 1), longMonth: false, shift: false)</td>
                             <td class="num">@Fmt.RialShort(p.BaseSalary)</td>
                             <td class="num">@(p.Bonus > 0 ? (MarkupString)("+" + Fmt.RialShort(p.Bonus).Value) : (MarkupString)"—")</td>
                             <td class="num">@(p.Deduction > 0 ? (MarkupString)("−" + Fmt.RialShort(p.Deduction).Value) : (MarkupString)"—")</td>
@@ -238,7 +238,7 @@
     private int _tab;
 
     private string RangeLabel => _range is { Start: not null, End: not null }
-        ? $"{_range.Start:d MMM yyyy} – {_range.End:d MMM yyyy}"
+        ? $"{Fmt.DayMonthYear(_range.Start, shift: false)} – {Fmt.DayMonthYear(_range.End, shift: false)}"
         : L["billrep.last12"];
 
     private string Share(decimal amount) =>

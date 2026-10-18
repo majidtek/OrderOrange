@@ -1,19 +1,35 @@
 @page "/addresses"
+@using OrderOrange.ClientCore.Services
 @inject ApiClient Api
 @inject IDialogService Dialogs
 @inject ISnackbar Snackbar
 @inject LanguageService L
+@inject AppState State
+@implements IDisposable
 
 <PageTitle>OrderOrange — Addresses</PageTitle>
 
 <PageHeader Title="@L["addr.title"]" Subtitle="@L["addr.subtitle"]">
     <Actions>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
-                   OnClick="@(() => Edit(null))">@L["addr.add"]</MudButton>
+        @if (State.Session is not null)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => Edit(null))">@L["addr.add"]</MudButton>
+        }
     </Actions>
 </PageHeader>
 
-@if (_addresses is null)
+@* Addresses belong to an account. A guest (or an expired session) used to sit on the
+   loader until it gave up with "taking too long" — Majed's screenshot 2026-10-01. *@
+@if (State.Session is null)
+{
+    <EmptyState Emoji="🔐" Title="@L["auth.signInToContinue"]" Subtitle="@L["auth.signInSub"]" />
+    <div class="d-flex justify-center mt-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/signin/email?return=%2Faddresses"
+                   StartIcon="@Icons.Material.Filled.Login">@L["auth.signIn"]</MudButton>
+    </div>
+}
+else if (_addresses is null)
 {
     <Loader FullPage="true" />
 }
@@ -52,9 +68,22 @@ else
 @code {
     private List<AddressDto>? _addresses;
 
-    protected override Task OnInitializedAsync() => Reload();
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnStateChanged;
+        if (State.Session is not null) await Reload();
+    }
 
-    private async Task Reload() => _addresses = await Api.GetAddressesAsync();
+    // A failed call (network, expired session) must end the loader, not keep it spinning.
+    private async Task Reload() => _addresses = await Api.GetAddressesAsync() ?? [];
+
+    private void OnStateChanged() => _ = InvokeAsync(async () =>
+    {
+        if (State.Session is not null && _addresses is null) await Reload();
+        StateHasChanged();
+    });
+
+    public void Dispose() => State.Changed -= OnStateChanged;
 
     private async Task Edit(AddressDto? address)
     {

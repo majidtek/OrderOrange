@@ -106,6 +106,10 @@ check `api/restaurants?take=1`, then staging. (See the reboot notes in the ops m
   container → poll → `media_publish`; the picture must have a public URL. Never poll Meta in a
   background loop; the scheduler only publishes what is due.
 * **WhatsApp Cloud API**: WABA and phone number configured on the API; templates are per WABA.
+* **xAI Grok** (`Grok:*`): the customer assistant's brain (`api/assistant/reply`) and the admin
+  data analyst (`api/assistant/analyst`). No key = rule-based bot only.
+* **MCP server** (`Mcp:*`): `/mcp` + `/api/mcp/*` give agents read-only SQL/Mongo tools behind a
+  bearer token — see `docs/MCP.md`. Rotate `Mcp:Token` like any secret; `AllowWrites` stays false.
 * **Cloudflare**: proxy on for every hostname; purge cache if a static file will not update.
 
 ## 9. Monitoring

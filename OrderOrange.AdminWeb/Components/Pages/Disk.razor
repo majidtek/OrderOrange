@@ -1,0 +1,224 @@
+@page "/disk"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@implements IDisposable
+
+@* Admin → Disk space (Majed 2026-10-13: "add hard disk space manager in admin panel").
+   Drives, what the platform's own folders hold, and a FIXED set of cleanups the server
+   defines — nothing here sends a path, so only known leftovers can ever be deleted. *@
+
+<PageTitle>Admin — Disk space</PageTitle>
+
+<PageHeader Title="@L["dk.title"]" Subtitle="@L["dk.sub"]" />
+
+<div class="dk-page">
+    @if (_status is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        <div class="dk-drives">
+            @foreach (var d in _status.Drives)
+            {
+                var pct = d.Total > 0 ? (double)d.Used / d.Total * 100 : 0;
+                var low = d.Free < 5L * 1024 * 1024 * 1024 || pct > 92;
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl dk-drive">
+                    <div class="d-flex align-center justify-space-between">
+                        <div class="d-flex align-center" style="gap: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.Storage" Color="@(low ? Color.Error : Color.Primary)" />
+                            <b>@d.Name</b> <span class="dk-muted">@d.Label</span>
+                        </div>
+                        @if (low)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Filled">@L["dk.low"]</MudChip>
+                        }
+                    </div>
+                    <MudProgressLinear Value="@pct" Color="@(low ? Color.Error : pct > 80 ? Color.Warning : Color.Success)" Size="Size.Large" Rounded="true" Class="my-3" />
+                    <div class="dk-nums">
+                        <span>@L["dk.used"] <b class="mf-ltr">@HumanSize(d.Used)</b></span>
+                        <span>@L["dk.free"] <b class="mf-ltr">@HumanSize(d.Free)</b></span>
+                        <span>@L["dk.total"] <b class="mf-ltr">@HumanSize(d.Total)</b></span>
+                    </div>
+                </MudPaper>
+            }
+        </div>
+
+        <div class="d-flex align-center flex-wrap my-4" style="gap: 10px;">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Refresh"
+                       Disabled="@(_status.Scanning || _busy)" OnClick="Rescan">@L["dk.scan"]</MudButton>
+            @if (_status.Scanning)
+            {
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                <span class="dk-muted">@L["dk.scanning"]</span>
+            }
+            else if (_status.Scan is { } sc)
+            {
+                <span class="dk-muted">@L["dk.scannedAt"] @Fmt.DateTimeText(sc.At, shift: false)</span>
+            }
+        </div>
+
+        @if (_status.Scan is { } scan)
+        {
+            <div class="dk-cats">
+                @foreach (var c in scan.Categories)
+                {
+                    var cat = c;
+                    var canClean = cat.Rule != "None";
+                    <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl dk-cat">
+                        <div class="d-flex align-center justify-space-between" style="gap: 8px;">
+                            <div>
+                                <div class="dk-cat-title">@L[$"dk.c.{cat.Key}"]</div>
+                                <div class="dk-muted">@L[$"dk.d.{cat.Key}"]</div>
+                            </div>
+                            <div class="dk-size mf-ltr">@HumanSize(cat.Bytes)</div>
+                        </div>
+                        <div class="dk-paths mf-ltr">
+                            @if (cat.Paths.Count == 0) { <span>—</span> }
+                            @foreach (var p in cat.Paths) { <div>@p</div> }
+                        </div>
+                        <div class="dk-muted mb-2">@string.Format(L["dk.files"], cat.Files)</div>
+
+                        @if (cat.Top.Count > 0)
+                        {
+                            <details class="dk-top">
+                                <summary>@L["dk.biggest"]</summary>
+                                @foreach (var t in cat.Top)
+                                {
+                                    <div class="dk-top-row"><span class="mf-ltr nm">@t.Name</span><span class="mf-ltr">@HumanSize(t.Bytes)</span></div>
+                                }
+                            </details>
+                        }
+
+                        @if (canClean)
+                        {
+                            <div class="dk-clean">
+                                @if (cat.Rule == "KeepNewestPerGroup")
+                                {
+                                    <MudNumericField T="int" Value="@ValueOf(cat)" ValueChanged="@(v => _values[cat.Key] = v)" Min="1" Max="20"
+                                                     Label="@L["dk.keep"]" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 150px;" />
+                                }
+                                else if (cat.Rule == "OlderThanDays")
+                                {
+                                    <MudNumericField T="int" Value="@ValueOf(cat)" ValueChanged="@(v => _values[cat.Key] = v)" Min="1" Max="365"
+                                                     Label="@L["dk.olderThan"]" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 150px;" />
+                                }
+                                <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.CleaningServices"
+                                           Disabled="@(_busy || _status.Scanning || cat.Bytes == 0)" OnClick="@(() => Clean(cat))">
+                                    @L["dk.clean"]
+                                </MudButton>
+                                @if (ValueOf(cat) == cat.DefaultValue && cat.Freeable > 0)
+                                {
+                                    <span class="dk-muted">@string.Format(L["dk.frees"], HumanSize(cat.Freeable))</span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="dk-muted dk-info"><MudIcon Icon="@Icons.Material.Filled.Lock" Style="width:14px;height:14px;" /> @L["dk.readOnly"]</div>
+                        }
+                    </MudPaper>
+                }
+            </div>
+        }
+
+        @if (_status.History.Count > 0)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mt-4">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">@L["dk.history"]</MudText>
+                @foreach (var h in _status.History)
+                {
+                    <div class="dk-hist">
+                        <span>@Fmt.DateTimeText(h.At, shift: false)</span>
+                        <span>@L[$"dk.c.{h.Category}"]</span>
+                        <span class="mf-ltr">@HumanSize(h.Bytes) · @h.Files</span>
+                        <span class="dk-muted">@h.By @h.Note</span>
+                    </div>
+                }
+            </MudPaper>
+        }
+    }
+</div>
+
+<style>
+    .dk-page { max-width: 1440px; margin-inline: auto; }
+    .dk-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+    .dk-cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+    .dk-muted { font-size: 12px; color: var(--mud-palette-text-secondary); }
+    .dk-nums { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; flex-wrap: wrap; }
+    .dk-cat { display: flex; flex-direction: column; gap: 6px; }
+    .dk-cat-title { font-weight: 700; font-size: 14.5px; }
+    .dk-size { font-weight: 800; font-size: 18px; white-space: nowrap; }
+    .dk-paths { font-size: 11px; color: var(--mud-palette-text-secondary); word-break: break-all; }
+    .dk-top summary { cursor: pointer; font-size: 12.5px; font-weight: 600; margin-bottom: 4px; }
+    .dk-top-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 2px 0; border-bottom: 1px dashed var(--mud-palette-lines-default); }
+    .dk-top-row .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dk-clean { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: auto; padding-top: 6px; }
+    .dk-info { margin-top: auto; display: flex; align-items: center; gap: 4px; }
+    .dk-hist { display: grid; grid-template-columns: 150px 1fr 140px 1fr; gap: 8px; font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid var(--mud-palette-lines-default); }
+    @@media (max-width: 700px) { .dk-hist { grid-template-columns: 1fr 1fr; } }
+</style>
+
+@code {
+    private DiskStatusDto? _status;
+    private readonly Dictionary<string, int> _values = [];
+    private bool _busy;
+    private Timer? _poll;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        // While a scan runs the numbers fill in by themselves.
+        _poll = new Timer(async _ =>
+        {
+            if (_status is { Scanning: true })
+                await InvokeAsync(async () => { await Load(); StateHasChanged(); });
+        }, null, 3000, 3000);
+    }
+
+    private async Task Load() => _status = await Api.GetDiskStatusAsync();
+
+    private int ValueOf(DiskCategoryDto c) => _values.TryGetValue(c.Key, out var v) ? v : c.DefaultValue;
+
+    private async Task Rescan()
+    {
+        _busy = true;
+        var (ok, error) = await Api.ScanDiskAsync();
+        _busy = false;
+        if (!ok) Snackbar.Add(error ?? L["common.error"], Severity.Error);
+        await Task.Delay(500);
+        await Load();
+    }
+
+    private async Task Clean(DiskCategoryDto c)
+    {
+        var value = ValueOf(c);
+        var what = c.Rule switch
+        {
+            "KeepNewestPerGroup" => string.Format(L["dk.confirmKeep"], value),
+            "OlderThanDays" => string.Format(L["dk.confirmOlder"], value),
+            _ => L["dk.confirmAll"].ToString(),
+        };
+        var yes = await Dialogs.ShowMessageBox(L[$"dk.c.{c.Key}"], what, yesText: L["dk.clean"], cancelText: L["common.cancel"]);
+        if (yes != true) return;
+        _busy = true;
+        var (result, error) = await Api.CleanDiskAsync(new DiskCleanRequest(c.Key, value));
+        _busy = false;
+        if (result is null) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+        Snackbar.Add(string.Format(L["dk.done"], HumanSize(result.Bytes), result.Files), Severity.Success);
+        await Task.Delay(600);
+        await Load();
+    }
+
+    private static string HumanSize(long bytes) => bytes switch
+    {
+        <= 0 => "0",
+        < 1024 * 1024 => $"{bytes / 1024d:0} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / 1024d / 1024:0.0} MB",
+        _ => $"{bytes / 1024d / 1024 / 1024:0.00} GB",
+    };
+
+    public void Dispose() => _poll?.Dispose();
+}

@@ -272,7 +272,7 @@ else
                                 }
                             </span>
                             <span class="val">@Fmt.Money(t.TotalValue)</span>
-                            <span class="who">@t.By · @t.At.ToString("dd MMM HH:mm")</span>
+                            <span class="who">@t.By · @Fmt.DayMonthTime(t.At)</span>
                             @if (!string.IsNullOrWhiteSpace(t.Note))
                             {
                                 <span class="note">@t.Note</span>

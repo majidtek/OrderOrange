@@ -28,7 +28,7 @@ else
             <div class="dh-head">
                 <div class="dh-no">
                     <span class="n">@order.Number</span>
-                    <span class="t">@order.PlacedAt.ToString("d MMM · HH:mm")</span>
+                    <span class="t">@Fmt.DayMonthTime(order.PlacedAt)</span>
                 </div>
                 <span class="dh-status s-@order.Status.ToString().ToLowerInvariant()">@StatusLabel(order.Status)</span>
             </div>

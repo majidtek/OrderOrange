@@ -17,7 +17,7 @@
             <div>
                 <MudText Typo="Typo.subtitle1" Style="font-weight: 800;">@Member.FullName</MudText>
                 <MudText Typo="Typo.body2" Color="Color.Secondary">
-                    @L["srole." + Member.Role] · @(new DateTime(Year, Month, 1).ToString("MMMM yyyy"))
+                    @L["srole." + Member.Role] · @Fmt.MonthYear(new DateTime(Year, Month, 1), shift: false)
                 </MudText>
             </div>
         </div>

@@ -1,0 +1,51 @@
+@inject LanguageService L
+
+@* A searchable country box with real flag pictures (Majed 2026-10-02: "with search").
+   Matches the English name, the local name or the two-letter code as the owner types.
+   Used by the post-registration region dialog and by Settings. *@
+
+<MudAutocomplete T="StoreRegion" Value="@StoreRegions.Find(Value)" ValueChanged="OnPicked"
+                 SearchFunc="Search" ToStringFunc="@Label_"
+                 Label="@Label" Variant="Variant.Outlined" Margin="Margin.Dense"
+                 MaxItems="null" ResetValueOnEmptyText="false" CoerceText="true" Strict="true"
+                 AdornmentIcon="@Icons.Material.Filled.Search" Adornment="Adornment.End"
+                 MaxHeight="360" Class="@Class">
+    <ItemTemplate Context="r">
+        <div class="d-flex align-center" style="gap: 10px;">
+            <Flag Region="r" />
+            <span>@Label_(r)</span>
+            @if (r.Native.Length > 0 && r.Native != r.Name)
+            {
+                <span class="mud-text-secondary" dir="auto">· @r.Native</span>
+            }
+        </div>
+    </ItemTemplate>
+</MudAutocomplete>
+
+@code {
+    /// <summary>ISO-2 code of the chosen country ("OM"); empty = none yet.</summary>
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string Label_(StoreRegion? r) =>
+        r is null ? "" : r.Code == StoreRegions.Other ? L["region.other"] : r.Name;
+
+    private Task<IEnumerable<StoreRegion>> Search(string? text, CancellationToken _)
+    {
+        var q = (text ?? "").Trim();
+        // The box shows the chosen name; opening it with that text should list everything.
+        if (q.Length == 0 || StoreRegions.All.Any(r => Label_(r).Equals(q, StringComparison.OrdinalIgnoreCase)))
+            return Task.FromResult(StoreRegions.All.AsEnumerable());
+        var hits = StoreRegions.All.Where(r =>
+            r.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            r.Native.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            r.Code.Equals(q, StringComparison.OrdinalIgnoreCase) ||
+            r.Currency.Equals(q, StringComparison.OrdinalIgnoreCase) ||
+            (r.Code == StoreRegions.Other && L["region.other"].Contains(q, StringComparison.OrdinalIgnoreCase)));
+        return Task.FromResult(hits);
+    }
+
+    private Task OnPicked(StoreRegion? r) => r is null ? Task.CompletedTask : ValueChanged.InvokeAsync(r.Code);
+}

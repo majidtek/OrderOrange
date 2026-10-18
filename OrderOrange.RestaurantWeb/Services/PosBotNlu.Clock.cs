@@ -1,4 +1,5 @@
 using System.Globalization;
+using OrderOrange.ClientCore.Services;
 
 namespace OrderOrange.RestaurantWeb.Services;
 
@@ -95,8 +96,9 @@ public static partial class PosBotNlu
     /// </summary>
     public static string DescribeDate(DateTime now, string? locale)
     {
-        var culture = CultureFor(locale);
-        var gregorian = now.ToString("dddd, d MMMM yyyy", culture);
+        // Names come from the app's translations: the WebAssembly app ships without culture
+        // data, so a CultureInfo here always fell back to English month and day names.
+        var gregorian = $"{Fmt.WeekdayName(now.DayOfWeek)}, {Fmt.DayMonthYear(now, shift: false)}";
 
         var second = locale switch
         {
@@ -111,10 +113,10 @@ public static partial class PosBotNlu
     /// <summary>The wall clock, in the reader's own conventions (24-hour where that is
     /// the norm, AM/PM where it is not).</summary>
     public static string DescribeTime(DateTime now, string? locale) =>
-        now.ToString("HH:mm", CultureFor(locale));
+        Fmt.Time(now, shift: false);
 
     public static string DescribeWeekday(DateTime now, string? locale) =>
-        now.ToString("dddd", CultureFor(locale));
+        Fmt.WeekdayName(now.DayOfWeek);
 
     /// <summary>
     /// A culture for formatting only. Note it is built from the language alone: the

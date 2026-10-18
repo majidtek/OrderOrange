@@ -131,7 +131,8 @@
                 // A soft navigation, not a full reload: the token is already live on this
                 // circuit, so the dashboard simply loads as the new store. The full reload
                 // was what parked people on "Restoring your session" for ages.
-                Nav.NavigateTo("/");
+                // ?welcome=1 asks the new branch for its country and currency.
+                Nav.NavigateTo("/?welcome=1");
             }
             else
             {

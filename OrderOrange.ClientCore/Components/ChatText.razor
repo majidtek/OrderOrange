@@ -1,0 +1,123 @@
+@namespace OrderOrange.ClientCore.Components
+@using System.Text.RegularExpressions
+
+@* A chat reply with the little markdown the assistant writes (Majed 2026-10-13: the partner AI
+   "not working well" in Persian — its tables came through as rows of "|" and its links as
+   "[منو](https://…)"). Renders tables, [text](url) links, **bold**, bullet lines and line
+   breaks; everything is built as text nodes and anchors, so a reply can never inject
+   markup. Bare URLs and e-mails still become links through LinkText. *@
+<div class="mf-chat-md" dir="auto">
+    @foreach (var block in Blocks)
+    {
+        if (block.Table is { } table)
+        {
+            <div class="mf-chat-table-wrap">
+                <table class="mf-chat-table">
+                    @if (table.Head.Count > 0)
+                    {
+                        <thead><tr>@foreach (var h in table.Head) { <th>@Inline(h)</th> }</tr></thead>
+                    }
+                    <tbody>
+                        @foreach (var row in table.Rows)
+                        {
+                            <tr>@foreach (var cell in row) { <td>@Inline(cell)</td> }</tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else if (block.Bullet)
+        {
+            <div class="mf-chat-li">@Inline(block.Text)</div>
+        }
+        else if (block.Heading)
+        {
+            <div class="mf-chat-h">@Inline(block.Text)</div>
+        }
+        else if (block.Text.Length > 0)
+        {
+            <div class="mf-chat-p">@Inline(block.Text)</div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string? Text { get; set; }
+
+    private sealed record Table(List<string> Head, List<List<string>> Rows);
+    private sealed record Block(string Text, Table? Table = null, bool Bullet = false, bool Heading = false);
+
+    private List<Block> Blocks { get; set; } = [];
+
+    private static readonly Regex Separator = new(@"^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$", RegexOptions.Compiled);
+    private static readonly Regex InlineRx = new(@"\[(?<t>[^\]\n]{1,200})\]\((?<u>(https?://|mailto:|/)[^)\s]{1,800})\)|\*\*(?<b>[^*\n]{1,300})\*\*", RegexOptions.Compiled);
+
+    protected override void OnParametersSet()
+    {
+        var lines = (Text ?? "").Replace("\r\n", "\n").Split('\n');
+        var blocks = new List<Block>();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+            if (line.StartsWith('|') && line.Count(c => c == '|') >= 2)
+            {
+                var rows = new List<List<string>>();
+                var head = new List<string>();
+                var j = i;
+                for (; j < lines.Length && lines[j].Trim().StartsWith('|'); j++)
+                {
+                    var l = lines[j].Trim();
+                    if (Separator.IsMatch(l)) { if (rows.Count == 1 && head.Count == 0) { head = rows[0]; rows.Clear(); } continue; }
+                    rows.Add(l.Trim('|').Split('|').Select(c => c.Trim()).ToList());
+                }
+                blocks.Add(new Block("", new Table(head, rows)));
+                i = j - 1;
+                continue;
+            }
+            if (line.StartsWith("- ") || line.StartsWith("* ") || line.StartsWith("• "))
+                blocks.Add(new Block("• " + line[2..].Trim(), Bullet: true));
+            else if (line.StartsWith('#'))
+                blocks.Add(new Block(line.TrimStart('#').Trim(), Heading: true));
+            else
+                blocks.Add(new Block(line));
+        }
+        // Collapse runs of empty lines to one gap.
+        Blocks = blocks.Where((b, k) => b.Table is not null || b.Text.Length > 0 || (k > 0 && blocks[k - 1].Text.Length > 0)).ToList();
+    }
+
+    /// <summary>One line's links and bold; the rest goes through LinkText (bare URLs, e-mails).</summary>
+    private RenderFragment Inline(string text) => builder =>
+    {
+        var seq = 0;
+        var at = 0;
+        foreach (Match m in InlineRx.Matches(text))
+        {
+            if (m.Index > at) Plain(builder, ref seq, text[at..m.Index]);
+            if (m.Groups["u"].Success)
+            {
+                builder.OpenElement(seq++, "a");
+                builder.AddAttribute(seq++, "class", "mf-link");
+                builder.AddAttribute(seq++, "href", m.Groups["u"].Value);
+                builder.AddAttribute(seq++, "target", m.Groups["u"].Value.StartsWith('/') ? "_self" : "_blank");
+                builder.AddAttribute(seq++, "rel", "noopener noreferrer");
+                builder.AddContent(seq++, m.Groups["t"].Value);
+                builder.CloseElement();
+            }
+            else
+            {
+                builder.OpenElement(seq++, "b");
+                builder.AddContent(seq++, m.Groups["b"].Value);
+                builder.CloseElement();
+            }
+            at = m.Index + m.Length;
+        }
+        if (at < text.Length) Plain(builder, ref seq, text[at..]);
+    };
+
+    private static void Plain(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ref int seq, string text)
+    {
+        builder.OpenComponent<LinkText>(seq++);
+        builder.AddAttribute(seq++, nameof(LinkText.Text), text);
+        builder.CloseComponent();
+    }
+}

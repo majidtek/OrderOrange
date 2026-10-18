@@ -15,10 +15,13 @@ public class CouponsController(AppDbContext db) : ApiControllerBase
     public async Task<ValidateCouponResponse> Validate(ValidateCouponRequest req)
     {
         var coupon = await db.Coupons.FirstOrDefaultAsync(c => c.Code == req.Code.Trim().ToUpper());
-        var problem = OrdersController.CouponProblem(coupon, req.Subtotal);
+        var problem = OrdersController.CouponProblem(coupon, req.Subtotal)
+                      ?? await OrdersController.FirstOrderProblemAsync(db, coupon!, CurrentUserId);
         if (problem is not null) return new ValidateCouponResponse(false, problem, 0m);
-        var discount = Math.Round(req.Subtotal * coupon!.Percent / 100m, 3);
-        return new ValidateCouponResponse(true, $"{coupon.Percent:0.#}% off — you save {discount:0.000} OMR.", discount);
+        var discount = OrdersController.CouponDiscount(coupon!, req.Subtotal);
+        return new ValidateCouponResponse(true, coupon!.Amount > 0
+            ? $"{coupon.Amount:0.###} OMR off — you save {discount:0.000} OMR."
+            : $"{coupon.Percent:0.#}% off — you save {discount:0.000} OMR.", discount);
     }
 
     /// <summary>Live promos for the home-page carousel — public, like Talabat's offer banners.</summary>
@@ -28,7 +31,7 @@ public class CouponsController(AppDbContext db) : ApiControllerBase
         await db.Coupons
             .Where(c => c.IsActive && c.Uses < c.MaxUses && (c.ExpiresAt == null || c.ExpiresAt > DateTime.Now))
             .OrderByDescending(c => c.Percent)
-            .Select(c => new PromoDto(c.Code, c.Percent, c.MinOrder, c.ExpiresAt))
+            .Select(c => new PromoDto(c.Code, c.Percent, c.MinOrder, c.ExpiresAt, c.MaxDiscount, c.Amount, c.FirstOrderOnly))
             .ToListAsync();
 
     // ---------- Admin management ----------
@@ -51,7 +54,8 @@ public class CouponsController(AppDbContext db) : ApiControllerBase
         db.Coupons.Add(new Coupon
         {
             Code = code, Percent = req.Percent, MinOrder = req.MinOrder,
-            ExpiresAt = req.ExpiresAt, IsActive = req.IsActive, MaxUses = req.MaxUses
+            ExpiresAt = req.ExpiresAt, IsActive = req.IsActive, MaxUses = req.MaxUses, MaxDiscount = req.MaxDiscount,
+            Amount = req.Amount, FirstOrderOnly = req.FirstOrderOnly
         });
         await db.SaveChangesAsync();
         return NoContent();
@@ -71,6 +75,9 @@ public class CouponsController(AppDbContext db) : ApiControllerBase
         coupon.ExpiresAt = req.ExpiresAt;
         coupon.IsActive = req.IsActive;
         coupon.MaxUses = req.MaxUses;
+        coupon.MaxDiscount = req.MaxDiscount;
+        coupon.Amount = req.Amount;
+        coupon.FirstOrderOnly = req.FirstOrderOnly;
         await db.SaveChangesAsync();
         return NoContent();
     }
@@ -89,8 +96,12 @@ public class CouponsController(AppDbContext db) : ApiControllerBase
     private static string? Validate(SaveCouponRequest req)
     {
         if (string.IsNullOrWhiteSpace(req.Code)) return "Code is required.";
-        if (req.Percent is <= 0 or > 100) return "Percent must be between 1 and 100.";
+        if (req.Amount < 0) return "The fixed discount cannot be negative.";
+        // A fixed-amount coupon needs no percent; a percent coupon needs one between 1 and 100.
+        if (req.Amount == 0 && req.Percent is <= 0 or > 100) return "Percent must be between 1 and 100.";
+        if (req.Percent is < 0 or > 100) return "Percent must be between 0 and 100.";
         if (req.MinOrder < 0) return "Minimum order cannot be negative.";
+        if (req.MaxDiscount < 0) return "Maximum discount cannot be negative.";
         if (req.MaxUses <= 0) return "Max uses must be at least 1.";
         return null;
     }

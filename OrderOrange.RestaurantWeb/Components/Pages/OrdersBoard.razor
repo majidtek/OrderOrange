@@ -143,10 +143,10 @@ else
                     </div>
 
                     <div class="obc-tags">
-                        @if (context.TableName is not null) { <span class="ob-tag dine">🍽️ @context.TableName</span> }
+                        @if (context.TableName is not null) { <span class="ob-tag dine">@(context.TableName.StartsWith("🚗") ? "" : "🍽️ ")@context.TableName</span> }
                         else if (context.OrderType == OrderType.Pickup) { <span class="ob-tag pick">🏪 @L["order.pickup"]</span> }
                         else { <span class="ob-tag del">🛵 @L["order.delivery"]</span> }
-                        @if (context.ScheduledFor is { } scheduled) { <span class="ob-tag sched">🗓️ @scheduled.ToString("dd MMM")</span> }
+                        @if (context.ScheduledFor is { } scheduled) { <span class="ob-tag sched">🗓️ @Fmt.DayMonth(scheduled)</span> }
                     </div>
 
                     <div class="obc-cust">

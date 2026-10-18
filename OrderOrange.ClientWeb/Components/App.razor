@@ -1,4 +1,4 @@
-﻿@using Microsoft.Extensions.Caching.Memory
+@using Microsoft.Extensions.Caching.Memory
 @using OrderOrange.ClientCore.Services
 @using OrderOrange.ClientWeb.Seo
 @using OrderOrange.ClientWeb.Components.Pages
@@ -12,7 +12,9 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    @* interactive-widget=resizes-content: when the phone keyboard opens, the page (and 100dvh)
+       shrink to the visible area instead of scrolling — fixed panels keep their header. *@
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <title>@Title</title>
     <base href="/" />
 
@@ -80,11 +82,9 @@
     {
         <script type="application/ld+json">@((MarkupString)posLd)</script>
     }
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;800&family=Vazirmatn:wght@400;600;800&family=Noto+Sans+Devanagari:wght@400;600;800&display=swap" rel="stylesheet" />
+    <link href="_content/OrderOrange.ClientCore/fonts.css?v=1" rel="stylesheet" /> <!-- self-hosted fonts: Google Fonts was blocked/slow for some partners (2026-10-16) -->
     <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
-    <link rel="stylesheet" href="_content/OrderOrange.ClientCore/food.css?v=797" />
+    <link rel="stylesheet" href="_content/OrderOrange.ClientCore/food.css?v=822" />
     <link rel="icon" type="image/svg+xml" href="logo.svg?v=4" />
     @* Must share the pages' render mode. Left static, it never receives the <PageTitle>
        and <HeadContent> an interactive page sets, so every shop page was served to
@@ -144,7 +144,7 @@
     <script src="js/mf-input.js"></script>
     <script src="js/mf-bot.js"></script>
     <script src="_content/OrderOrange.ClientCore/mf-google.js?v=2"></script>
-    <script src="_content/OrderOrange.ClientCore/mf-voice.js?v=42"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-voice.js?v=46"></script>
     <script src="_content/OrderOrange.ClientCore/mf-qty.js?v=11"></script>
     <script src="_content/OrderOrange.ClientCore/mf-reconnect.js?v=8"></script>
     <script src="_framework/blazor.web.js" autostart="false"></script>

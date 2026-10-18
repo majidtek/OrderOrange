@@ -100,15 +100,15 @@ public class MenuController(CatalogStore catalog) : ApiControllerBase
 
     /// <summary>
     /// The canonical name comes from whatever was given: the multilingual set
-    /// (Arabic required, English preferred for the canonical) or the plain Name.
+    /// (English required and used as the canonical) or the plain Name.
     /// </summary>
     private static (string Canonical, Dictionary<string, string>? Names, string? Error) ResolveCategoryNames(SaveCategoryRequest req)
     {
         var names = req.Names is null ? null : RestaurantsController.CleanNames(req.Names);
         if (names is { Count: > 0 })
         {
-            if (!names.ContainsKey("ar")) return ("", null, "Arabic name is required.");
-            return (names.GetValueOrDefault("en") ?? names["ar"], names, null);
+            if (!names.ContainsKey("en")) return ("", null, "English name is required.");
+            return (names["en"], names, null);
         }
         return string.IsNullOrWhiteSpace(req.Name)
             ? ("", null, "Category name is required.")
@@ -236,8 +236,8 @@ public class MenuController(CatalogStore catalog) : ApiControllerBase
 
     private async Task<string?> ValidateItem(SaveMenuItemRequest req)
     {
-        if (req.Names is not null && !RestaurantsController.CleanNames(req.Names).ContainsKey("ar"))
-            return "The Arabic name is required.";
+        if (req.Names is not null && !RestaurantsController.CleanNames(req.Names).ContainsKey("en"))
+            return "The English name is required.";
         if (string.IsNullOrWhiteSpace(req.Name)) return "Item name is required.";
         if (req.Price <= 0) return "Price must be greater than zero.";
         if (!string.IsNullOrEmpty(req.Photo))

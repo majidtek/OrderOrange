@@ -10,7 +10,7 @@
             @string.Format(L["inv.cancelAsk"], Row.Number)
         </MudText>
         <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">
-            @Fmt.Rial(Row.Total) · @Row.ItemCount @L["inv.items"] · @Row.PlacedAt.ToString("MM-dd HH:mm")
+            @Fmt.Rial(Row.Total) · @Row.ItemCount @L["inv.items"] · @Fmt.DayMonthTime(Row.PlacedAt)
         </MudText>
         <MudTextField Margin="Margin.Dense" @bind-Value="_reason" Label="@L["inv.reason"]" Variant="Variant.Outlined"
                       Lines="2" MaxLength="400" HelperText="@L["inv.reasonHint"]" />

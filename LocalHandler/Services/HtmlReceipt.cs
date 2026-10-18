@@ -252,55 +252,11 @@ public static class HtmlReceipt
         IReadOnlyDictionary<string, string>? descriptions, int paperWidth,
         IReadOnlyDictionary<string, string>? nameOverrides = null,
         IReadOnlyDictionary<int, LineChange>? changes = null,
-        TicketStrings? strings = null)
-    {
-        strings ??= TicketStrings.For("");
-        var edited = changes is { Count: > 0 };
-        var b = new StringBuilder();
-        b.Append($"<div class=\"tk{(paperWidth == 58 ? " p58" : "")}\"{(strings.Rtl ? " dir=\"rtl\"" : "")}>");
-        b.Append($"<div class=\"no\">#{Enc(order.Number)}</div>");
-        b.Append($"<div class=\"dt\" dir=\"ltr\">{order.PlacedAt.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)}</div>");
-        // An edit of an invoice the kitchen already has is announced before anything else.
-        if (edited) b.Append($"<div class=\"ed\">✎ {Enc(strings.Edited)}</div>");
-        // Who it is for: the table and the person, boxed so the pass reads it first.
-        var who = new List<string>();
-        if (order.TableName is { Length: > 0 }) who.Add(Enc(TableLabel(order.TableName!, strings.Table)));
-        if (!string.IsNullOrWhiteSpace(order.CustomerName)) who.Add(Enc(order.CustomerName!.Trim()));
-        if (who.Count > 0) b.Append("<div class=\"who\">" + string.Join("", who.Select(w => $"<span>{w}</span>")) + "</div>");
-        // The cashier's note to the kitchen, if any.
-        if (!string.IsNullOrWhiteSpace(order.Notes))
-            b.Append($"<div class=\"knote\">{Enc(order.Notes!.Trim())}</div>");
-        b.Append("<div class=\"hr\"></div>");
-        foreach (var it in items)
-        {
-            var name = nameOverrides?.GetValueOrDefault(it.Name) is { Length: > 0 } n ? n : it.Name;
-            var ch = changes?.GetValueOrDefault(it.Id);
-            var cls = ch is null ? "it" : ch.IsRemoved ? "it rm" : ch.IsNew ? "it nw" : ch.Delta > 0 ? "it up" : "it dn";
-            b.Append($"<div class=\"{cls}\">");
-            b.Append($"<div class=\"q\">{(ch is { IsRemoved: true } ? "✕" : it.Quantity.ToString())}</div><div class=\"b\">");
-            b.Append($"<div class=\"n\">{Enc(name)}</div>");
-            // The edit, spelled out: 1 → 3 (+2), 3 → 1 (−2), 5 → 0 REMOVED, or NEW.
-            if (ch is not null)
-            {
-                b.Append("<div class=\"chg\">");
-                if (!ch.IsNew) b.Append($"<span class=\"was\" dir=\"ltr\">{ch.From} → {ch.To}</span>");
-                if (!ch.IsNew && !ch.IsRemoved) b.Append($"<span class=\"d\" dir=\"ltr\">{(ch.Delta > 0 ? "+" : "−")}{Math.Abs(ch.Delta)}</span>");
-                if (ch.IsRemoved) b.Append($"<span class=\"tag\">{Enc(strings.Removed)}</span>");
-                if (ch.IsNew) b.Append($"<span class=\"tag\">{Enc(strings.New)}</span>");
-                b.Append("</div>");
-            }
-            // Only what the cashier/admin typed for this line in the POS — never the menu blurb.
-            if (!string.IsNullOrWhiteSpace(it.Notes))
-                b.Append($"<div class=\"nt\">{Enc(it.Notes!)}</div>");
-            b.Append("</div></div>");
-        }
-        b.Append("<div class=\"hr\"></div></div>");
-
-        return "<!doctype html><html><head><meta charset=\"utf-8\">"
-             + "<style>*{box-sizing:border-box}html,body{margin:0;padding:0;background:#fff}@media print{@page{margin:0}}"
-             + TicketCss + "</style></head><body>" + b + "</body></html>";
-    }
-
+        TicketStrings? strings = null,
+        KitchenDesignDto? design = null,
+        string? stationName = null) =>
+        // One builder for the till and the partner designer's preview (OrderOrange.Shared).
+        KitchenTicket.Html(order, items, paperWidth, design, stationName, nameOverrides, changes, strings);
     // ---------- helpers (mirror ReceiptView.razor) ----------
 
     /// <summary>Menu descriptions often restate the dish ("Kabab — chargrilled…"); drop that and keep it short.</summary>

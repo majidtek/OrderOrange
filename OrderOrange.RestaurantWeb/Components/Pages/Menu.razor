@@ -170,8 +170,7 @@ else
                                 }
                             </MudText>
                             <div class="pmn-dish-foot">
-                                <MudSwitch T="bool" Value="@dish.IsAvailable" ValueChanged="@(_ => ToggleAvailable(dish))"
-                                           Color="Color.Success" Size="Size.Small" />
+                                <MudSwitch Color="Color.Success" T="bool" Value="@dish.IsAvailable" ValueChanged="@(_ => ToggleAvailable(dish))" Size="Size.Small" />
                                 <MudSpacer />
                                 @* Edit and delete fold into one quiet ⋮ — two fewer
                                    loud icons on every single card. *@

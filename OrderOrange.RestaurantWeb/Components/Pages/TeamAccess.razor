@@ -106,7 +106,7 @@ else
                         {
                             <small><MudIcon Icon="@Icons.Material.Filled.Phone" /><PhoneMask Phone="@member.Phone" Hint="@L["ph.tapShow"]" /></small>
                         }
-                        <small><MudIcon Icon="@Icons.Material.Filled.Event" /><span>@member.CreatedAt.ToString("dd MMM yyyy")</span></small>
+                        <small><MudIcon Icon="@Icons.Material.Filled.Event" /><span>@Fmt.DayMonthYear(member.CreatedAt)</span></small>
                     </div>
                     <div class="foot">
                         @if (member.IsOwner)
@@ -115,7 +115,7 @@ else
                         }
                         else
                         {
-                            <MudSwitch T="bool" Value="member.IsActive" Color="Color.Success" Size="Size.Small"
+                            <MudSwitch Color="Color.Success" T="bool" Value="member.IsActive" Size="Size.Small"
                                        ValueChanged="@(v => ToggleActive(member, v))"
                                        Label="@(member.IsActive ? L["tm.active"] : L["tm.inactive"])" />
                         }

@@ -3,6 +3,7 @@
 @inject LanguageService L
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
+@inject IDialogService Dialogs
 
 <PageTitle>Partner — Invoice designer</PageTitle>
 
@@ -14,6 +15,18 @@
 }
 else
 {
+    @* Two papers, one designer page: the customer's receipt and the kitchen/bar ticket
+       (Majed 2026-10-13: "in designer add kitchen UI also"). *@
+    <div class="pv-seg kd-mode mb-3">
+        <button type="button" class="@(_mode == "receipt" ? "on" : "")" @onclick="@(() => _mode = "receipt")">🧾 @L["des.receiptTab"]</button>
+        <button type="button" class="@(_mode == "kitchen" ? "on" : "")" @onclick="@(() => _mode = "kitchen")">👨‍🍳 @L["des.kitchenTab"]</button>
+    </div>
+    @if (_mode == "kitchen")
+    {
+        <KitchenDesigner PaperWidth="_paperWidth" KitchenLanguage="@_store.KitchenLanguage" />
+    }
+    else
+    {
     <div class="rd">
         <div class="rd-controls">
             @* ---------- One-click templates ---------- *@
@@ -181,8 +194,8 @@ else
             @* ---------- Elements ---------- *@
             <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-3">
                 <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-1">🧩 @L["des.elements"]</MudText>
-                <MudSwitch T="bool" @bind-Value="_showBarcode" Color="Color.Primary" Label="@L["des.barcode"]" />
-                <MudSwitch T="bool" @bind-Value="_showQr" Color="Color.Primary" Label="@L["des.qr"]" />
+                <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_showBarcode" Label="@L["des.barcode"]" />
+                <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_showQr" Label="@L["des.qr"]" />
                 @if (_showQr)
                 {
                     <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-2 mb-1">@L["des.qrMode"]</MudText>
@@ -214,11 +227,10 @@ else
                         <button type="button" class="@(_qrSize == "large" ? "on" : "")" @onclick="@(() => _qrSize = "large")">@L["des.large"]</button>
                     </div>
                 }
-                <MudSwitch T="bool" @bind-Value="_showVat" Color="Color.Primary" Label="@L["des.crVat"]" />
-                <MudSwitch T="bool" @bind-Value="_showCourier" Color="Color.Primary" Label="@L["des.courierDetails"]" />
-                <MudSwitch T="bool" @bind-Value="_showAddress" Color="Color.Primary" Label="@L["des.storeAddress"]" />
-                <MudSwitch T="bool" Value="@(_stamp == "auto")" ValueChanged="@((bool v) => _stamp = v ? "auto" : "none")"
-                           Color="Color.Primary" Label="@L["des.stamp"]" />
+                <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_showVat" Label="@L["des.crVat"]" />
+                <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_showCourier" Label="@L["des.courierDetails"]" />
+                <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_showAddress" Label="@L["des.storeAddress"]" />
+                <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" Value="@(_stamp == "auto")" ValueChanged="@((bool v) => _stamp = v ? "auto" : "none")" Label="@L["des.stamp"]" />
                 <MudText Typo="Typo.subtitle2" Style="font-weight: 700;" Class="mt-2 mb-1">@L["des.copies"]</MudText>
                 <div class="pv-seg" style="max-width: 280px;">
                     <button type="button" class="@(_copies == 1 ? "on" : "")" @onclick="@(() => _copies = 1)">@L["des.copy1"]</button>
@@ -255,10 +267,13 @@ else
             @(_saving ? "…" : L["des.save"])
         </MudButton>
     </div>
+    }
 }
 
 @code {
     private MyRestaurantDto? _store;
+    /// <summary>"receipt" | "kitchen" — which paper the designer is editing.</summary>
+    private string _mode = "receipt";
 
     private string? _logo;
     private string _headerMessage = "";
@@ -319,7 +334,7 @@ else
 
     /// <summary>A realistic sample order so the preview looks like the real thing.</summary>
     private OrderDto SampleOrder => new(
-        123456, "MF-1234", OrderStatus.OnTheWay, DateTime.Now, 0,
+        123456, "MF-1234", OrderStatus.OnTheWay, Fmt.ServerNow, 0,
         "Ahmed Al Lawati", "+968 9123 4567",
         _store!.Id, _store.Name, _store.LogoEmoji, _store.Area, _store.Phone,
         99, "Demo Delivery", "+968 9876 5432",
@@ -387,7 +402,16 @@ else
                 if (pick?.Error == "TOO_BIG") Snackbar.Add(L["des.logoTooLarge"], Severity.Warning);
                 return;
             }
-            _logo = pick.DataUrl;
+            // Crop, zoom and turn it before it lands on the receipt (Majed 2026-10-14). PNG prints
+            // cleanly on the till; the receipt logo is capped at 200 000 characters.
+            var parameters = new DialogParameters<LogoEditorDialog>
+            {
+                { d => d.Source, pick.DataUrl }, { d => d.OutputSize, 384 }, { d => d.Mime, "image/png" }, { d => d.MaxChars, 190_000 },
+            };
+            var dialog = await Dialogs.ShowAsync<LogoEditorDialog>(null, parameters,
+                new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+            var result = await dialog.Result;
+            if (result is { Canceled: false, Data: string edited }) _logo = edited;
         }
         finally
         {

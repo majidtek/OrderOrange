@@ -5,6 +5,7 @@
 @inject LanguageService L
 @inject CartState Cart
 @inject TableBrandState TableBrand
+@inject AppState State
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 @inject IDialogService Dialogs
@@ -73,7 +74,11 @@ else
                 }
             </div>
             <div class="who">
-                <h1 class="nm">@StoreText.Name(info.Name, info.Names, L)</h1>
+                @{ var (titleMain, titleAlt) = StoreText.Title(info.Name, info.Names, L.Locale); }
+                @* Two languages, two lines: the English name leads, the owner's other-language
+                   name sits under it in its own direction (Majed 2026-10-16: on a phone the
+                   one-line "English - عربي" wrapped and the dash landed on the wrong side). *@
+                <h1 class="nm"><span class="nm-main" dir="auto" lang="@NameScript.ScriptLang(titleMain)">@titleMain</span>@if (titleAlt is not null) { <span class="nm-alt" dir="auto" lang="@NameScript.ScriptLang(titleAlt)">@titleAlt</span> }</h1>
                 <div class="tags">
                     @* Scanned from a table card: the QR carries ?t=N, so the guest sees
                        which table they are at without the card itself saying so. *@
@@ -132,7 +137,20 @@ else
 
         @if (StoreText.Description(info.Description, L) is { Length: > 0 } about)
         {
-            <p class="oo-hero-about">@about</p>
+            @* The owner's tagline as a card, not a grey line (Majed 2026-10-16: "add modern UI
+               with animation"): a glowing spark, the text in up to two languages on their own
+               lines, a slide-up entrance and a soft shimmer along the accent. *@
+            var parts = TaglineParts(about);
+            @* No icon (Majed): the text carries the card. Each line is tagged with the language
+               its script says, so Arabic gets Cairo, Persian/Urdu Vazirmatn, Hindi Devanagari. *@
+            <div class="oo-tagline">
+                <div class="oo-tagline-tx">
+                    @foreach (var part in parts)
+                    {
+                        <span dir="auto" lang="@NameScript.ScriptLang(part)">@part</span>
+                    }
+                </div>
+            </div>
         }
 
         <div class="oo-hero-facts">
@@ -584,6 +602,19 @@ else
                 new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
             return;
         }
+        // Came in through the shop's own QR and not signed in: order as a guest, pickup or
+        // to the car, without the sign-in wall (Majed 2026-10-09).
+        if (TableBrand.QrStoreId == Id && !State.IsAuthenticated)
+        {
+            var qrParameters = new DialogParameters
+            {
+                ["RestaurantId"] = Id,
+                ["StoreName"] = _detail?.Info is { } qinf ? StoreText.Name(qinf.Name, qinf.Names, L) : "",
+            };
+            await Dialogs.ShowAsync<QrOrderDialog>("", qrParameters,
+                new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+            return;
+        }
         _going = true;   // paint the spinner before the page changes under us
         StateHasChanged();
         Nav.NavigateTo("/checkout");
@@ -620,7 +651,7 @@ else
         // the rest of the visit — its logo, its name, no back button to the platform.
         if (_detail?.Info is { } info &&
             System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["qr"] == "1")
-            TableBrand.Set(StoreText.Name(info.Name, info.Names, L), info.LogoPhoto, info.LogoEmoji);
+            TableBrand.Set(StoreText.Name(info.Name, info.Names, L), info.LogoPhoto, info.LogoEmoji, Id);
         _ = Api.TrackStoreVisitAsync(Id); // anonymous count for the partner's analytics
     }
 
@@ -650,6 +681,35 @@ else
     }
 
     private string StoreName(RestaurantCardDto r) => StoreText.Name(r.Name, r.Names, L);
+
+    /// <summary>
+    /// "Grilled Fish &amp; Seafood - شوي الأسماك" → two lines, one per language. Only a dash
+    /// between a Latin half and a non-Latin half splits; an ordinary dash inside one
+    /// language stays as written.
+    /// </summary>
+    private static List<string> TaglineParts(string about)
+    {
+        foreach (var sep in new[] { " - ", " – ", " — ", " | " })
+        {
+            var i = about.IndexOf(sep, StringComparison.Ordinal);
+            if (i <= 0 || i + sep.Length >= about.Length) continue;
+            var a = about[..i].Trim();
+            var b = about[(i + sep.Length)..].Trim();
+            if (a.Length > 0 && b.Length > 0 && IsLatin(a) != IsLatin(b)) return [a, b];
+        }
+        return [about];
+    }
+
+    private static bool IsLatin(string s)
+    {
+        int latin = 0, other = 0;
+        foreach (var c in s)
+        {
+            if (!char.IsLetter(c)) continue;
+            if (c < 0x250) latin++; else other++;
+        }
+        return latin >= other;
+    }
 
     /// <summary>
     /// One store per basket. If the basket already holds another store's food the customer

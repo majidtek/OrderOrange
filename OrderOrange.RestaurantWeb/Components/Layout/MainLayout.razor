@@ -19,6 +19,7 @@
     <MudPopoverProvider />
     <MudDialogProvider />
     <MudSnackbarProvider />
+    <UpdateWatch />
     @* First visit: ONLY the picker renders; the portal loads once, in that language. *@
     <LanguageGate />
 @if (!_gateOnly)
@@ -89,7 +90,7 @@
                 @if (_stores is { Count: > 1 })
                 {
                     @* The brand doubles as the business switcher when there is a choice. *@
-                    <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Class="ml-2" ListClass="mf-me-list" Dense="true">
+                    <MudMenu AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft" Class="ml-2 d-none d-sm-inline-flex" ListClass="mf-me-list" Dense="true">
                         <ActivatorContent>
                             <div class="mf-brand" style="cursor: pointer;">
                                 <div class="mf-brand-mark @(string.IsNullOrEmpty(_restaurant?.LogoData) ? "" : "has-logo")">
@@ -134,7 +135,7 @@
                 }
                 else
                 {
-                    <div class="mf-brand ml-2">
+                    <div class="mf-brand ml-2 d-none d-sm-flex">
                         <div class="mf-brand-mark @(string.IsNullOrEmpty(_restaurant?.LogoData) ? "" : "has-logo")">
                                     @if (_restaurant?.LogoData is { Length: > 0 } brandLogo)
                                     {
@@ -149,6 +150,9 @@
                     </div>
                 }
                 <MudSpacer />
+                @* On phones the actions sit together in one rounded dock (Majed: "modern ui");
+                   on wider screens the wrapper is display:contents and changes nothing. *@
+                <div class="mf-dock">
                 @* The everything-door: one box that reaches every page and record. *@
                 <button type="button" class="cp-launch d-none d-md-flex" @onclick="@(() => _palette?.Open())">
                     <MudIcon Icon="@Icons.Material.Filled.Search" Style="width:16px;height:16px;" />
@@ -165,7 +169,9 @@
                     <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" />
                 </button>
                 @* Fullscreen toggle — plain onclick so the browser keeps the gesture. *@
-                <button type="button" class="mf-full-btn" onclick="mfFull.toggle()" title="@Lang["nav.fullscreen"]">
+                @* Hidden on phones (the bar ran out of room and pushed the language and account
+                   buttons off the edge); the account menu carries it there instead. *@
+                <button type="button" class="mf-full-btn d-none d-sm-flex" onclick="mfFull.toggle()" title="@Lang["nav.fullscreen"]">
                     <MudIcon Icon="@Icons.Material.Filled.Fullscreen" />
                 </button>
                 @* Rings when an order's deduction pushes an ingredient under its minimum. *@
@@ -183,13 +189,14 @@
                        when the shop is closed, so a shut door is still impossible to miss. *@
                     @if (!_restaurant.IsOpen)
                     {
-                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Class="mr-2">
+                        <MudChip T="string" Color="Color.Error" Size="Size.Small" Class="mr-2 mf-closed-chip d-none d-sm-flex">
                             @Lang["partner.closed"]
                         </MudChip>
                     }
                 }
                 <LanguageMenu Compact="true" />
-                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" ListClass="mf-me-list" Dense="true">
+                </div>
+                <MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" ListClass="mf-me-list" Dense="true" Class="d-none d-sm-inline-flex">
                     <ActivatorContent>
                         <MudAvatar Color="Color.Primary">
                             @if (State.AvatarPhoto is { Length: > 0 } myFace)
@@ -278,7 +285,7 @@
                                 {
                                     var store = s;
                                     <button type="button" class="pnav-tile biz @(store.Id == State.RestaurantId ? "on" : "")"
-                                            disabled="@(store.Id == State.RestaurantId)"
+                                            disabled="@(store.Id == State.RestaurantId)" title="@store.Name"
                                             @onclick="@(() => { _navOpen = false; _ = PickStore(store); })">
                                         <span class="ic">
                                             @if (store.LogoData is { Length: > 0 } navLogo)
@@ -319,6 +326,9 @@
                                     <MudIcon Icon="@Icons.Material.Filled.AddBusiness" /> @Lang["partner.addBusiness"]
                                 </button>
                             }
+                            <button type="button" class="row d-flex d-sm-none" onclick="mfFull.toggle()">
+                                <MudIcon Icon="@Icons.Material.Filled.Fullscreen" /> @Lang["nav.fullscreen"]
+                            </button>
                             <button type="button" class="row exit" @onclick="@(() => { _navOpen = false; _ = SignOut(); })">
                                 <MudIcon Icon="@Icons.Material.Filled.Logout" /> @Lang["common.signout"]
                             </button>
@@ -388,6 +398,7 @@
             new("tchat.title", "/chat", Icons.Material.Filled.Forum, Badge: () => _teamUnread),
             new("nav.tableChats", "/table-chats", Icons.Material.Filled.ChatBubbleOutline, Badge: () => _chatUnread),
             new("nav.support", "/support", Icons.Material.Filled.SupportAgent, () => Can(Perm.Support)),
+            new("achat.title", "/admin-chat", Icons.Material.Filled.HeadsetMic, Badge: () => _adminUnread),
         ]),
         new("nav.operations", Icons.Material.Filled.PointOfSale,
         [
@@ -482,6 +493,7 @@
     // ---------- Chat badges: table-guest unread + team-DM unread, on a quiet poll ----------
     private int _chatUnread;
     private int _teamUnread;
+    private int _adminUnread;
     private System.Threading.Timer? _chatTimer;
     private System.Threading.Timer? _beatTimer;
 
@@ -514,6 +526,20 @@
                 _teamUnread = team;
                 await InvokeAsync(StateHasChanged);
             }
+
+            // Messages from the OrderOrange team (admin chat): badge, and a ring when new.
+            var fromAdmin = await Api.GetAdminChatUnreadAsync();
+            if (fromAdmin != _adminUnread)
+            {
+                if (fromAdmin > _adminUnread)
+                {
+                    Snackbar.Add(Lang["achat.newMsg"], Severity.Info, options => { options.Icon = Icons.Material.Filled.HeadsetMic; });
+                    try { await JS.InvokeVoidAsync("mfDing"); } catch { }
+                }
+                _adminUnread = fromAdmin;
+                await InvokeAsync(StateHasChanged);
+            }
+            State.SetAdminChatUnread(fromAdmin);
 
             // Share the counts with the rest of the circuit — the dashboard shortcut and
             // the command palette badge off these rather than polling again themselves.
@@ -606,7 +632,28 @@
             _stores ??= await Api.GetMyStoresAsync();
             await IssueFormPassAsync();
             await NudgeUnfinishedStoreAsync();
+            await AskRegionAsync();
         }
+    }
+
+    private bool _regionAsked;
+
+    /// <summary>
+    /// Right after a business is opened (registration or "add business" land on /?welcome=1),
+    /// ask once where it trades and what its money is called. A store that already answered
+    /// is never asked again; Settings keeps both editable.
+    /// </summary>
+    private async Task AskRegionAsync()
+    {
+        if (_regionAsked || _restaurant is null || !RoleIn("owner")) return;
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query);
+        if (query["welcome"] != "1" || !string.IsNullOrWhiteSpace(_restaurant.Country)) return;
+        _regionAsked = true;
+        var options = new DialogOptions { BackdropClick = false, CloseOnEscapeKey = false, CloseButton = false, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await Dialogs.ShowAsync<OrderOrange.RestaurantWeb.Components.Pages.RegionDialog>("", options);
+        await dialog.Result;
+        await RefreshRestaurant();
+        Nav.NavigateTo("/", replace: true);   // drop ?welcome so a reload does not ask again
     }
 
     private bool _completionChecked;
@@ -745,8 +792,19 @@
     /// portal — till, reports, invoices, the kitchen screen — says the same thing. Safe as
     /// a static here: the partner app is WebAssembly, one browser per person.
     /// </summary>
-    private void ApplyCurrency() =>
+    private void ApplyCurrency()
+    {
         Fmt.Symbol = _restaurant?.Currency is { Length: > 0 } c ? c : Fmt.DefaultSymbol;
+        // Phone boxes start on the shop's own country (+1 for a US store, not +968).
+        OrderOrange.ClientCore.Components.PhoneField.DefaultCountryCode =
+            _restaurant?.Country is { Length: 2 } cc ? cc.ToLowerInvariant() : "om";
+        // The shop's clock and calendar: date order, 12/24 h, time zone, translated names.
+        Fmt.DateOrder = _restaurant?.DateFormat is "mdy" or "ymd" ? _restaurant.DateFormat : "dmy";
+        Fmt.Clock12 = _restaurant?.TimeFormat == "12";
+        if (_restaurant?.ServerOffsetMinutes is { } server)
+            Fmt.ConfigureClock(server, _restaurant.StoreOffsetMinutes ?? server);
+        Fmt.Names = key => { var v = Lang[key]; return v == key ? null : v; };
+    }
 
     /// <summary>Pages call this after saving settings so the app bar reflects the change.</summary>
     public async Task RefreshRestaurant()

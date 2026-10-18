@@ -205,7 +205,7 @@ public static class DbSeeder
 
         // ---------- Coupons ----------
         db.Coupons.AddRange(
-            new Coupon { Code = "WELCOME10", Percent = 10m, MinOrder = 2.000m, ExpiresAt = null, IsActive = true, MaxUses = 1000, Uses = 46 },
+            new Coupon { Code = "WELCOME10", Percent = 10m, MinOrder = 2.000m, MaxDiscount = 2.000m, ExpiresAt = null, IsActive = true, MaxUses = 1000, Uses = 46 },
             new Coupon { Code = "SAVE20", Percent = 20m, MinOrder = 5.000m, ExpiresAt = now.AddDays(30), IsActive = true, MaxUses = 500, Uses = 112 },
             new Coupon { Code = "EID15", Percent = 15m, MinOrder = 3.000m, ExpiresAt = now.AddDays(-10), IsActive = false, MaxUses = 300, Uses = 300 });
 

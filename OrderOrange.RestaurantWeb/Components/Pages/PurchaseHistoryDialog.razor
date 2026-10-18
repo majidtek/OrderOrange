@@ -54,7 +54,7 @@
                                 <span class="ic">@(invoice.IsPaid ? "✅" : invoice.HasOverdue ? "⏰" : "🕓")</span>
                                 <div class="mid">
                                     <b>@invoice.Supplier</b>
-                                    <small class="mf-ltr">@invoice.Number · @invoice.InvoiceDate.ToString("dd MMM yyyy")</small>
+                                    <small class="mf-ltr">@invoice.Number · @Fmt.DayMonthYear(invoice.InvoiceDate, shift: false)</small>
                                 </div>
                                 <span class="lines">@string.Format(L["pur.lineCount"], invoice.Lines.Count)</span>
                                 <span class="amt mf-ltr">@Fmt.Rial(invoice.Total)</span>
@@ -80,10 +80,10 @@
                                             <div class="ps @(step.IsPaid ? "paid" : step.IsOverdue ? "late" : "")">
                                                 <span class="mi">@MethodIcon(step.Method)</span>
                                                 <span class="amt mf-ltr">@Fmt.Rial(step.Amount)</span>
-                                                <span class="due mf-ltr">@step.DueDate.ToString("dd MMM yyyy")</span>
+                                                <span class="due mf-ltr">@Fmt.DayMonthYear(step.DueDate, shift: false)</span>
                                                 @if (step.IsPaid)
                                                 {
-                                                    <span class="st ok">✓ @L["pay.paidOn"] @step.PaidAt!.Value.ToString("dd MMM")</span>
+                                                    <span class="st ok">✓ @L["pay.paidOn"] @Fmt.DayMonth(step.PaidAt!.Value)</span>
                                                 }
                                                 else if (step.IsOverdue)
                                                 {

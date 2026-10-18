@@ -1,0 +1,96 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* Write a mail from info@: new, reply, reply-all or forward. Plain text; the server wraps
+   it in a readable HTML twin. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Title</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_to" Label="@L["mail.to"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr" Immediate="true"
+                      HelperText="@L["mail.toHint"]" />
+        <MudTextField @bind-Value="_cc" Label="@L["mail.cc"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3 mf-ltr" Immediate="true" />
+        <MudTextField @bind-Value="_subject" Label="@L["mail.subject"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Immediate="true" />
+        <MudTextField @bind-Value="_body" Label="@L["mail.body"]" Variant="Variant.Outlined" Lines="12" Immediate="true" />
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())" Disabled="_busy">@L["common.cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="Send"
+                   Disabled="@(_busy || string.IsNullOrWhiteSpace(_to))">@(_busy ? L["mail.sending"] : L["mail.send"])</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public MailMessageDto? Original { get; set; }
+    [Parameter] public string Mode { get; set; } = "new";
+
+    private string _to = "";
+    private string _cc = "";
+    private string _subject = "";
+    private string _body = "";
+    private bool _busy;
+    private string? _error;
+
+    private string Title => Mode switch
+    {
+        "reply" or "replyAll" => L["mail.reply"],
+        "forward" => L["mail.forward"],
+        _ => L["mail.compose"],
+    };
+
+    protected override void OnInitialized()
+    {
+        if (Original is null) return;
+        var o = Original;
+        var quoted = "\n\n\n---- " + string.Format(L["mail.quoted"], o.From, Fmt.DateTimeText(o.Date, shift: false)) + " ----\n" +
+                     (o.Text ?? StripTags(o.Html ?? ""));
+        switch (Mode)
+        {
+            case "reply":
+                _to = o.FromAddress;
+                _subject = Re(o.Subject);
+                _body = quoted;
+                break;
+            case "replyAll":
+                _to = o.FromAddress;
+                _cc = string.Join(", ", o.To.Concat(o.Cc).Where(a => !a.Contains(o.FromAddress, StringComparison.OrdinalIgnoreCase)));
+                _subject = Re(o.Subject);
+                _body = quoted;
+                break;
+            case "forward":
+                _subject = o.Subject.StartsWith("Fwd:", StringComparison.OrdinalIgnoreCase) ? o.Subject : "Fwd: " + o.Subject;
+                _body = quoted;
+                break;
+        }
+    }
+
+    private static string Re(string s) => s.StartsWith("Re:", StringComparison.OrdinalIgnoreCase) ? s : "Re: " + s;
+
+    private static string StripTags(string html)
+    {
+        var text = System.Text.RegularExpressions.Regex.Replace(html, @"<(script|style)[\s\S]*?</\1>", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"<br\s*/?>|</p>|</div>|</tr>", "\n", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        text = System.Text.RegularExpressions.Regex.Replace(text, "<[^>]+>", "");
+        text = System.Net.WebUtility.HtmlDecode(text);
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\n{3,}", "\n\n").Trim();
+    }
+
+    private async Task Send()
+    {
+        _busy = true;
+        _error = null;
+        var isReply = Mode is "reply" or "replyAll" && Original is not null;
+        var (ok, error) = await Api.SendMailAsync(new MailSendRequest(_to, _cc, _subject, _body, false,
+            isReply ? Original!.Folder : null, isReply ? Original!.Uid : 0));
+        _busy = false;
+        if (!ok) { _error = error ?? L["mail.sendFail"]; return; }
+        Dialog.Close(DialogResult.Ok(true));
+    }
+}

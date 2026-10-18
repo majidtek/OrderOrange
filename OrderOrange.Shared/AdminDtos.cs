@@ -1,4 +1,4 @@
-namespace OrderOrange.Shared;
+﻿namespace OrderOrange.Shared;
 
 public record StatusCountDto(OrderStatus Status, int Count);
 
@@ -75,7 +75,7 @@ public record AdminRestaurantDto(
     int? SuggestedOrder = null);
 
 /// <summary>One row of the admin panel's "Suggested strip" panel, in running order.</summary>
-public record AdminSuggestedDto(int Id, string Name, string LogoEmoji, bool IsApproved);
+public record AdminSuggestedDto(int Id, string Name, string LogoEmoji, bool IsApproved, string? LogoPhoto = null, string? Area = null);
 
 /// <summary>Everything a hard delete would erase — shown in full before the red button.</summary>
 public record AdminStoreFootprintDto(

@@ -67,6 +67,9 @@
                                Class="mf-backbtn" OnClick="BackAction">
                         @Lang["common.back"]
                     </MudButton>
+                    @* A way home from ANY inner page, even one opened straight from a link. *@
+                    <MudIconButton Icon="@Icons.Material.Filled.Home" Color="Color.Inherit" Class="mf-backbtn ms-1"
+                                   OnClick="GoHome" title="@Lang["nav.home"]" aria-label="@Lang["nav.home"]" />
                     <MudSpacer />
                     <LanguageMenu Compact="true" />
                 }
@@ -314,8 +317,11 @@
             Nav.NavigateTo(target);
             return;
         }
-        try { await JS.InvokeVoidAsync("eval", "history.length > 1 ? history.back() : location.assign('/')"); }
-        catch { Nav.NavigateTo("/"); }
+        // No earlier page of THIS visit: home, never the browser's history. The history is
+        // often the sign-in pages that brought the visitor here, and "back" into them only
+        // bounced straight back to this page — Majed 2026-10-01: "user can not go home".
+        await Task.CompletedTask;
+        Nav.NavigateTo("/");
     }
 
     private string Active(string href)
