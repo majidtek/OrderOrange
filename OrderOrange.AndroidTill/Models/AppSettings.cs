@@ -183,7 +183,10 @@ public sealed class AppSettings
         var ids = ProductPrinters.TryGetValue(productId, out var own) && own.Count > 0 ? own
                 : CategoryPrinters.GetValueOrDefault(categoryId) ?? [];
         if (ids.Count == 0) return [];
-        return Printers.Where(p => p.Enabled && ids.Contains(p.Id)).ToList();
+        // Old ticks on a Cashier printer are ignored unless it is the only printer there is.
+        var picked = Printers.Where(p => p.Enabled && ids.Contains(p.Id)).ToList();
+        var work = picked.Where(p => p.Role != PrinterRole.Cashier).ToList();
+        return work.Count > 0 || Printers.Any(p => p.Enabled && p.Role != PrinterRole.Cashier) ? work : picked;
     }
 
     private const string Key = "settings";

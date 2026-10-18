@@ -30,7 +30,12 @@ public sealed class RoutingPage : ContentPage
     {
         Title = L.T("routing");
         FlowDirection = Ui.Flow;
-        _printers = AppSettings.Current.Printers.Where(p => p.Enabled).ToList();
+        // Work tickets go to kitchen/bar printers only. The cashier printer used to be a column
+        // too (as on Windows) and a tick there sent every kitchen ticket to the receipt printer
+        // (Majed 2026-10-18: "come again issue"). It is offered only when no other printer exists.
+        var all = AppSettings.Current.Printers.Where(p => p.Enabled).ToList();
+        _printers = all.Where(p => p.Role != PrinterRole.Cashier).ToList();
+        if (_printers.Count == 0) _printers = all;
         _search.Placeholder = L.T("routingSearch");
         _search.TextChanged += (_, _) => Render();
         _save = Ui.Primary(L.T("save"), SaveAsync);
