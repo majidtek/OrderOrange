@@ -25,6 +25,29 @@ public static class PrinterDiscovery
     {
         var list = new List<Found>();
 
+        // Paired Bluetooth printers — on Sunmi-style terminals the built-in printer itself shows up
+        // here as "InnerPrinter" (Majed's E-POS, 2026-10-18). Portable Bluetooth printers too.
+        try
+        {
+            if (await BluetoothPrinterTransport.EnsurePermissionAsync())
+            {
+                var bonded = BluetoothPrinterTransport.Bonded()
+                    .OrderByDescending(d => (d.Name ?? "").Contains("InnerPrinter", StringComparison.OrdinalIgnoreCase))
+                    .ThenByDescending(BluetoothPrinterTransport.LooksLikePrinter);
+                foreach (var d in bonded)
+                {
+                    var inner = (d.Name ?? "").Contains("InnerPrinter", StringComparison.OrdinalIgnoreCase);
+                    list.Add(new Found(inner ? L.T("builtIn") : L.T("bluetoothPrinter"), BluetoothPrinterTransport.Label(d), new PrinterConfig
+                    {
+                        Name = inner ? L.T("builtIn") : d.Name ?? L.T("bluetoothPrinter"), Connection = PrinterConnection.Bluetooth,
+                        BluetoothAddress = d.Address ?? "", BluetoothName = d.Name ?? "",
+                        Role = inner ? PrinterRole.Cashier : PrinterRole.Kitchen, Paper = inner ? 58 : 80, Cut = !inner,
+                    }));
+                }
+            }
+        }
+        catch { /* no Bluetooth */ }
+
         // A built-in printer the vendor exposed as a USB printer-class device, or one on the host port.
         try
         {

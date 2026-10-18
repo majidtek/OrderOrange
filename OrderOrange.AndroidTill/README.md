@@ -45,13 +45,17 @@ or `adb install -r <apk>`.
 
 1. Sign in with the business account (role RestaurantOwner). Point the server field at staging
    for tests (`https://orderorange.com:8600/`).
-2. Printers → **Find printers**: the app checks the terminal itself (USB printer-class devices,
-   an internal print server on 127.0.0.1:9100, writable serial nodes) and sweeps the Wi-Fi for
-   anything answering on TCP 9100, then lists what it found. **Use** opens the form pre-filled
-   (built-in → Cashier, 58 mm, cut off; network → Kitchen, 80 mm). `Printing/PrinterDiscovery.cs`,
-   `Pages/DiscoverPage.cs`; the IP field also has **Find on the network…**. Typing an IP by hand
-   still works (Add printer). Use **Test print** — the page has English, Arabic, Persian and a QR,
-   so a missing font or wrong width shows at once.
+2. Printers → **Find printers**: the app lists the paired Bluetooth devices (on Sunmi-style
+   terminals such as the E-POS the built-in printer is the paired device **"InnerPrinter"**;
+   Android 12+ asks for the Nearby devices permission once), checks the terminal itself (USB
+   printer-class devices, an internal print server on 127.0.0.1:9100, writable serial nodes) and
+   sweeps the Wi-Fi for anything answering on TCP 9100, then lists what it found. **Use** opens
+   the form pre-filled (InnerPrinter/built-in → Cashier, 58 mm, cut off; network or other
+   Bluetooth → Kitchen, 80 mm). `Printing/PrinterDiscovery.cs`, `Pages/DiscoverPage.cs`; the IP
+   field also has **Find on the network…**, the Bluetooth connection has **Choose a paired
+   device…** (a printer must be paired in Android Settings → Connected devices first). Typing an
+   IP by hand still works (Add printer). Use **Test print** — the page has English, Arabic,
+   Persian and a QR, so a missing font or wrong width shows at once.
 3. If the built-in printer does not answer, open Settings → Device & printer probe and send the
    report (model, USB devices, serial nodes, loopback port): a vendor SDK can then be added as one
    more transport. If the terminal's ROM has no Arabic font, drop `arabic.ttf` into

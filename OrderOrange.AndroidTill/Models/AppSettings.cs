@@ -15,6 +15,8 @@ public enum PrinterConnection
     Usb = 2,
     /// <summary>A serial device node such as /dev/ttyS1 (some terminals expose the built-in printer this way).</summary>
     Serial = 3,
+    /// <summary>A paired Bluetooth printer (SPP) — including the terminal's own "InnerPrinter".</summary>
+    Bluetooth = 4,
 }
 
 /// <summary>What a printer is FOR. The role decides what gets printed on it.</summary>
@@ -39,6 +41,9 @@ public sealed class PrinterConfig
     public string SerialPath { get; set; } = "";
     public int UsbVendorId { get; set; }
     public int UsbProductId { get; set; }
+    /// <summary>MAC of the paired Bluetooth printer, and its name as Android shows it.</summary>
+    public string BluetoothAddress { get; set; } = "";
+    public string BluetoothName { get; set; } = "";
     public PrinterRole Role { get; set; } = PrinterRole.Kitchen;
     /// <summary>58 or 80 (mm).</summary>
     public int Paper { get; set; } = 80;
@@ -56,6 +61,7 @@ public sealed class PrinterConfig
         PrinterConnection.WiFi => $"tcp:{Host.Trim().ToLowerInvariant()}:{Port}",
         PrinterConnection.Usb => $"usb:{UsbVendorId:x4}:{UsbProductId:x4}",
         PrinterConnection.Serial => $"serial:{SerialPath.Trim()}",
+        PrinterConnection.Bluetooth => $"bt:{BluetoothAddress.Trim().ToLowerInvariant()}",
         _ => "builtin",
     };
 
@@ -64,6 +70,7 @@ public sealed class PrinterConfig
         PrinterConnection.WiFi => $"{Host}:{Port}",
         PrinterConnection.Usb => UsbVendorId == 0 ? "USB" : $"USB {UsbVendorId:X4}:{UsbProductId:X4}",
         PrinterConnection.Serial => SerialPath,
+        PrinterConnection.Bluetooth => BluetoothName.Length > 0 ? $"BT {BluetoothName}" : $"BT {BluetoothAddress}",
         _ => "built-in",
     };
 

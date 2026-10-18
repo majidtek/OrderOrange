@@ -22,6 +22,7 @@ public static class PrinterTransports
         PrinterConnection.WiFi => new TcpPrinterTransport(p.Host.Trim(), p.Port),
         PrinterConnection.Usb => new UsbPrinterTransport(p.UsbVendorId, p.UsbProductId),
         PrinterConnection.Serial => new SerialPrinterTransport(p.SerialPath.Trim()),
+        PrinterConnection.Bluetooth => new BluetoothPrinterTransport(p.BluetoothAddress.Trim(), p.BluetoothName),
         _ => new BuiltInPrinterTransport(),
     };
 
@@ -200,8 +201,93 @@ public sealed class UsbPrinterTransport(int vendorId, int productId) : IPrinterT
 }
 
 /// <summary>
-/// The terminal's own printer, whose wiring is unknown until tried: a USB printer-class
-/// device, a loopback TCP port, or a serial node. Tries each; the route that works is
+/// Bluetooth SPP (RFCOMM): how Sunmi-style terminals expose their own printer ("InnerPrinter",
+/// paired out of the box) and how portable Bluetooth receipt printers work. Needs the device
+/// paired in Android Settings first; on Android 12+ the BLUETOOTH_CONNECT permission is asked
+/// for on first use.
+/// </summary>
+public sealed class BluetoothPrinterTransport(string address, string name) : IPrinterTransport
+{
+    private static readonly Java.Util.UUID Spp = Java.Util.UUID.FromString("00001101-0000-1000-8000-00805F9B34FB")!;
+
+    public string Describe() => string.IsNullOrEmpty(name) ? address : $"{name} ({address})";
+
+    public static Android.Bluetooth.BluetoothAdapter? Adapter =>
+        (Platform.AppContext.GetSystemService(Context.BluetoothService) as Android.Bluetooth.BluetoothManager)?.Adapter;
+
+    public static bool HasPermission() =>
+        !OperatingSystem.IsAndroidVersionAtLeast(31) ||
+        Platform.AppContext.CheckSelfPermission(Android.Manifest.Permission.BluetoothConnect) == Android.Content.PM.Permission.Granted;
+
+    public static async Task<bool> EnsurePermissionAsync()
+    {
+        if (HasPermission()) return true;
+        try { return await MainThread.InvokeOnMainThreadAsync(() => Permissions.RequestAsync<BluetoothConnectPermission>()) == PermissionStatus.Granted; }
+        catch { return false; }
+    }
+
+    /// <summary>The devices paired in Android Settings (empty without the permission).</summary>
+    public static List<Android.Bluetooth.BluetoothDevice> Bonded()
+    {
+        try
+        {
+            if (!HasPermission()) return [];
+            return Adapter?.BondedDevices?.ToList() ?? [];
+        }
+        catch { return []; }
+    }
+
+    public static bool LooksLikePrinter(Android.Bluetooth.BluetoothDevice d)
+    {
+        var n = d.Name ?? "";
+        if (n.Contains("print", StringComparison.OrdinalIgnoreCase) || n.Contains("pos", StringComparison.OrdinalIgnoreCase)) return true;
+        try { return d.BluetoothClass?.MajorDeviceClass == Android.Bluetooth.MajorDeviceClass.Imaging; } catch { return false; }
+    }
+
+    public static string Label(Android.Bluetooth.BluetoothDevice d) => $"{d.Name ?? "?"} ({d.Address})";
+
+    public async Task SendAsync(byte[] data, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(address)) throw new InvalidOperationException("No Bluetooth printer chosen.");
+        if (!await EnsurePermissionAsync()) throw new IOException("Bluetooth permission was not granted.");
+        var adapter = Adapter ?? throw new IOException("This device has no Bluetooth.");
+        if (!adapter.IsEnabled) throw new IOException("Bluetooth is switched off.");
+        var device = Bonded().FirstOrDefault(d => string.Equals(d.Address, address, StringComparison.OrdinalIgnoreCase))
+                     ?? throw new IOException($"Bluetooth printer {Describe()} is not paired — pair it in Android Settings → Connected devices.");
+
+        await Task.Run(() =>
+        {
+            try { adapter.CancelDiscovery(); } catch { }
+            using var socket = device.CreateRfcommSocketToServiceRecord(Spp) ?? throw new IOException("Could not open a Bluetooth channel.");
+            try { socket.Connect(); }
+            catch (Java.IO.IOException ex) { throw new IOException($"Bluetooth printer {Describe()} did not answer ({ex.Message})."); }
+            try
+            {
+                using var os = socket.OutputStream ?? throw new IOException("Bluetooth channel has no output.");
+                const int chunk = 2048;   // RFCOMM likes small writes; a 30 KB raster in one go stalls some firmware
+                for (var off = 0; off < data.Length; off += chunk)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    os.Write(data, off, Math.Min(chunk, data.Length - off));
+                }
+                os.Flush();
+                Thread.Sleep(Math.Clamp(300 + data.Length / 40, 300, 3000));   // let the printer drain before the link drops
+            }
+            finally { try { socket.Close(); } catch { } }
+        }, ct);
+    }
+}
+
+/// <summary>Android 12+ runtime permission for talking to paired Bluetooth devices.</summary>
+public sealed class BluetoothConnectPermission : Permissions.BasePlatformPermission
+{
+    public override (string androidPermission, bool isRuntime)[] RequiredPermissions =>
+        [(Android.Manifest.Permission.BluetoothConnect, true)];
+}
+
+/// <summary>
+/// The terminal's own printer, whose wiring is unknown until tried: a paired Bluetooth
+/// "InnerPrinter", a USB printer-class device, a loopback TCP port, or a serial node. Tries each; the route that works is
 /// remembered and used first next time. (A vendor SDK, once the model is known, slots in
 /// here as one more route.)
 /// </summary>
@@ -219,11 +305,14 @@ public sealed class BuiltInPrinterTransport : IPrinterTransport
     /// <summary>Every route worth a try, the remembered one first.</summary>
     public static List<(string Key, IPrinterTransport Transport)> Routes()
     {
-        var list = new List<(string, IPrinterTransport)>
-        {
-            ("usb", new UsbPrinterTransport(0, 0)),
-            ("tcp:127.0.0.1:9100", new TcpPrinterTransport("127.0.0.1", 9100)),
-        };
+        var list = new List<(string, IPrinterTransport)>();
+        // Sunmi-style terminals (Majed's E-POS included, 2026-10-18) expose their own printer as
+        // a paired Bluetooth device called "InnerPrinter" — that route goes first.
+        foreach (var d in BluetoothPrinterTransport.Bonded().Where(BluetoothPrinterTransport.LooksLikePrinter)
+                     .OrderByDescending(d => (d.Name ?? "").Contains("InnerPrinter", StringComparison.OrdinalIgnoreCase)))
+            list.Add(($"bt:{d.Address}", new BluetoothPrinterTransport(d.Address ?? "", d.Name ?? "")));
+        list.Add(("usb", new UsbPrinterTransport(0, 0)));
+        list.Add(("tcp:127.0.0.1:9100", new TcpPrinterTransport("127.0.0.1", 9100)));
         foreach (var path in SerialCandidates)
             if (File.Exists(path)) list.Add(($"serial:{path}", new SerialPrinterTransport(path)));
 

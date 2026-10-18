@@ -24,11 +24,14 @@ public sealed class PrinterEditPage : ContentPage
     private readonly VerticalStackLayout _wifiRows = new();
     private readonly VerticalStackLayout _serialRows = new();
     private readonly VerticalStackLayout _usbRows = new();
+    private readonly VerticalStackLayout _btRows = new();
+    private readonly Label _btLabel = new() { TextColor = Colors.Gray, FontSize = 13, FlowDirection = FlowDirection.LeftToRight };
     private readonly Label _builtInHint = new() { TextColor = Colors.Gray, FontSize = 13 };
     private int _usbVendor, _usbProduct;
+    private string _btAddress = "", _btName = "";
 
     private static readonly PrinterConnection[] Connections =
-        [PrinterConnection.BuiltIn, PrinterConnection.WiFi, PrinterConnection.Usb, PrinterConnection.Serial];
+        [PrinterConnection.BuiltIn, PrinterConnection.Bluetooth, PrinterConnection.WiFi, PrinterConnection.Usb, PrinterConnection.Serial];
     private static readonly PrinterRole[] Roles = [PrinterRole.Cashier, PrinterRole.Kitchen, PrinterRole.Bar];
     private static readonly int[] Papers = [58, 80];
 
@@ -43,7 +46,7 @@ public sealed class PrinterEditPage : ContentPage
 
         foreach (var c in Connections) _connection.Items.Add(L.T(c switch
         {
-            PrinterConnection.BuiltIn => "builtIn", PrinterConnection.WiFi => "wifi",
+            PrinterConnection.BuiltIn => "builtIn", PrinterConnection.Bluetooth => "bluetooth", PrinterConnection.WiFi => "wifi",
             PrinterConnection.Usb => "usb", _ => "serial",
         }));
         foreach (var r in Roles) _role.Items.Add(L.T(r switch { PrinterRole.Cashier => "cashier", PrinterRole.Kitchen => "kitchen", _ => "bar" }));
@@ -55,6 +58,7 @@ public sealed class PrinterEditPage : ContentPage
         _port.Text = p.Port.ToString();
         _serial.Text = p.SerialPath;
         _usbVendor = p.UsbVendorId; _usbProduct = p.UsbProductId;
+        _btAddress = p.BluetoothAddress; _btName = p.BluetoothName;
         _role.SelectedIndex = Array.IndexOf(Roles, p.Role);
         _paper.SelectedIndex = Math.Max(0, Array.IndexOf(Papers, p.Paper));
         _copies.Value = Math.Clamp(p.Copies, 1, 5);
@@ -64,6 +68,7 @@ public sealed class PrinterEditPage : ContentPage
         _enabled.IsToggled = p.Enabled;
         _builtInHint.Text = L.T("builtInHint");
         UsbLabel();
+        BtLabel();
 
         _wifiRows.Children.Add(Ui.Caption(L.T("host")));
         _wifiRows.Children.Add(_host);
@@ -75,6 +80,10 @@ public sealed class PrinterEditPage : ContentPage
         _usbRows.Children.Add(Ui.Caption(L.T("usbDevice")));
         _usbRows.Children.Add(_usbLabel);
         _usbRows.Children.Add(Ui.Secondary(L.T("usbDevice") + "…", PickUsbAsync));
+        _btRows.Children.Add(Ui.Caption(L.T("btDevice")));
+        _btRows.Children.Add(_btLabel);
+        _btRows.Children.Add(Ui.Secondary(L.T("pickBt"), PickBluetoothAsync));
+        _btRows.Children.Add(new Label { Text = L.T("btHint"), TextColor = Colors.Gray, FontSize = 13 });
 
         _connection.SelectedIndexChanged += (_, _) => ShowRows();
         ShowRows();
@@ -101,7 +110,7 @@ public sealed class PrinterEditPage : ContentPage
                 {
                     Ui.Caption(L.T("name")), _name,
                     Ui.Caption(L.T("connection")), _connection,
-                    _builtInHint, _wifiRows, _serialRows, _usbRows,
+                    _builtInHint, _btRows, _wifiRows, _serialRows, _usbRows,
                     Ui.Caption(L.T("role")), _role,
                     Ui.Caption(L.T("paper")), _paper,
                     Ui.Row(L.T("copies"), copiesRow),
@@ -123,10 +132,35 @@ public sealed class PrinterEditPage : ContentPage
         _wifiRows.IsVisible = c == PrinterConnection.WiFi;
         _serialRows.IsVisible = c == PrinterConnection.Serial;
         _usbRows.IsVisible = c == PrinterConnection.Usb;
+        _btRows.IsVisible = c == PrinterConnection.Bluetooth;
     }
 
     private void UsbLabel() =>
         _usbLabel.Text = _usbVendor == 0 ? L.T("anyUsbPrinter") : $"USB {_usbVendor:X4}:{_usbProduct:X4}";
+
+    private void BtLabel() =>
+        _btLabel.Text = _btAddress.Length == 0 ? L.T("noBtChosen") : (_btName.Length > 0 ? $"{_btName} ({_btAddress})" : _btAddress);
+
+    /// <summary>Lists the devices paired in Android Settings; the terminal's own printer is "InnerPrinter".</summary>
+    private async Task PickBluetoothAsync()
+    {
+        if (!await BluetoothPrinterTransport.EnsurePermissionAsync()) { await Ui.Alert(L.T("btNoPermission")); return; }
+        if (BluetoothPrinterTransport.Adapter is null) { await Ui.Alert(L.T("btNone")); return; }
+        if (!BluetoothPrinterTransport.Adapter.IsEnabled) { await Ui.Alert(L.T("btOff")); return; }
+        var devices = BluetoothPrinterTransport.Bonded()
+            .OrderByDescending(d => (d.Name ?? "").Contains("InnerPrinter", StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(BluetoothPrinterTransport.LooksLikePrinter).ToList();
+        if (devices.Count == 0) { await Ui.Alert(L.T("btNotPaired")); return; }
+        var options = devices.Select(BluetoothPrinterTransport.Label).ToArray();
+        var choice = await DisplayActionSheet(L.T("btDevice"), L.T("cancel"), null, options);
+        var at = Array.IndexOf(options, choice ?? "");
+        if (at < 0) return;
+        _btAddress = devices[at].Address ?? "";
+        _btName = devices[at].Name ?? "";
+        BtLabel();
+        if (string.IsNullOrWhiteSpace(_name.Text))
+            _name.Text = _btName.Contains("InnerPrinter", StringComparison.OrdinalIgnoreCase) ? L.T("builtIn") : _btName;
+    }
 
     private async Task PickUsbAsync()
     {
@@ -179,6 +213,8 @@ public sealed class PrinterEditPage : ContentPage
         SerialPath = (_serial.Text ?? "").Trim(),
         UsbVendorId = _usbVendor,
         UsbProductId = _usbProduct,
+        BluetoothAddress = _btAddress,
+        BluetoothName = _btName,
         Role = Roles[Math.Max(0, _role.SelectedIndex)],
         Paper = Papers[Math.Max(0, _paper.SelectedIndex)],
         Copies = (int)_copies.Value,
@@ -191,6 +227,7 @@ public sealed class PrinterEditPage : ContentPage
         if (p.Name.Length == 0) return L.T("name") + "?";
         if (p.Connection == PrinterConnection.WiFi && p.Host.Length == 0) return L.T("host") + "?";
         if (p.Connection == PrinterConnection.Serial && p.SerialPath.Length == 0) return L.T("serialPath") + "?";
+        if (p.Connection == PrinterConnection.Bluetooth && p.BluetoothAddress.Length == 0) return L.T("noBtChosen");
         return null;
     }
 

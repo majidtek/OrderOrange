@@ -64,6 +64,22 @@ public static class DeviceProbe
         catch { sb.AppendLine("/dev: not listable"); }
 
         sb.AppendLine();
+        sb.AppendLine("== Paired Bluetooth devices ==");
+        try
+        {
+            if (!await BluetoothPrinterTransport.EnsurePermissionAsync()) sb.AppendLine("(no Bluetooth permission)");
+            else if (BluetoothPrinterTransport.Adapter is not { } bt) sb.AppendLine("(no Bluetooth)");
+            else
+            {
+                sb.AppendLine(bt.IsEnabled ? "Bluetooth on" : "Bluetooth OFF");
+                var bonded = BluetoothPrinterTransport.Bonded();
+                sb.AppendLine(bonded.Count == 0 ? "(none paired)" : string.Join("\n", bonded.Select(d =>
+                    $"{BluetoothPrinterTransport.Label(d)} class={d.BluetoothClass?.MajorDeviceClass}{(BluetoothPrinterTransport.LooksLikePrinter(d) ? " · printer" : "")}")));
+            }
+        }
+        catch (Exception ex) { sb.AppendLine($"(error: {ex.Message})"); }
+
+        sb.AppendLine();
         sb.AppendLine("== Loopback 127.0.0.1:9100 ==");
         sb.AppendLine(await TcpOpenAsync("127.0.0.1", 9100) ? "open (an internal print server answers)" : "closed");
 
