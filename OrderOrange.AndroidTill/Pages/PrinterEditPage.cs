@@ -99,7 +99,14 @@ public sealed class PrinterEditPage : ContentPage
         _btRows.Children.Add(Ui.Secondary(L.T("pickBt"), PickBluetoothAsync));
         _btRows.Children.Add(new Label { Text = L.T("btHint"), TextColor = Colors.Gray, FontSize = 13 });
 
-        _connection.SelectedIndexChanged += (_, _) => ShowRows();
+        _connection.SelectedIndexChanged += (_, _) =>
+        {
+            ShowRows();
+            // A NEW built-in printer is the cashier's in practice; the Kitchen default produced a
+            // second "Built-in printer" entry that printed kitchen tickets on the receipt printer.
+            if (existing is null && SelectedConnection == PrinterConnection.BuiltIn)
+                _role.SelectedIndex = Array.IndexOf(Roles, PrinterRole.Cashier);
+        };
         ShowRows();
 
         var copiesRow = new HorizontalStackLayout { Spacing = 8, Children = { _copiesLabel, _copies } };
@@ -173,8 +180,9 @@ public sealed class PrinterEditPage : ContentPage
         _btAddress = devices[at].Address ?? "";
         _btName = devices[at].Name ?? "";
         BtLabel();
-        if (string.IsNullOrWhiteSpace(_name.Text))
-            _name.Text = _btName.Contains("InnerPrinter", StringComparison.OrdinalIgnoreCase) ? L.T("builtIn") : _btName;
+        var inner = _btName.Contains("InnerPrinter", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(_name.Text)) _name.Text = inner ? L.T("builtIn") : _btName;
+        if (inner && _existing is null) { _role.SelectedIndex = Array.IndexOf(Roles, PrinterRole.Cashier); _paper.SelectedIndex = Array.IndexOf(Papers, 58); _cut.IsToggled = false; }
     }
 
     private async Task PickUsbAsync()
