@@ -541,10 +541,11 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     /// <summary>The API's public origin as this app reaches it — for plain links such as the till download.</summary>
     public string ApiBase => http.BaseAddress?.ToString().TrimEnd('/') ?? "";
     /// <summary>The current Windows till release; null when none is published.</summary>
-    public Task<TillVersionDto?> GetTillVersionAsync() => GetAsync<TillVersionDto>("api/till/version");
+    public Task<TillVersionDto?> GetTillVersionAsync() => GetAsync<TillVersionDto>($"api/till/version?t={DateTime.UtcNow.Ticks}");
 
-    /// <summary>The Android till (APK) on offer, or null when none has been published.</summary>
-    public Task<TillVersionDto?> GetAndroidTillVersionAsync() => GetAsync<TillVersionDto>("api/till/android/version");
+    /// <summary>The Android till (APK) on offer, or null when none has been published. The query
+    /// string defeats a browser copy of the manifest, so a new release shows the moment it lands.</summary>
+    public Task<TillVersionDto?> GetAndroidTillVersionAsync() => GetAsync<TillVersionDto>($"api/till/android/version?t={DateTime.UtcNow.Ticks}");
     /// <summary>The partner assistant: Grok with store-scoped MCP tools (reads and the two store actions).</summary>
     public Task<(AnalystReplyDto? data, string? error)> AskPartnerAssistantAsync(AnalystAskRequest req) =>
         SendForAsync<AnalystReplyDto>(HttpMethod.Post, "api/assistant/partner", req);

@@ -16,7 +16,11 @@ public class TillController(IConfiguration config, IWebHostEnvironment env) : Co
 {
     private string Dir => config["Till:Dir"] ?? Path.Combine(env.ContentRootPath, "till");
 
+    // Both manifests are tiny and change exactly when a release lands — a browser must never
+    // show yesterday's version (Majed 2026-10-18: partner Settings still said 1.0.0 after 1.2.0
+    // was published; without Cache-Control the browser kept the old JSON by heuristic).
     [HttpGet("version")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public IActionResult Version()
     {
         var path = Path.Combine(Dir, "version.json");
@@ -32,6 +36,7 @@ public class TillController(IConfiguration config, IWebHostEnvironment env) : Co
     // next to the APK. The partner Settings page links here; the terminal side-loads it.
 
     [HttpGet("android/version")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public IActionResult AndroidVersion()
     {
         var path = Path.Combine(Dir, "android.json");
