@@ -63,6 +63,12 @@ public sealed class SettingsPage : ContentPage
                     Ui.Secondary(L.T("allowOverlay"), () => { Printing.HtmlRenderer.RequestOverlay(); return Task.CompletedTask; }),
                     new BoxView { HeightRequest = 8, Color = Colors.Transparent },
                     Ui.Primary(L.T("save"), SaveAsync),
+                    Ui.Secondary(L.T("checkUpdate"), async () =>
+                    {
+                        var up = await UpdateService.CheckAsync(TillEngine.Instance.Api);
+                        await Ui.Alert(up is null ? L.T("upToDate") : string.Format(L.T("updateAvailable"), up.Version, up.Notes ?? ""));
+                        if (up is not null) await Navigation.PopAsync();   // the home screen shows the Update button
+                    }),
                     Ui.Secondary(L.T("deviceProbe"), () => Navigation.PushAsync(new ProbePage())),
                     Ui.Secondary(L.T("viewLog"), () => Navigation.PushAsync(new LogPage())),
                     version,

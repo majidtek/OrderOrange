@@ -22,10 +22,25 @@ public sealed class MainPage : ContentPage
     private readonly Label _noJobs = new() { TextColor = Colors.Gray };
     private bool _fillingStores;
 
+    // Self-update: a green strip with the new version and an Update button, shown when the server has a newer APK.
+    private readonly Label _updateText = new() { TextColor = Colors.White, FontAttributes = FontAttributes.Bold, VerticalOptions = LayoutOptions.Center, LineBreakMode = LineBreakMode.WordWrap };
+    private readonly Button _updateBtn;
+    private readonly Grid _update = new()
+    {
+        BackgroundColor = Color.FromArgb("#2E7D32"), Padding = new Thickness(10, 8), ColumnSpacing = 10, IsVisible = false,
+        ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
+    };
+    private bool _updating;
+
     public MainPage()
     {
         Title = L.T("appName");
         FlowDirection = Ui.Flow;
+
+        _updateBtn = new Button { Text = L.T("updateNow"), BackgroundColor = Colors.White, TextColor = Color.FromArgb("#2E7D32"), CornerRadius = 8, Padding = new Thickness(12, 6), FontAttributes = FontAttributes.Bold };
+        _updateBtn.Clicked += async (_, _) => await UpdateNowAsync();
+        _update.Add(_updateText, 0, 0);
+        _update.Add(_updateBtn, 1, 0);
 
         _stores.Title = L.T("switchStore");
         _stores.SelectedIndexChanged += async (_, _) =>
@@ -83,7 +98,7 @@ public sealed class MainPage : ContentPage
                 new VerticalStackLayout
                 {
                     Spacing = 6,
-                    Children = { _store, _status, _banner, _stores, buttons, Ui.Caption(L.T("jobs")), _noJobs },
+                    Children = { _store, _status, _update, _banner, _stores, buttons, Ui.Caption(L.T("jobs")), _noJobs },
                 },
                 _jobs,
             },
@@ -118,6 +133,8 @@ public sealed class MainPage : ContentPage
         MainActivity.StartTillService();
         E.Start();
         Render();
+        // Is there a newer till? Ask once on open; the engine re-asks with every store refresh.
+        try { if (await UpdateService.CheckAsync(E.Api) is not null) Render(); } catch { }
 
         // Once: ask Android not to doze the till, or orders stop arriving when the screen sleeps.
         if (!MainActivity.BackgroundAllowed() && !Preferences.Default.Get("till.batteryAsked", false))
@@ -143,6 +160,12 @@ public sealed class MainPage : ContentPage
         _status.Text = string.IsNullOrEmpty(E.Status) ? run : $"{run} · {E.Status}";
         _banner.Text = E.Banner ?? "";
         _banner.IsVisible = E.Banner is not null;
+        if (!_updating)
+        {
+            var up = UpdateService.Available;
+            _update.IsVisible = up is not null;
+            if (up is not null) _updateText.Text = string.Format(L.T("updateAvailable"), up.Version, up.Notes ?? "");
+        }
 
         if (E.Stores.Count > 1)
         {
@@ -164,6 +187,28 @@ public sealed class MainPage : ContentPage
         _jobs.ItemsSource = jobs;
         _noJobs.Text = jobs.Count == 0 ? (E.Settings.Printers.Count == 0 ? L.T("noPrinters") : L.T("noJobs")) : "";
         _noJobs.IsVisible = jobs.Count == 0;
+    }
+
+    /// <summary>Downloads the offered release with a percent counter in the strip, then opens Android's installer.</summary>
+    private async Task UpdateNowAsync()
+    {
+        if (_updating || UpdateService.Available is not { } release) return;
+        _updating = true;
+        _updateBtn.IsEnabled = false;
+        try
+        {
+            var progress = new Progress<int>(p => MainThread.BeginInvokeOnMainThread(() => _updateText.Text = string.Format(L.T("updateDownloading"), p)));
+            _updateText.Text = string.Format(L.T("updateDownloading"), 0);
+            var err = await UpdateService.DownloadAndInstallAsync(E.Api, release, progress);
+            _updateText.Text = err ?? L.T("updateInstall");
+            if (err is not null) await Ui.Alert(err);
+        }
+        finally
+        {
+            _updating = false;
+            _updateBtn.IsEnabled = true;
+            Render();
+        }
     }
 
     private async Task SignOutAsync()

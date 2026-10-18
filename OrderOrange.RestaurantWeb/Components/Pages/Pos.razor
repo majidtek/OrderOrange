@@ -100,7 +100,10 @@ else if (_menu is not null)
                         }
                         @if (!_photos)
                         {
-                            @* text card — nothing to load, nothing to look at but the name and the price *@
+                            @* text card — a tap on the small picture mark shows the product's photos without ringing it up *@
+                            <span class="pt-peek" title="@L["pos.viewPhoto"]" @onclick="@(() => PeekPhotoAsync(dish))" @onclick:stopPropagation="true">
+                                <MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Small" />
+                            </span>
                         }
                         else if (!string.IsNullOrWhiteSpace(dish.Photo))
                         {
@@ -1146,6 +1149,20 @@ else if (_menu is not null)
     private bool _prefsLoaded;
     private bool _defaultKeepOpen = true;
     private bool _keepOpen = true;
+
+    /// <summary>A look at one product's photos while the tiles run without pictures.</summary>
+    private Task PeekPhotoAsync(MenuItemDto dish)
+    {
+        var parameters = new DialogParameters<PosPhotoDialog>
+        {
+            { d => d.ItemId, dish.Id },
+            { d => d.Name, dish.NameFor(L.Locale) },
+            { d => d.Emoji, string.IsNullOrWhiteSpace(dish.ImageEmoji) ? "🍽️" : dish.ImageEmoji },
+            { d => d.Photo, dish.Photo },
+        };
+        return Dialogs.ShowAsync<PosPhotoDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+    }
 
     /// <summary>Search lives in its own dialog; whatever it picks lands on the ticket.</summary>
     private async Task OpenSearch()

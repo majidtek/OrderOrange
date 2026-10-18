@@ -4068,5 +4068,6 @@
     "pr.both":  "两者",
     "pr.bothHint":  "同时选中“厨房”和“吧台”，该商品会在两台打印机上打印。",
     "pos.photosOn":  "显示商品图片",
-    "pos.photosOff":  "隐藏商品图片"
+    "pos.photosOff":  "隐藏商品图片",
+    "pos.viewPhoto":  "查看图片"
 }

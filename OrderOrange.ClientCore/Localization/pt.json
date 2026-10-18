@@ -4068,5 +4068,6 @@
     "pr.both":  "Ambos",
     "pr.bothHint":  "Ative Cozinha e Bar em conjunto para imprimir um produto nas duas impressoras.",
     "pos.photosOn":  "Mostrar fotos dos produtos",
-    "pos.photosOff":  "Ocultar fotos dos produtos"
+    "pos.photosOff":  "Ocultar fotos dos produtos",
+    "pos.viewPhoto":  "Ver foto"
 }

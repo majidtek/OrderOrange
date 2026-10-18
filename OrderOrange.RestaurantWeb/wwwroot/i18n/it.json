@@ -4068,5 +4068,6 @@
     "pr.both":  "Entrambi",
     "pr.bothHint":  "Attiva Cucina e Bar insieme per stampare un prodotto su entrambe le stampanti.",
     "pos.photosOn":  "Mostra le foto dei prodotti",
-    "pos.photosOff":  "Nascondi le foto dei prodotti"
+    "pos.photosOff":  "Nascondi le foto dei prodotti",
+    "pos.viewPhoto":  "Vedi foto"
 }

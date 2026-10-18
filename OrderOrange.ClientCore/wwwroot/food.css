@@ -28156,3 +28156,18 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
 .pos-grid.noimg .pos-tile .pt-name{ font-size:.92rem; -webkit-line-clamp:3; min-height:0; }
 .pos.tablet .pos-grid.noimg .pos-tile{ padding:12px 8px 10px; min-height:80px; }
 .pos.tablet .pos-grid.noimg .pos-tile .pt-name{ font-size:.86rem; }
+/* v824 - photo peek on text tiles (Majed 2026-10-18 "user want to see image will click"):
+   a small picture mark in the tile's corner opens PosPhotoDialog; the tap never adds the dish. */
+.pos-grid.noimg .pos-tile .pt-peek{
+  position:absolute; top:6px; inset-inline-start:6px; width:26px; height:26px; border-radius:8px;
+  display:grid; place-items:center; color:#a08b74; background:#f6f0e8; opacity:.85;
+}
+.pos-grid.noimg .pos-tile .pt-peek:hover{ color:#f4511e; background:#fff1e8; opacity:1; }
+.pos-grid.noimg .pos-tile .pt-peek .mud-icon-root{ width:16px; height:16px; }
+.pos-grid.noimg .pos-tile.on .pt-minus{ top:6px; inset-inline-start:38px; }
+.pos-peek{ display:flex; flex-direction:column; gap:12px; }
+.pos-peek-name{ font-weight:800; font-size:1.05rem; color:#2b2118; }
+.pos-peek-wait, .pos-peek-none{ display:grid; place-items:center; min-height:180px; font-size:56px; background:#faf7f2; border-radius:14px; }
+.pos-peek-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
+.pos-peek-grid.one{ grid-template-columns:1fr; }
+.pos-peek-grid img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:14px; background:#faf7f2; }

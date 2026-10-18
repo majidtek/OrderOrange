@@ -217,6 +217,8 @@ public sealed class TillEngine
             }
         Stores = await Api.MyStoresAsync();
         _storeLoadedAt = DateTime.UtcNow;
+        // Piggy-back the update check on the store refresh (every ~10 min): the home screen offers a newer release.
+        try { await UpdateService.CheckAsync(Api); } catch { }
         Notify();
     }
 

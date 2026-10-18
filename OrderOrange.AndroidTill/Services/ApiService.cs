@@ -138,6 +138,42 @@ public sealed class ApiService
     /// <summary>Set once the server answered 404 to the long poll — don't keep asking.</summary>
     public bool PushUnsupported { get; private set; }
 
+    // ---------- Self-update ----------
+
+    /// <summary>The Android till release the server offers (version, file, sha256, notes); null when none or unreachable.</summary>
+    public Task<TillVersionDto?> AndroidVersionAsync() => GetAsync<TillVersionDto>($"api/till/android/version?t={DateTime.UtcNow.Ticks}");
+
+    /// <summary>Streams the current APK to <paramref name="destination"/>; progress in percent. Null on success, else why not.</summary>
+    public async Task<string?> DownloadAndroidAsync(string destination, IProgress<int>? progress, CancellationToken ct)
+    {
+        try
+        {
+            // The APK is ~30 MB; the ordinary client's 30-second limit is for small JSON calls.
+            using var http = new HttpClient(Handler, disposeHandler: false) { Timeout = TimeSpan.FromMinutes(10) };
+            using var req = new HttpRequestMessage(HttpMethod.Get, Endpoint("api/till/android/download"));
+            Authorize(req);
+            using var response = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!response.IsSuccessStatusCode) return $"Download failed: HTTP {(int)response.StatusCode}";
+            var total = response.Content.Headers.ContentLength ?? 0;
+            await using var src = await response.Content.ReadAsStreamAsync(ct);
+            await using var dst = File.Create(destination);
+            var buffer = new byte[128 * 1024];
+            long done = 0; int lastPct = -1, n;
+            while ((n = await src.ReadAsync(buffer, ct)) > 0)
+            {
+                await dst.WriteAsync(buffer.AsMemory(0, n), ct);
+                done += n;
+                if (total > 0)
+                {
+                    var pct = (int)(done * 100 / total);
+                    if (pct != lastPct) { lastPct = pct; progress?.Report(pct); }
+                }
+            }
+            return null;
+        }
+        catch (Exception ex) { return ex.Message; }
+    }
+
     /// <summary>The tables with an open, unpaid invoice. Null = server unreachable.</summary>
     public Task<List<StoreTabDto>?> OpenTabsAsync() => GetAsync<List<StoreTabDto>>("api/storetabs");
 
