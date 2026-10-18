@@ -4066,5 +4066,7 @@
     "till.android.reqs":  "Android 8 或更高。允许从此来源安装，打开 APK，用合作伙伴账号登录。",
     "till.android.soon":  "即将推出",
     "pr.both":  "两者",
-    "pr.bothHint":  "同时选中“厨房”和“吧台”，该商品会在两台打印机上打印。"
+    "pr.bothHint":  "同时选中“厨房”和“吧台”，该商品会在两台打印机上打印。",
+    "pos.photosOn":  "显示商品图片",
+    "pos.photosOff":  "隐藏商品图片"
 }

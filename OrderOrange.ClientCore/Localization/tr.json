@@ -4066,5 +4066,7 @@
     "till.android.reqs":  "Android 8 veya üzeri. Bu kaynaktan yüklemeye izin verin, APK'yı açın, iş ortağı hesabınızla giriş yapın.",
     "till.android.soon":  "Çok yakında",
     "pr.both":  "İkisi de",
-    "pr.bothHint":  "Bir ürünü iki yazıcıda da yazdırmak için Mutfak ve Bar'ı birlikte seçin."
+    "pr.bothHint":  "Bir ürünü iki yazıcıda da yazdırmak için Mutfak ve Bar'ı birlikte seçin.",
+    "pos.photosOn":  "Ürün fotoğraflarını göster",
+    "pos.photosOff":  "Ürün fotoğraflarını gizle"
 }

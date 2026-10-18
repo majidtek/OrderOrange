@@ -62,6 +62,9 @@ else if (_menu is not null)
                 <MudIconButton Icon="@Icons.Material.Filled.Keyboard" Size="Size.Medium"
                                OnClick="@(() => _hkOpen = !_hkOpen)" title="@L["pos.hk.title"]" />
                 <MudIconButton Icon="@Icons.Material.Filled.HelpOutline" Size="Size.Medium" OnClick="@(() => StartTour())" />
+                @* Product photos on the tiles: off by default (text cards load instantly), remembered per device. *@
+                <MudIconButton Icon="@(_photos ? Icons.Material.Filled.Image : Icons.Material.Outlined.HideImage)" Size="Size.Medium"
+                               OnClick="TogglePhotosAsync" title="@L[_photos ? "pos.photosOff" : "pos.photosOn"]" />
                 <MudIconButton Icon="@Icons.Material.Filled.Search" Size="Size.Medium" OnClick="OpenSearch" />
             </div>
 
@@ -81,7 +84,7 @@ else if (_menu is not null)
                         @onclick="@(() => JS.InvokeVoidAsync("mfPos.slideCats", ".pos-cats", 1))">›</button>
             </div>
 
-            <div class="pos-grid @(_catLoading ? "loading" : "")" @key="_categoryId">
+            <div class="pos-grid @(_catLoading ? "loading" : "") @(_photos ? "" : "noimg")" @key="_categoryId">
                 @foreach (var item in VisibleItems)
                 {
                     var dish = item;
@@ -95,7 +98,11 @@ else if (_menu is not null)
                             <span class="pt-badge">@qty</span>
                             <span class="pt-minus" @onclick="@(() => Bump(dish, -1))" @onclick:stopPropagation="true">−</span>
                         }
-                        @if (!string.IsNullOrWhiteSpace(dish.Photo))
+                        @if (!_photos)
+                        {
+                            @* text card — nothing to load, nothing to look at but the name and the price *@
+                        }
+                        else if (!string.IsNullOrWhiteSpace(dish.Photo))
                         {
                             <img class="pt-img" src="@dish.Photo" alt="" loading="lazy" />
                         }
@@ -392,9 +399,20 @@ else if (_menu is not null)
         await EnsureCategoryLoadedAsync(id);
     }
 
-    /// <summary>Fetches one group's items with photos, once, and swaps them into the outline.</summary>
+    /// <summary>Photos on the tiles, off by default; the choice is kept per device (localStorage "pos.photos").</summary>
+    private bool _photos;
+
+    private async Task TogglePhotosAsync()
+    {
+        _photos = !_photos;
+        try { await JS.InvokeVoidAsync("localStorage.setItem", "pos.photos", _photos ? "1" : "0"); } catch { }
+        if (_photos) await EnsureCategoryLoadedAsync(_categoryId);   // the pictures were never fetched while off
+    }
+
+    /// <summary>Fetches one group's items with photos, once, and swaps them into the outline — only while photos are shown.</summary>
     private async Task EnsureCategoryLoadedAsync(int id)
     {
+        if (!_photos) return;   // the outline already has names, prices and availability; the photos are all this fetch adds
         if (id == 0 || _menu is null || _loadedCats.Contains(id)) return;
         var index = _menu.FindIndex(c => c.Id == id);
         if (index < 0) return;
@@ -668,6 +686,16 @@ else if (_menu is not null)
             return;
         }
         _keysRef = DotNetObjectReference.Create(this);
+        try
+        {
+            if (await JS.InvokeAsync<string?>("localStorage.getItem", "pos.photos") == "1")
+            {
+                _photos = true;
+                await EnsureCategoryLoadedAsync(_categoryId);
+                StateHasChanged();
+            }
+        }
+        catch { }
         // The till was fullscreen before a reload? First tap takes it back.
         try { await JS.InvokeVoidAsync("mfPos.restoreFullscreen"); } catch { }
         try

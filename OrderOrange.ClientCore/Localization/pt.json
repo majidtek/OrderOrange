@@ -4066,5 +4066,7 @@
     "till.android.reqs":  "Android 8 ou superior. Permita instalar desta origem, abra o APK e inicie sessão com a conta de parceiro.",
     "till.android.soon":  "Em breve",
     "pr.both":  "Ambos",
-    "pr.bothHint":  "Ative Cozinha e Bar em conjunto para imprimir um produto nas duas impressoras."
+    "pr.bothHint":  "Ative Cozinha e Bar em conjunto para imprimir um produto nas duas impressoras.",
+    "pos.photosOn":  "Mostrar fotos dos produtos",
+    "pos.photosOff":  "Ocultar fotos dos produtos"
 }

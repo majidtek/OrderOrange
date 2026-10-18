@@ -4066,5 +4066,7 @@
     "till.android.reqs":  "Android 8 o successivo. Consenti l'installazione da questa origine, apri l'APK, accedi con l'account partner.",
     "till.android.soon":  "In arrivo",
     "pr.both":  "Entrambi",
-    "pr.bothHint":  "Attiva Cucina e Bar insieme per stampare un prodotto su entrambe le stampanti."
+    "pr.bothHint":  "Attiva Cucina e Bar insieme per stampare un prodotto su entrambe le stampanti.",
+    "pos.photosOn":  "Mostra le foto dei prodotti",
+    "pos.photosOff":  "Nascondi le foto dei prodotti"
 }

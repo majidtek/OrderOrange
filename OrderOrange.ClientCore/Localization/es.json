@@ -4066,5 +4066,7 @@
     "till.android.reqs":  "Android 8 o posterior. Permite instalar desde este origen, abre el APK e inicia sesión con tu cuenta de socio.",
     "till.android.soon":  "Próximamente",
     "pr.both":  "Ambos",
-    "pr.bothHint":  "Activa Cocina y Barra a la vez para imprimir un producto en ambas impresoras."
+    "pr.bothHint":  "Activa Cocina y Barra a la vez para imprimir un producto en ambas impresoras.",
+    "pos.photosOn":  "Mostrar fotos de productos",
+    "pos.photosOff":  "Ocultar fotos de productos"
 }

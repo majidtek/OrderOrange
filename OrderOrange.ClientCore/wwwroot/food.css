@@ -28148,3 +28148,11 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
   .oo-hero-plate .tag { font-size: .7rem; padding: 3px 8px; }
   .oo-hero-plate .tag .mud-icon-root { width: 12px; height: 12px; }
 }
+
+/* v823 - POS without product photos (Majed 2026-10-18 "in pos do not show images"): the
+   photo switch in the POS top bar is OFF by default and remembered per device; the grid then
+   carries .noimg and the tiles become text cards — name + price, no picture, no emoji. */
+.pos-grid.noimg .pos-tile{ padding:14px 10px 12px; min-height:92px; justify-content:center; gap:8px; }
+.pos-grid.noimg .pos-tile .pt-name{ font-size:.92rem; -webkit-line-clamp:3; min-height:0; }
+.pos.tablet .pos-grid.noimg .pos-tile{ padding:12px 8px 10px; min-height:80px; }
+.pos.tablet .pos-grid.noimg .pos-tile .pt-name{ font-size:.86rem; }

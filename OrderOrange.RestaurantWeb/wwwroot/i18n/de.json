@@ -4066,5 +4066,7 @@
     "till.android.reqs":  "Android 8 oder neuer. Installation aus dieser Quelle erlauben, APK öffnen, mit dem Partnerkonto anmelden.",
     "till.android.soon":  "Demnächst",
     "pr.both":  "Beide",
-    "pr.bothHint":  "Küche und Bar zusammen antippen, damit ein Produkt auf beiden Druckern gedruckt wird."
+    "pr.bothHint":  "Küche und Bar zusammen antippen, damit ein Produkt auf beiden Druckern gedruckt wird.",
+    "pos.photosOn":  "Produktfotos anzeigen",
+    "pos.photosOff":  "Produktfotos ausblenden"
 }
