@@ -523,6 +523,7 @@ public sealed class TillEngine
         var categoryId = _menuByName.TryGetValue(item.Name, out var menuItem) ? menuItem.CategoryId : 0;
         var local = Settings.LocalPrintersFor(pid, categoryId);
         if (local.Count > 0) return local;
+        if (!Settings.UnroutedToKitchen) return [];   // the owner chose: no tick, no ticket
 
         var station = _routes.GetValueOrDefault(pid);
         var list = station switch

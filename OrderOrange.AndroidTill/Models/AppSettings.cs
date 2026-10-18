@@ -150,6 +150,12 @@ public sealed class AppSettings
     public string Language { get; set; } = "en";
     public bool AutoPrintReceipt { get; set; } = true;
     public bool AutoPrintKitchen { get; set; } = true;
+    /// <summary>
+    /// What happens to a product with no tick on the Product printers screen: true = it still
+    /// prints on the kitchen/bar printers the web map (or the default) says; false = no work
+    /// ticket at all (Majed 2026-10-18: "I did not set those items for kitchen but coming").
+    /// </summary>
+    public bool UnroutedToKitchen { get; set; } = true;
     /// <summary>Seconds between polls — also how long a web sale takes to reach the printer.</summary>
     public int PollSeconds { get; set; } = 8;
     /// <summary>Floyd–Steinberg dithering instead of a plain threshold (better for photo logos, speckles text).</summary>

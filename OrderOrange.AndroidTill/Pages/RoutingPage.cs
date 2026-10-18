@@ -50,6 +50,14 @@ public sealed class RoutingPage : ContentPage
             RowSpacing = 8,
             RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star), new RowDefinition(GridLength.Auto) },
         };
+        // Unticked products: follow the web map (default) or print no work ticket at all.
+        var unrouted = new Switch { IsToggled = AppSettings.Current.UnroutedToKitchen, OnColor = App.Orange };
+        unrouted.Toggled += (_, e) =>
+        {
+            AppSettings.Current.UnroutedToKitchen = e.Value;
+            AppSettings.Current.Save();
+            Render();   // grey/black names follow the rule
+        };
         var head = new VerticalStackLayout
         {
             Spacing = 6,
@@ -57,6 +65,7 @@ public sealed class RoutingPage : ContentPage
             {
                 new Label { Text = L.T("routingHint"), FontSize = 13, TextColor = Colors.Gray },
                 new ScrollView { Orientation = ScrollOrientation.Horizontal, Content = legend },
+                Ui.Row(L.T("unroutedToKitchen"), unrouted),
                 _search,
                 _status,
             },
