@@ -1,4 +1,5 @@
 using Microsoft.Maui.ApplicationModel;
+using Microsoft.Maui.Storage;
 using OrderOrange.AndroidTill.Localization;
 using OrderOrange.AndroidTill.Services;
 
@@ -117,6 +118,13 @@ public sealed class MainPage : ContentPage
         MainActivity.StartTillService();
         E.Start();
         Render();
+
+        // Once: ask Android not to doze the till, or orders stop arriving when the screen sleeps.
+        if (!MainActivity.BackgroundAllowed() && !Preferences.Default.Get("till.batteryAsked", false))
+        {
+            Preferences.Default.Set("till.batteryAsked", true);
+            if (await Ui.Confirm(L.T("backgroundAsk"))) MainActivity.RequestBackgroundAllowed();
+        }
     }
 
     private void OnChanged() => MainThread.BeginInvokeOnMainThread(Render);

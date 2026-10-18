@@ -66,6 +66,13 @@ or `adb install -r <apk>`.
    that is placed and finished between two polls still gets its ticket and bill. Polling every
    N seconds (Settings) is the latency of auto-print — a sale rung up on the web prints within
    one poll, not instantly.
+   **Background (1.3.0):** the poll runs in a foreground service of type *connectedDevice*
+   (no 6-hour cap on Android 14+) with a partial wake lock and a Wi-Fi lock; the app asks once
+   to be left out of battery optimisation (Doze otherwise cuts the network with the screen
+   off — Settings → "Running in the background" shows the state and re-opens the prompt); a
+   `BootReceiver` restarts the service after a reboot or an app update when a session is saved;
+   swiping the app out of Recents schedules a restart. Some
+   ROMs also need the app marked "auto-start" / "no restrictions" in their own battery screen.
 4. If the built-in printer does not answer, open Settings → Device & printer probe and send the
    report (model, USB devices, serial nodes, loopback port): a vendor SDK can then be added as one
    more transport. If the terminal's ROM has no Arabic font, drop `arabic.ttf` into

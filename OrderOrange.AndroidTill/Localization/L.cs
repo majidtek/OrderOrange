@@ -137,6 +137,11 @@ public static class L
             ["discardChanges"] = "Leave without saving?",
             ["foundNone0"] = "Nothing matches.",
             ["noCashierPrinter"] = "A bill is due but no printer is set as Cashier — open Printers and give one the Cashier role.",
+            ["background"] = "Running in the background",
+            ["backgroundOn"] = "Allowed — Android will keep the till watching for orders with the screen off.",
+            ["backgroundOff"] = "Not allowed yet — Android may pause the till when the screen sleeps. Tap Allow and choose \"Allow\" / \"Don't optimise\".",
+            ["allowBackground"] = "Allow running in the background",
+            ["backgroundAsk"] = "To keep printing while the screen is off, Android must leave this app out of battery optimisation. Open the setting now?",
         },
         ["ar"] = new()
         {
@@ -250,6 +255,11 @@ public static class L
             ["discardChanges"] = "الخروج دون حفظ؟",
             ["foundNone0"] = "لا توجد نتائج.",
             ["noCashierPrinter"] = "هناك فاتورة جاهزة ولا توجد طابعة بدور «الكاشير» — افتح الطابعات وعيّن إحداها كاشيرًا.",
+            ["background"] = "العمل في الخلفية",
+            ["backgroundOn"] = "مسموح — سيبقي أندرويد الكاشير يراقب الطلبات والشاشة مطفأة.",
+            ["backgroundOff"] = "غير مسموح بعد — قد يوقف أندرويد الكاشير عند إطفاء الشاشة. اضغط «السماح» ثم اختر «السماح» / «عدم التحسين».",
+            ["allowBackground"] = "السماح بالعمل في الخلفية",
+            ["backgroundAsk"] = "لمواصلة الطباعة والشاشة مطفأة يجب استثناء هذا التطبيق من تحسين البطارية. فتح الإعداد الآن؟",
         },
         ["fa"] = new()
         {
@@ -363,6 +373,11 @@ public static class L
             ["discardChanges"] = "بدون ذخیره خارج شوید؟",
             ["foundNone0"] = "موردی پیدا نشد.",
             ["noCashierPrinter"] = "فاکتوری آماده است اما هیچ چاپگری نقش «صندوق» ندارد — در چاپگرها یکی را صندوق کنید.",
+            ["background"] = "اجرا در پس‌زمینه",
+            ["backgroundOn"] = "مجاز — اندروید صندوق را با صفحهٔ خاموش هم در انتظار سفارش نگه می‌دارد.",
+            ["backgroundOff"] = "هنوز مجاز نیست — اندروید ممکن است با خاموش شدن صفحه صندوق را متوقف کند. «اجازه» را بزنید و «مجاز» / «بهینه‌سازی نشود» را انتخاب کنید.",
+            ["allowBackground"] = "اجازهٔ اجرا در پس‌زمینه",
+            ["backgroundAsk"] = "برای ادامهٔ چاپ با صفحهٔ خاموش، این برنامه باید از بهینه‌سازی باتری مستثنا شود. تنظیم را الان باز کنیم؟",
         },
     };
 }

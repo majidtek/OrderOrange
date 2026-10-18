@@ -31,4 +31,39 @@ public class MainActivity : MauiAppCompatActivity
         var ctx = Android.App.Application.Context;
         ctx.StopService(new Intent(ctx, typeof(TillForegroundService)));
     }
+
+    /// <summary>True when Android has agreed not to doze this app (battery optimisation off for it).</summary>
+    public static bool BackgroundAllowed()
+    {
+        try
+        {
+            if (!OperatingSystem.IsAndroidVersionAtLeast(23)) return true;
+            var ctx = Android.App.Application.Context;
+            return ctx.GetSystemService(Context.PowerService) is PowerManager pm && pm.IsIgnoringBatteryOptimizations(ctx.PackageName);
+        }
+        catch { return true; }
+    }
+
+    /// <summary>
+    /// Asks Android to leave the till out of battery optimisation. Without it, Doze cuts the
+    /// network a while after the screen goes dark and the poll loop silently stops seeing
+    /// orders — a foreground service and a wake lock do not override Doze; this does.
+    /// </summary>
+    public static void RequestBackgroundAllowed()
+    {
+        if (!OperatingSystem.IsAndroidVersionAtLeast(23) || BackgroundAllowed()) return;
+        var ctx = Android.App.Application.Context;
+        try
+        {
+            var intent = new Intent(Android.Provider.Settings.ActionRequestIgnoreBatteryOptimizations)
+                .SetData(Android.Net.Uri.Parse($"package:{ctx.PackageName}"))
+                .AddFlags(ActivityFlags.NewTask);
+            ctx.StartActivity(intent);
+        }
+        catch
+        {
+            // Some ROMs refuse the direct request: open the list instead so the user can find the app.
+            try { ctx.StartActivity(new Intent(Android.Provider.Settings.ActionIgnoreBatteryOptimizationSettings).AddFlags(ActivityFlags.NewTask)); } catch { }
+        }
+    }
 }

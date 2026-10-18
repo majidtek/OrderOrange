@@ -12,7 +12,7 @@ namespace OrderOrange.AndroidTill;
 /// wake lock and a Wi-Fi lock, so Android neither kills the poll loop nor lets the radio
 /// doze while a kitchen printer is waiting for the next ticket.
 /// </summary>
-[Service(Exported = false, ForegroundServiceType = ForegroundService.TypeDataSync)]
+[Service(Exported = false, ForegroundServiceType = ForegroundService.TypeConnectedDevice)]
 public class TillForegroundService : Service
 {
     private const int NotificationId = 1001;
@@ -25,8 +25,10 @@ public class TillForegroundService : Service
     public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
     {
         var notification = BuildNotification();
+        // "Connected device" (printers over Bluetooth/USB/LAN): unlike dataSync it is not cut
+        // off after 6 hours on Android 14+, so the till can run all day.
         if (OperatingSystem.IsAndroidVersionAtLeast(29))
-            StartForeground(NotificationId, notification, ForegroundService.TypeDataSync);
+            StartForeground(NotificationId, notification, ForegroundService.TypeConnectedDevice);
         else
             StartForeground(NotificationId, notification);
 
@@ -47,6 +49,32 @@ public class TillForegroundService : Service
 
         TillEngine.Instance.Start();
         return StartCommandResult.Sticky;
+    }
+
+    /// <summary>The app was swiped out of Recents: some ROMs kill the process with it — come back in a few seconds.</summary>
+    public override void OnTaskRemoved(Intent? rootIntent)
+    {
+        try
+        {
+            TillLog.Write("task removed — scheduling the till service to come back");
+            ScheduleRestart(this, 3000);
+        }
+        catch (Exception ex) { TillLog.Write($"restart schedule failed: {ex.Message}"); }
+        base.OnTaskRemoved(rootIntent);
+    }
+
+    public static void ScheduleRestart(Context ctx, int delayMs)
+    {
+        var intent = new Intent(ctx, typeof(TillForegroundService));
+        var flags = PendingIntentFlags.UpdateCurrent;
+        if (OperatingSystem.IsAndroidVersionAtLeast(23)) flags |= PendingIntentFlags.Immutable;
+        var pi = OperatingSystem.IsAndroidVersionAtLeast(26)
+            ? PendingIntent.GetForegroundService(ctx, 7, intent, flags)
+            : PendingIntent.GetService(ctx, 7, intent, flags);
+        if (pi is null || ctx.GetSystemService(AlarmService) is not AlarmManager am) return;
+        var at = SystemClock.ElapsedRealtime() + delayMs;
+        if (OperatingSystem.IsAndroidVersionAtLeast(23)) am.SetAndAllowWhileIdle(AlarmType.ElapsedRealtimeWakeup, at, pi);
+        else am.Set(AlarmType.ElapsedRealtimeWakeup, at, pi);
     }
 
     public override void OnDestroy()
