@@ -11,6 +11,9 @@ public static class PrintService
     /// <summary>The CSS width of a kitchen ticket's root block for a paper width.</summary>
     public static int TicketCssWidth(int paper) => paper == 58 ? 196 : 270;
 
+    /// <summary>One lock per physical printer: jobs for different printers run side by side, two jobs for the same printer queue.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim> Locks = new();
+
     /// <summary>Returns null on success, else why not.</summary>
     public static async Task<string?> PrintHtmlAsync(PrinterConfig printer, string html, int cssWidth, CancellationToken ct = default)
     {
@@ -20,8 +23,14 @@ public static class PrintService
             using var bitmap = await HtmlRenderer.RenderAsync(html, printer.WidthDots, cssWidth);
             var bytes = EscPos.Encode(bitmap, s.Dither, s.Threshold, feedLines: 4, cut: printer.Cut, cutMode: printer.CutMode);
             var transport = PrinterTransports.For(printer);
-            for (var copy = 0; copy < Math.Max(1, printer.Copies); copy++)
-                await transport.SendAsync(bytes, ct);
+            var gate = Locks.GetOrAdd(printer.PhysicalKey, _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(ct);
+            try
+            {
+                for (var copy = 0; copy < Math.Max(1, printer.Copies); copy++)
+                    await transport.SendAsync(bytes, ct);
+            }
+            finally { gate.Release(); }
             return null;
         }
         catch (Exception ex)

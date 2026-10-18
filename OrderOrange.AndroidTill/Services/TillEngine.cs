@@ -251,9 +251,37 @@ public sealed class TillEngine
                 Banner = ex.Message;
                 Notify();
             }
-            try { await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(Settings.PollSeconds, 3, 300)), ct); }
+            try { await WaitForNextAsync(ct); }
             catch (OperationCanceledException) { }
         }
+    }
+
+    private long _changeVersion;
+
+    /// <summary>
+    /// Sleeps until the next pass: the server's long poll wakes us the moment the store's
+    /// orders change (a web sale prints in about a second); the timed poll stays as the
+    /// safety net and as the only mechanism against an older server.
+    /// </summary>
+    private async Task WaitForNextAsync(CancellationToken ct)
+    {
+        var poll = TimeSpan.FromSeconds(Math.Clamp(Settings.PollSeconds, 3, 300));
+        if (!Api.SignedIn || Api.PushUnsupported || !Online)
+        {
+            await Task.Delay(poll, ct);
+            return;
+        }
+        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var wait = Api.WaitForChangeAsync(_changeVersion, waitCts.Token);
+        var timer = Task.Delay(poll, ct);
+        var first = await Task.WhenAny(wait, timer);
+        if (first == wait && wait.Result is { } version)
+        {
+            if (version > _changeVersion) { _changeVersion = version; return; }   // changed → refresh now
+            // unchanged after the server's timeout → fall through to a normal pass
+        }
+        // The timer won (or the wait failed): one ordinary pass; drop the stray long poll.
+        waitCts.Cancel();
     }
 
     /// <summary>One pass over the board and the open tables. Safe to call from a button too.</summary>
@@ -310,31 +338,25 @@ public sealed class TillEngine
                 var fromClosedTable = IsDineIn(order)
                     && (order.IsPaid || (order.PaymentRef?.StartsWith("TAB-", StringComparison.OrdinalIgnoreCase) ?? false));
 
+                // The kitchen ticket and the bill go to different printers, so they print at the
+                // same time instead of one after the other (PrintService serialises per printer).
+                Task<bool>? ticketTask = null;
                 if (!_printed.Contains(order.Id))
                 {
-                    bool ok;
                     if (fromClosedTable)
                     {
-                        ok = true;
-                        if (Settings.AutoPrintKitchen && ChangeItems(order) is { Count: > 0 } change)
-                            ok = await PrintTicketsCore(order with { Items = change }, null, L.T("ticket"));
-                        if (ok) _kitchenTally.Remove(order.TableName ?? "");   // table is done
+                        ticketTask = Settings.AutoPrintKitchen && ChangeItems(order) is { Count: > 0 } change
+                            ? PrintTicketsCore(order with { Items = change }, null, L.T("ticket"))
+                            : Task.FromResult(true);
                     }
-                    else if (Settings.AutoPrintKitchen)
-                        ok = await PrintTicketsCore(order, null, L.T("ticket"));
                     else
-                        ok = true;   // mark seen even when kitchen auto-print is off
-
-                    if (ok) { _printed.Add(order.Id); newTickets.Add(order.Id); }
+                        ticketTask = Settings.AutoPrintKitchen ? PrintTicketsCore(order, null, L.T("ticket")) : Task.FromResult(true);
                 }
 
+                Task<string?>? billTask = null;
                 if (Settings.AutoPrintReceipt && !_receipted.Contains(order.Id) && ReadyForReceipt(order))
                 {
-                    if (Settings.Cashier is { } cashier)
-                    {
-                        var err = await PrintReceiptAsync(order, cashier);
-                        if (err is null) { _receipted.Add(order.Id); newReceipts.Add(order.Id); }
-                    }
+                    if (Settings.Cashier is { } cashier) billTask = PrintReceiptAsync(order, cashier);
                     else if (_warnedNoCashier.Add(order.Id))
                     {
                         // Say so instead of staying silent: the bill is due and no printer is marked Cashier.
@@ -343,6 +365,14 @@ public sealed class TillEngine
                         Banner = L.T("noCashierPrinter");
                     }
                 }
+
+                if (ticketTask is not null)
+                {
+                    var ok = await ticketTask;
+                    if (ok && fromClosedTable) _kitchenTally.Remove(order.TableName ?? "");   // table is done
+                    if (ok) { _printed.Add(order.Id); newTickets.Add(order.Id); }
+                }
+                if (billTask is not null && await billTask is null) { _receipted.Add(order.Id); newReceipts.Add(order.Id); }
             }
             if (newTickets.Count > 0) AppSettings.Remember(memory.Printed, newTickets);
             if (newReceipts.Count > 0) AppSettings.Remember(memory.Receipted, newReceipts);

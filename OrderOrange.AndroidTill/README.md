@@ -63,9 +63,14 @@ or `adb install -r <apk>`.
    later). Unticked products follow the web map at partner → Product printers (Kitchen / Bar /
    both). `Pages/RoutingPage.cs`, `TillEngine.PrintersFor`.
    Since 1.3.0 the poll also sweeps the newest CLOSED orders (last 30 min): a web counter sale
-   that is placed and finished between two polls still gets its ticket and bill. Polling every
-   N seconds (Settings) is the latency of auto-print — a sale rung up on the web prints within
-   one poll, not instantly.
+   that is placed and finished between two polls still gets its ticket and bill.
+   **Since 1.4.0 the till is woken by the server:** between passes it long-polls
+   `GET api/orders/restaurant/wait?since=<version>` (API `StoreChangeNotifier`, bumped by
+   `AppDbContext.SaveChangesAsync` whenever a store's Orders / StoreTabs / StoreTabLines change;
+   answers within ~25 s otherwise). A changed version triggers a pass at once, so a web sale is
+   on paper in about a second; the N-second poll remains the safety net and the only mechanism
+   against an older API (404 → `ApiService.PushUnsupported`). The bill and the kitchen ticket
+   of one order print at the same time (different printers; `PrintService` locks per printer).
    **Background (1.3.0):** the poll runs in a foreground service of type *connectedDevice*
    (no 6-hour cap on Android 14+) with a partial wake lock and a Wi-Fi lock; the app asks once
    to be left out of battery optimisation (Doze otherwise cuts the network with the screen

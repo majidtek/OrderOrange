@@ -680,6 +680,20 @@ public class OrdersController(AppDbContext db, CatalogStore catalog, Services.Pu
             .OrderBy(o => o.PlacedAt).ToListAsync())
         .Select(o => o.ToDto()).ToList();
 
+    /// <summary>
+    /// Long poll for the shop's tills: answers the moment anything about this store's orders
+    /// or open tables changes (version grows past <paramref name="since"/>), or after ~25 s
+    /// with the unchanged version. A till that gets a new version refreshes at once.
+    /// </summary>
+    [HttpGet("restaurant/wait")]
+    [Authorize(Roles = "RestaurantOwner")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<ActionResult<StoreChangeDto>> Wait(long since = 0, CancellationToken ct = default)
+    {
+        var version = await StoreChangeNotifier.Instance.WaitAsync(CurrentRestaurantId, since, TimeSpan.FromSeconds(25), ct);
+        return new StoreChangeDto(version);
+    }
+
     [HttpGet("restaurant/history")]
     [Authorize(Roles = "RestaurantOwner")]
     public async Task<List<OrderDto>> RestaurantHistory(int skip = 0, int take = 25) =>

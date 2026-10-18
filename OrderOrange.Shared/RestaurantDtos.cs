@@ -716,6 +716,9 @@ public record PendingProductPageDto(List<PendingProductDto> Items, int Total);
 
 public record RejectProductRequest(string? Reason);
 
+/// <summary>The store's change counter, from the tills' long poll (api/orders/restaurant/wait).</summary>
+public record StoreChangeDto(long Version);
+
 /// <summary>One product's kitchen-ticket destination on the shop's till ("kitchen" / "bar" / "both").</summary>
 public record PrintRouteDto(int MenuItemId, string Station);
 

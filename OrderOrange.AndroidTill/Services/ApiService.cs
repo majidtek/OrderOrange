@@ -113,6 +113,31 @@ public sealed class ApiService
     /// </summary>
     public Task<List<OrderDto>?> HistoryAsync(int take = 15) => GetAsync<List<OrderDto>>($"api/orders/restaurant/history?take={take}");
 
+    /// <summary>
+    /// Long poll: returns the store's change version as soon as it passes <paramref name="since"/>,
+    /// or the unchanged version after the server's ~25 s. Null when the server does not offer it
+    /// (older API → 404) or is unreachable; the caller then falls back to timed polling.
+    /// </summary>
+    public async Task<long?> WaitForChangeAsync(long since, CancellationToken ct)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, Endpoint($"api/orders/restaurant/wait?since={since}"));
+            Authorize(req);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(40));
+            using var response = await _http.SendAsync(req, cts.Token);
+            if (response.StatusCode == HttpStatusCode.NotFound) { PushUnsupported = true; return null; }
+            if (!response.IsSuccessStatusCode) return null;
+            var dto = await response.Content.ReadFromJsonAsync<StoreChangeDto>(Json, cts.Token);
+            return dto?.Version;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>Set once the server answered 404 to the long poll — don't keep asking.</summary>
+    public bool PushUnsupported { get; private set; }
+
     /// <summary>The tables with an open, unpaid invoice. Null = server unreachable.</summary>
     public Task<List<StoreTabDto>?> OpenTabsAsync() => GetAsync<List<StoreTabDto>>("api/storetabs");
 
