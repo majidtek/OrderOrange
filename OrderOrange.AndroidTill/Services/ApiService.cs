@@ -106,6 +106,13 @@ public sealed class ApiService
     /// <summary>Everything still in play: new, cooking, ready, on the way. Null = server unreachable.</summary>
     public Task<List<OrderDto>?> BoardAsync() => GetAsync<List<OrderDto>>("api/orders/restaurant/board");
 
+    /// <summary>
+    /// The newest closed orders (delivered / cancelled / rejected). A counter sale that is
+    /// placed AND finished between two polls never shows on the board — this is where it is
+    /// caught so its bill and kitchen ticket still print. Null = server unreachable.
+    /// </summary>
+    public Task<List<OrderDto>?> HistoryAsync(int take = 15) => GetAsync<List<OrderDto>>($"api/orders/restaurant/history?take={take}");
+
     /// <summary>The tables with an open, unpaid invoice. Null = server unreachable.</summary>
     public Task<List<StoreTabDto>?> OpenTabsAsync() => GetAsync<List<StoreTabDto>>("api/storetabs");
 

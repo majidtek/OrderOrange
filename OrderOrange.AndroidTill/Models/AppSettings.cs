@@ -107,6 +107,8 @@ public sealed class StoreMemory
     public bool OrdersInitialised { get; set; }
     /// <summary>The open tabs were seen once: their lines then count as already sent.</summary>
     public bool TabsInitialised { get; set; }
+    /// <summary>The recently closed orders were seen once (1.3.0): they count as already printed.</summary>
+    public bool HistoryInitialised { get; set; }
 }
 
 /// <summary>
@@ -125,7 +127,8 @@ public sealed class AppSettings
     public string Language { get; set; } = "en";
     public bool AutoPrintReceipt { get; set; } = true;
     public bool AutoPrintKitchen { get; set; } = true;
-    public int PollSeconds { get; set; } = 15;
+    /// <summary>Seconds between polls — also how long a web sale takes to reach the printer.</summary>
+    public int PollSeconds { get; set; } = 8;
     /// <summary>Floyd–Steinberg dithering instead of a plain threshold (better for photo logos, speckles text).</summary>
     public bool Dither { get; set; }
     /// <summary>Grey level above which a pixel prints white (0–255).</summary>

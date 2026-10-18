@@ -136,6 +136,7 @@ public static class L
             ["unsaved"] = "Unsaved changes",
             ["discardChanges"] = "Leave without saving?",
             ["foundNone0"] = "Nothing matches.",
+            ["noCashierPrinter"] = "A bill is due but no printer is set as Cashier — open Printers and give one the Cashier role.",
         },
         ["ar"] = new()
         {
@@ -248,6 +249,7 @@ public static class L
             ["unsaved"] = "تغييرات غير محفوظة",
             ["discardChanges"] = "الخروج دون حفظ؟",
             ["foundNone0"] = "لا توجد نتائج.",
+            ["noCashierPrinter"] = "هناك فاتورة جاهزة ولا توجد طابعة بدور «الكاشير» — افتح الطابعات وعيّن إحداها كاشيرًا.",
         },
         ["fa"] = new()
         {
@@ -360,6 +362,7 @@ public static class L
             ["unsaved"] = "تغییرات ذخیره‌نشده",
             ["discardChanges"] = "بدون ذخیره خارج شوید؟",
             ["foundNone0"] = "موردی پیدا نشد.",
+            ["noCashierPrinter"] = "فاکتوری آماده است اما هیچ چاپگری نقش «صندوق» ندارد — در چاپگرها یکی را صندوق کنید.",
         },
     };
 }

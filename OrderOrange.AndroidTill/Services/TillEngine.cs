@@ -59,6 +59,7 @@ public sealed class TillEngine
     private readonly HashSet<int> _printed = [];
     private readonly HashSet<int> _receipted = [];
     private readonly HashSet<int> _seenTabLines = [];
+    private readonly HashSet<int> _warnedNoCashier = [];
     private Dictionary<int, TabLineMemo> _tabMemos = [];
     private bool _memoryLoaded;
     /// <summary>Table name → (product name → quantity already sent to the kitchen for that table).</summary>
@@ -250,7 +251,7 @@ public sealed class TillEngine
                 Banner = ex.Message;
                 Notify();
             }
-            try { await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(Settings.PollSeconds, 5, 300)), ct); }
+            try { await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(Settings.PollSeconds, 3, 300)), ct); }
             catch (OperationCanceledException) { }
         }
     }
@@ -280,9 +281,16 @@ public sealed class TillEngine
             }
             Online = true;
 
+            // Orders finished in the last half hour that this till never saw: a web counter sale
+            // is placed and closed in one go, so by the next poll it has already left the board
+            // (Majed 2026-10-18: "when I do invoice from web not coming print").
+            var recentClosed = ((await Api.HistoryAsync()) ?? [])
+                .Where(o => o.Status == OrderStatus.Delivered && o.PlacedAt >= DateTime.Now.AddMinutes(-30))
+                .ToList();
+
             var storeId = Api.RestaurantId ?? 0;
             var memory = Settings.For(storeId);
-            if (!_memoryLoaded && !await LoadMemoryAsync(memory, storeId, board)) return;
+            if (!_memoryLoaded && !await LoadMemoryAsync(memory, storeId, board, recentClosed)) return;
 
             // Open tables: a round rung onto a table has no order yet, so print its NEW lines
             // to the kitchen straight away (never the bill — that waits for the table to close).
@@ -294,7 +302,7 @@ public sealed class TillEngine
             //     paid (table closed), or a delivery/pickup order is Ready or beyond.
             var newTickets = new List<int>();
             var newReceipts = new List<int>();
-            foreach (var order in board)
+            foreach (var order in board.Concat(recentClosed.Where(c => board.All(b => b.Id != c.Id))))
             {
                 // A closed table's bill lands on the board as a paid dine-in order — but the
                 // kitchen already got every round while the table was open, so it must NOT be
@@ -320,11 +328,20 @@ public sealed class TillEngine
                     if (ok) { _printed.Add(order.Id); newTickets.Add(order.Id); }
                 }
 
-                if (Settings.AutoPrintReceipt && !_receipted.Contains(order.Id) && ReadyForReceipt(order)
-                    && Settings.Cashier is { } cashier)
+                if (Settings.AutoPrintReceipt && !_receipted.Contains(order.Id) && ReadyForReceipt(order))
                 {
-                    var err = await PrintReceiptAsync(order, cashier);
-                    if (err is null) { _receipted.Add(order.Id); newReceipts.Add(order.Id); }
+                    if (Settings.Cashier is { } cashier)
+                    {
+                        var err = await PrintReceiptAsync(order, cashier);
+                        if (err is null) { _receipted.Add(order.Id); newReceipts.Add(order.Id); }
+                    }
+                    else if (_warnedNoCashier.Add(order.Id))
+                    {
+                        // Say so instead of staying silent: the bill is due and no printer is marked Cashier.
+                        TillLog.Write($"bill #{order.Number} due but no enabled Cashier printer is set up");
+                        _pollHadFailure = true;
+                        Banner = L.T("noCashierPrinter");
+                    }
                 }
             }
             if (newTickets.Count > 0) AppSettings.Remember(memory.Printed, newTickets);
@@ -343,7 +360,7 @@ public sealed class TillEngine
     /// anything for this store treats what is on the board and in the tabs right now as
     /// history — it must not reprint the day's orders.
     /// </summary>
-    private async Task<bool> LoadMemoryAsync(StoreMemory memory, int storeId, List<OrderDto> board)
+    private async Task<bool> LoadMemoryAsync(StoreMemory memory, int storeId, List<OrderDto> board, List<OrderDto> recentClosed)
     {
         _printed.Clear(); _printed.UnionWith(memory.Printed);
         _receipted.Clear(); _receipted.UnionWith(memory.Receipted);
@@ -356,6 +373,17 @@ public sealed class TillEngine
             memory.OrdersInitialised = true;
             Settings.Save();
             TillLog.Write($"store {storeId}: first run — {seen.Count} order(s) on the board taken as history");
+        }
+        if (!memory.HistoryInitialised)
+        {
+            // First run with the closed-orders sweep: what is already finished stays unprinted.
+            var seen = recentClosed.Select(o => o.Id).ToList();
+            _printed.UnionWith(seen); _receipted.UnionWith(seen);
+            AppSettings.Remember(memory.Printed, seen);
+            AppSettings.Remember(memory.Receipted, seen);
+            memory.HistoryInitialised = true;
+            Settings.Save();
+            TillLog.Write($"store {storeId}: {seen.Count} recently closed order(s) taken as history");
         }
 
         _seenTabLines.Clear(); _seenTabLines.UnionWith(memory.SeenTabLines);

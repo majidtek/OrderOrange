@@ -62,6 +62,10 @@ or `adb install -r <apk>`.
    printers every product of a category shares become the category rule for dishes added
    later). Unticked products follow the web map at partner → Product printers (Kitchen / Bar /
    both). `Pages/RoutingPage.cs`, `TillEngine.PrintersFor`.
+   Since 1.3.0 the poll also sweeps the newest CLOSED orders (last 30 min): a web counter sale
+   that is placed and finished between two polls still gets its ticket and bill. Polling every
+   N seconds (Settings) is the latency of auto-print — a sale rung up on the web prints within
+   one poll, not instantly.
 4. If the built-in printer does not answer, open Settings → Device & printer probe and send the
    report (model, USB devices, serial nodes, loopback port): a vendor SDK can then be added as one
    more transport. If the terminal's ROM has no Arabic font, drop `arabic.ttf` into

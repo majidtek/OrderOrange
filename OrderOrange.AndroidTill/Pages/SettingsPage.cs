@@ -71,7 +71,7 @@ public sealed class SettingsPage : ContentPage
         if (!string.IsNullOrWhiteSpace(_client.Text)) s.ClientUrl = _client.Text.Trim();
         s.AutoPrintReceipt = _autoReceipt.IsToggled;
         s.AutoPrintKitchen = _autoKitchen.IsToggled;
-        if (int.TryParse(_poll.Text, out var poll)) s.PollSeconds = Math.Clamp(poll, 5, 300);
+        if (int.TryParse(_poll.Text, out var poll)) s.PollSeconds = Math.Clamp(poll, 3, 300);
         s.Dither = _dither.IsToggled;
         if (int.TryParse(_threshold.Text, out var th)) s.Threshold = Math.Clamp(th, 1, 254);
 
