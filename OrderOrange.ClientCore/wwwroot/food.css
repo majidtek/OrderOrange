@@ -28155,6 +28155,10 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
 .pos-grid.noimg .pos-tile{ padding:14px 10px 12px; min-height:92px; justify-content:center; gap:8px; }
 .pos-grid.noimg .pos-tile .pt-name{ font-size:.92rem; -webkit-line-clamp:3; min-height:0; }
 .pos.tablet .pos-grid.noimg .pos-tile{ padding:12px 8px 10px; min-height:80px; }
+/* v825 - the photo peek mark sits in the top corner (6px + 26px tall), so the text tile keeps a
+   band above its name for it: long names used to run under the mark ("image over text"). */
+.pos-grid.noimg .pos-tile{ padding-top:36px; }
+.pos.tablet .pos-grid.noimg .pos-tile{ padding-top:34px; }
 .pos.tablet .pos-grid.noimg .pos-tile .pt-name{ font-size:.86rem; }
 /* v824 - photo peek on text tiles (Majed 2026-10-18 "user want to see image will click"):
    a small picture mark in the tile's corner opens PosPhotoDialog; the tap never adds the dish. */
