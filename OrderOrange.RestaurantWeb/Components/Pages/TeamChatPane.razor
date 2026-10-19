@@ -77,7 +77,7 @@
                     {
                         <i class="ed">@L["qc.edited"] · </i>
                     }
-                    @msg.At.ToString("HH:mm")
+                    @Fmt.Time(msg.At)
                 </small>
                 @if (_actionsFor == msg.Id && !msg.Deleted)
                 {
@@ -224,9 +224,9 @@
     private System.Threading.Timer? _poll;
 
     private string DayLabel(DateTime at) =>
-        at.Date == DateTime.Today ? L["qc.today"]
-        : at.Date == DateTime.Today.AddDays(-1) ? L["qc.yesterday"]
-        : at.ToString("dd/MM/yyyy");
+        at.Date == Fmt.ServerToday ? L["qc.today"]
+        : at.Date == Fmt.ServerToday.AddDays(-1) ? L["qc.yesterday"]
+        : Fmt.Date(at);
 
     private string PreviewOf(CommunityChatMessageDto msg) =>
         !string.IsNullOrWhiteSpace(msg.Text)

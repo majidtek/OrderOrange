@@ -39,7 +39,7 @@
     <div class="c ttl">@(Design.LabelStyle == "bilingual" ? "TAX INVOICE — فاتورة" : "TAX INVOICE")</div>
     <div class="row"><span>@Lb("Order", "الطلب")</span><b>@Order.Number</b></div>
     <div class="row"><span>@Lb("Receipt #", "رقم الإيصال")</span><span>@Order.Id.ToString("D6")</span></div>
-    <div class="row"><span>@Lb("Date", "التاريخ")</span><span>@Order.PlacedAt.ToString("dd/MM/yyyy HH:mm")</span></div>
+    <div class="row"><span>@Lb("Date", "التاريخ")</span><span>@Fmt.DateTimeText(Order.PlacedAt)</span></div>
     @* The type is read off the ORDER, not assumed: a counter sale is not a delivery. *@
     <div class="row"><span>@Lb("Type", "النوع")</span><span>@Lb(TypeEn, TypeAr) @TypeIcon</span></div>
     @if (Order.TableName is { Length: > 0 })
@@ -176,7 +176,7 @@
     <div class="c sm">Keep this receipt for your order.</div>
     <div class="c nm2">OrderOrange</div>
     <div class="c xs">Ordered online · @ClientHost</div>
-    <div class="c xs">Printed @DateTime.Now.ToString("dd/MM/yyyy HH:mm")</div>
+    <div class="c xs">Printed @Fmt.DateTimeText(Fmt.ServerNow)</div>
 </div>
 
 @code {

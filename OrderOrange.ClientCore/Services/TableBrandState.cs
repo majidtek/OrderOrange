@@ -11,12 +11,15 @@ public sealed class TableBrandState
     public string? Logo { get; private set; }
     public string? Emoji { get; private set; }
     public bool IsSet => !string.IsNullOrEmpty(Name);
+    /// <summary>The store whose own QR started this visit — its guests may order without signing in.</summary>
+    public int? QrStoreId { get; private set; }
 
     public event Action? Changed;
 
-    public void Set(string name, string? logo, string? emoji)
+    public void Set(string name, string? logo, string? emoji, int? qrStoreId = null)
     {
         Name = name;
+        if (qrStoreId is not null) QrStoreId = qrStoreId;
         Logo = logo;
         Emoji = emoji;
         Changed?.Invoke();
@@ -26,6 +29,7 @@ public sealed class TableBrandState
     {
         if (Name is null) return;
         Name = Logo = Emoji = null;
+        QrStoreId = null;
         Changed?.Invoke();
     }
 }

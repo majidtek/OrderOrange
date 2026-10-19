@@ -1,0 +1,99 @@
+@namespace OrderOrange.ClientCore.Components
+@inject IJSRuntime JS
+@inject LanguageService L
+@implements IAsyncDisposable
+
+@* Edit a logo before it is saved (Majed 2026-10-14: "client in upload logo can edit logo"):
+   drag to move, zoom, rotate, transparent or white background, round preview. The browser
+   draws it (mf-logoedit.js); the dialog returns the finished square image as a data URL. *@
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">✂️ @L["le.title"]</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="le-stage">
+            <canvas id="@_id" class="le-canvas"></canvas>
+        </div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center" Class="d-block mt-1 mb-3">@L["le.hint"]</MudText>
+
+        <div class="d-flex align-center" style="gap: 10px;">
+            <MudIcon Icon="@Icons.Material.Filled.ZoomOut" Size="Size.Small" />
+            <MudSlider T="double" Value="_zoom" ValueChanged="OnZoom" Min="0.3" Max="5" Step="0.05" Color="Color.Primary" Class="flex-grow-1" />
+            <MudIcon Icon="@Icons.Material.Filled.ZoomIn" Size="Size.Small" />
+        </div>
+
+        <div class="d-flex flex-wrap justify-center mt-2" style="gap: 8px;">
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RotateLeft" OnClick="@(() => Rotate(-90))">@L["le.rotateLeft"]</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RotateRight" OnClick="@(() => Rotate(90))">@L["le.rotateRight"]</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.RestartAlt" OnClick="Reset">@L["le.reset"]</MudButton>
+        </div>
+
+        <div class="d-flex flex-wrap justify-center align-center mt-3" style="gap: 14px;">
+            <div class="pv-seg" style="max-width: 260px;">
+                <button type="button" class="@(_bg == "clear" ? "on" : "")" @onclick="@(() => SetBg("clear"))">@L["le.clear"]</button>
+                <button type="button" class="@(_bg == "white" ? "on" : "")" @onclick="@(() => SetBg("white"))">@L["le.white"]</button>
+            </div>
+            <MudSwitch T="bool" Color="Color.Success" Size="Size.Small" Value="_round" ValueChanged="SetRound" Label="@L["le.round"]" />
+        </div>
+        @if (!_ready)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mt-2" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => Dialog.Cancel())">@L["common.cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Check"
+                   Disabled="@(!_ready)" OnClick="Use">@L["le.use"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    /// <summary>The picked image as a data URL.</summary>
+    [Parameter, EditorRequired] public string Source { get; set; } = "";
+    /// <summary>Edge length of the finished square image, in pixels.</summary>
+    [Parameter] public int OutputSize { get; set; } = 512;
+    /// <summary>image/webp (keeps transparency, small), image/png or image/jpeg.</summary>
+    [Parameter] public string Mime { get; set; } = "image/webp";
+    /// <summary>Largest data URL the caller can store; the export steps down until it fits.</summary>
+    [Parameter] public int MaxChars { get; set; } = 330_000;
+
+    private readonly string _id = "le-" + Guid.NewGuid().ToString("N")[..8];
+    private double _zoom = 1;
+    private string _bg = "clear";
+    private bool _round;
+    private bool _ready;
+    private DotNetObjectReference<LogoEditorDialog>? _self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _ready = await JS.InvokeAsync<bool>("mfLogoEdit.init", _id, Source);
+        _self = DotNetObjectReference.Create(this);
+        if (_ready) await JS.InvokeVoidAsync("mfLogoEdit.watchZoom", _id, _self);
+        StateHasChanged();
+    }
+
+    /// <summary>Mouse-wheel zoom on the canvas keeps the slider in step.</summary>
+    [JSInvokable] public void ZoomChanged(double zoom) { _zoom = zoom; StateHasChanged(); }
+
+    private async Task OnZoom(double z) { _zoom = z; await JS.InvokeVoidAsync("mfLogoEdit.zoom", _id, z); }
+    private Task Rotate(int deg) => JS.InvokeVoidAsync("mfLogoEdit.rotate", _id, deg).AsTask();
+    private async Task Reset() { _zoom = 1; await JS.InvokeVoidAsync("mfLogoEdit.reset", _id); }
+    private async Task SetBg(string mode) { _bg = mode; await JS.InvokeVoidAsync("mfLogoEdit.bg", _id, mode); }
+    private async Task SetRound(bool on) { _round = on; await JS.InvokeVoidAsync("mfLogoEdit.round", _id, on); }
+
+    private async Task Use()
+    {
+        var url = await JS.InvokeAsync<string?>("mfLogoEdit.export", _id, OutputSize, Mime, MaxChars);
+        if (string.IsNullOrEmpty(url)) return;
+        Dialog.Close(DialogResult.Ok(url));
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("mfLogoEdit.dispose", _id); } catch { }
+        _self?.Dispose();
+    }
+}

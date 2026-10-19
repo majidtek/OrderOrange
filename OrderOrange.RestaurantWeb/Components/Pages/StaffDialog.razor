@@ -43,7 +43,7 @@
             Class="mb-3" Immediate="true" MaxLength="120" />
         <div class="d-flex" style="gap: 12px;">
             <MudTextField @bind-Value="_phone" Label="@L["common.phone"]" Variant="Variant.Outlined" Margin="Margin.Dense"
-                Class="mb-3" Placeholder="+968 ..." MaxLength="40" />
+                Class="mb-3" Placeholder="@($"{OrderOrange.ClientCore.Components.PhoneField.DefaultDial} ...")" MaxLength="40" />
             <MudTextField @bind-Value="_nationalId" Label="@L["staff.idField"]" Variant="Variant.Outlined"
                 Margin="Margin.Dense" Class="mb-3" MaxLength="40" />
         </div>
@@ -63,7 +63,7 @@
                 <MudSelectItem T="int" Value="@member.UserId">@member.FullName · @member.Email</MudSelectItem>
             }
         </MudSelect>
-        <MudSwitch T="bool" @bind-Value="_isActive" Color="Color.Success" Label="@L["staff.currentlyWorking"]" />
+        <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_isActive" Label="@L["staff.currentlyWorking"]" />
 
         @if (_error is not null)
         {
@@ -88,7 +88,7 @@
     private string _nationalId = "";
     private string? _photo;
     private decimal _salary = 250.000m;
-    private DateTime? _hiredOn = DateTime.Today;
+    private DateTime? _hiredOn = Fmt.ServerToday;
     private string _notes = "";
     private bool _isActive = true;
     private bool _uploading;
@@ -150,7 +150,7 @@
             try
             {
                 var request = new SaveStaffRequest(_fullName, _role, _phone, _nationalId, _photo ?? "",
-                _salary, _hiredOn ?? DateTime.Today, _isActive, _notes, _userId > 0 ? _userId : null);
+                _salary, _hiredOn ?? Fmt.ServerToday, _isActive, _notes, _userId > 0 ? _userId : null);
                 var (ok, error) = Existing is null
                 ? await Api.CreateStaffAsync(request)
                 : await Api.UpdateStaffAsync(Existing.Id, request);

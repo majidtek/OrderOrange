@@ -249,7 +249,7 @@ else
 
     public static string Duration(DateTime at, LanguageService lang)
     {
-        var span = DateTime.Now - at;
+        var span = Fmt.ServerNow - at;
         return span.TotalHours >= 1
             ? string.Format(lang["tables.durH"], (int)span.TotalHours, span.Minutes.ToString("00"))
             : string.Format(lang["tables.durM"], Math.Max(1, (int)span.TotalMinutes));

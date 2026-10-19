@@ -1,0 +1,48 @@
+@namespace OrderOrange.ClientCore.Components
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject LanguageService Lang
+@implements IDisposable
+
+@* "A new version of the app is ready — Reload." The partner and admin apps are single pages:
+   a tab opened before a release keeps running the old code until it reloads, which is how
+   a brand-new chat line showed its raw key to Majed (2026-10-15). Every three minutes this
+   asks the server whether the framework file changed (HEAD, no body) and, once, offers a
+   reload. Needs mf-voice.js (mfUpdate). *@
+
+@code {
+    private string? _stamp;
+    private System.Threading.Timer? _timer;
+    private bool _told;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _stamp = await StampAsync();
+        if (_stamp is null) return;
+        _timer = new System.Threading.Timer(async _ => await CheckAsync(), null, 180_000, 180_000);
+    }
+
+    private async Task<string?> StampAsync()
+    {
+        try { return await JS.InvokeAsync<string?>("mfUpdate.stamp"); } catch { return null; }
+    }
+
+    private async Task CheckAsync()
+    {
+        if (_told) return;
+        var now = await StampAsync();
+        if (string.IsNullOrEmpty(now) || now == _stamp) return;
+        _told = true;
+        await InvokeAsync(() => Snackbar.Add(Lang["app.updateReady"], Severity.Info, o =>
+        {
+            o.RequireInteraction = true;
+            o.Icon = Icons.Material.Filled.SystemUpdateAlt;
+            o.Action = Lang["app.reload"];
+            o.ActionColor = Color.Primary;
+            o.OnClick = _ => JS.InvokeVoidAsync("mfUpdate.reload").AsTask();
+        }));
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

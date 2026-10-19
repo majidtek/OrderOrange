@@ -31,8 +31,8 @@
                       Lines="2" Class="mb-2" MaxLength="300" />
 
         <div class="d-flex flex-wrap" style="gap: 18px;">
-            <MudSwitch T="bool" @bind-Value="_isPaid" Color="Color.Success" Label="@L["bill.alreadyPaid"]" />
-            <MudSwitch T="bool" @bind-Value="_recurring" Color="Color.Primary" Label="@L["bill.repeats"]" />
+            <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_isPaid" Label="@L["bill.alreadyPaid"]" />
+            <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_recurring" Label="@L["bill.repeats"]" />
         </div>
         @if (_recurring)
         {
@@ -63,7 +63,7 @@
     private string _vendor = "";
     private string _reference = "";
     private decimal _amount = 10.000m;
-    private DateTime? _dueDate = DateTime.Today.AddDays(7);
+    private DateTime? _dueDate = Fmt.ServerToday.AddDays(7);
     private string _notes = "";
     private bool _isPaid;
     private bool _recurring;
@@ -91,7 +91,7 @@
         try
         {
             var request = new SaveStoreBillRequest(_category, _title, _vendor, _reference, _amount,
-                _dueDate ?? DateTime.Today, _isPaid, _recurring, _notes);
+                _dueDate ?? Fmt.ServerToday, _isPaid, _recurring, _notes);
             var (ok, error) = Existing is null
                 ? await Api.CreateBillAsync(request)
                 : await Api.UpdateBillAsync(Existing.Id, request);

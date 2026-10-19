@@ -75,7 +75,7 @@ else
                     <b>@L["svr.comments"]</b>
                     @foreach (var c in _current.Comments)
                     {
-                        <div class="cmt"><small>@c.At.ToString("dd MMM HH:mm")@(string.IsNullOrEmpty(c.Source) ? "" : $" · {c.Source}")</small><span>@c.Text</span></div>
+                        <div class="cmt"><small>@Fmt.DayMonthTime(c.At)@(string.IsNullOrEmpty(c.Source) ? "" : $" · {c.Source}")</small><span>@c.Text</span></div>
                     }
                 </div>
             }

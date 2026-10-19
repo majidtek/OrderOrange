@@ -114,9 +114,9 @@
         string.IsNullOrEmpty(s) ? "•" : s.Length <= 2 ? s : s[..2];
 
     private string ChatClock(DateTime at) =>
-        at.Date == DateTime.Today ? at.ToString("HH:mm")
-        : at.Date == DateTime.Today.AddDays(-1) ? L["qc.yesterday"]
-        : at.ToString("dd/MM/yyyy");
+        at.Date == Fmt.ServerToday ? Fmt.Time(at)
+        : at.Date == Fmt.ServerToday.AddDays(-1) ? L["qc.yesterday"]
+        : Fmt.Date(at);
 
     protected override async Task OnInitializedAsync()
     {
@@ -159,7 +159,7 @@
     private async Task StartChat(StoreTableDto table)
     {
         _newChat = false;
-        await OpenThread(new TableChatThreadDto(table.Id, table.Name, "", "store", DateTime.Now));
+        await OpenThread(new TableChatThreadDto(table.Id, table.Name, "", "store", Fmt.ServerNow));
     }
 
     public void Dispose() => _poll?.Dispose();

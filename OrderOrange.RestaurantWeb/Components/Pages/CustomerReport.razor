@@ -20,7 +20,7 @@
         <MfDateRangePicker DateFormat="yyyy-MM-dd" DateRange="_range" DateRangeChanged="OnRangeChanged"
                             Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
                             Class="rp-range" PlaceholderStart="@L["w.date"]" PlaceholderEnd="@L["w.date"]"
-                            MaxDate="DateTime.Today" />
+                            MaxDate="Fmt.ServerToday" />
         <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Info">@RangeLabel</MudChip>
         <span style="flex: 1;"></span>
         <ReportExport Title="@L["crep.title"]" Subtitle="@L["crep.sub"]" RangeLabel="@RangeLabel"
@@ -150,7 +150,7 @@
                                                 {
                                                     <tr>
                                                         <td class="strong">@order.Number</td>
-                                                        <td>@order.At.ToString("d MMM yyyy · HH:mm")</td>
+                                                        <td>@Fmt.DayMonthYearTime(order.At)</td>
                                                         <td><span class="st s-@order.Status.ToString().ToLowerInvariant()">@L["status." + order.Status]</span></td>
                                                         <td class="num strong">@Fmt.RialShort(order.Amount)</td>
                                                     </tr>
@@ -230,7 +230,7 @@
     }
 
     private string RangeLabel => _range is { Start: not null, End: not null }
-        ? $"{_range.Start:d MMM} – {_range.End:d MMM yyyy}"
+        ? $"{Fmt.DayMonth(_range.Start, shift: false)} – {Fmt.DayMonthYear(_range.End, shift: false)}"
         : _period switch
         {
             "day" => L["vis.todayHour"],

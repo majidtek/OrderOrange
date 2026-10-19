@@ -13,6 +13,7 @@
     <MudPopoverProvider />
     <MudDialogProvider />
     <MudSnackbarProvider />
+    <UpdateWatch />
     @* First visit: the customer picks a language before anything else happens. *@
     <LanguageGate />
 <SessionGate>
@@ -55,16 +56,23 @@
                     <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">@Lang["nav.dashboard"]</MudNavLink>
                     <MudNavLink Href="/orders" Icon="@Icons.Material.Filled.ReceiptLong">@Lang["nav.orders"]</MudNavLink>
                     <MudNavLink Href="/reports" Icon="@Icons.Material.Filled.Assessment">@Lang["nav.reports"]</MudNavLink>
+                    <MudNavLink Href="/partner-reports" Icon="@Icons.Material.Filled.Summarize">@Lang["ptr.title"]</MudNavLink>
                     <MudNavLink Href="/activity" Icon="@Icons.Material.Filled.Sensors">@Lang["nav.activity"]</MudNavLink>
                     <MudNavLink Href="/visitors" Icon="@Icons.Material.Filled.Dns">@Lang["nav.visitors"]</MudNavLink>
                     <MudNavLink Href="/bot-chats" Icon="@Icons.Material.Filled.Forum">@Lang["bots.title"]</MudNavLink>
                     <MudNavLink Href="/contact-messages" Icon="@Icons.Material.Filled.MarkEmailUnread">@Lang["nav.contact"] <ContactBadge /></MudNavLink>
                     <MudNavLink Href="/insights" Icon="@Icons.Material.Filled.QueryStats">@Lang["nav.insights"]</MudNavLink>
+                    <MudNavLink Href="/analyst" Icon="@Icons.Material.Filled.AutoAwesome">@Lang["analyst.title"]</MudNavLink>
+                    <MudNavLink Href="/backups" Icon="@Icons.Material.Filled.Backup">@Lang["bkp.title"]</MudNavLink>
+                    <MudNavLink Href="/settings" Icon="@Icons.Material.Filled.Settings">@Lang["set.title"]</MudNavLink>
+                    <MudNavLink Href="/disk" Icon="@Icons.Material.Filled.Storage">@Lang["dk.title"]</MudNavLink>
                     <MudNavLink Href="/chats" Icon="@Icons.Material.Filled.Forum">@Lang["nav.chats"]</MudNavLink>
                     <MudNavLink Href="/restaurants" Icon="@Icons.Material.Filled.Storefront">@Lang["admin.partners"]</MudNavLink>
                     <MudNavLink Href="/drivers" Icon="@Icons.Material.Filled.Badge">@Lang["nav.drivers"]</MudNavLink>
                     <MudNavLink Href="/users" Icon="@Icons.Material.Filled.Group">@Lang["nav.users"]</MudNavLink>
                     <MudNavLink Href="/support" Icon="@Icons.Material.Filled.SupportAgent">@Lang["nav.support"] <SupportBadge /></MudNavLink>
+                    <MudNavLink Href="/partner-chat" Icon="@Icons.Material.Filled.Forum">@Lang["pchat.title"] <PartnerChatBadge /></MudNavLink>
+                    <MudNavLink Href="/mailbox" Icon="@Icons.Material.Filled.Email">@Lang["mail.title"] <MailBadge /></MudNavLink>
                     <MudNavGroup Title="@Lang["nav.basicinfo"]" Icon="@Icons.Material.Filled.Tune" Expanded="true">
                         <MudNavLink Href="/products" Icon="@Icons.Material.Filled.MenuBook">@Lang["nav.products"]</MudNavLink>
                         <MudNavLink Href="/cuisines" Icon="@Icons.Material.Filled.Category">@Lang["nav.cuisines"]</MudNavLink>

@@ -154,7 +154,7 @@
                             <tr>
                                 <td>
                                     <div class="strong">@p.StaffName</div>
-                                    <div class="bl-sub">@L["srole." + p.Role] · @p.PaidAt.ToString("d MMM, HH:mm")</div>
+                                    <div class="bl-sub">@L["srole." + p.Role] · @Fmt.DayMonthTime(p.PaidAt)</div>
                                 </td>
                                 <td class="num">@Fmt.RialShort(p.BaseSalary)</td>
                                 <td class="num">@(p.Bonus > 0 ? (MarkupString)("+" + Fmt.RialShort(p.Bonus).Value) : (MarkupString)"—")</td>
@@ -186,12 +186,12 @@
 
 @code {
     private PayrollDto? _payroll;
-    private int _year = DateTime.Today.Year;
-    private int _month = DateTime.Today.Month;
+    private int _year = Fmt.ServerToday.Year;
+    private int _month = Fmt.ServerToday.Month;
     private bool _busy;
 
-    private string MonthLabel => new DateTime(_year, _month, 1).ToString("MMMM yyyy");
-    private bool IsCurrentMonth => _year == DateTime.Today.Year && _month == DateTime.Today.Month;
+    private string MonthLabel => Fmt.MonthYear(new DateTime(_year, _month, 1), shift: false);
+    private bool IsCurrentMonth => _year == Fmt.ServerToday.Year && _month == Fmt.ServerToday.Month;
 
     protected override Task OnInitializedAsync() => Reload();
 
@@ -204,7 +204,7 @@
     private async Task Shift(int months)
     {
         var next = new DateTime(_year, _month, 1).AddMonths(months);
-        if (next > new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)) return;
+        if (next > new DateTime(Fmt.ServerToday.Year, Fmt.ServerToday.Month, 1)) return;
         _year = next.Year;
         _month = next.Month;
         await Reload();
@@ -212,8 +212,8 @@
 
     private async Task ThisMonth()
     {
-        _year = DateTime.Today.Year;
-        _month = DateTime.Today.Month;
+        _year = Fmt.ServerToday.Year;
+        _month = Fmt.ServerToday.Month;
         await Reload();
     }
 

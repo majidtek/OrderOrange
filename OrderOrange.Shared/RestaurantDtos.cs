@@ -228,7 +228,14 @@ public record MyRestaurantDto(
     string KitchenLanguage = "",
     // What money is called on this shop's screens and printouts: "OMR", "﷼", "$".
     // Empty = the platform default.
-    string Currency = "");
+    string Currency = "",
+    // ISO 3166 country the shop trades in ("OM"); empty = never answered.
+    string Country = "",
+    // The shop's clock: IANA zone, date order (dmy|mdy|ymd) and 12/24-hour clock.
+    string TimeZone = "", string DateFormat = "", string TimeFormat = "",
+    // UTC offsets right now: the shop's zone and the server's own (every API timestamp is
+    // on the server's wall clock). Null on an older API.
+    int? StoreOffsetMinutes = null, int? ServerOffsetMinutes = null);
 
 public record QrTextRequest(string? Text);
 
@@ -312,7 +319,11 @@ public record UpdateRestaurantRequest(
     string KitchenLanguage = "",
     // What money is called on this shop's screens and printouts: "OMR", "﷼", "$".
     // Empty = the platform default.
-    string Currency = "");
+    string Currency = "",
+    // ISO 3166 country the shop trades in. Empty = leave the stored one unchanged.
+    string Country = "",
+    // The shop's clock; empty = unchanged.
+    string TimeZone = "", string DateFormat = "", string TimeFormat = "");
 
 /// <summary>A spot on the map, read from a pin or a pasted Google Maps link.</summary>
 public record MapPointDto(double Lat, double Lng);
@@ -705,7 +716,10 @@ public record PendingProductPageDto(List<PendingProductDto> Items, int Total);
 
 public record RejectProductRequest(string? Reason);
 
-/// <summary>One product's kitchen-ticket destination on the shop's till ("kitchen"/"bar").</summary>
+/// <summary>The store's change counter, from the tills' long poll (api/orders/restaurant/wait).</summary>
+public record StoreChangeDto(long Version);
+
+/// <summary>One product's kitchen-ticket destination on the shop's till ("kitchen" / "bar" / "both").</summary>
 public record PrintRouteDto(int MenuItemId, string Station);
 
 /// <summary>An amount the web POS asks the till (LocalHandler) to charge on the card terminal.</summary>

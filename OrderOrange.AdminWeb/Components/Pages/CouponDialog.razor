@@ -7,16 +7,24 @@
                       Placeholder="@L["admin.couponPh"]" />
         <div class="d-flex" style="gap: 12px;">
             <MudNumericField Margin="Margin.Dense" @bind-Value="_percent" Label="@L["admin.discountPct"]" Variant="Variant.Outlined"
-                             Min="1m" Max="100m" Class="mb-3" />
+                             Min="0m" Max="100m" Class="mb-3" />
             <MudNumericField Margin="Margin.Dense" @bind-Value="_minOrder" Label="@L["admin.minOrderOmr"]" Variant="Variant.Outlined"
                              Format="0.000" Min="0m" Step="0.500m" Class="mb-3" />
+            @* The most one order can save — e.g. 10 % but never more than 2 OMR. 0 = no limit. *@
+            <MudNumericField Margin="Margin.Dense" @bind-Value="_maxDiscount" Label="@L["admin.maxDiscountOmr"]" Variant="Variant.Outlined"
+                             Format="0.000" Min="0m" Step="0.500m" HelperText="@L["admin.zeroNoLimit"]" Class="mb-3" />
         </div>
         <div class="d-flex" style="gap: 12px;">
             <MfDatePicker Margin="Margin.Dense" @bind-Date="_expiresAt" Label="@L["admin.expiresOpt"]" Variant="Variant.Outlined"
                            Clearable="true" Class="mb-3" />
             <MudNumericField Margin="Margin.Dense" @bind-Value="_maxUses" Label="@L["admin.maxUses"]" Variant="Variant.Outlined" Min="1" Class="mb-3" />
         </div>
-        <MudSwitch T="bool" @bind-Value="_isActive" Label="@L["admin.active"]" Color="Color.Success" />
+        @* A flat discount (e.g. 1 OMR) replaces the percent when above 0; first-order-only
+           refuses customers who already have an order (Majed 2026-10-14). *@
+        <MudNumericField Margin="Margin.Dense" @bind-Value="_amount" Label="@L["admin.fixedAmount"]" Variant="Variant.Outlined"
+                         Format="0.000" Min="0m" Step="0.500m" HelperText="@L["admin.fixedHint"]" Class="mb-3" />
+        <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_firstOnly" Label="@L["admin.firstOnly"]" />
+        <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_isActive" Label="@L["admin.active"]" />
         @if (_error is not null)
         {
             <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
@@ -35,6 +43,9 @@
     private string _code = "";
     private decimal _percent = 10m;
     private decimal _minOrder = 1.000m;
+    private decimal _maxDiscount;
+    private decimal _amount;
+    private bool _firstOnly;
     private DateTime? _expiresAt;
     private int _maxUses = 100;
     private bool _isActive = true;
@@ -47,6 +58,9 @@
         _code = Existing.Code;
         _percent = Existing.Percent;
         _minOrder = Existing.MinOrder;
+        _maxDiscount = Existing.MaxDiscount;
+        _amount = Existing.Amount;
+        _firstOnly = Existing.FirstOrderOnly;
         _expiresAt = Existing.ExpiresAt;
         _maxUses = Existing.MaxUses;
         _isActive = Existing.IsActive;
@@ -58,7 +72,7 @@
         _busy = true;
         try
         {
-            var request = new SaveCouponRequest(_code, _percent, _minOrder, _expiresAt, _isActive, _maxUses);
+            var request = new SaveCouponRequest(_code, _percent, _minOrder, _expiresAt, _isActive, _maxUses, _maxDiscount, _amount, _firstOnly);
             var (ok, error) = Existing is null
                 ? await Api.CreateCouponAsync(request)
                 : await Api.UpdateCouponAsync(Existing.Id, request);

@@ -139,7 +139,7 @@
                         <div><span>@L["ig.tokenLife"]</span><b>@string.Format(L["ig.daysLeft"], _status.DaysLeft)</b></div>
                         @if (_status.LastPostAt is { } last)
                         {
-                            <div><span>@L["ig.lastPost"]</span><b>@last.ToString("dd MMM, HH:mm")</b></div>
+                            <div><span>@L["ig.lastPost"]</span><b>@Fmt.DayMonthTime(last)</b></div>
                         }
                     </div>
                     @if (_status.LastPostUrl is { Length: > 0 } url)

@@ -70,7 +70,7 @@ public static class Mapping
     }
 
     public static CouponDto ToDto(this Coupon c) =>
-        new(c.Id, c.Code, c.Percent, c.MinOrder, c.ExpiresAt, c.IsActive, c.MaxUses, c.Uses);
+        new(c.Id, c.Code, c.Percent, c.MinOrder, c.ExpiresAt, c.IsActive, c.MaxUses, c.Uses, c.MaxDiscount, c.Amount, c.FirstOrderOnly);
 
     public static CuisineDto ToDto(this Cuisine c) => new(c.Id, c.Name, c.Emoji);
 

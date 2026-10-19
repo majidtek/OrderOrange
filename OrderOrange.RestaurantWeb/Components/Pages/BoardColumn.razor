@@ -24,7 +24,7 @@
                 <span class="ob-card-num">@o.Number</span>
                 @if (o.TableName is not null)
                 {
-                    <span class="ob-tag dine">🍽️ @o.TableName</span>
+                    <span class="ob-tag dine">@(o.TableName.StartsWith("🚗") ? "" : "🍽️ ")@o.TableName</span>
                 }
                 else if (o.OrderType == OrderType.Pickup)
                 {
@@ -32,7 +32,7 @@
                 }
                 @if (o.ScheduledFor is { } scheduled)
                 {
-                    <span class="ob-tag sched">🗓️ @scheduled.ToString("dd MMM")</span>
+                    <span class="ob-tag sched">🗓️ @Fmt.DayMonth(scheduled)</span>
                 }
                 <span class="ob-card-time">@Fmt.TimeAgo(o.PlacedAt, L)</span>
             </div>

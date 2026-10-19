@@ -15,7 +15,7 @@ the counter recognises a caller, and it is what the order is filed under. *@
         <MudTextField @bind-Value="_name" Label="@L["cust.name"]" Variant="Variant.Outlined"
             Margin="Margin.Dense" Class="mb-3" Immediate="true" MaxLength="120" />
         <MudTextField @bind-Value="_phone" Label="@L["common.phone"]" Variant="Variant.Outlined"
-            Margin="Margin.Dense" Class="mb-3" Placeholder="+968 ..." MaxLength="40"
+            Margin="Margin.Dense" Class="mb-3" Placeholder="@($"{OrderOrange.ClientCore.Components.PhoneField.DefaultDial} ...")" MaxLength="40"
             Immediate="true" />
         <MudTextField @bind-Value="_address" Label="@L["cust.address"]" Variant="Variant.Outlined"
             Margin="Margin.Dense" Class="mb-3" Lines="2" MaxLength="300" />

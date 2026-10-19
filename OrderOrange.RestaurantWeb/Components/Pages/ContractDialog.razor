@@ -107,7 +107,7 @@
     private int _timesPerMonth = 10;
     private int _months = 1;
     private decimal _monthlyPrice;
-    private DateTime? _start = DateTime.Today;
+    private DateTime? _start = Fmt.ServerToday;
     private string? _note;
     private bool _busy;
 
@@ -125,7 +125,7 @@
             _lines = c.Lines.Select(l => new LineEdit { Name = l.Name, Quantity = l.Quantity, UnitPrice = l.UnitPrice }).ToList();
             if (_lines.Count == 0) _lines = [new()];
             _timesPerMonth = c.TimesPerMonth; _months = c.Months; _monthlyPrice = c.MonthlyPrice;
-            _start = AsCopy ? DateTime.Today : c.StartDate;
+            _start = AsCopy ? Fmt.ServerToday : c.StartDate;
             _note = c.Note;
             // A draft copies the TERMS; the person they are for is typed fresh.
             if (AsCopy) { _name = ""; _email = ""; _phone = ""; }
@@ -181,7 +181,7 @@
                 _lines.Where(l => !string.IsNullOrWhiteSpace(l.Name))
                       .Select(l => new ContractLineDto(l.Name.Trim(), l.Quantity, l.UnitPrice)).ToList(),
                 _timesPerMonth, _months, _monthlyPrice,
-                _start ?? DateTime.Today, _note);
+                _start ?? Fmt.ServerToday, _note);
             var (saved, error) = Existing is null || AsCopy
                 ? await Api.CreateContractAsync(req)
                 : await Api.UpdateContractAsync(Existing.Id, req);

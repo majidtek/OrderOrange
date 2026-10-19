@@ -2,6 +2,8 @@
 using OrderOrange.ApiServer.Models;
 using OrderOrange.ApiServer.Services;
 using OrderOrange.Shared;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -84,9 +86,10 @@ public class OrdersController(AppDbContext db, CatalogStore catalog, Services.Pu
             else
             {
                 var coupon = await db.Coupons.FirstOrDefaultAsync(c => c.Code == code);
-                var problem = CouponProblem(coupon, subtotal);
+                var problem = CouponProblem(coupon, subtotal)
+                              ?? await FirstOrderProblemAsync(db, coupon!, CurrentUserId);
                 if (problem is not null) return BadRequest(new { message = problem });
-                discount = Math.Round(subtotal * coupon!.Percent / 100m, 3);
+                discount = CouponDiscount(coupon!, subtotal);
                 coupon.Uses++;
                 appliedCode = coupon.Code;
             }
@@ -211,6 +214,142 @@ public class OrdersController(AppDbContext db, CatalogStore catalog, Services.Pu
             $"{order.TableName} � {order.Total:0.###} OMR", "/orders");
 
         return Ok(new { id = order.Id, number = order.Number, total = order.Total });
+    }
+
+    /// <summary>
+    /// An order from the SHOP's own QR (the poster on the counter or the door), no account
+    /// (Majed 2026-10-09: "user by scan market qr do order without login, and can enter car
+    /// plate number"). It is a pickup: the guest collects it, or stays in the car and gives a
+    /// plate so staff bring it out. Booked to the shop's walk-in customer like a table order,
+    /// priced by BuildItemsAsync so a crafted request cannot set its own prices, and capped
+    /// per address because no sign-in stands in front of it.
+    /// </summary>
+    [HttpPost("qr")]
+    [AllowAnonymous]
+    public async Task<IActionResult> PlaceQrOrder(PlaceQrOrderRequest req, [FromServices] IConfiguration config)
+    {
+        if (req.Items is not { Count: > 0 } || req.Items.Count > 40)
+            return BadRequest(new { message = "The order needs between 1 and 40 lines." });
+        if (!QrOrderGate.Allow(ClientAddress()))
+            return StatusCode(429, new { message = "Too many orders from this connection. Please ask at the counter." });
+
+        var restaurant = await db.Restaurants.Include(r => r.Cuisine)
+            .FirstOrDefaultAsync(r => r.Id == req.RestaurantId && r.IsApproved);
+        if (restaurant is null) return NotFound();
+        if (!restaurant.IsOpen)
+            return BadRequest(new { code = "srv.closed", message = "The kitchen is closed right now." });
+
+        var (items, problem, _) = await BuildItemsAsync(restaurant, req.Items, enforceWindows: true);
+        if (items is null) return BadRequest(new { message = problem });
+
+        static string Clip(string? s, int max) => (s ?? "").Trim() is var t && t.Length > max ? t[..max] : (s ?? "").Trim();
+        var plate = Clip(req.CarPlate, 20).ToUpperInvariant();
+        var name = Clip(req.GuestName, 40);
+        var phone = Clip(req.Phone, 30);
+        if (phone.Length > 0 && phone.Count(char.IsDigit) < 6)
+            return BadRequest(new { message = "Enter a valid phone number." });
+
+        var guest = name.Length > 0 ? name : plate.Length > 0 ? $"Car {plate}" : "QR guest";
+        var customer = await WalkInBook.GetOrCreateAsync(db, restaurant.Id, guest);
+
+        // The plate rides in TableName so every screen that already shows a table (orders
+        // board, kitchen display, bell, receipt) shows the car with no new column; the full
+        // contact goes in Notes, which those screens print too.
+        var note = string.Join(" · ", new[]
+        {
+            plate.Length > 0 ? $"🚗 {plate}" : "",
+            name, phone,
+            Clip(req.Notes, 300),
+        }.Where(s => s.Length > 0));
+
+        var subtotal = items.Sum(i => i.UnitPrice * i.Quantity);
+        var tax = Math.Round(subtotal * restaurant.TaxPercent / 100m, 3);
+        var order = new Order
+        {
+            CustomerId = customer.UserId,
+            RestaurantId = restaurant.Id,
+            Status = OrderStatus.Pending,
+            OrderType = OrderType.Pickup,
+            PaymentMethod = PaymentMethod.CashOnDelivery,   // paid on collection
+            DeliveryAddress = plate.Length > 0 ? $"Pickup — car {plate}" : "Pickup — QR",
+            Subtotal = subtotal,
+            DeliveryFee = 0m,
+            ServiceFee = 0m,
+            Discount = 0m,
+            TaxPercent = restaurant.TaxPercent,
+            TaxAmount = tax,
+            Total = subtotal + tax,
+            EstimatedMinutes = Pricing.EstimateMinutes(restaurant.AvgPrepMinutes),
+            TableName = plate.Length > 0 ? $"🚗 {plate}" : null,
+            Notes = note,
+            IsPaid = false,
+            PlacedAt = DateTime.Now,
+            Items = items,
+            Events = { new OrderEvent { Status = OrderStatus.Pending, At = DateTime.Now, By = guest } },
+        };
+        db.Orders.Add(order);
+        await db.SaveChangesAsync();
+        order.Number = $"MF-{1000 + order.Id}";
+        await loyalty.TryAwardAsync(db, order, CurrentUserName);
+        await db.SaveChangesAsync();
+
+        push.SendToStore(restaurant.Id, $"🛎 {order.Number}",
+            $"{(plate.Length > 0 ? $"🚗 {plate}" : "QR pickup")} · {order.Total:0.###}", "/orders");
+
+        return Ok(new { id = order.Id, number = order.Number, total = order.Total, key = GuestKey(config, order.Id) });
+    }
+
+    /// <summary>
+    /// Where a guest's QR order stands, for the "waiting for the shop to accept" screen
+    /// (Majed 2026-10-14: "when someone orders by QR and I do not accept, show waiting for
+    /// accept"). The guest has no account, so the key handed back at placement is the pass:
+    /// it opens this one order's status and nothing else — no items, no contact details.
+    /// </summary>
+    [HttpGet("qr/{id:int}/status")]
+    [AllowAnonymous]
+    public async Task<ActionResult<GuestOrderStatusDto>> QrOrderStatus(int id, string key, [FromServices] IConfiguration config)
+    {
+        if (string.IsNullOrEmpty(key) || !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(key), Encoding.UTF8.GetBytes(GuestKey(config, id))))
+            return NotFound();
+        var order = await db.Orders.AsNoTracking().Where(o => o.Id == id)
+            .Select(o => new GuestOrderStatusDto(o.Id, o.Number, o.Status, o.EstimatedMinutes, o.CancelReason))
+            .FirstOrDefaultAsync();
+        return order is null ? NotFound() : order;
+    }
+
+    private static string GuestKey(IConfiguration config, int orderId) =>
+        Convert.ToHexString(HMACSHA256.HashData(
+            Encoding.UTF8.GetBytes("guest-order:" + (config["Jwt:Key"] ?? "")),
+            Encoding.UTF8.GetBytes(orderId.ToString())))[..24].ToLowerInvariant();
+
+    /// <summary>The caller's address — Cloudflare's header first, as the visitor log does.</summary>
+    private string ClientAddress() =>
+        Request.Headers["CF-Connecting-IP"].FirstOrDefault()
+        ?? Request.Headers["X-Forwarded-For"].FirstOrDefault()?.Split(',')[0].Trim()
+        ?? HttpContext.Connection.RemoteIpAddress?.ToString() ?? "?";
+
+    /// <summary>
+    /// Anonymous QR orders, at most 12 an hour per address — enough for a family ordering
+    /// round after round, too few to flood a kitchen.
+    /// </summary>
+    private static class QrOrderGate
+    {
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<DateTime>> Seen = new();
+        public static bool Allow(string address)
+        {
+            var now = DateTime.UtcNow;
+            var list = Seen.GetOrAdd(address, _ => []);
+            lock (list)
+            {
+                list.RemoveAll(t => now - t > TimeSpan.FromHours(1));
+                if (list.Count >= 12) return false;
+                list.Add(now);
+            }
+            if (Seen.Count > 5000)
+                foreach (var key in Seen.Keys.Take(1000)) Seen.TryRemove(key, out _);
+            return true;
+        }
     }
 
     /// <summary>
@@ -540,6 +679,20 @@ public class OrdersController(AppDbContext db, CatalogStore catalog, Services.Pu
                         && o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Rejected)
             .OrderBy(o => o.PlacedAt).ToListAsync())
         .Select(o => o.ToDto()).ToList();
+
+    /// <summary>
+    /// Long poll for the shop's tills: answers the moment anything about this store's orders
+    /// or open tables changes (version grows past <paramref name="since"/>), or after ~25 s
+    /// with the unchanged version. A till that gets a new version refreshes at once.
+    /// </summary>
+    [HttpGet("restaurant/wait")]
+    [Authorize(Roles = "RestaurantOwner")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<ActionResult<StoreChangeDto>> Wait(long since = 0, CancellationToken ct = default)
+    {
+        var version = await StoreChangeNotifier.Instance.WaitAsync(CurrentRestaurantId, since, TimeSpan.FromSeconds(25), ct);
+        return new StoreChangeDto(version);
+    }
 
     [HttpGet("restaurant/history")]
     [Authorize(Roles = "RestaurantOwner")]
@@ -913,6 +1066,21 @@ public class OrdersController(AppDbContext db, CatalogStore catalog, Services.Pu
         }
         return NoContent();
     }
+
+    /// <summary>The platform coupon's discount on a subtotal: its percent, never more than its cap (0 = no cap).</summary>
+    public static decimal CouponDiscount(Coupon coupon, decimal subtotal)
+    {
+        // A flat amount replaces the percent, and never takes off more than the goods cost.
+        if (coupon.Amount > 0) return Math.Min(coupon.Amount, subtotal);
+        var discount = Math.Round(subtotal * coupon.Percent / 100m, 3);
+        return coupon.MaxDiscount > 0 ? Math.Min(discount, coupon.MaxDiscount) : discount;
+    }
+
+    /// <summary>A first-order-only coupon is refused once the customer has any order that was not cancelled.</summary>
+    internal static async Task<string?> FirstOrderProblemAsync(AppDbContext db, Coupon coupon, int userId) =>
+        coupon.FirstOrderOnly && await db.Orders.AnyAsync(o => o.CustomerId == userId && o.Status != OrderStatus.Cancelled)
+            ? "This coupon is for your first order only."
+            : null;
 
     internal static string? CouponProblem(Coupon? coupon, decimal subtotal)
     {

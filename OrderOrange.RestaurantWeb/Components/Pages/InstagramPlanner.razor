@@ -101,7 +101,7 @@
 
                         <span class="igp-lbl mt-3">@L["igp.when"]</span>
                         <div class="igp-when">
-                            <MfDatePicker @bind-Date="_date" Label="@L["igp.date"]" MinDate="DateTime.Today" Class="flex-grow-1" />
+                            <MfDatePicker @bind-Date="_date" Label="@L["igp.date"]" MinDate="Fmt.ServerToday" Class="flex-grow-1" />
                             <MfTimePicker @bind-Time="_time" Label="@L["igp.time"]" Class="flex-grow-1" />
                         </div>
                         <div class="igp-quick">
@@ -150,7 +150,7 @@
                                     }
                                 </span>
                                 <span class="body">
-                                    <b>@p.DueAt.ToString("ddd dd MMM · HH:mm")</b>
+                                    <b>@($"{Fmt.WeekdayDayMonth(p.DueAt, false)} · {Fmt.Time(p.DueAt)}")</b>
                                     <span class="cap">@Short(p.Caption)</span>
                                     @if (p.Error is { Length: > 0 } err && p.Status == "failed")
                                     {
@@ -185,8 +185,8 @@
     private MenuItemDto? _menuItem;
     private string? _photo, _error;
     private string _caption = "";
-    private DateTime? _date = DateTime.Today;
-    private TimeSpan? _time = new TimeSpan(DateTime.Now.Hour + 1, 0, 0);
+    private DateTime? _date = Fmt.ServerToday;
+    private TimeSpan? _time = new TimeSpan(Fmt.ServerNow.Hour + 1, 0, 0);
     private bool _loading = true, _busy, _uploading;
 
     private static readonly string[] Hashtags =
@@ -194,9 +194,9 @@
 
     /// <summary>The three hours a restaurant actually posts at, one tap each.</summary>
     private (string, DateTime)[] QuickSlots => [
-        (L["igp.tonight"], DateTime.Today.AddHours(19)),
-        (L["igp.tomorrowNoon"], DateTime.Today.AddDays(1).AddHours(12)),
-        (L["igp.tomorrowEve"], DateTime.Today.AddDays(1).AddHours(19)),
+        (L["igp.tonight"], Fmt.ServerToday.AddHours(19)),
+        (L["igp.tomorrowNoon"], Fmt.ServerToday.AddDays(1).AddHours(12)),
+        (L["igp.tomorrowEve"], Fmt.ServerToday.AddDays(1).AddHours(19)),
     ];
 
     private bool CanSchedule => _caption.Trim().Length > 0 && (_photo is not null || _menuItem is not null)
@@ -205,7 +205,7 @@
     private DateTime? When => _date is { } d && _time is { } t ? d.Date + t : null;
 
     private string WhenSummary => When is { } w
-        ? (w <= DateTime.Now ? L["igp.past"] : string.Format(L["igp.inTime"], Human(w - DateTime.Now)))
+        ? (w <= Fmt.ServerNow ? L["igp.past"] : string.Format(L["igp.inTime"], Human(w - Fmt.ServerNow)))
         : "";
 
     private string Human(TimeSpan span) =>
@@ -307,7 +307,7 @@
     {
         _error = null;
         if (When is not { } when) return;
-        if (when <= DateTime.Now) { _error = L["igp.past"]; return; }
+        if (when <= Fmt.ServerNow) { _error = L["igp.past"]; return; }
         _busy = true;
         try
         {

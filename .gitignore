@@ -51,3 +51,10 @@ siraj-menu/
 docs/seed/
 till-releases/
 *.pdb
+
+# publish staging folders and the guide's raw source frames (regenerated, large)
+_*tmp/
+doc-src/*.png
+doc-src/frames.json
+doc-src/src/
+

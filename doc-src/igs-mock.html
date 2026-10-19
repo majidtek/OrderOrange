@@ -1,0 +1,65 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Scheduled posts</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;width:1500px;height:760px;overflow:hidden;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#1C1712;
+       background:#FBF7F2 linear-gradient(#efe6da 1px,transparent 1px) 0 0/40px 40px,linear-gradient(90deg,#efe6da 1px,transparent 1px) 0 0/40px 40px;padding:26px 44px}
+  .head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+  h1{margin:0;font-size:26px;font-weight:800;display:flex;align-items:center;gap:10px}
+  h1 .ig{width:26px;height:26px;border-radius:7px;border:2.5px solid #E1306C;position:relative}
+  h1 .ig::after{content:"";position:absolute;inset:5px;border:2.5px solid #E1306C;border-radius:50%}
+  .sub{color:#6B5D4F;font-size:14px;margin-top:4px}
+  .now{font-weight:800;font-size:14px}
+  .grid{display:grid;grid-template-columns:1fr 560px;gap:20px;align-items:start}
+  .card{background:#fff;border:1px solid #EEE6DB;border-radius:18px;padding:20px 22px}
+  .card h3{margin:0 0 6px;font-size:16px;font-weight:800}
+  .two{display:grid;grid-template-columns:270px 1fr;gap:22px}
+  .drop{border:2px dashed #E3D9CC;border-radius:16px;height:240px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#8E8274;font-size:13px}
+  .drop b{color:#FF5A00;font-size:26px;font-weight:400}.drop strong{color:#1C1712;font-size:14px}
+  .lbl{font-size:12px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#8E8274;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .lbl b{font-size:13px;letter-spacing:0;text-transform:none;color:#1C1712}
+  .strip{display:flex;gap:8px;overflow:hidden}
+  .strip img{width:58px;height:58px;object-fit:cover;border-radius:10px;box-shadow:0 0 0 1px #EEE6DB;flex:none}
+  .bar{height:5px;border-radius:999px;background:#EEE6DB;margin:8px 0 12px;position:relative}
+  .bar i{position:absolute;left:0;top:0;bottom:0;width:36%;background:#B9AC9C;border-radius:999px}
+  .cap{border:1.5px solid #E3D9CC;border-radius:12px;height:118px;padding:12px 14px;color:#8E8274;font-size:15px}
+  .cnt{text-align:right;font-size:12px;color:#8E8274;margin:4px 0 10px}
+  .tags{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+  .tags span{border:1px solid #EEE6DB;background:#fff;border-radius:10px;padding:6px 12px;font-size:12.5px;font-weight:700}
+  .field{border:1.5px solid #D9CFC2;border-radius:12px;padding:8px 14px;margin-bottom:10px;position:relative;font-size:16px;font-weight:600}
+  .field small{position:absolute;top:-8px;left:12px;background:#fff;padding:0 4px;font-size:11px;color:#8E8274;font-weight:600}
+  .field em{position:absolute;right:14px;top:9px;font-style:normal;color:#5A4E42}
+  .quick{display:flex;gap:8px;margin:12px 0 10px}
+  .quick span{border:1px solid #FFD9BF;background:#FFF6EF;color:#C44300;border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:800}
+  .in{font-size:13px;margin-bottom:12px}
+  .btn{background:#E9E2D8;color:#A79C8E;border-radius:12px;padding:13px;text-align:center;font-weight:800;font-size:14px}
+  .plan p{margin:0 0 14px;font-size:13.5px;color:#5A4E42}
+  .plan .empty{font-size:14px}
+</style></head><body>
+<div class="head">
+  <div><h1><span class="ig"></span> Scheduled posts</h1><div class="sub">Plan a post now and OrderOrange publishes it at the hour you choose.</div></div>
+  <div class="now">➤ Post now</div>
+</div>
+<div class="grid">
+  <div class="card">
+    <div class="two">
+      <div class="drop"><b>+</b><strong>Add a photo</strong>Square looks best on Instagram</div>
+      <div>
+        <div class="lbl">Or a dish from your menu <b>🔍 All products</b></div>
+        <div class="strip"><img src="dish1.jpg"><img src="dish2.jpg"><img src="dish3.jpg"><img src="dish4.jpg"><img src="dish5.jpg"><img src="dish6.jpg"><img src="dish7.jpg"><img src="dish8.jpg"></div>
+        <div class="bar"><i></i></div>
+        <div class="cap">Caption</div>
+        <div class="cnt">0 / 2200</div>
+        <div class="tags"><span>#OrderOrange</span><span>#Oman</span><span>#Muscat</span><span>#FoodDelivery</span><span>#مسقط</span><span>#عمان</span></div>
+        <div class="lbl">When to post</div>
+        <div class="field"><small>Day</small>2026-09-19<em>▦</em></div>
+        <div class="field"><small>Time</small>13:00<em>◷</em></div>
+        <div class="quick"><span>Tonight 19:00</span><span>Tomorrow 12:00</span><span>Tomorrow 19:00</span></div>
+        <div class="in">Goes out in 31 minutes</div>
+        <div class="btn">◷ Schedule the post</div>
+      </div>
+    </div>
+  </div>
+  <div class="card plan"><h3>The plan</h3><p>Everything waiting, and what already went out.</p><div class="empty">Nothing planned yet.</div></div>
+</div>
+</body></html>

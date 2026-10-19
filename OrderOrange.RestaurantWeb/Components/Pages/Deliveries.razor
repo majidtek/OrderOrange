@@ -28,7 +28,7 @@ else
             <span class="dot"></span>
             <div>
                 <b>@L["deliv.sharingNow"]</b>
-                <small>@_sharingLabel@(_lastFix is null ? "" : $" · {_lastFix:HH:mm:ss}")</small>
+                <small>@_sharingLabel@(_lastFix is null ? "" : $" · {Fmt.TimeSeconds(_lastFix.Value)}")</small>
             </div>
             <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small" OnClick="StopSharing">
                 @L["deliv.stopShare"]
@@ -50,7 +50,7 @@ else
                     <div class="hd">
                         <span class="no">#@o.Number</span>
                         <span class="st @StatusClass(o.Status)">@L[$"status.{o.Status}"]</span>
-                        <span class="tm">@o.PlacedAt.ToString("HH:mm")</span>
+                        <span class="tm">@Fmt.Time(o.PlacedAt)</span>
                     </div>
 
                     <div class="who">
@@ -235,7 +235,7 @@ else
                     public async Task OnFix(double lat, double lng)
                     {
                         if (_sharingId is not { } id) return;
-                        _lastFix = DateTime.Now;
+                        _lastFix = Fmt.ServerNow;
                         await Api.PushCourierLocationAsync(id, lat, lng);
                         await InvokeAsync(StateHasChanged);
                     }

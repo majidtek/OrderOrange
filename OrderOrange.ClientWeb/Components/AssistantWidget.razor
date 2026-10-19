@@ -12,7 +12,11 @@
 
 @if (!_open)
 {
-    <button type="button" class="mf-bot-fab @LiftClass" title="@Lang["bot.open"]" @onclick="Open">
+    @* Opening the chat away from a store page starts the GPS request inside this very tap
+       (Majed: "ask for location first", "get user GPS location") — phones only show the
+       permission prompt for a request that begins in a gesture. Store pages never ask. *@
+    <button type="button" class="mf-bot-fab @LiftClass" title="@Lang["bot.open"]" @onclick="Open"
+            onpointerdown="if (window.mfGeo && !/^\/(p|restaurant|store|reserve|reserve-table)\//.test(location.pathname)) mfGeo.start(15000);">
         @Spark
         <span class="mf-bot-fab-badge">💬</span>
         <span class="mf-bot-fab-ring"></span>
@@ -20,7 +24,7 @@
 }
 else
 {
-    <div class="mf-bot-panel">
+    <div class="mf-bot-panel" id="mf-bot-panel">
         <div class="mf-bot-head">
             <div class="mf-bot-head-avatar">@Spark</div>
             <div class="mf-bot-head-text">
@@ -116,7 +120,7 @@ else
                                     }
                                 </div>
                             }
-                            <div class="mf-bot-text">@message.Text</div>
+                            <div class="mf-bot-text"><ChatText Text="@message.Text" /></div>
                             @if (message.Bill is { } bill)
                             {
                                 @* The confirmation receipt — a real bill, not a wall of text. *@
@@ -229,10 +233,17 @@ else
                 @if (message.FromBot && message.Chips.Count > 0 && isLast && !Bot.Busy && !asCartCard)
                 {
                     <div class="mf-bot-chips">
-                        @foreach (var chip in message.Chips)
+                        @foreach (var (chip, ci) in message.Chips.Select((c, i) => (c, i)))
                         {
                             var c = chip;
-                            <button type="button" class="mf-bot-chip" @onclick="() => OnChip(c)">@c.Label</button>
+                            @* The first chip is the step forward and reads as the page's main button;
+                               the rest are soft pills like the page's secondary buttons. *@
+                            @* "Use my location": the GPS request must START inside the tap itself or phones
+                               never show the permission prompt — the native pointerdown fires it, and the
+                               server-side call joins the same request a moment later. *@
+                            <button type="button" class="mf-bot-chip @(ci == 0 ? "primary" : "")"
+                                    onpointerdown="@(c.Payload == "act:near" ? "window.mfGeo && mfGeo.start(15000)" : null)"
+                                    @onclick="() => OnChip(c)">@c.Label</button>
                         }
                     </div>
                 }
@@ -684,27 +695,49 @@ else
     }
     .mf-bot-time { font-size: 10px; opacity: .55; margin-top: 3px; text-align: end; }
 
+    /* ── Chips: real buttons, in the page's own language (Majed 2026-10-01: "make the
+       buttons in chatbot like page better"). The first one is the step forward and wears
+       the brand gradient like the page's primary button; the others are the soft tinted
+       pills the cart card already uses. Finger-sized, with a press, no thin outlines. ── */
     .mf-bot-chips {
         display: flex;
         flex-wrap: wrap;
-        gap: 6px;
-        margin-block: -2px 12px;
+        gap: 8px;
+        margin-block: 0 14px;
         margin-inline-start: 35px; /* logical: aligns under the bot bubble in RTL too */
     }
     .mf-bot-row.mine + .mf-bot-chips { margin-inline-start: 0; }
     .mf-bot-chip {
-        border: 1.5px solid rgba(255, 90, 0, .45);
-        background: var(--mud-palette-surface, #fff);
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        min-height: 40px;
+        border: none;
+        background: #FFF3EA;
         color: #E04E00;
-        border-radius: 999px;
-        padding: 6px 13px;
-        font-size: 12.8px;
-        font-weight: 700;
+        border-radius: 14px;
+        padding: 9px 16px;
+        font-size: 13.5px;
+        font-weight: 800;
+        font-family: inherit;
+        line-height: 1.2;
         cursor: pointer;
-        transition: background .12s ease, color .12s ease;
+        box-shadow: inset 0 0 0 1px rgba(255, 90, 0, .10);
+        transition: transform .12s ease, box-shadow .15s ease, background .15s ease, color .15s ease;
         unicode-bidi: plaintext;  /* mixed-language labels render sanely in RTL */
+        -webkit-tap-highlight-color: transparent;
     }
-    .mf-bot-chip:hover { background: #FF5A00; color: #fff; }
+    .mf-bot-chip:hover { background: #FFE6D6; }
+    .mf-bot-chip:active { transform: scale(.97); }
+    .mf-bot-chip:focus-visible { outline: 3px solid rgba(255, 90, 0, .35); outline-offset: 2px; }
+    .mf-bot-chip.primary {
+        background: linear-gradient(135deg, #FF5A00, #FF8A3D);
+        color: #fff;
+        box-shadow: 0 4px 12px rgba(255, 90, 0, .32);
+    }
+    .mf-bot-chip.primary:hover { background: linear-gradient(135deg, #F25300, #FF7A24); box-shadow: 0 6px 16px rgba(255, 90, 0, .38); }
+    @@media (prefers-color-scheme: dark) {
+        .mf-bot-chip { background: rgba(255, 90, 0, .14); color: #FFB08A; box-shadow: inset 0 0 0 1px rgba(255, 138, 61, .25); }
+        .mf-bot-chip:hover { background: rgba(255, 90, 0, .22); }
+    }
 
     .mf-bot-typing { display: flex; gap: 4px; padding: 12px 14px; }
     .mf-bot-typing span {
@@ -836,7 +869,9 @@ else
                             ?? context.Connection.RemoteIpAddress?.ToString();
         }
         Bot.Page = Nav.ToBaseRelativePath(Nav.Uri) is { Length: > 0 } rel ? "/" + rel : "/";
+        Bot.CurrentStoreId = OrderBot.StoreIdFromPath(Bot.Page);
         Bot.Changed += OnBotChanged;
+        Bot.NavigateRequested += OnNavigateRequested;
         Lang.Changed += OnLangChanged;
         Nav.LocationChanged += OnLocationChanged;
         Cart.Changed += OnCartChanged;
@@ -848,7 +883,7 @@ else
     {
         _open = true;
         _draft = "";   // the old input element is gone; never ghost-send stale text
-        Bot.Start();
+        _ = Bot.StartAsync();   // greets at once; names the store once its card arrives
     }
 
     private void Close() => _open = false;
@@ -888,14 +923,33 @@ else
 
     private void OnLangChanged() => _ = InvokeAsync(StateHasChanged);
 
+    /// <summary>An "Open" chip from the assistant: site paths navigate in place, full links go to a new tab via a hard navigation.</summary>
+    private void OnNavigateRequested(string url)
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (url.StartsWith('/')) Nav.NavigateTo(url);
+            else Nav.NavigateTo(url, forceLoad: true);
+        });
+    }
+
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         Bot.Page = Nav.ToBaseRelativePath(Nav.Uri) is { Length: > 0 } moved ? "/" + moved : "/";
+        Bot.CurrentStoreId = OrderBot.StoreIdFromPath(Bot.Page);
         _ = InvokeAsync(StateHasChanged);
     }
 
+    private bool _viewportWatched;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // Phone keyboard up: pin the panel to the visible viewport so the title stays.
+        if (_open && !_viewportWatched)
+        {
+            _viewportWatched = true;
+            try { await JS.InvokeVoidAsync("mfBotVp.watch", "mf-bot-panel"); } catch { /* older script cached — CSS still applies */ }
+        }
         // Scroll only when the conversation actually grew — not on every
         // keystroke re-render, which would fight the user reading history.
         var count = Bot.Messages.Count + (Bot.Busy ? 1 : 0);
@@ -909,6 +963,7 @@ else
     public void Dispose()
     {
         Bot.Changed -= OnBotChanged;
+        Bot.NavigateRequested -= OnNavigateRequested;
         Lang.Changed -= OnLangChanged;
         Nav.LocationChanged -= OnLocationChanged;
         Cart.Changed -= OnCartChanged;

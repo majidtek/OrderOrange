@@ -77,7 +77,7 @@ else
                     <span>@string.Format(L["cust.orders"], customer.OrderCount)</span>
                     @if (customer.LastOrderAt is { } last)
                     {
-                        <span>· @string.Format(L["cust.lastOrder"], last.ToString("dd MMM"))</span>
+                        <span>· @string.Format(L["cust.lastOrder"], Fmt.DayMonth(last))</span>
                     }
                 </div>
 

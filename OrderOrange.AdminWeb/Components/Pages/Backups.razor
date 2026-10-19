@@ -1,0 +1,185 @@
+@page "/backups"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+@implements IDisposable
+
+@* Admin → Backups (Majed 2026-10-14: "in admin panel add page, I can do backup any time I
+   want"). One big button takes a backup now — SQL + MongoDB in one zip — whether or not the
+   hourly schedule is on; every zip in the folder is listed with a download button. The
+   schedule itself lives in Settings → Backups. *@
+
+<PageTitle>Admin — Backups</PageTitle>
+<PageHeader Title="@L["bkp.title"]" Subtitle="@L["bkp.sub"]" />
+
+<div class="bkp-page">
+    @if (_status is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (string.IsNullOrWhiteSpace(_status.Folder))
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl">
+            <MudText Typo="Typo.h6" Class="mb-1">📁 @L["bkp.noFolder"]</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">@L["bk.folderHint"]</MudText>
+            <div class="d-flex flex-wrap align-center" style="gap: 10px;">
+                <MudTextField @bind-Value="_folder" Placeholder="C:\OrderOrangeBackups" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mf-ltr" Style="min-width: 280px;" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" Disabled="_busy" OnClick="SaveFolder">@L["common.save"]</MudButton>
+            </div>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4 bkp-hero">
+            <div class="bkp-now">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" StartIcon="@Icons.Material.Filled.Backup"
+                           Disabled="@(_busy || _status.Running)" OnClick="RunNow" Class="bkp-btn">
+                    @(_status.Running ? L["bkp.running"] : L["bk.runNow"])
+                </MudButton>
+                <div class="bkp-info">
+                    @if (_status.Running)
+                    {
+                        <div class="d-flex align-center" style="gap: 8px;">
+                            <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" />
+                            <b>@(_status.Step switch { "sql" => L["bkp.stepSql"], "zip" => L["bkp.stepZip"], "mongo" => L["bkp.stepMongo"], _ => L["bkp.running"] })</b>
+                        </div>
+                    }
+                    else if (_status.LastRunAt is { } last)
+                    {
+                        <div class="@(_status.LastOk ? "ok" : "bad")">
+                            @(_status.LastOk ? "✅" : "⚠️") <b>@Fmt.DateTimeText(last, shift: false)</b> · @_status.LastMessage
+                        </div>
+                    }
+                    <div class="dk">@L["bk.folderUse"]: <b class="mf-ltr">@HumanSize(_status.FolderBytes)</b> · @L["bk.free"]: <b class="mf-ltr">@(_status.FreeBytes >= 0 ? HumanSize(_status.FreeBytes) : "—")</b> · <span class="mf-ltr">@_status.Folder</span></div>
+                    <div class="dk">@(_status.Enabled ? string.Format(L["bkp.auto"], _status.IntervalHours) : L["bkp.autoOff"]) — <a href="/settings">@L["set.title"]</a></div>
+                </div>
+            </div>
+        </MudPaper>
+
+        <MudText Typo="Typo.subtitle1" Style="font-weight: 800;" Class="mb-2">@L["bkp.list"] (@(_files?.Count ?? 0))</MudText>
+        @if (_files is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_files.Count == 0)
+        {
+            <EmptyState Emoji="🗄️" Title="@L["bkp.none"]" />
+        }
+        else
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow-x: auto;">
+                @foreach (var f in _files)
+                {
+                    var file = f;
+                    <div class="bkp-row">
+                        <MudIcon Icon="@Icons.Material.Filled.FolderZip" Color="@(file.Kind == "full" ? Color.Primary : Color.Default)" />
+                        <div class="nm">
+                            <b class="mf-ltr">@file.Name</b>
+                            <span>@Fmt.DateTimeText(file.CreatedAt, shift: false) · @(file.Kind == "full" ? L["bkp.full"] : file.Kind == "diff" ? L["bkp.diff"] : "")</span>
+                        </div>
+                        <span class="sz mf-ltr">@HumanSize(file.Bytes)</span>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Download"
+                                   Disabled="@(_downloading == file.Name)" OnClick="@(() => Download(file.Name))">@L["bkp.download"]</MudButton>
+                    </div>
+                }
+            </MudPaper>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["bk.restoreHint"]</MudText>
+        }
+    }
+</div>
+
+<style>
+    .bkp-page { max-width: 1000px; margin-inline: auto; }
+    .bkp-now { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+    .bkp-btn { min-height: 56px; padding: 0 28px !important; font-size: 16px !important; border-radius: 16px !important; }
+    .bkp-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; flex: 1; }
+    .bkp-info .ok, .bkp-info .bad { font-size: 13.5px; }
+    .bkp-info .bad { color: #C62828; }
+    .bkp-info .dk { font-size: 12.5px; color: var(--mud-palette-text-secondary); overflow-wrap: anywhere; }
+    .bkp-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--mud-palette-lines-default); min-width: 520px; }
+    .bkp-row:last-child { border-bottom: 0; }
+    .bkp-row .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .bkp-row .nm b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bkp-row .nm span { font-size: 12px; color: var(--mud-palette-text-secondary); }
+    .bkp-row .sz { font-weight: 700; font-size: 13px; white-space: nowrap; }
+</style>
+
+@code {
+    private BackupStatusDto? _status;
+    private List<BackupFileDto>? _files;
+    private string _folder = @"C:\OrderOrangeBackups";
+    private bool _busy;
+    private string? _downloading;
+    private bool _wasRunning;
+    private Timer? _poll;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+        // While a backup runs, follow it; when it finishes, refresh the list.
+        _poll = new Timer(async _ =>
+        {
+            if (_status is not { Running: true } && !_wasRunning) return;
+            await InvokeAsync(async () =>
+            {
+                var before = _wasRunning;
+                _status = await Api.GetBackupStatusAsync() ?? _status;
+                _wasRunning = _status?.Running == true;
+                if (before && !_wasRunning) _files = await Api.GetBackupFilesAsync() ?? [];
+                StateHasChanged();
+            });
+        }, null, 3000, 3000);
+    }
+
+    private async Task Load()
+    {
+        _status = await Api.GetBackupStatusAsync();
+        _wasRunning = _status?.Running == true;
+        if (!string.IsNullOrWhiteSpace(_status?.Folder)) _files = await Api.GetBackupFilesAsync() ?? [];
+    }
+
+    private async Task SaveFolder()
+    {
+        if (_status is null) return;
+        _busy = true;
+        var (ok, error) = await Api.SaveBackupSettingsAsync(new BackupSettingsRequest(_status.Enabled, (_folder ?? "").Trim(), _status.IntervalHours, _status.KeepHours));
+        _busy = false;
+        if (!ok) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+        Snackbar.Add(L["bk.saved"], Severity.Success);
+        await Load();
+    }
+
+    private async Task RunNow()
+    {
+        _busy = true;
+        var (ok, error) = await Api.RunBackupNowAsync();
+        _busy = false;
+        if (!ok) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+        Snackbar.Add(L["bkp.started"], Severity.Info);
+        _wasRunning = true;
+        await Task.Delay(700);
+        _status = await Api.GetBackupStatusAsync() ?? _status;
+    }
+
+    /// <summary>Asks for a 10-minute link and lets the browser download the zip itself.</summary>
+    private async Task Download(string name)
+    {
+        _downloading = name;
+        var (link, error) = await Api.GetBackupLinkAsync(name);
+        _downloading = null;
+        if (link is null) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+        var url = Api.ApiBase.TrimEnd('/') + "/" + link.Url.TrimStart('/');
+        await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    private static string HumanSize(long bytes) => bytes switch
+    {
+        <= 0 => "0",
+        < 1024 * 1024 => $"{bytes / 1024d:0} KB",
+        < 1024L * 1024 * 1024 => $"{bytes / 1024d / 1024:0.0} MB",
+        _ => $"{bytes / 1024d / 1024 / 1024:0.00} GB",
+    };
+
+    public void Dispose() => _poll?.Dispose();
+}

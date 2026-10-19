@@ -8,6 +8,34 @@ using MongoDB.Driver;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Public HTTPS endpoints that load a store certificate by subject (Https = till port 8500 /
+// staging 8600, McpHttps = staging 8443) serve the newest certificate whose private key this
+// process can USE — see UsableCertificate for the 2026-10-06 renewal that broke them.
+// The loopback endpoint (oo-loopback) is left exactly as configured.
+builder.WebHost.ConfigureKestrel((ctx, kestrel) =>
+{
+    var section = ctx.Configuration.GetSection("Kestrel");
+    var loader = kestrel.Configure(section, reloadOnChange: false);
+    foreach (var name in new[] { "Https", "McpHttps" })
+    {
+        var cert = section.GetSection($"Endpoints:{name}:Certificate");
+        var subject = cert["Subject"];
+        if (string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(cert["Store"])) continue;
+        var storeName = cert["Store"]!;
+
+        var location = string.Equals(cert["Location"], "CurrentUser", StringComparison.OrdinalIgnoreCase)
+            ? System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser
+            : System.Security.Cryptography.X509Certificates.StoreLocation.LocalMachine;
+        loader.Endpoint(name, ep =>
+        {
+            var configured = ep.HttpsOptions.ServerCertificate;
+            ep.HttpsOptions.ServerCertificateSelector = (_, _) =>
+                UsableCertificate.Get(subject, storeName, location) ?? configured;
+
+        });
+    }
+});
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("Default")));
@@ -43,10 +71,20 @@ builder.Services.AddSingleton<PromotionStore>();
 builder.Services.AddScoped<OrderOrange.ApiServer.Services.PromotionEngine>();   // reads the order book, so it rides the request's DbContext
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.TableChatStore>();
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.CommunityChatStore>();
+builder.Services.AddSingleton<OrderOrange.ApiServer.Services.AdminChatStore>();
+// The admin mailbox (info@): IMAP/SMTP client plus the new-mail watcher behind the admin bell.
+// Keeps the SQL search mirror of every store's Mongo menu current — search, the assistant and
+// the sitemap read it (reconciles at startup and every 6 h; catalog writes touch it at once).
+builder.Services.AddSingleton<OrderOrange.ApiServer.Services.MenuSearchMirror>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<OrderOrange.ApiServer.Services.MenuSearchMirror>());
+builder.Services.AddSingleton<OrderOrange.ApiServer.Services.MailboxService>();
+builder.Services.AddSingleton<OrderOrange.ApiServer.Services.MailWatcher>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<OrderOrange.ApiServer.Services.MailWatcher>());
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.AdminAlertStore>();
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.BotChatStore>();
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.KdsStore>();
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.StorePrefsStore>();
+builder.Services.AddSingleton<OrderOrange.ApiServer.Services.KitchenDesignStore>();   // partner designer → kitchen ticket
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.WasteStore>();
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.WarehouseStore>();
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.LoyaltyStore>();
@@ -61,6 +99,15 @@ builder.Services.AddSingleton<OrderOrange.ApiServer.Services.InstagramQueueStore
 // Planned posts go out on their own minute, with each store's own token.
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.InstagramGraph>();
 builder.Services.AddHostedService<OrderOrange.ApiServer.Services.InstagramScheduler>();
+// Admin Settings → Backups: SQL (daily full + hourly differential) and Mongo dumps to a folder.
+builder.Services.AddSingleton<OrderOrange.ApiServer.Services.BackupRunner>();
+builder.Services.AddHostedService<OrderOrange.ApiServer.Services.BackupScheduler>();
+// Admin → Disk space: drive usage, folder sizes and fixed cleanups.
+builder.Services.AddSingleton<OrderOrange.ApiServer.Services.DiskManager>();
+// The language model behind the customer assistant (Grok:ApiKey empty = rule-based bot only).
+builder.Services.AddHttpClient("grok", c => c.Timeout = TimeSpan.FromSeconds(45));
+builder.Services.AddHttpClient("grok-analyst", c => c.Timeout = TimeSpan.FromSeconds(180));   // tool round-trips take a while
+builder.Services.AddSingleton<OrderOrange.ApiServer.Services.GrokAssistant>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]!;
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -99,6 +146,10 @@ OrderOrange.Shared.TableCode.UseSecret(builder.Configuration["Bill:Secret"]);
 OrderOrange.Shared.ContractCode.UseSecret(builder.Configuration["Bill:Secret"]);
 
 var app = builder.Build();
+
+// Every catalog write nudges the search mirror for that store (debounced inside).
+app.Services.GetRequiredService<CatalogStore>().Changed =
+    id => app.Services.GetRequiredService<OrderOrange.ApiServer.Services.MenuSearchMirror>().Touch(id);
 
 // "dotnet run -- --test-email you@example.com" — proves the SMTP settings work before a
 // customer is the one who discovers they don't. Sends a real message and says exactly
@@ -189,6 +240,12 @@ using (var scope = app.Services.CreateScope())
                 ALTER TABLE dbo.StoreTabLines ADD AddedAt datetime2 NOT NULL CONSTRAINT DF_StoreTabLines_AddedAt DEFAULT '2000-01-01';
             IF COL_LENGTH('dbo.StoreTabLines','Source') IS NULL
                 ALTER TABLE dbo.StoreTabLines ADD Source nvarchar(8) NULL;
+            IF COL_LENGTH('dbo.Coupons','Amount') IS NULL
+                ALTER TABLE dbo.Coupons ADD Amount decimal(18,3) NOT NULL CONSTRAINT DF_Coupons_Amount DEFAULT 0;
+            IF COL_LENGTH('dbo.Coupons','FirstOrderOnly') IS NULL
+                ALTER TABLE dbo.Coupons ADD FirstOrderOnly bit NOT NULL CONSTRAINT DF_Coupons_FirstOrderOnly DEFAULT 0;
+            IF COL_LENGTH('dbo.Coupons','MaxDiscount') IS NULL
+                ALTER TABLE dbo.Coupons ADD MaxDiscount decimal(18,3) NOT NULL CONSTRAINT DF_Coupons_MaxDiscount DEFAULT 0;
             IF COL_LENGTH('dbo.Restaurants','KitchenLanguage') IS NULL
                 ALTER TABLE dbo.Restaurants ADD KitchenLanguage nvarchar(8) NOT NULL CONSTRAINT DF_Restaurants_KitchenLanguage DEFAULT '';
             """);
@@ -394,6 +451,8 @@ static string BeatApp(HttpContext ctx)
 
 app.UseAuthorization();
 app.MapControllers();
+// Model Context Protocol server (+ REST mirror) for language models and agents: /mcp, /api/mcp/*
+OrderOrange.ApiServer.Mcp.McpEndpoint.MapMcp(app);
 
 app.Run();
 

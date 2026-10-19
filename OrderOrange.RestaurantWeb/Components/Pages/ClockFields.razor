@@ -1,0 +1,54 @@
+@inject LanguageService L
+
+@* The shop's clock: time zone (searchable, with its UTC offset), date order and 12/24-hour
+   clock. Shared by the post-registration dialog and Settings. *@
+
+<div class="@Class">
+    <MudAutocomplete T="TimeZoneOptionDto" Value="@_zone" ValueChanged="OnZone"
+                     SearchFunc="SearchZones" ToStringFunc="@(z => z?.Label ?? "")"
+                     Label="@L["region.timezone"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                     MaxItems="null" CoerceText="true" Strict="true" ResetValueOnEmptyText="false"
+                     AdornmentIcon="@Icons.Material.Filled.Schedule" Adornment="Adornment.End" MaxHeight="320" Class="mb-3" />
+    <div class="d-flex flex-wrap" style="gap: 12px;">
+        <MudSelect T="string" Value="DateFormat" ValueChanged="OnDate" Label="@L["region.dateFormat"]"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 170px; flex: 1;">
+            <MudSelectItem T="string" Value="@("dmy")">31/12/2026</MudSelectItem>
+            <MudSelectItem T="string" Value="@("mdy")">12/31/2026</MudSelectItem>
+            <MudSelectItem T="string" Value="@("ymd")">2026-12-31</MudSelectItem>
+        </MudSelect>
+        <MudSelect T="string" Value="TimeFormat" ValueChanged="OnTime" Label="@L["region.timeFormat"]"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 170px; flex: 1;">
+            <MudSelectItem T="string" Value="@("24")">@L["region.h24"] · 14:05</MudSelectItem>
+            <MudSelectItem T="string" Value="@("12")">@L["region.h12"] · 2:05 PM</MudSelectItem>
+        </MudSelect>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string TimeZone { get; set; } = "";
+    [Parameter] public EventCallback<string> TimeZoneChanged { get; set; }
+    [Parameter] public string DateFormat { get; set; } = "dmy";
+    [Parameter] public EventCallback<string> DateFormatChanged { get; set; }
+    [Parameter] public string TimeFormat { get; set; } = "24";
+    [Parameter] public EventCallback<string> TimeFormatChanged { get; set; }
+    [Parameter] public List<TimeZoneOptionDto> Zones { get; set; } = [];
+    [Parameter] public string? Class { get; set; }
+
+    private TimeZoneOptionDto? _zone => Zones.FirstOrDefault(z => z.Id == TimeZone);
+
+    private Task<IEnumerable<TimeZoneOptionDto>> SearchZones(string? text, CancellationToken _)
+    {
+        var q = (text ?? "").Trim();
+        if (q.Length == 0 || Zones.Any(z => z.Label == q)) return Task.FromResult(Zones.AsEnumerable());
+        var folded = q.Replace(' ', '_');
+        // "Muscat", "Dubai", "+04", or a country name typed in any of its forms.
+        var countryZones = StoreRegions.All.Where(r => r.Name.Contains(q, StringComparison.OrdinalIgnoreCase) || r.Native.Contains(q, StringComparison.OrdinalIgnoreCase))
+            .SelectMany(r => r.TimeZones).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return Task.FromResult(Zones.Where(z =>
+            z.Id.Contains(folded, StringComparison.OrdinalIgnoreCase) || z.Label.Contains(q, StringComparison.OrdinalIgnoreCase) || countryZones.Contains(z.Id)));
+    }
+
+    private Task OnZone(TimeZoneOptionDto? z) => z is null ? Task.CompletedTask : TimeZoneChanged.InvokeAsync(z.Id);
+    private Task OnDate(string v) => DateFormatChanged.InvokeAsync(v);
+    private Task OnTime(string v) => TimeFormatChanged.InvokeAsync(v);
+}

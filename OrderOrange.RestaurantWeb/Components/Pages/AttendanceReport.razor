@@ -57,7 +57,7 @@ else
                         <b>@(leave.StaffName ?? leave.UserName)</b>
                         <span>@LeaveSpan(leave)</span>
                         @if (!string.IsNullOrEmpty(leave.Reason)) { <small>“@leave.Reason”</small> }
-                        <small class="when">@string.Format(L["lv.askedAt"], leave.RequestedAt.ToString("d MMM HH:mm"))</small>
+                        <small class="when">@string.Format(L["lv.askedAt"], Fmt.DayMonthTime(leave.RequestedAt))</small>
                     </div>
                     <div class="acts">
                         <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" Disabled="_busy"
@@ -124,10 +124,10 @@ else
                         @foreach (var r in _report.Rows)
                         {
                             <tr class="@(r.OutAt is null ? "open" : "")">
-                                <td><b data-date="@r.InAt.ToString("ddd d MMM")">@(r.StaffName ?? r.UserName)</b></td>
-                                <td>@r.InAt.ToString("ddd d MMM")</td>
+                                <td><b data-date="@Fmt.WeekdayDayMonth(r.InAt, longWeekday: false)">@(r.StaffName ?? r.UserName)</b></td>
+                                <td>@Fmt.WeekdayDayMonth(r.InAt, longWeekday: false)</td>
                                 <td class="io-cell">
-                                    <div class="io"><span class="t">@r.InAt.ToString("HH:mm")</span>@LocChip(r.StaffName ?? r.UserName, r.InAt, r.InLat, r.InLng, r.InAccuracy, r.InDistanceM)</div>
+                                    <div class="io"><span class="t">@Fmt.Time(r.InAt)</span>@LocChip(r.StaffName ?? r.UserName, r.InAt, r.InLat, r.InLng, r.InAccuracy, r.InDistanceM)</div>
                                 </td>
                                 <td class="io-cell">
                                     @if (r.OutAt is null)
@@ -136,7 +136,7 @@ else
                                     }
                                     else
                                     {
-                                        <div class="io"><span class="t">@r.OutAt.Value.ToString("HH:mm")</span>@LocChip(r.StaffName ?? r.UserName, r.OutAt.Value, r.OutLat, r.OutLng, r.OutAccuracy, r.OutDistanceM)</div>
+                                        <div class="io"><span class="t">@Fmt.Time(r.OutAt.Value)</span>@LocChip(r.StaffName ?? r.UserName, r.OutAt.Value, r.OutLat, r.OutLng, r.OutAccuracy, r.OutDistanceM)</div>
                                     }
                                 </td>
                                 <td class="num">@r.Hours.ToString("0.0")</td>
@@ -186,7 +186,7 @@ else
         <div class="tm-sheet att-map-sheet" @onclick:stopPropagation="true">
             <div class="head">
                 <span class="ic"><MudIcon Icon="@Icons.Material.Filled.Place" /></span>
-                <b>@map.Who · @map.At.ToString("ddd d MMM HH:mm")</b>
+                <b>@map.Who · @Fmt.WeekdayDayMonth(map.At, longWeekday: false) @Fmt.Time(map.At)</b>
             </div>
             <div class="att-map-meta">
                 @if (map.DistanceM is double d)
@@ -222,13 +222,13 @@ else
 
     private (DateTime from, DateTime to) Period => _range switch
     {
-        "month" => (new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1), DateTime.Today),
-        "last" => (new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-1), new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1)),
+        "month" => (new DateTime(Fmt.ServerToday.Year, Fmt.ServerToday.Month, 1), Fmt.ServerToday),
+        "last" => (new DateTime(Fmt.ServerToday.Year, Fmt.ServerToday.Month, 1).AddMonths(-1), new DateTime(Fmt.ServerToday.Year, Fmt.ServerToday.Month, 1).AddDays(-1)),
         "custom" when _custom is { Start: { } s, End: { } e } => (s, e),
-        _ => (DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek), DateTime.Today),
+        _ => (Fmt.ServerToday.AddDays(-(int)Fmt.ServerToday.DayOfWeek), Fmt.ServerToday),
     };
 
-    private string RangeLabel => $"{Period.from:d MMM} – {Period.to:d MMM yyyy}";
+    private string RangeLabel => $"{Fmt.DayMonth(Period.from, shift: false)} – {Fmt.DayMonthYear(Period.to, shift: false)}";
 
     protected override async Task OnInitializedAsync() => await Load();
 
@@ -252,8 +252,8 @@ else
     private async Task SetUser(int userId) { _userId = userId; await Load(); }
 
     private string LeaveSpan(LeaveDto lv) => lv.Kind == "hourly"
-        ? $"{lv.From:ddd d MMM} · {lv.From:HH:mm}–{lv.To:HH:mm} ({lv.Hours:0.#} {L["att.h"]})"
-        : $"{lv.From:ddd d MMM} – {lv.To:ddd d MMM} ({lv.Days} {L["att.days"]})";
+        ? $"{Fmt.WeekdayDayMonth(lv.From, longWeekday: false, shift: false)} · {Fmt.Time(lv.From, shift: false)}–{Fmt.Time(lv.To, shift: false)} ({lv.Hours:0.#} {L["att.h"]})"
+        : $"{Fmt.WeekdayDayMonth(lv.From, longWeekday: false, shift: false)} – {Fmt.WeekdayDayMonth(lv.To, longWeekday: false, shift: false)} ({lv.Days} {L["att.days"]})";
 
     /// <summary>Approve or reject, with an optional line the person will read.</summary>
     private async Task Decide(LeaveDto leave, bool approve)

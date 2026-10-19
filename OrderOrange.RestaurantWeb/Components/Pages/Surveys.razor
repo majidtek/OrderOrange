@@ -66,7 +66,7 @@ else
             </div>
 
             <MudTextField @bind-Value="_title" Label="@L["sv.name"]" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="120" />
-            <MudSwitch T="bool" @bind-Value="_active" Color="Color.Success" Size="Size.Small" Label="@L["sv.activeSwitch"]" />
+            <MudSwitch Color="Color.Success" T="bool" @bind-Value="_active" Size="Size.Small" Label="@L["sv.activeSwitch"]" />
 
             @for (var qi = 0; qi < _questions.Count; qi++)
             {
@@ -95,7 +95,7 @@ else
                             {
                                 <button type="button" class="add" @onclick="@(() => q.Options.Add(""))">＋ @L["sv.addOption"]</button>
                             }
-                            <MudSwitch T="bool" @bind-Value="q.Multi" Color="Color.Primary" Size="Size.Small" Label="@L["sv.multi"]" />
+                            <MudSwitch Color="Color.Success" T="bool" @bind-Value="q.Multi" Size="Size.Small" Label="@L["sv.multi"]" />
                         </div>
                     </div>
                 </div>
@@ -153,7 +153,7 @@ else
                     <b>@L["sv.comments"]</b>
                     @foreach (var c in _results.Comments)
                     {
-                        <div class="cmt"><small>@c.At.ToString("dd MMM HH:mm")@(string.IsNullOrEmpty(c.Source) ? "" : $" · {c.Source}")</small><span>@c.Text</span></div>
+                        <div class="cmt"><small>@Fmt.DayMonthTime(c.At)@(string.IsNullOrEmpty(c.Source) ? "" : $" · {c.Source}")</small><span>@c.Text</span></div>
                     }
                 </div>
             }

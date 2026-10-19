@@ -1,0 +1,215 @@
+@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+
+@* "Where is your business?" — asked once, right after a business is opened (Majed
+   2026-10-02: "after registration show dialog to select country and currency"). The
+   country suggests the currency; the owner can still pick or type another symbol, the
+   same freedom Settings gives. Both can be changed later in Settings.
+   Step 2 (Majed 2026-10-09): the business name (English required) and an optional mobile
+   and landline, both starting on the country picked in step 1. *@
+
+<MudDialog Class="rg-region" ContentClass="pt-1">
+    <TitleContent>
+        <div class="d-flex align-center" style="gap: 10px;">
+            <Flag Region="_country" Width="36" />
+            <div>
+                <MudText Typo="Typo.h6" Class="mb-0">@(_step == 1 ? L["region.title"] : L["region.detailsTitle"])</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@(_step == 1 ? L["region.sub"] : L["region.detailsSub"])</MudText>
+            </div>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (_step == 2)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mb-2">@L["partner.storeName"]</MudText>
+            <StoreNameFields @bind-Value="_names" />
+            @* The category — never pre-filled (Majed 2026-10-15: "do not make this default,
+               user has to set it after register"). A vertical store has exactly one, so that
+               one is already chosen; a restaurant picks its cuisine here. *@
+            @if (_choices.Count > 1)
+            {
+                <div class="mt-4">
+                    <CuisinePicker @bind-Value="_cuisineId" Label="@L["w.category"]" Choices="@_choices" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@L["region.pickCategory"]</MudText>
+                </div>
+            }
+            <div class="mt-4 d-flex flex-column" style="gap: 12px;">
+                <PhoneField @bind-Value="_mobile" DefaultCountry="@(_country?.Code)" Label="@($"{L["rg.mobile"]} — {L["nm.optional"]}")" />
+                <PhoneField @bind-Value="_phone" DefaultCountry="@(_country?.Code)" Label="@($"{L["common.phone"]} — {L["nm.optional"]}")" />
+            </div>
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+            }
+        }
+        else
+        {
+        <CountryPicker Value="@(_country?.Code)" ValueChanged="OnCountry" Label="@L["region.country"]" Class="mb-4" />
+
+        <div class="d-flex flex-wrap" style="gap: 12px;">
+            <MudSelect T="string" Value="_currency" ValueChanged="OnCurrency" Label="@L["region.currency"]"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width: 160px; flex: 1;">
+                @foreach (var c in StoreRegions.Currencies)
+                {
+                    <MudSelectItem T="string" Value="@c">@c</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField T="string" Value="_currency" ValueChanged="OnCurrency" Immediate="true" Label="@L["region.currencyOwn"]"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="8" Class="mf-ltr" Style="min-width: 140px; flex: 1;" />
+        </div>
+        @* The shop's clock: where it is, how it writes a date, which way it reads the hour. *@
+        <ClockFields @bind-TimeZone="_timeZone" @bind-DateFormat="_dateFormat" @bind-TimeFormat="_timeFormat" Zones="_zones" Class="mt-4" />
+
+        <MudText Typo="Typo.body2" Class="mt-3">
+            @L["region.example"] <b class="mf-ltr">@Fmt.Money(12.5m)</b> · <b>@ExampleDate</b>
+        </MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">@L["region.later"]</MudText>
+
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+        }
+    </DialogContent>
+    <DialogActions>
+        @if (_step == 2)
+        {
+            <MudButton Variant="Variant.Text" OnClick="@(() => { _step = 1; _error = null; Dialog.StateHasChanged(); })" Class="ma-2" Disabled="_busy">@L["common.back"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || !_names.ContainsKey("en") || _cuisineId == 0)"
+                       OnClick="SaveBasics" Class="ma-2" StartIcon="@Icons.Material.Filled.Check">@L["region.finish"]</MudButton>
+        }
+        else
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(_busy || _country is null || string.IsNullOrWhiteSpace(_currency))"
+                       OnClick="Save" Class="ma-2" EndIcon="@Icons.Material.Filled.ArrowForward">@L["region.save"]</MudButton>
+        }
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+
+    private StoreRegion? _country;
+    private string _currency = "";
+    private string _timeZone = "";
+    private string _dateFormat = "dmy";
+    private string _timeFormat = "24";
+    private List<TimeZoneOptionDto> _zones = [];
+    private bool _busy;
+    private string? _error;
+    private int _step = 1;
+    private Dictionary<string, string> _names = [];
+    private string _mobile = "";
+    private string _phone = "";
+    private int _cuisineId;
+    private List<CuisineDto> _choices = [];
+    private static readonly string[] VerticalCategories = ["Grocery", "Pharmacy", "Flowers & Gifts", "Flowers", "Shopping"];
+
+    /// <summary>A real moment shown the way the choices would show it.</summary>
+    private string ExampleDate
+    {
+        get
+        {
+            var (order, clock) = (Fmt.DateOrder, Fmt.Clock12);
+            Fmt.DateOrder = _dateFormat; Fmt.Clock12 = _timeFormat == "12";
+            var text = Fmt.DateTimeText(new DateTime(2026, 12, 31, 14, 5, 0), shift: false);
+            (Fmt.DateOrder, Fmt.Clock12) = (order, clock);
+            return text;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _zones = await Api.GetTimeZonesAsync() ?? [];
+        // Step 2 starts from what registration already saved (the name typed at sign-up).
+        try
+        {
+            if (await Api.GetMyRestaurantAsync() is { } mine)
+            {
+                _names = mine.Names is { Count: > 0 } n ? new Dictionary<string, string>(n)
+                    : mine.Name is { Length: > 0 } ? new Dictionary<string, string> { [NameScript.LangOf(mine.Name)] = mine.Name } : [];
+                var numbers = (mine.Phone ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                _mobile = numbers.ElementAtOrDefault(0) ?? "";
+                _phone = numbers.ElementAtOrDefault(1) ?? "";
+
+                // Same split as Settings: a vertical sees its own category, a restaurant the cuisines.
+                var all = await Api.GetCuisinesAsync() ?? [];
+                _choices = mine.StoreType switch
+                {
+                    StoreType.Grocery => all.Where(c => c.Name == "Grocery").ToList(),
+                    StoreType.Pharmacy => all.Where(c => c.Name == "Pharmacy").ToList(),
+                    StoreType.Flowers => all.Where(c => c.Name is "Flowers & Gifts" or "Flowers").ToList(),
+                    StoreType.Shop => all.Where(c => c.Name == "Shopping").ToList(),
+                    _ => all.Where(c => !VerticalCategories.Contains(c.Name)).ToList(),
+                };
+                if (_choices.Count == 0) _choices = all;
+                // One choice means it is already the answer; more than one is the owner's call.
+                _cuisineId = _choices.Count == 1 ? _choices[0].Id : 0;
+            }
+        }
+        catch { /* the owner types it */ }
+        // First guess: the browser's time zone (a phone in Muscat says Asia/Muscat).
+        string? browserZone = null;
+        try
+        {
+            browserZone = await JS.InvokeAsync<string>("eval", "Intl.DateTimeFormat().resolvedOptions().timeZone");
+            _country = StoreRegions.FromTimeZone(browserZone);
+        }
+        catch { /* no guess — the owner picks */ }
+        _country ??= StoreRegions.Find("OM");
+        _currency = _country?.Currency ?? Fmt.DefaultSymbol;
+        Fmt.Symbol = _currency;
+        _timeZone = browserZone is not null && _zones.Any(z => z.Id == browserZone) ? browserZone : _country?.TimeZones.FirstOrDefault() ?? "";
+        _dateFormat = StoreClock.DefaultDateFormat(_country?.Code);
+        _timeFormat = StoreClock.DefaultTimeFormat(_country?.Code);
+    }
+
+    private void OnCountry(string code)
+    {
+        var previous = _country;
+        _country = StoreRegions.Find(code);
+        if (_country is null) return;
+        // Follow the country unless the owner had already chosen something of their own.
+        if (_country.Currency.Length > 0 && (string.IsNullOrWhiteSpace(_currency) || _currency == previous?.Currency))
+            OnCurrency(_country.Currency);
+        if (_country.TimeZones.Length > 0 && (string.IsNullOrEmpty(_timeZone) || previous?.TimeZones.Contains(_timeZone) == true))
+            _timeZone = _country.TimeZones[0];
+        if (_dateFormat == StoreClock.DefaultDateFormat(previous?.Code)) _dateFormat = StoreClock.DefaultDateFormat(_country.Code);
+        if (_timeFormat == StoreClock.DefaultTimeFormat(previous?.Code)) _timeFormat = StoreClock.DefaultTimeFormat(_country.Code);
+    }
+
+    private void OnCurrency(string value)
+    {
+        _currency = (value ?? "").Trim();
+        if (_currency.Length > 0) Fmt.Symbol = _currency;
+    }
+
+    private async Task Save()
+    {
+        if (_country is null || string.IsNullOrWhiteSpace(_currency)) return;
+        _busy = true;
+        _error = null;
+        var (ok, error) = await Api.SetMyRegionAsync(new RegionRequest(_country.Code, _currency, _timeZone, _dateFormat, _timeFormat));
+        _busy = false;
+        if (!ok) { _error = error ?? L["common.updateFail"]; return; }
+        // From here on every phone box in the app starts on this country.
+        PhoneField.DefaultCountryCode = _country.Code.ToLowerInvariant();
+        _step = 2;
+        // The dialog's title bar belongs to the dialog instance and does not redraw with this
+        // component — without this it kept saying "Where is your business?" on step 2.
+        Dialog.StateHasChanged();
+    }
+
+    private async Task SaveBasics()
+    {
+        if (!_names.ContainsKey("en")) { _error = L["nm.needEn"]; return; }
+        if (_cuisineId == 0) { _error = L["region.pickCategory"]; return; }
+        _busy = true;
+        _error = null;
+        var (ok, error) = await Api.SetMyBasicsAsync(new StoreBasicsRequest(_names, _mobile, _phone, _cuisineId));
+        _busy = false;
+        if (!ok) { _error = error ?? L["common.updateFail"]; return; }
+        Dialog.Close(DialogResult.Ok(true));
+    }
+}

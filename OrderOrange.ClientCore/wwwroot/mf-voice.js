@@ -489,7 +489,9 @@ window.mfMap = {
 
             const has = typeof lat === 'number' && typeof lng === 'number' && (lat || lng);
             const start = has ? [lat, lng] : [23.588, 58.4059]; // Muscat until told better
-            const map = L.map(mapEl, { zoomControl: false, attributionControl: false }).setView(start, has ? 16 : 11);
+            // Street level (Majed 2026-10-14: "do more zoom on its current location").
+            const CLOSE = 18;
+            const map = L.map(mapEl, { zoomControl: false, attributionControl: false }).setView(start, has ? CLOSE : 11);
             const credit = document.createElement('span');
             credit.className = 'credit';
             credit.textContent = '© Google';
@@ -516,13 +518,25 @@ window.mfMap = {
                 marker = L.marker(start, { draggable: true, icon: this._icon() }).addTo(map);
                 map.on('click', e => marker.setLatLng(e.latlng));
             }
-            if (!has && navigator.geolocation) {
+            // Where am I? High accuracy, and fly in close enough to see the building.
+            const locate = (fly) => {
+                if (!navigator.geolocation) return;
+                locBtn.classList.add('busy');
                 navigator.geolocation.getCurrentPosition(p => {
+                    locBtn.classList.remove('busy');
                     const here = [p.coords.latitude, p.coords.longitude];
-                    map.setView(here, 16);
+                    if (fly) map.flyTo(here, CLOSE, { duration: 0.8 }); else map.setView(here, CLOSE);
                     if (marker) marker.setLatLng(here);
-                }, () => { }, { timeout: 4000 });
-            }
+                }, () => { locBtn.classList.remove('busy'); }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 });
+            };
+            const locBtn = document.createElement('button');
+            locBtn.type = 'button';
+            locBtn.className = 'mloc';
+            locBtn.title = 'My location';
+            locBtn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24"><path fill="currentColor" d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm8.94 3A8.99 8.99 0 0 0 13 3.06V1h-2v2.06A8.99 8.99 0 0 0 3.06 11H1v2h2.06A8.99 8.99 0 0 0 11 20.94V23h2v-2.06A8.99 8.99 0 0 0 20.94 13H23v-2h-2.06zM12 19a7 7 0 1 1 0-14 7 7 0 0 1 0 14z"/></svg>';
+            locBtn.onclick = () => locate(true);
+            box.append(locBtn);
+            if (!has) locate(false);
 
             const search = async () => {
                 const text = q.value.trim();
@@ -556,7 +570,7 @@ window.mfMap = {
                         }
                         b.append(ic, tx);
                         b.onclick = () => {
-                            map.setView([place.lat, place.lng], 17);
+                            map.setView([place.lat, place.lng], CLOSE);
                             if (marker) marker.setLatLng([place.lat, place.lng]);
                             res.innerHTML = '';
                             q.value = '';
@@ -577,7 +591,7 @@ window.mfMap = {
             });
 
             const jump = ll => {
-                map.setView(ll, 17);
+                map.setView(ll, CLOSE);
                 if (marker) marker.setLatLng(ll);
                 // Found: just move the map — the input stays a plain input.
                 lk.classList.remove('busy', 'bad');
@@ -705,4 +719,85 @@ window.mfQm = {
             el.addEventListener('scroll', update, { passive: true });
         }
     },
+};
+// ── Where is the customer? The assistant's "📍 Use my location" (Majed 2026-10-01: "get user
+// GPS location"). An ACTIVE request — it raises the browser's permission prompt when needed —
+// unlike mfMap.position, which only answers from what is already known. Resolves
+// {lat, lng, accuracy} or null (no support, refused, timed out). ──
+window.mfGeo = {
+    _pending: null,
+    _last: null,
+    // Begin the GPS request INSIDE the tap (native pointerdown on the chip): phones only show
+    // the permission prompt reliably for a request that starts in the gesture itself. The
+    // server-side call that follows a moment later joins the same promise.
+    start(timeoutMs) {
+        if (this._pending) return this._pending;
+        this._pending = new Promise(resolve => {
+            if (!navigator.geolocation) { resolve({ denied: false, unsupported: true }); return; }
+            let done = false;
+            const finish = v => { if (!done) { done = true; this._pending = null; if (v && v.lat) this._last = v; resolve(v); } };
+            try {
+                navigator.geolocation.getCurrentPosition(
+                    p => finish({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy: p.coords.accuracy }),
+                    err => finish({ denied: !!(err && err.code === 1), unsupported: false }),
+                    { enableHighAccuracy: true, timeout: timeoutMs || 15000, maximumAge: 120000 });
+            } catch (e) { finish({ denied: false, unsupported: true }); }
+            setTimeout(() => finish({ denied: false, unsupported: false, timeout: true }), (timeoutMs || 15000) + 1500);
+        });
+        return this._pending;
+    },
+    async request(timeoutMs) {
+        if (this._last) return this._last;
+        // Blocked for this site? Say so instead of waiting for a prompt that will never come.
+        try {
+            if (navigator.permissions && navigator.permissions.query) {
+                const st = await navigator.permissions.query({ name: 'geolocation' });
+                if (st.state === 'denied') return { denied: true };
+            }
+        } catch (e) { }
+        return this.start(timeoutMs);
+    }
+};
+
+// ── Keep the chat panel inside the VISIBLE viewport while the phone keyboard is up
+// (Majed 2026-10-01: "do not hide the title"). Android Chrome keeps the layout viewport
+// (and 100dvh) at full height when the keyboard opens and scrolls the page instead, so a
+// fixed, full-height panel loses its header above the top edge. The visualViewport API
+// says how much is really visible; the panel is pinned to exactly that. ──
+window.mfBotVp = {
+    _bound: false,
+    watch(id) {
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const apply = () => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (window.innerWidth > 640) { el.style.top = ''; el.style.height = ''; el.style.bottom = ''; return; }
+            el.style.top = vv.offsetTop + 'px';
+            el.style.height = vv.height + 'px';
+            el.style.bottom = 'auto';
+            const scroll = el.querySelector('.mf-bot-scroll');
+            if (scroll) scroll.scrollTop = scroll.scrollHeight;
+        };
+        if (!this._bound) {
+            this._bound = true;
+            vv.addEventListener('resize', apply);
+            vv.addEventListener('scroll', apply);
+        }
+        apply();
+    }
+};
+
+// v47 - "a new version is ready": the app shell is a single page, so a tab opened before a
+// release keeps the old code until it reloads. The layouts ask every few minutes whether the
+// framework file on the server changed and offer a reload (Majed 2026-10-15: the welcome
+// line showed its raw key in a tab opened before the deploy).
+window.mfUpdate = {
+    async stamp() {
+        try {
+            const r = await fetch('_framework/dotnet.js', { method: 'HEAD', cache: 'no-store' });
+            return (r.headers.get('etag') || '') + '|' + (r.headers.get('last-modified') || '');
+        } catch { return null; }
+    },
+    reload() { location.reload(); }
 };

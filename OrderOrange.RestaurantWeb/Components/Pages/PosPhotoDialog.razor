@@ -1,0 +1,48 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* A quick look at one product's photos from the POS while the tiles run without pictures
+   (Majed 2026-10-18: "user want to see image will click"). Read-only; nothing is rung up. *@
+<MudDialog>
+    <DialogContent>
+        <div class="pos-peek">
+            <div class="pos-peek-name">@Name</div>
+            @if (_photos is null)
+            {
+                <div class="pos-peek-wait"><MudProgressCircular Indeterminate="true" Size="Size.Small" /></div>
+            }
+            else if (_photos.Count == 0)
+            {
+                <div class="pos-peek-none">@Emoji</div>
+            }
+            else
+            {
+                <div class="pos-peek-grid @(_photos.Count == 1 ? "one" : "")">
+                    @foreach (var p in _photos.OrderByDescending(p => p.IsMain))
+                    {
+                        <img src="@p.Data" alt="" />
+                    }
+                </div>
+            }
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public int ItemId { get; set; }
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Emoji { get; set; } = "🍽️";
+    [Parameter] public string? Photo { get; set; }
+
+    private List<DishPhotoDto>? _photos;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // The tile may already carry the main photo (photos switched on) — show it at once.
+        if (!string.IsNullOrWhiteSpace(Photo)) _photos = [new DishPhotoDto(0, Photo, true)];
+        var all = await Api.GetMyDishPhotosAsync(ItemId);
+        if (all is { Count: > 0 }) _photos = all;
+        else _photos ??= [];
+    }
+}

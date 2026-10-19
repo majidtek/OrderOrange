@@ -193,6 +193,28 @@ public sealed class CatalogStore
     /// (Majed: "when a user adds a new product let it be accepted, no need for admin
     /// approval") — an administrator can still reject a product afterwards.
     /// </summary>
+    /// <summary>
+    /// Told after every write, with the store it touched, so the SQL search mirror can follow
+    /// (MenuSearchMirror.Touch). Set once at startup; null in tests.
+    /// </summary>
+    public Action<int>? Changed { get; set; }
+    private void Notify(int restaurantId) { try { Changed?.Invoke(restaurantId); } catch { } }
+    private async Task NotifyItemAsync(int itemId)
+    {
+        var rid = await _items.Find(i => i.Id == itemId).Project(i => i.RestaurantId).FirstOrDefaultAsync();
+        if (rid > 0) Notify(rid);
+    }
+
+    /// <summary>How many live, orderable products each store has — the reconcile's yardstick.</summary>
+    public async Task<Dictionary<int, int>> ApprovedItemCountsAsync()
+    {
+        var rows = await _items.Aggregate()
+            .Match(i => i.Status == ProductStatus.Approved && !i.InStoreOnly)
+            .Group(i => i.RestaurantId, g => new { Id = g.Key, N = g.Count() })
+            .ToListAsync();
+        return rows.ToDictionary(r => r.Id, r => r.N);
+    }
+
     public async Task<MenuItemDoc> AddItemAsync(MenuItemDoc item)
     {
         item.Id = await NextIdAsync(CollectionNames.MenuItems);
@@ -202,6 +224,7 @@ public sealed class CatalogStore
         item.ReviewedByUserId = null;
         item.RejectionReason = null;
         await _items.InsertOneAsync(item);
+        Notify(item.RestaurantId);
         return item;
     }
 
@@ -209,8 +232,11 @@ public sealed class CatalogStore
     /// Applies an edit. The status is deliberately untouched: an approved product stays
     /// live, and a pending one stays in the queue.
     /// </summary>
-    public Task UpdateItemAsync(MenuItemDoc item) =>
-        _items.ReplaceOneAsync(i => i.Id == item.Id, item);
+    public async Task UpdateItemAsync(MenuItemDoc item)
+    {
+        await _items.ReplaceOneAsync(i => i.Id == item.Id, item);
+        Notify(item.RestaurantId);
+    }
 
     /// <summary>
     /// The rows an order is priced from: this store's, approved, by id. Ordering reads
@@ -221,14 +247,19 @@ public sealed class CatalogStore
         _items.Find(i => i.RestaurantId == restaurantId && ids.Contains(i.Id) && i.Status == ProductStatus.Approved)
               .ToListAsync();
 
-    public Task SetAvailabilityAsync(int id, bool available) =>
-        _items.UpdateOneAsync(i => i.Id == id,
+    public async Task SetAvailabilityAsync(int id, bool available)
+    {
+        await _items.UpdateOneAsync(i => i.Id == id,
             Builders<MenuItemDoc>.Update.Set(i => i.IsAvailable, available));
+        await NotifyItemAsync(id);
+    }
 
     public async Task DeleteItemAsync(int id)
     {
+        var rid = await _items.Find(i => i.Id == id).Project(i => i.RestaurantId).FirstOrDefaultAsync();
         await _items.DeleteOneAsync(i => i.Id == id);
         await _itemPhotos.DeleteManyAsync(p => p.MenuItemId == id);
+        if (rid > 0) Notify(rid);
     }
 
     // ---------- Categories ----------
@@ -240,11 +271,15 @@ public sealed class CatalogStore
     {
         category.Id = await NextIdAsync(CollectionNames.MenuCategories);
         await _categories.InsertOneAsync(category);
+        Notify(category.RestaurantId);
         return category;
     }
 
-    public Task UpdateCategoryAsync(MenuCategoryDoc category) =>
-        _categories.ReplaceOneAsync(c => c.Id == category.Id, category);
+    public async Task UpdateCategoryAsync(MenuCategoryDoc category)
+    {
+        await _categories.ReplaceOneAsync(c => c.Id == category.Id, category);
+        Notify(category.RestaurantId);
+    }
 
     public async Task DeleteCategoryAsync(int categoryId, int restaurantId)
     {
@@ -256,6 +291,7 @@ public sealed class CatalogStore
             await _itemPhotos.DeleteManyAsync(p => items.Contains(p.MenuItemId));
         }
         await _categories.DeleteOneAsync(c => c.Id == categoryId && c.RestaurantId == restaurantId);
+        Notify(restaurantId);
     }
 
     // ---------- Item photos ----------

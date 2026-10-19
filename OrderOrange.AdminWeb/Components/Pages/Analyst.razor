@@ -1,0 +1,212 @@
+@page "/analyst"
+@inject ApiClient Api
+@inject LanguageService L
+@inject IJSRuntime JS
+
+@* Ask the data in plain words. Grok answers with the platform's own MCP tools in hand
+   (live SQL + Mongo, read-only), and every tool call is shown so a number can be checked. *@
+
+<PageTitle>Admin — Data analyst</PageTitle>
+
+<PageHeader Title="@L["analyst.title"]" Subtitle="@L["analyst.sub"]" />
+
+<div class="an-wrap">
+    <MudPaper Elevation="0" Outlined="true" Class="pa-3 rounded-xl an-chat" id="an-scroll">
+        @if (_turns.Count == 0)
+        {
+            <div class="an-empty">
+                <div class="an-hello">@L["analyst.hello"]</div>
+                <div class="an-examples">
+                    @foreach (var ex in Examples)
+                    {
+                        <button type="button" class="an-example" @onclick="() => Ask(ex)">@ex</button>
+                    }
+                </div>
+            </div>
+        }
+        @foreach (var t in _turns)
+        {
+            <div class="an-turn @(t.FromUser ? "me" : "ai")">
+                <div class="an-bubble" dir="auto">
+                    @if (t.FromUser)
+                    {
+                        @t.Text
+                    }
+                    else
+                    {
+                        <div class="an-answer">@((MarkupString)Render(t.Text))</div>
+                        @if (t.Calls.Count > 0)
+                        {
+                            <details class="an-tools">
+                                <summary>@string.Format(L["analyst.tools"], t.Calls.Count) · @(t.ElapsedMs / 1000.0):0.0 s</summary>
+                                @foreach (var c in t.Calls)
+                                {
+                                    <div class="an-call @(c.Error ? "err" : "")">
+                                        <div class="an-call-head"><code>@c.Tool</code> <span class="an-args mf-ltr">@c.Arguments</span></div>
+                                        <pre class="an-out mf-ltr">@Trim(c.Output, 1200)</pre>
+                                    </div>
+                                }
+                            </details>
+                        }
+                        @if (!string.IsNullOrEmpty(t.Error))
+                        {
+                            <div class="an-error">@t.Error</div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+        @if (_busy)
+        {
+            <div class="an-turn ai"><div class="an-bubble an-typing"><span></span><span></span><span></span> <em>@L["analyst.working"]</em></div></div>
+        }
+    </MudPaper>
+
+    <div class="an-composer">
+        <MudTextField T="string" @bind-Value="_draft" Placeholder="@L["analyst.placeholder"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Lines="2" AutoGrow="true" MaxLines="6" Immediate="true" Disabled="_busy" OnKeyDown="OnKey" Class="an-input" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AutoAwesome" Disabled="@(_busy || string.IsNullOrWhiteSpace(_draft))"
+                   OnClick="() => Ask(_draft)" Class="an-send">@L["analyst.ask"]</MudButton>
+        <MudIconButton Icon="@Icons.Material.Filled.DeleteSweep" Title="@L["analyst.clear"]" Disabled="_busy || _turns.Count == 0" OnClick="Clear" />
+    </div>
+    <div class="an-foot">@L["analyst.foot"]</div>
+</div>
+
+<style>
+    .an-wrap { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+    .an-chat { min-height: 420px; max-height: calc(100vh - 330px); overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: var(--mud-palette-background); }
+    .an-empty { margin: auto; text-align: center; padding: 24px 12px; }
+    .an-hello { font-size: 1.05rem; color: var(--mud-palette-text-secondary); margin-bottom: 16px; }
+    .an-examples { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .an-example { border: 1px solid var(--mud-palette-lines-default); background: var(--mud-palette-surface); border-radius: 999px; padding: 8px 14px; cursor: pointer; font: inherit; font-size: .9rem; color: var(--mud-palette-text-primary); transition: background .15s, border-color .15s; }
+    .an-example:hover { border-color: var(--mud-palette-primary); background: color-mix(in srgb, var(--mud-palette-primary) 8%, var(--mud-palette-surface)); }
+    .an-turn { display: flex; }
+    .an-turn.me { justify-content: flex-end; }
+    .an-bubble { max-width: 88%; border-radius: 18px; padding: 12px 16px; line-height: 1.5; background: var(--mud-palette-surface); border: 1px solid var(--mud-palette-lines-default); }
+    .an-turn.me .an-bubble { background: var(--mud-palette-primary); color: var(--mud-palette-primary-text); border-color: transparent; }
+    .an-answer { white-space: pre-wrap; word-break: break-word; }
+    .an-answer table { border-collapse: collapse; margin: 8px 0; font-size: .9rem; }
+    .an-answer th, .an-answer td { border: 1px solid var(--mud-palette-lines-default); padding: 4px 10px; text-align: start; }
+    .an-answer th { background: color-mix(in srgb, var(--mud-palette-primary) 10%, transparent); }
+    .an-answer code { background: color-mix(in srgb, var(--mud-palette-text-primary) 8%, transparent); border-radius: 4px; padding: 0 4px; }
+    .an-tools { margin-top: 10px; font-size: .85rem; color: var(--mud-palette-text-secondary); }
+    .an-tools summary { cursor: pointer; }
+    .an-call { margin-top: 8px; border-inline-start: 3px solid var(--mud-palette-primary); padding-inline-start: 10px; }
+    .an-call.err { border-color: var(--mud-palette-error); }
+    .an-call-head code { font-weight: 600; color: var(--mud-palette-text-primary); }
+    .an-args { opacity: .8; word-break: break-all; }
+    .an-out { margin: 4px 0 0; max-height: 220px; overflow: auto; font-size: .78rem; background: color-mix(in srgb, var(--mud-palette-text-primary) 5%, transparent); border-radius: 8px; padding: 8px; white-space: pre-wrap; word-break: break-word; }
+    .an-error { margin-top: 8px; color: var(--mud-palette-error); font-size: .9rem; }
+    .an-typing span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--mud-palette-primary); margin-inline-end: 3px; animation: anBlink 1.2s infinite; }
+    .an-typing span:nth-child(2) { animation-delay: .2s; } .an-typing span:nth-child(3) { animation-delay: .4s; }
+    .an-typing em { margin-inline-start: 8px; color: var(--mud-palette-text-secondary); font-style: normal; font-size: .9rem; }
+    @@keyframes anBlink { 0%, 80%, 100% { opacity: .25 } 40% { opacity: 1 } }
+    .an-composer { display: flex; gap: 8px; align-items: flex-end; }
+    .an-input { flex: 1; }
+    .an-send { height: 40px; }
+    .an-foot { font-size: .78rem; color: var(--mud-palette-text-secondary); text-align: center; }
+</style>
+
+@code {
+    private sealed class Turn
+    {
+        public bool FromUser { get; init; }
+        public string Text { get; init; } = "";
+        public List<AnalystToolCallDto> Calls { get; init; } = [];
+        public string? Error { get; init; }
+        public int ElapsedMs { get; init; }
+    }
+
+    private readonly List<Turn> _turns = [];
+    private string _draft = "";
+    private bool _busy;
+
+    private string[] Examples =>
+    [
+        L["analyst.ex1"], L["analyst.ex2"], L["analyst.ex3"], L["analyst.ex4"],
+    ];
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey && !string.IsNullOrWhiteSpace(_draft)) await Ask(_draft);
+    }
+
+    private async Task Ask(string question)
+    {
+        question = (question ?? "").Trim();
+        if (question.Length == 0 || _busy) return;
+        _draft = "";
+        _turns.Add(new Turn { FromUser = true, Text = question });
+        _busy = true;
+        StateHasChanged();
+        await ScrollDown();
+        var history = _turns.Take(_turns.Count - 1).TakeLast(8)
+            .Select(t => new AssistantTurnDto(t.FromUser ? "user" : "assistant", t.Text)).ToList();
+        var (data, error) = await Api.AskAnalystAsync(new AnalystAskRequest(question, history, L.Locale));
+        _turns.Add(data is null
+            ? new Turn { Text = "", Error = error ?? L["common.wentWrong"] }
+            : new Turn { Text = data.Answer ?? "", Calls = data.ToolCalls, Error = data.Error, ElapsedMs = data.ElapsedMs });
+        _busy = false;
+        StateHasChanged();
+        await ScrollDown();
+    }
+
+    private void Clear() { _turns.Clear(); _draft = ""; }
+
+    private async Task ScrollDown()
+    {
+        try { await JS.InvokeVoidAsync("eval", "var s=document.getElementById('an-scroll'); if(s){s.scrollTop=s.scrollHeight;}"); } catch { }
+    }
+
+    private static string Trim(string s, int max) => string.IsNullOrEmpty(s) ? "" : s.Length <= max ? s : s[..max] + " …";
+
+    /// <summary>
+    /// The model writes light markdown: bold, inline code, bullet lines and pipe tables.
+    /// Rendered minimally and safely — everything is HTML-encoded first.
+    /// </summary>
+    private static string Render(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var lines = text.Replace("\r", "").Split('\n');
+        var sb = new System.Text.StringBuilder();
+        var i = 0;
+        while (i < lines.Length)
+        {
+            var line = lines[i];
+            if (line.TrimStart().StartsWith('|') && i + 1 < lines.Length && System.Text.RegularExpressions.Regex.IsMatch(lines[i + 1], @"^\s*\|?\s*:?-{2,}"))
+            {
+                var header = Cells(line);
+                sb.Append("<table><thead><tr>");
+                foreach (var h in header) sb.Append("<th>").Append(Inline(h)).Append("</th>");
+                sb.Append("</tr></thead><tbody>");
+                i += 2;
+                while (i < lines.Length && lines[i].TrimStart().StartsWith('|'))
+                {
+                    sb.Append("<tr>");
+                    foreach (var c in Cells(lines[i])) sb.Append("<td>").Append(Inline(c)).Append("</td>");
+                    sb.Append("</tr>");
+                    i++;
+                }
+                sb.Append("</tbody></table>");
+                continue;
+            }
+            var t = line.TrimStart();
+            if (t.StartsWith("- ") || t.StartsWith("* ") || t.StartsWith("• ")) sb.Append("• ").Append(Inline(t[2..])).Append('\n');
+            else if (t.StartsWith("### ") || t.StartsWith("## ") || t.StartsWith("# ")) sb.Append("<b>").Append(Inline(t.TrimStart('#').Trim())).Append("</b>\n");
+            else sb.Append(Inline(line)).Append('\n');
+            i++;
+        }
+        return sb.ToString().TrimEnd('\n');
+    }
+
+    private static IEnumerable<string> Cells(string row) =>
+        row.Trim().Trim('|').Split('|').Select(c => c.Trim());
+
+    private static string Inline(string s)
+    {
+        var e = System.Net.WebUtility.HtmlEncode(s);
+        e = System.Text.RegularExpressions.Regex.Replace(e, @"\*\*(.+?)\*\*", "<b>$1</b>");
+        e = System.Text.RegularExpressions.Regex.Replace(e, @"`([^`]+)`", "<code>$1</code>");
+        return e;
+    }
+}

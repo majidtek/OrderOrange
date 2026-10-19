@@ -1,0 +1,67 @@
+@namespace OrderOrange.ClientCore.Components
+@using System.Text.RegularExpressions
+@inject NavigationManager Nav
+
+@* Plain chat text with its links made clickable (Majed 2026-10-11: "in chat bot in partner
+   and client make link clickable"). Web addresses, bare domains (orderorange.com/pos) and
+   e-mail addresses become links; everything else stays text, so nothing in a reply can
+   inject markup. A link to this same site opens in place, anything else in a new tab. *@
+@foreach (var seg in Segments)
+{
+    if (seg.Href is null)
+    {
+        @seg.Text
+    }
+    else
+    {
+        <a class="mf-link" href="@seg.Href" target="@seg.Target" rel="noopener noreferrer">@seg.Text</a>
+    }
+}
+
+@code {
+    [Parameter] public string? Text { get; set; }
+
+    private sealed record Segment(string Text, string? Href = null, string? Target = null);
+
+    // Order matters: full URLs, then e-mails, then www./bare domains. A trailing
+    // punctuation mark (".", "،", ")", "!") belongs to the sentence, not the link.
+    private static readonly Regex Links = new(
+        @"(?<url>https?://[^\s<>""']+[^\s<>""'.,!?;:)\]}»،؛。])" +
+        @"|(?<mail>[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})" +
+        @"|(?<host>\b(?:www\.)?(?:[A-Za-z0-9-]+\.)+(?:com|net|org|om|ae|sa|qa|kw|bh|io|app|co|info|me|ir|pk|in|uk)\b(?:/[^\s<>""']*[^\s<>""'.,!?;:)\]}»،؛])?)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private List<Segment> Segments { get; set; } = [];
+
+    protected override void OnParametersSet()
+    {
+        var text = Text ?? "";
+        var list = new List<Segment>();
+        var at = 0;
+        foreach (Match m in Links.Matches(text))
+        {
+            if (m.Index > at) list.Add(new Segment(text[at..m.Index]));
+            var shown = m.Value;
+            string href = m.Groups["mail"].Success ? $"mailto:{shown}"
+                : m.Groups["url"].Success ? shown
+                : $"https://{shown}";
+            list.Add(new Segment(shown, href, TargetFor(href)));
+            at = m.Index + m.Length;
+        }
+        if (at < text.Length) list.Add(new Segment(text[at..]));
+        Segments = list;
+    }
+
+    /// <summary>Same host as this page → stay in the app; anything else → a new tab.</summary>
+    private string TargetFor(string href)
+    {
+        if (href.StartsWith("mailto:", StringComparison.OrdinalIgnoreCase)) return "_self";
+        try
+        {
+            var here = new Uri(Nav.BaseUri);
+            var there = new Uri(href);
+            return string.Equals(here.Host, there.Host, StringComparison.OrdinalIgnoreCase) ? "_self" : "_blank";
+        }
+        catch { return "_blank"; }
+    }
+}

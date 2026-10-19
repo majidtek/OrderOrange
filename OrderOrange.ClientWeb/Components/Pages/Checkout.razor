@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Components.Sections
 @inject ApiClient Api
 @inject AppState State
+@inject TableBrandState TableBrand
 @inject CartState Cart
 @inject NavigationManager Nav
 @inject IDialogService Dialogs
@@ -429,6 +430,21 @@ else
         // The door checks the key BEFORE the form is filled, never after.
         if (!State.IsAuthenticated && !await SignIn()) return;
         await LoadAddresses(); // doubles as a session probe — a dead token signs us out here
+        // A guest who came in through a shop's own QR orders from that shop without an
+        // account: pickup or to the car (Majed 2026-10-09).
+        if (!State.IsAuthenticated && TableBrand.QrStoreId is int qrStore
+            && Cart.Groups.Count > 0 && Cart.Groups.All(g => g.Restaurant.Id == qrStore))
+        {
+            var qrParameters = new DialogParameters
+            {
+                ["RestaurantId"] = qrStore,
+                ["StoreName"] = TableBrand.Name ?? "",
+            };
+            var qrDialog = await Dialogs.ShowAsync<QrOrderDialog>("", qrParameters,
+                new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+            await qrDialog.Result;
+            return;
+        }
         if (!State.IsAuthenticated)
         {
             if (!await SignIn()) return;
@@ -520,6 +536,21 @@ else
         // Guests build their basket freely; the account is only needed here, because an
         // order has to belong to someone. After signing in, load their addresses and
         // cards and let them carry on rather than starting over.
+        // A guest who came in through a shop's own QR orders from that shop without an
+        // account: pickup or to the car (Majed 2026-10-09).
+        if (!State.IsAuthenticated && TableBrand.QrStoreId is int qrStore
+            && Cart.Groups.Count > 0 && Cart.Groups.All(g => g.Restaurant.Id == qrStore))
+        {
+            var qrParameters = new DialogParameters
+            {
+                ["RestaurantId"] = qrStore,
+                ["StoreName"] = TableBrand.Name ?? "",
+            };
+            var qrDialog = await Dialogs.ShowAsync<QrOrderDialog>("", qrParameters,
+                new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+            await qrDialog.Result;
+            return;
+        }
         if (!State.IsAuthenticated)
         {
             if (!await SignIn()) return;

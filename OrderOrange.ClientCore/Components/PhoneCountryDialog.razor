@@ -1,0 +1,41 @@
+@namespace OrderOrange.ClientCore.Components
+
+@* The phone field's country list, as its own small dialog (Majed 2026-10-14, "Can not
+   select"): the old drop-down lived inside whatever dialog held the field and was cut off
+   by that dialog's scroll box, so only the first country could be tapped. A dialog of its
+   own always sits on top. *@
+
+<MudDialog ContentClass="pa-0">
+    <DialogContent>
+        <div class="pf-pick">
+            <input class="q" value="@_query" @oninput="@(e => _query = e.Value?.ToString() ?? "")"
+                   placeholder="🔍" autocomplete="off" autofocus />
+            <div class="list">
+                @foreach (var option in Filtered)
+                {
+                    var country = option;
+                    <button type="button" class="@(country.Code == Current ? "on" : "")" @onclick="@(() => Dialog.Close(DialogResult.Ok(country)))">
+                        <img class="pf-flag" src="https://flagcdn.com/w40/@(country.Code).png" alt="" />
+                        <b>@country.Name</b>
+                        <i>@country.Dial</i>
+                    </button>
+                }
+            </div>
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public string? Current { get; set; }
+
+    private string _query = "";
+
+    private IEnumerable<PhoneField.Country> Filtered =>
+        string.IsNullOrWhiteSpace(_query)
+            ? PhoneField.Countries
+            : PhoneField.Countries.Where(c =>
+                c.Name.Contains(_query.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                c.Dial.Contains(_query.Trim(), StringComparison.Ordinal) ||
+                c.Code.Contains(_query.Trim(), StringComparison.OrdinalIgnoreCase));
+}

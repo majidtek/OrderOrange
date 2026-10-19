@@ -5,6 +5,41 @@ namespace OrderOrange.ApiServer.Data;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    /// <summary>
+    /// Every save that touches a store's orders or open tables wakes that store's tills
+    /// (<see cref="Services.StoreChangeNotifier"/>), whichever controller made the change.
+    /// </summary>
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        var stores = new HashSet<int>();
+        var tabIds = new HashSet<int>();
+        foreach (var entry in ChangeTracker.Entries())
+        {
+            if (entry.State is not (EntityState.Added or EntityState.Modified or EntityState.Deleted)) continue;
+            switch (entry.Entity)
+            {
+                case Order o: stores.Add(o.RestaurantId); break;
+                case StoreTab t: stores.Add(t.RestaurantId); break;
+                case StoreTabLine l:
+                    if (l.Tab is not null) stores.Add(l.Tab.RestaurantId); else tabIds.Add(l.StoreTabId);
+                    break;
+            }
+        }
+        if (tabIds.Count > 0)
+        {
+            // Lines added by id only: find their tables' stores (the tab row itself may be untouched).
+            var known = ChangeTracker.Entries<StoreTab>().Select(e => e.Entity).Where(t => tabIds.Contains(t.Id)).ToList();
+            foreach (var t in known) { stores.Add(t.RestaurantId); tabIds.Remove(t.Id); }
+            if (tabIds.Count > 0)
+                foreach (var rid in await StoreTabs.AsNoTracking().Where(t => tabIds.Contains(t.Id)).Select(t => t.RestaurantId).ToListAsync(cancellationToken))
+                    stores.Add(rid);
+        }
+
+        var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        foreach (var rid in stores) Services.StoreChangeNotifier.Instance.Signal(rid);
+        return result;
+    }
+
     public DbSet<User> Users => Set<User>();
     public DbSet<DriverProfile> DriverProfiles => Set<DriverProfile>();
     public DbSet<Address> Addresses => Set<Address>();

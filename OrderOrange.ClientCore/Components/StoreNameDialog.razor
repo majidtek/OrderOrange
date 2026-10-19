@@ -17,11 +17,11 @@
             @foreach (var language in Ordered)
             {
                 var lang = language;
-                <div class="nm-row @(lang.Code == "ar" ? "req" : "")">
+                <div class="nm-row @(lang.Code == "en" ? "req" : "")">
                     <img class="pf-flag" src="https://flagcdn.com/w40/@(FlagOf(lang.Code)).png" alt="" />
                     <MudTextField Value="@ValueOf(lang.Code)" T="string"
                                   ValueChanged="@(v => _values[lang.Code] = v)"
-                                  Label="@(lang.NativeName + (lang.Code == "ar" ? " *" : $" — {Lang["nm.optional"]}"))"
+                                  Label="@(lang.NativeName + (lang.Code == "en" ? " *" : $" — {Lang["nm.optional"]}"))"
                                   Variant="Variant.Outlined" Margin="Margin.Dense" />
                 </div>
             }
@@ -48,7 +48,7 @@
     /// <summary>Arabic and English lead the queue; the rest follow in their usual order.</summary>
     private IEnumerable<LanguageService.LanguageOption> Ordered =>
         LanguageService.SupportedLanguages
-            .OrderBy(l => l.Code switch { "ar" => 0, "en" => 1, _ => 2 });
+            .OrderBy(l => l.Code switch { "en" => 0, "ar" => 1, _ => 2 });
 
     private string ValueOf(string code) => _values.GetValueOrDefault(code, "");
 
@@ -70,9 +70,9 @@
         var clean = _values
             .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
             .ToDictionary(kv => kv.Key, kv => kv.Value.Trim());
-        if (!clean.ContainsKey("ar"))
+        if (!clean.ContainsKey("en"))
         {
-            _error = Lang["nm.needAr"];
+            _error = Lang["nm.needEn"];
             return;
         }
         Dialog.Close(DialogResult.Ok(clean));

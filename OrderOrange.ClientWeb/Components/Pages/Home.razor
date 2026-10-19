@@ -143,11 +143,24 @@
                  style="--promo-img: url('/img/promos/@(PromoPhotos[index % PromoPhotos.Length])');">
                 <div class="mf-promo-top">
                     <span class="mf-promo-pct">
-                        <b>@p.Percent.ToString("0.#")</b><i>%</i>
+                        @if (p.Amount > 0)
+                        {
+                            @* A flat discount: "1 OMR" rather than a percent (Majed 2026-10-14). *@
+                            <b>@p.Amount.ToString("0.###")</b><i>@Fmt.Symbol</i>
+                        }
+                        else
+                        {
+                            <b>@p.Percent.ToString("0.#")</b><i>%</i>
+                        }
                     </span>
                     <span class="mf-promo-head">
-                        <span class="t">@L["promo.off"]</span>
+                        <span class="t">@(p.FirstOrderOnly ? L["promo.offFirst"] : L["promo.off"])</span>
                         <span class="s">@((MarkupString)string.Format(L["promo.minOrder"], Fmt.Rial(p.MinOrder)))</span>
+                        @if (p.MaxDiscount > 0 && p.Amount <= 0)
+                        {
+                            @* The cap, said out loud: "10 % — up to 2 OMR" (Majed 2026-10-14). *@
+                            <span class="s">@((MarkupString)string.Format(L["promo.upTo"], Fmt.Rial(p.MaxDiscount)))</span>
+                        }
                     </span>
                 </div>
 

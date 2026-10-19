@@ -152,6 +152,17 @@ public sealed class ApiService(Setup setup)
         catch { return ReceiptDesignDto.Default; }
     }
 
+    /// <summary>The kitchen ticket the owner laid out in the designer; the stock look when never set.</summary>
+    public async Task<KitchenDesignDto> KitchenDesignAsync()
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<KitchenDesignDto>(Endpoint("api/restaurants/mine/kitchen-design"), Json)
+                   ?? KitchenDesignDto.Default;
+        }
+        catch { return KitchenDesignDto.Default; }
+    }
+
     /// <summary>The store's own profile — name, address, phone, CR/VAT — printed on the bill.</summary>
     public async Task<MyRestaurantDto?> ProfileAsync()
     {

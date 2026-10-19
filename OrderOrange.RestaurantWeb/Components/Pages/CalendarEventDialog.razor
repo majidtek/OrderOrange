@@ -14,7 +14,7 @@
                 <MfTimePicker @bind-Time="_end" Label="@L["cal.f.end"]" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Class="mb-3" Style="min-width: 120px;" />
             }
         </div>
-        <MudSwitch T="bool" @bind-Value="_allDay" Label="@L["cal.f.allDay"]" Size="Size.Small" />
+        <MudSwitch Color="Color.Success" T="bool" @bind-Value="_allDay" Label="@L["cal.f.allDay"]" Size="Size.Small" />
 
         <MudSelect T="int" @bind-Value="_remind" Label="@L["cal.f.remind"]" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="mb-3"
                    AdornmentIcon="@Icons.Material.Filled.NotificationsActive" Adornment="Adornment.Start">
@@ -60,7 +60,7 @@
     private string _title = "";
     private string _details = "";
     private string _color = "#ff7a1a";
-    private DateTime? _date = DateTime.Today;
+    private DateTime? _date = Fmt.ServerToday;
     private TimeSpan? _start = new(9, 0, 0);
     private TimeSpan? _end;
     private bool _allDay;
@@ -87,7 +87,7 @@
     {
         _error = null;
         if (string.IsNullOrWhiteSpace(_title)) { _error = L["cal.e.title"]; return; }
-        var day = (_date ?? DateTime.Today).Date;
+        var day = (_date ?? Fmt.ServerToday).Date;
         var start = _allDay ? day : day + (_start ?? new TimeSpan(9, 0, 0));
         DateTime? end = _allDay || _end is null ? null : day + _end.Value;
         if (end is DateTime e && e <= start) end = start.AddHours(1);

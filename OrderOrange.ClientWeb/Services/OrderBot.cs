@@ -1,4 +1,5 @@
-﻿using OrderOrange.ClientCore.Services;
+﻿using Microsoft.JSInterop;
+using OrderOrange.ClientCore.Services;
 using OrderOrange.Shared;
 
 namespace OrderOrange.ClientWeb.Services;
@@ -11,7 +12,7 @@ namespace OrderOrange.ClientWeb.Services;
 /// placed, plus live order tracking and cancellation. No network AI — the
 /// only I/O is this app's own API server.
 /// </summary>
-public sealed class OrderBot(ApiClient api, CartState cart, AppState state, LanguageService lang)
+public sealed class OrderBot(ApiClient api, CartState cart, AppState state, LanguageService lang, Microsoft.JSInterop.IJSRuntime js)
 {
     /// <summary>
     /// The visitor's address, handed in by the widget while an HttpContext still exists —
@@ -21,6 +22,185 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
 
     /// <summary>The page the assistant was opened from, for the report to show.</summary>
     public string? Page { get; set; }
+
+    /// <summary>
+    /// The store whose page the customer is on. Majed 2026-10-01: that store is the MAIN
+    /// one for the whole conversation — searches, recommendations and the model's answers
+    /// stay inside it, and the platform is only searched when the customer asks for it.
+    /// Null on the home page and everywhere else.
+    /// </summary>
+    public int? CurrentStoreId
+    {
+        get => _currentStoreId;
+        set { if (_currentStoreId != value) { _currentStoreId = value; _currentStore = null; } }
+    }
+    private int? _currentStoreId;
+    private RestaurantCardDto? _currentStore;
+
+    /// <summary>The store id in a customer-site path: /p/5000216, /restaurant/…, /store/…, /reserve-table/…, /reserve/5000216-….</summary>
+    public static int? StoreIdFromPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        var m = System.Text.RegularExpressions.Regex.Match(path, @"^/(?:p|restaurant|store|reserve-table)/(\d+)(?:[/?#]|$)|^/reserve/(\d+)-", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!m.Success) return null;
+        var g = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
+        return int.TryParse(g, out var id) && id > 0 ? id : null;
+    }
+
+    /// <summary>
+    /// The store this conversation is about: the page's store, or — away from a store page —
+    /// the store the basket already holds (Majed 2026-10-01: "do not show other restaurants
+    /// if there is [something] in basket"). Null on the home page with an empty basket.
+    /// </summary>
+    private int? EffectiveStoreId =>
+        CurrentStoreId ?? (cart.Lines.Count > 0 && !cart.IsMultiStore ? cart.Restaurant?.Id : null);
+
+    // ───────────────────────────── Where is the customer? ─────────────────────────────
+    // Majed 2026-10-01: "ask for location first". Away from a store page with an empty
+    // basket, a search over the whole platform first finds out where the customer is —
+    // the browser's position, or an area they type — and the answer is built from the
+    // stores around them, not a random spread of the whole country.
+
+    private double? _lat, _lng;
+    private List<RestaurantCardDto>? _nearStores;      // nearest first, once known
+    private bool _locationAsked;                        // asked once per conversation
+    private string? _pendingQuery;                      // the search that waits for the location
+    private bool _areaWait;                             // the next short line may be an area name
+
+    private sealed record GeoPos(double? Lat, double? Lng, bool Denied = false, bool Unsupported = false, bool Timeout = false);
+    private bool _locationDenied;
+
+    /// <summary>
+    /// The customer's GPS position through mfGeo (Majed: "get user GPS location"): a request
+    /// the chip's own tap may already have started, so the prompt appears on phones. The
+    /// page's silently-known position is tried first with a short leash — it must never
+    /// stall the chat. False = refused, unsupported or timed out; the area can be typed.
+    /// </summary>
+    private async Task<bool> TryLocateAsync()
+    {
+        if (_lat is not null) return true;
+        try
+        {
+            var known = js.InvokeAsync<GeoPos?>("mfMap.position").AsTask();
+            if (await Task.WhenAny(known, Task.Delay(2500)) == known && known.Result is { Lat: not null and not 0 } k)
+            { _lat = k.Lat; _lng = k.Lng; return true; }
+        }
+        catch { /* the page may not carry that helper */ }
+        try
+        {
+            var pos = await js.InvokeAsync<GeoPos?>("mfGeo.request", 15000);
+            if (pos is { Lat: not null and not 0 } p) { _lat = p.Lat; _lng = p.Lng; _locationDenied = false; return true; }
+            _locationDenied = pos?.Denied == true;
+        }
+        catch { /* refused or unsupported */ }
+        return false;
+    }
+
+    /// <summary>The stores around the known position, nearest first (also the store filter for searches).</summary>
+    private async Task<List<RestaurantCardDto>> NearStoresAsync()
+    {
+        if (_nearStores is not null) return _nearStores;
+        if (_lat is null) return [];
+        var page = await api.BrowsePageAsync(null, null, "recommended", false, 0, 40, null, _lat, _lng) ?? [];
+        _nearStores = page.Where(r => r.Id >= 5_000_200).OrderBy(r => r.DistanceKm ?? double.MaxValue).ToList();
+        return _nearStores;
+    }
+
+    /// <summary>
+    /// "Nearby restaurants", or the first platform-wide search: locate, then show the nearest
+    /// stores (or run the waiting search among them). Without a position, ask for the area.
+    /// </summary>
+    private async Task NearFlowAsync(string? header = null)
+    {
+        if (!await TryLocateAsync())
+        {
+            _locationAsked = true;
+            _areaWait = true;
+            // Blocked in the browser: say how to unblock it, otherwise offer the tap that asks.
+            Bot(TT(_locationDenied ? "bot.locationDenied" : "bot.askArea"),
+                Chip(TT("bot.chipUseLocation"), "act:near"), Chip(TT("bot.chipHelp"), "act:help"));
+            return;
+        }
+        var near = await NearStoresAsync();
+        if (_pendingQuery is { } waiting)
+        {
+            _pendingQuery = null;
+            await SearchFlowAsync(waiting, allStores: true, header: header);
+            return;
+        }
+        if (near.Count == 0) { Bot(TT("bot.nearNone"), Chip(TT("bot.chipOrder"), "act:order")); return; }
+        ShowStoreCards(near.Take(8).ToList(), header ?? TT("bot.nearHere"));
+    }
+
+    /// <summary>The customer typed where they are: stores whose area matches become the neighbourhood.</summary>
+    private async Task<bool> TryAreaAnswerAsync(string text)
+    {
+        if (!_areaWait) return false;
+        var tokens = BotNlu.Fold(text).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0 || tokens.Length > 5 || LooksLikeQuestion(text)) return false;
+        var found = (await api.BrowsePageAsync(null, null, "recommended", false, 0, 40, text) ?? [])
+            .Where(r => r.Id >= 5_000_200).ToList();
+        if (found.Count == 0) return false;                 // not an area after all — the normal path takes it
+        _areaWait = false;
+        _nearStores = found;
+        if (_pendingQuery is { } waiting)
+        {
+            _pendingQuery = null;
+            await SearchFlowAsync(waiting, allStores: true);
+            return true;
+        }
+        ShowStoreCards(found.Take(8).ToList(), TT("bot.nearHere"));
+        return true;
+    }
+
+    /// <summary>
+    /// "List the restaurants" / "other places" / "pizza places in Seeb": the platform's real
+    /// stores as tappable cards — nearest first when the position is known, filtered by the
+    /// model's word when it gave one. Works on a store page too: the customer asked.
+    /// </summary>
+    private async Task<bool> ShowStoresAsync(string? filter, string? header)
+    {
+        var search = string.IsNullOrWhiteSpace(filter) ? null : filter.Trim();
+        var page = await api.BrowsePageAsync(null, null, "recommended", false, 0, 40, search, _lat, _lng) ?? [];
+        var stores = page.Where(r => r.Id >= 5_000_200).ToList();
+        if (stores.Count == 0 && search is not null)
+        {
+            page = await api.BrowsePageAsync(null, null, "recommended", false, 0, 40, null, _lat, _lng) ?? [];
+            stores = page.Where(r => r.Id >= 5_000_200).ToList();
+        }
+        if (stores.Count == 0) return false;
+        if (_lat is not null) stores = stores.OrderBy(r => r.DistanceKm ?? double.MaxValue).ToList();
+        ShowStoreCards(stores.Take(12).ToList(), header ?? TT("bot.results"));
+        return true;
+    }
+
+    private void ShowStoreCards(List<RestaurantCardDto> stores, string header)
+    {
+        _options = [];
+        var cards = new List<BotOptionView>();
+        foreach (var r in stores)
+        {
+            _options.Add(new Option(OptKind.Restaurant, SN(r.Name), $"{r.Name} {SN(r.Name)} {r.Cuisine}", r));
+            var km = r.DistanceKm is { } d ? $" · 📍 {d:0.0} km" : "";
+            cards.Add(new BotOptionView(_options.Count, r.LogoEmoji, FoodPhoto.ForRestaurant(r.Cuisine, r.Id),
+                SN(r.Name), $"{CN(r.Cuisine)} · ⭐{r.Rating:0.0}{km}", "")
+            {
+                Hue = HueOf(r.Name),
+                Closed = !r.IsOpen,
+            });
+        }
+        _step = Step.PickResult;
+        _messages.Add(new BotMessage { FromBot = true, Text = header, OptionCards = cards });
+    }
+
+    private async Task<RestaurantCardDto?> CurrentStoreAsync()
+    {
+        if (EffectiveStoreId is not { } id) return null;
+        if (_currentStore?.Id == id) return _currentStore;
+        if (CurrentStoreId is null && cart.Restaurant is { } fromBasket && fromBasket.Id == id) { _currentStore = fromBasket; return _currentStore; }
+        try { _currentStore = (await api.GetRestaurantAsync(id))?.Info; } catch { _currentStore = null; }
+        return _currentStore;
+    }
 
     /// <summary>One id for this sitting, so the report can show conversations, not a heap of lines.</summary>
     private readonly string _session = Guid.NewGuid().ToString("N");
@@ -114,6 +294,9 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
     public bool Busy { get; private set; }
     public event Action? Changed;
 
+    /// <summary>The customer tapped an "Open" chip: the widget (which owns navigation) takes them there.</summary>
+    public event Action<string>? NavigateRequested;
+
     // ───────────────────────────── Dialog state ─────────────────────────────
 
     private enum Step
@@ -185,6 +368,25 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
     }
 
     /// <summary>
+    /// The greeting, naming the store when the chat opens on a store's page — the first
+    /// sign that this conversation is about THIS store.
+    /// </summary>
+    public async Task StartAsync()
+    {
+        if (_messages.Count > 0) return;
+        var store = await CurrentStoreAsync();
+        if (_messages.Count > 0) return;                 // a tap raced the fetch
+        var name = string.IsNullOrWhiteSpace(state.FullName) ? "" : state.FullName.Split(' ')[0];
+        var text = TT("bot.greeting", name);
+        if (store is not null) text += "\n" + TT("bot.greetStore", SN(store.Name));
+        Bot(text,
+            Chip(TT("bot.chipOrder"), "act:order"),
+            Chip(TT("bot.chipTrack"), "act:track"),
+            Chip(TT("bot.chipHelp"), "act:help"));
+        Changed?.Invoke();
+    }
+
+    /// <summary>
     /// Feed one user utterance (or a chip tap: display label + machine payload)
     /// through the dialog engine.
     /// </summary>
@@ -249,6 +451,10 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
             case "rm" when int.TryParse(parts[1], out var itemId): RemoveLine(itemId, null); break;
             case "buy" when int.TryParse(parts[1], out var combo): await BuyComboAsync(combo); break;
             case "find": await SearchFlowAsync(parts[1]); break;
+            case "findall": await SearchFlowAsync(parts[1], allStores: true); break;   // the customer chose to leave the store
+            case "go" when parts.Length == 2 && (parts[1].StartsWith('/') || parts[1].StartsWith("https://")):
+                NavigateRequested?.Invoke(parts[1]);
+                break;
             case "act":
                 switch (parts[1])
                 {
@@ -261,6 +467,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
                     case "checkout": await CheckoutFlowAsync(); break;
                     case "reorder": await ReorderFlowAsync(); break;
                     case "help": ShowHelp(); break;
+                    case "near": await NearFlowAsync(); break;
                 }
                 break;
         }
@@ -273,19 +480,181 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
         // Reply in the language the user writes in (sticky across turns). The app's own
         // language breaks Perso-Arabic ties, so a Persian customer writing words that are
         // spelled the same in Arabic still gets Persian back.
-        if (BotNlu.DetectLocale(text, lang.Locale) is { } detected) _replyLocale = detected;
+        // A bare count («3تا», "x2") carries no language of its own — Persian and Arabic share
+        // the letters — so it must not flip the conversation's language.
+        if (ParseBareQuantity(text) is null && BotNlu.DetectLocale(text, lang.Locale) is { } detected) _replyLocale = detected;
 
         // "switch to Arabic" changes the whole app, not just the reply. It runs ahead of
         // the dialog steps because a language name is a short word, and a step waiting for
         // a dish or an address would otherwise swallow it as an answer.
         if (LanguagePick.Resolve(text) is { } wanted) { await SwitchLanguageAsync(wanted); return; }
 
-        // A service question ("do you deliver?", "can I pay by card?") is answered the
-        // same whatever step the dialog is in — before "pay" can be read as "checkout".
-        if (TryFaq(text)) return;
+        // "Al Khuwair" typed after we asked where they are.
+        if (await TryAreaAnswerAsync(text)) return;
 
+        // Structured answers stay with the engine: a bare number or yes/no for a quantity
+        // or an option, and the address / payment / card / confirmation steps, which are
+        // menus of their own. Everything else — Majed 2026-10-01: "make all text connected
+        // to grok, we just do filter and search" — goes to the language model first, which
+        // answers or tells the engine what to do (search, pick, quantity, track…).
+        if (IsStructuredStepInput(text) && await TryHandleStepAsync(text)) return;
+        if (await TryModelTurnAsync(text)) return;
+
+        // The model is unavailable: the old rule pipeline, exactly as before.
+        if (TryFaq(text)) return;
         if (await TryHandleStepAsync(text)) return;
         await HandleGlobalAsync(text);
+    }
+
+    /// <summary>
+    /// A number with a counter word glued to it, in any digit script — Persian «۳تا», «3 عدد»,
+    /// Arabic «٣ حبات», English "3 pcs", "x3". Anything longer than a few letters around the
+    /// digits is a sentence, not a count (Majed's screenshot 2026-10-01: «3تا» became a search).
+    /// </summary>
+    private static int? ParseBareQuantity(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 14) return null;
+        var ascii = new string(text.Trim().Select(ch =>
+            ch is >= '۰' and <= '۹' ? (char)('0' + (ch - '۰')) :
+            ch is >= '٠' and <= '٩' ? (char)('0' + (ch - '٠')) : ch).ToArray());
+        var m = System.Text.RegularExpressions.Regex.Match(ascii, @"^[^\d]{0,3}(\d{1,3})[^\d]{0,8}$");
+        return m.Success && int.TryParse(m.Groups[1].Value, out var n) && n is >= 1 and <= 99 ? n : null;
+    }
+
+    /// <summary>Inputs the engine's own steps read better than any model: numbers, yes/no, and the checkout menus.</summary>
+    private bool IsStructuredStepInput(string text)
+    {
+        switch (_step)
+        {
+            case Step.PickAddress or Step.PickPayment or Step.PickCard
+                or Step.ConfirmSwitch or Step.ConfirmOrder or Step.ConfirmCancel or Step.ConfirmClear
+                or Step.PickTrackOrder or Step.PickCancelOrder:
+                return true;
+            case Step.PickQuantity:
+                return BotNlu.DetectYesNo(text) is not null || BotNlu.ExtractQuantity(text, bareAnswer: true).Item1 is not null
+                       || ParseBareQuantity(text) is not null;
+            case Step.PickResult:
+                // An option number — or, with a single card on screen, a bare count («3تا»).
+                return (int.TryParse(text.Trim().TrimEnd('.', ')'), out var n) && n >= 1 && n <= _options.Count)
+                       || (_options.Count == 1 && ParseBareQuantity(text) is not null);
+            default:
+                return false;
+        }
+    }
+
+    private DateTime _modelDownUntil = DateTime.MinValue;
+
+    private static readonly HashSet<string> SupportedLocales = new(StringComparer.Ordinal)
+        { "en", "ar", "fa", "ur", "hi", "tr", "de", "fr", "es", "it", "pt", "ru", "ja", "zh" };
+
+    /// <summary>
+    /// One turn through the language model in agent mode: it reads the whole situation
+    /// (store menu, list on screen, basket, step) and either answers or names an action
+    /// for the engine. False = the model could not be reached and the rules take over.
+    /// </summary>
+    private async Task<bool> TryModelTurnAsync(string text)
+    {
+        if (DateTime.Now < _modelDownUntil) return false;
+        var earlier = _messages.Take(_messages.Count - 1)
+            .Where(m => !string.IsNullOrWhiteSpace(m.Text) || m.OptionCards.Count > 0)
+            .TakeLast(9)
+            .Select(m => new AssistantTurnDto(m.FromBot ? "assistant" : "user", Truncate(HistoryText(m), 900)))
+            .ToList();
+        var options = _step is Step.PickResult && _options.Count > 0
+            ? _options.Select(o => o.Label).ToList()
+            : null;
+        var storeId = EffectiveStoreId ?? _pendingRestaurant?.Id;
+
+        AssistantReplyDto? answer;
+        try
+        {
+            answer = await api.AskAssistantAsync(new AssistantAskRequest(
+                _session, text, _replyLocale ?? lang.Locale, Page, storeId, earlier, VisitorIp,
+                Agent: true, Step: StepName(), Cart: CartSummary(), Options: options));
+        }
+        catch { answer = null; }
+        if (answer is null)
+        {
+            _modelDownUntil = DateTime.Now.AddSeconds(30);   // spare the next lines a wasted round trip
+            return false;
+        }
+
+        var reply = (answer.Reply ?? "").Trim();
+        // The model is the better judge of Persian vs Arabic: its call sets the language
+        // the engine's own lines ("how many?", "added") are printed in.
+        if (answer.Lang is { Length: 2 } spoken && SupportedLocales.Contains(spoken)) _replyLocale = spoken;
+        switch (answer.Action)
+        {
+            case "search" when !string.IsNullOrWhiteSpace(answer.Query):
+                _pendingQty = BotNlu.ExtractQuantity(text).Item1;   // "2 koobideh" keeps its 2
+                await SearchFlowAsync(answer.Query, allStores: answer.Scope == "all", header: reply.Length > 0 ? reply : null);
+                return true;
+            case "menu":
+                if (await ShowMenuCardsAsync(answer.Query, reply.Length > 0 ? reply : null)) return true;
+                break;                                       // no store or empty menu: fall through to the text
+            case "near":
+                await NearFlowAsync(reply.Length > 0 ? reply : null);
+                return true;
+            case "stores":
+                if (await ShowStoresAsync(answer.Query, reply.Length > 0 ? reply : null)) return true;
+                break;
+            case "pick" when answer.Option is { } n && n >= 1 && n <= _options.Count:
+                if (reply.Length > 0) Bot(reply);
+                // "the first one, three of them" / «۳ تا»: the count rides along with the pick.
+                if (answer.Qty is { } pq && pq >= 1) _pendingQty = pq;
+                else if (ParseBareQuantity(text) is { } hq) _pendingQty = hq;
+                await SelectOptionAsync(n - 1);
+                return true;
+            case "qty" when answer.Qty is { } q && q >= 1 && _step == Step.PickQuantity:
+                if (reply.Length > 0) Bot(reply);
+                await HandleQuantityAsync(q);
+                return true;
+            // The engine asked "how many?" and the model read the answer as something else:
+            // a count hidden in the text still wins over a fresh search.
+            case "search" or "none" when _step == Step.PickQuantity && ParseBareQuantity(text) is { } hidden:
+                await HandleQuantityAsync(hidden);
+                return true;
+            case "remove":
+                if (reply.Length > 0) Bot(reply);
+                await RemoveItemFlowAsync(answer.Query ?? "", "");
+                return true;
+            case "keep" when !string.IsNullOrWhiteSpace(answer.Query):
+                if (reply.Length > 0) Bot(reply);
+                await KeepOnlyAsync(answer.Query);
+                return true;
+            case "track": await TrackFlowAsync(BotNlu.ExtractOrderNumber(text)); return true;
+            case "cancel": await CancelFlowAsync(BotNlu.ExtractOrderNumber(text)); return true;
+            case "cart": ShowCart(); return true;
+            case "checkout": await CheckoutFlowAsync(); return true;
+            case "reorder": await ReorderFlowAsync(); return true;
+            case "clear": ConfirmClearCart(); return true;
+            case "help": ShowHelp(); return true;
+        }
+        if (reply.Length == 0) return false;            // nothing usable — let the rules try
+        var chips = new List<BotChip>();
+        if (!string.IsNullOrWhiteSpace(answer.Url)) chips.Add(Chip(TT("bot.chipOpen"), $"go:{answer.Url.Trim()}"));
+        chips.Add(Chip(TT("bot.chipOrder"), "act:order"));
+        chips.Add(Chip(TT("bot.chipHelp"), "act:help"));
+        Bot(reply, chips.ToArray());
+        return true;
+    }
+
+    private string StepName() => _step switch
+    {
+        Step.Idle => "idle",
+        Step.AwaitQuery => "await-query",
+        Step.PickResult => "pick-result",
+        Step.PickQuantity => "pick-quantity",
+        Step.ConfirmOrder => "confirm-order",
+        var s => s.ToString().ToLowerInvariant(),
+    };
+
+    /// <summary>The basket as the model should read it: one line per item, then the subtotal.</summary>
+    private string CartSummary()
+    {
+        if (cart.Lines.Count == 0) return "";
+        var lines = cart.Lines.Select(l => $"{l.Quantity} x {l.Item.Name} @ {l.Restaurant.Name} = {Fmt.Money(l.LineTotal)}");
+        return string.Join("\n", lines) + $"\nSubtotal {Fmt.Money(cart.Subtotal)}";
     }
 
     /// <summary>Slot-filling for the current step. False → fall through to global intents.</summary>
@@ -305,11 +674,30 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
                     return true;
                 }
                 var (qty, _) = BotNlu.ExtractQuantity(text, bareAnswer: true);
+                qty ??= ParseBareQuantity(text);          // "3تا", "۳ عدد", "x3", "3 pcs"
                 if (qty is { } q) { await HandleQuantityAsync(q); return true; }
                 return false;
             }
             case Step.PickResult:
             {
+                // One card on screen and the customer answers with a count («3تا», "x2"):
+                // that is "this one, three of them" — pick it and skip the how-many question.
+                if (_options.Count == 1 && ParseBareQuantity(text) is { } count && !int.TryParse(text.Trim(), out _))
+                {
+                    _pendingQty = count;
+                    await SelectOptionAsync(0);
+                    return true;
+                }
+                // "what is this?", "which one is spicy?" — a question about the list on
+                // screen is for the language model (it gets the list as context), never
+                // for the fuzzy matcher, which would happily pick a product out of "this".
+                if (LooksLikeQuestion(text))
+                {
+                    if (await TryAskModelAsync()) return true;
+                    Bot(TT("bot.pickHint"),
+                        _options.Take(6).Select((o, i) => Chip($"{i + 1}. {Truncate(o.Label, 20)}", $"opt:{i + 1}")).ToArray());
+                    return true;
+                }
                 // "the first one", "the cheapest" — pointing at the list already on screen
                 // instead of typing its number.
                 if (ResolveByReference(text) is { } referenced)
@@ -346,7 +734,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
                 rest = BotNlu.StripStartOrderNoise(rest);
                 if (!string.IsNullOrWhiteSpace(rest))
                 {
-                    var probe = await api.SearchAsync(rest, realOnly: true);
+                    var probe = await api.SearchAsync(rest, realOnly: true, storeId: EffectiveStoreId);
                     if (probe is not null && (probe.Dishes.Count > 0 || probe.Restaurants.Count > 0))
                     {
                         _pendingQty = qty;
@@ -388,6 +776,21 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
     private async Task HandleGlobalAsync(string text)
     {
         var intent = BotNlu.DetectIntent(text);
+
+        // A question that is not a command ("can I bring my dog?", "is it quiet in the
+        // evening?") goes to the language model first. Commands keep their rules: "where
+        // is my order?" is a question too, and the tracker answers it better than any
+        // model could. A greeting word inside a long question ("…in the evening") must
+        // not turn the question into small talk either.
+        var actionable = intent.Intent is BotLexicon.Intent.TrackOrder or BotLexicon.Intent.CancelOrder
+            or BotLexicon.Intent.ShowCart or BotLexicon.Intent.ClearCart or BotLexicon.Intent.RemoveItem
+            or BotLexicon.Intent.Checkout or BotLexicon.Intent.Reorder or BotLexicon.Intent.Help
+            or BotLexicon.Intent.StartOrder;
+        // "What can I get for 5 rials?" has its own answer — real combinations with cards —
+        // so the budget rule runs ahead of the model.
+        if (!actionable && await TryBudgetAsync(text)) return;
+        if (!actionable && LooksLikeQuestion(text) && await TryAskModelAsync()) return;
+
         switch (intent.Intent)
         {
             case BotLexicon.Intent.Greeting:
@@ -418,7 +821,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
                     return;
                 }
                 // A stray yes/no with nothing to confirm — never search for it.
-                Bot(TT("bot.fallback"), Chip(TT("bot.chipHelp"), "act:help"));
+                if (!await TryAskModelAsync()) Bot(TT("bot.fallback"), Chip(TT("bot.chipHelp"), "act:help"));
                 return;
             }
             case BotLexicon.Intent.StartOrder:
@@ -463,7 +866,65 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
         // left, and searching for "what" would only find a dish that sounds like it.
         if (IsMenuQuestion(rest)) { ShowMenuOverview(); return; }
         if (!string.IsNullOrWhiteSpace(rest)) await SearchFlowAsync(rest, fallbackHelp: true);
-        else Bot(TT("bot.fallback"), Chip(TT("bot.chipHelp"), "act:help"));
+        else if (!await TryAskModelAsync()) Bot(TT("bot.fallback"), Chip(TT("bot.chipHelp"), "act:help"));
+    }
+
+    /// <summary>
+    /// A question or a sentence, as opposed to an order: a question mark, an asking word up
+    /// front, or simply a long sentence. A SHORT question naming a dish ("do you have
+    /// pizza?") stays with the search — tappable cards answer it better than prose — but a
+    /// long one is a real question even when a food word sits inside it ("can I bring my
+    /// dog…" has "dog", and the search is fuzzy enough to "find" something for any words).
+    /// </summary>
+    private static bool LooksLikeQuestion(string text)
+    {
+        var tokens = BotNlu.Fold(text).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0) return false;
+        var asks = text.Contains('?') || text.Contains('؟')
+                   || AskStarts.Contains(tokens[0]) || (tokens.Length > 1 && AskStarts.Contains(tokens[1]));
+        if (!asks && tokens.Length < 6) return false;
+        return tokens.Length > 5 || !tokens.Any(BotNlu.IsFoodWord);
+    }
+
+    // ───────────────────────────── The language model ─────────────────────────────
+
+    /// <summary>
+    /// The last resort before "I didn't catch that": the line that no rule understood
+    /// goes to the language model on the API (Grok), together with the last few turns,
+    /// the page and the store being looked at. The model knows the platform and that
+    /// store's real menu; it answers questions, it never places orders — those stay
+    /// with this engine. False = no answer (no key, outage, throttled) and the caller
+    /// prints its own fallback exactly as before.
+    /// </summary>
+    private async Task<bool> TryAskModelAsync()
+    {
+        if (DateTime.Now < _modelDownUntil) return false;
+        var text = _messages.LastOrDefault(m => !m.FromBot)?.Text;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        // Everything before the line being answered, most recent nine lines at most.
+        // The product cards under a bot line are part of what the customer saw — "what
+        // is this?" refers to them — so they travel as numbered text.
+        var earlier = _messages.Take(_messages.Count - 1)
+            .Where(m => !string.IsNullOrWhiteSpace(m.Text) || m.OptionCards.Count > 0)
+            .TakeLast(9)
+            .Select(m => new AssistantTurnDto(m.FromBot ? "assistant" : "user", Truncate(HistoryText(m), 900)))
+            .ToList();
+
+        AssistantReplyDto? answer;
+        try
+        {
+            answer = await api.AskAssistantAsync(new AssistantAskRequest(
+                _session, text, _replyLocale ?? lang.Locale, Page, EffectiveStoreId ?? _pendingRestaurant?.Id, earlier, VisitorIp));
+        }
+        catch
+        {
+            answer = null;
+        }
+        if (answer is null || string.IsNullOrWhiteSpace(answer.Reply)) return false;
+
+        Bot(answer.Reply.Trim(), Chip(TT("bot.chipOrder"), "act:order"), Chip(TT("bot.chipHelp"), "act:help"));
+        return true;
     }
 
     // ───────────────────────────── "Do you …?" ─────────────────────────────
@@ -497,6 +958,9 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
 
     private bool TryFaq(string text)
     {
+        // "where is my order?" is about an order, not about where the shop is — the
+        // tracker owns it, however many FAQ words it carries.
+        if (BotNlu.DetectIntent(text).Intent is BotLexicon.Intent.TrackOrder or BotLexicon.Intent.CancelOrder) return false;
         var folded = BotNlu.Fold(text);
         var tokens = folded.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (tokens.Length == 0 || tokens.Length > 12) return false;
@@ -570,18 +1034,62 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
         Bot(TT("bot.whatToEat"));
     }
 
-    private async Task SearchFlowAsync(string query, bool fallbackHelp = false)
+    /// <param name="allStores">
+    /// Leave the store being viewed and search the whole platform — only when the customer
+    /// asked for it (the "Search all stores" chip, or the model's scope "all").
+    /// </param>
+    /// <param name="header">
+    /// The model's own sentence to put above the cards. When given, the engine's stock
+    /// "I found this…" and "Tap one…" lines are left out — the conversation stays in one voice.
+    /// </param>
+    private async Task SearchFlowAsync(string query, bool fallbackHelp = false, bool allStores = false, string? header = null)
     {
-        var results = await api.SearchAsync(query, realOnly: true);
+        var storeId = allStores ? null : EffectiveStoreId;
+
+        var results = await api.SearchAsync(query, realOnly: true, storeId: storeId);
         var dishes = results?.Dishes ?? [];
         var restaurants = results?.Restaurants ?? [];
+
+        // Platform-wide, the customer's whereabouts unknown, and the answer would span several
+        // stores: ask where they are first, once. A request that already names its store
+        // («آب دوغ رستوران سراج» → everything from Siraj) needs no location.
+        var oneStore = dishes.Count > 0 && restaurants.Count == 0 && dishes.Select(d => d.RestaurantId).Distinct().Count() == 1;
+        if (storeId is null && !oneStore && (dishes.Count > 0 || restaurants.Count > 0)
+            && _lat is null && _nearStores is null && !_locationAsked)
+        {
+            _pendingQuery = query;
+            await NearFlowAsync();
+            return;
+        }
+
+        // Around the customer first: dishes from the neighbourhood stores, nearest store first.
+        if (storeId is null && _nearStores is { Count: > 0 } near)
+        {
+            var rank = near.Select((r, i) => (r.Id, i)).ToDictionary(x => x.Id, x => x.i);
+            var local = dishes.Where(d => rank.ContainsKey(d.RestaurantId)).OrderBy(d => rank[d.RestaurantId]).ToList();
+            if (local.Count > 0) dishes = local;
+            var localStores = restaurants.Where(r => rank.ContainsKey(r.Id)).OrderBy(r => rank[r.Id]).ToList();
+            if (localStores.Count > 0 || local.Count > 0) restaurants = localStores;
+        }
 
         if (dishes.Count == 0 && restaurants.Count == 0)
         {
             _pendingQty = null;                  // the quantity belonged to this failed query
-            Bot(fallbackHelp
-                ? TT("bot.fallback")
-                : TT("bot.noResults", query), Chip(TT("bot.chipHelp"), "act:help"));
+            if (storeId is not null)
+            {
+                // Not on THIS store's menu. The store stays the main one: say so and leave the
+                // door to the rest of the platform as a tap, never an automatic switch.
+                var store = await CurrentStoreAsync();
+                Bot(TT("bot.notHere", SN(store?.Name)),
+                    Chip(TT("bot.chipAllStores"), $"findall:{query}"),
+                    Chip(TT("bot.chipHelp"), "act:help"));
+                _step = _step == Step.PickResult ? Step.PickResult : Step.AwaitQuery;
+                return;
+            }
+            if (!await TryAskModelAsync())
+                Bot(fallbackHelp
+                    ? TT("bot.fallback")
+                    : TT("bot.noResults", query), Chip(TT("bot.chipHelp"), "act:help"));
             _step = _step == Step.PickResult ? Step.PickResult : Step.AwaitQuery;
             return;
         }
@@ -591,7 +1099,8 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
         var lines = new List<string>();
         // One header only. The customer's own words (or our spelling of them) are not read
         // back — Majed 2026-09-21: "just answer like 'I found …, maybe it helps you'".
-        lines.Add(TT("bot.results"));
+        // With the model speaking, its sentence IS the header (Majed 2026-10-01: "full grok").
+        lines.Add(header ?? TT("bot.results"));
 
         // The partner's own uploaded product photos beat stock photography —
         // fetch mains for the real menu items in parallel (virtual ids ≤ 0
@@ -630,7 +1139,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
                 Closed = !r.IsOpen,
             });
         }
-        lines.Add(TT("bot.pickHint"));
+        if (header is null) lines.Add(TT("bot.pickHint"));
 
         _step = Step.PickResult;
         _messages.Add(new BotMessage
@@ -638,7 +1147,59 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
             FromBot = true,
             Text = string.Join('\n', lines),
             OptionCards = cards,
+            // Inside a store the wider platform is one tap away, never the default.
+            Chips = storeId is not null ? [Chip(TT("bot.chipAllStores"), $"findall:{query}")] : [],
         });
+    }
+
+    /// <summary>
+    /// "Show me the menu with pictures" / "what's in Main Dishes?": the store's menu as
+    /// photo cards — one category when named, otherwise the highlights (popular first) —
+    /// each card tappable to order. The model's sentence sits above them.
+    /// </summary>
+    private async Task<bool> ShowMenuCardsAsync(string? category, string? header)
+    {
+        var storeId = EffectiveStoreId ?? _pendingRestaurant?.Id;
+        if (storeId is null) return false;
+        var detail = await api.GetRestaurantAsync(storeId.Value);
+        if (detail is null) return false;
+
+        var cats = detail.Categories;
+        var pool = cats.SelectMany(c => c.Items.Select(i => (Cat: c, Item: i)));
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            var f = BotNlu.Fold(category);
+            var match = cats.Where(c =>
+                    BotNlu.Fold(c.Name).Contains(f) || (f.Length >= 3 && f.Contains(BotNlu.Fold(c.Name))) ||
+                    (c.Names?.Values.Any(n => !string.IsNullOrWhiteSpace(n) && BotNlu.Fold(n).Contains(f)) ?? false))
+                .ToList();
+            if (match.Count > 0) pool = match.SelectMany(c => c.Items.Select(i => (Cat: c, Item: i)));
+        }
+        var items = pool.Where(x => x.Item.IsAvailable)
+            .OrderByDescending(x => x.Item.IsPopular).ThenBy(x => x.Cat.SortOrder).ThenBy(x => x.Item.SortOrder)
+            .Take(12).ToList();
+        if (items.Count == 0) return false;
+
+        var locale = _replyLocale ?? lang.Locale;
+        _options = [];
+        var cards = new List<BotOptionView>();
+        foreach (var (cat, i) in items)
+        {
+            var hit = new DishHitDto(i.Id, i.Name, i.Description, i.ImageEmoji, i.FinalPrice,
+                detail.Info.Id, detail.Info.Name, detail.Info.LogoEmoji, detail.Info.IsOpen);
+            _options.Add(new Option(OptKind.Dish, PN(i.Name), $"{i.Name} {PN(i.Name)}", hit));
+            cards.Add(new BotOptionView(_options.Count, i.ImageEmoji, i.Photo ?? FoodPhoto.ForDish(i.Name),
+                PN(i.Name), cat.NameFor(locale), Fmt.Money(i.FinalPrice))
+            {
+                Venue = SN(detail.Info.Name),
+                VenueEmoji = detail.Info.LogoEmoji,
+                Hue = HueOf(detail.Info.Name),
+                Closed = !detail.Info.IsOpen,
+            });
+        }
+        _step = Step.PickResult;
+        _messages.Add(new BotMessage { FromBot = true, Text = header ?? TT("bot.results"), OptionCards = cards });
+        return true;
     }
 
     private async Task SelectOptionAsync(int index)
@@ -875,7 +1436,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
             var found = new List<DishHitDto>();
             foreach (var option in slot.Options)
             {
-                var hits = await api.SearchAsync(option, realOnly: true);
+                var hits = await api.SearchAsync(option, realOnly: true, storeId: EffectiveStoreId);
                 // A shut restaurant can't fill the order, so it must not shape the answer.
                 if (hits is not null) found.AddRange(hits.Dishes.Where(d => d.RestaurantIsOpen).Take(8));
             }
@@ -955,7 +1516,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
         var found = new List<DishHitDto>();
         foreach (var term in BotLexicon.BudgetSampleTerms)
         {
-            var hits = await api.SearchAsync(term, realOnly: true);
+            var hits = await api.SearchAsync(term, realOnly: true, storeId: EffectiveStoreId);
             if (hits is null) continue;
             found.AddRange(hits.Dishes.Where(d => d.RestaurantIsOpen));
         }
@@ -1081,7 +1642,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
             var phrase = _queue[0];
             _queue.RemoveAt(0);
 
-            var results = await api.SearchAsync(phrase.Query, realOnly: true);
+            var results = await api.SearchAsync(phrase.Query, realOnly: true, storeId: EffectiveStoreId);
             var dishes = results?.Dishes ?? [];
             if (dishes.Count == 0)
             {
@@ -1157,6 +1718,36 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
     }
 
     /// <summary>"remove the pizza" / "minus one cola" — take an item out of the cart.</summary>
+    /// <summary>
+    /// "Keep only the doogh": every basket line that is NOT the named item goes; the named
+    /// item stays. Names are matched the same way removal matches them — by the basket's own
+    /// names in either language, then by the server's multilingual keyword search.
+    /// </summary>
+    private async Task KeepOnlyAsync(string query)
+    {
+        if (cart.Lines.Count == 0) { _step = Step.AwaitQuery; Bot(TT("bot.cartEmpty")); return; }
+        var keep = new HashSet<int>();
+        var idx = BotNlu.MatchOption(query, cart.Lines.Select(l => $"{l.Item.Name} {PN(l.Item.Name)}").ToList());
+        if (idx >= 0) keep.Add(cart.Lines[idx].Item.Id);
+        var folded = BotNlu.Fold(query);
+        foreach (var l in cart.Lines)
+            if (BotNlu.Fold(l.Item.Name).Contains(folded) || BotNlu.Fold(PN(l.Item.Name)).Contains(folded)) keep.Add(l.Item.Id);
+        if (keep.Count == 0)
+        {
+            var hits = await api.SearchAsync(query, realOnly: true, storeId: cart.Restaurant?.Id);
+            var ids = hits?.Dishes.Select(d => d.MenuItemId).ToHashSet() ?? [];
+            foreach (var l in cart.Lines) if (ids.Contains(l.Item.Id)) keep.Add(l.Item.Id);
+        }
+        if (keep.Count == 0)
+        {
+            Bot(TT("bot.removeWhat"), cart.Lines.Take(6).Select(l => Chip($"🗑️ {Truncate(PN(l.Item.Name), 20)}", $"rm:{l.Item.Id}")).ToArray());
+            return;
+        }
+        foreach (var l in cart.Lines.Where(l => !keep.Contains(l.Item.Id)).ToList())
+            RemoveLine(l.Item.Id, null);
+        ShowCart();
+    }
+
     private async Task RemoveItemFlowAsync(string text, string matchedPhrase)
     {
         if (cart.Lines.Count == 0)
@@ -1543,6 +2134,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
 
     private async Task TrackFlowAsync(string? explicitNumber)
     {
+        if (!SignedInOr()) return;
         var fetched = await api.GetMyOrdersAsync(0, 20);
         if (fetched is null) { Bot(TT("common.wentWrong")); return; }   // network down ≠ no orders
         var orders = fetched.OrderByDescending(o => o.PlacedAt).ToList();
@@ -1663,6 +2255,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
 
     private async Task CancelFlowAsync(string? explicitNumber = null)
     {
+        if (!SignedInOr()) return;
         var fetched = await api.GetMyOrdersAsync(0, 20);
         if (fetched is null) { Bot(TT("common.wentWrong")); return; }
         var orders = fetched
@@ -1716,6 +2309,7 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
 
     private async Task ReorderFlowAsync()
     {
+        if (!SignedInOr()) return;
         var fetched = await api.GetMyOrdersAsync(0, 10);
         if (fetched is null) { Bot(TT("common.wentWrong")); return; }
         var orders = fetched.OrderByDescending(o => o.PlacedAt).ToList();
@@ -1893,6 +2487,18 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
     private static BotChip Chip(string label, string payload) => new(label, payload);
 
     /// <summary>
+    /// Orders belong to an account. A guest asking "where is my order?" used to get
+    /// "Something went wrong" (the API answers 401); now they are told to sign in.
+    /// </summary>
+    private bool SignedInOr()
+    {
+        if (state.IsAuthenticated) return true;
+        _step = Step.Idle;
+        Bot(TT("auth.signInToContinue"), Chip(TT("bot.chipOrder"), "act:order"), Chip(TT("bot.chipHelp"), "act:help"));
+        return false;
+    }
+
+    /// <summary>
     /// A product name in the language THIS conversation is answering in — which is the
     /// language the customer types, not the one the app is set to.
     /// </summary>
@@ -1931,6 +2537,15 @@ public sealed class OrderBot(ApiClient api, CartState cart, AppState state, Lang
         if (args.Length == 0) return template;
         try { return string.Format(template, args); }
         catch (FormatException) { return template; }
+    }
+
+    /// <summary>A message as the model should read it: the text plus its cards, numbered.</summary>
+    private static string HistoryText(BotMessage m)
+    {
+        if (m.OptionCards.Count == 0) return m.Text;
+        var cards = m.OptionCards.Select(c =>
+            $"{c.Number}. {c.Title}{(string.IsNullOrWhiteSpace(c.Subtitle) ? "" : " (" + c.Subtitle + ")")}{(string.IsNullOrWhiteSpace(c.Price) ? "" : " — " + c.Price)}{(c.Venue is null ? "" : " @ " + c.Venue)}");
+        return (m.Text + "\n" + string.Join("\n", cards)).Trim();
     }
 
     private static string Truncate(string s, int max) =>

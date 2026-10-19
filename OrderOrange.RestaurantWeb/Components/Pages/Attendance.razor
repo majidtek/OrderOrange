@@ -27,13 +27,13 @@ else
                 @if (_me.Open is { } open)
                 {
                     <div>
-                        <b>@string.Format(L["att.present"], open.InAt.ToString("HH:mm"))</b>
+                        <b>@string.Format(L["att.present"], Fmt.Time(open.InAt))</b>
                         <small>@Elapsed(open.InAt)</small>
                     </div>
                 }
                 else
                 {
-                    <div><b>@L["att.away"]</b><small>@DateTime.Now.ToString("dddd, d MMMM")</small></div>
+                    <div><b>@L["att.away"]</b><small>@Fmt.WeekdayDayMonth(Fmt.ServerNow)</small></div>
                 }
             </div>
 
@@ -71,9 +71,9 @@ else
                 @foreach (var s in _me.Today)
                 {
                     <div class="row">
-                        <span class="t">@s.InAt.ToString("HH:mm")</span>
+                        <span class="t">@Fmt.Time(s.InAt)</span>
                         <span class="arrow">→</span>
-                        <span class="t">@(s.OutAt?.ToString("HH:mm") ?? L["att.open"])</span>
+                        <span class="t">@(s.OutAt is { } sOut ? Fmt.Time(sOut) : L["att.open"])</span>
                         <span class="hrs">@s.Hours.ToString("0.0") @L["att.h"]</span>
                         <span class="loc">
                             @if (s.InLat is double la && s.InLng is double lo)
@@ -109,7 +109,7 @@ else
                         <div class="txt">
                             <b>@LeaveLabel(lv)</b>
                             <small>
-                                @(lv.Kind == "hourly" ? $"{lv.From:ddd d MMM} · {lv.From:HH:mm}–{lv.To:HH:mm}" : $"{lv.From:ddd d MMM} – {lv.To:ddd d MMM}")
+                                @(lv.Kind == "hourly" ? $"{Fmt.WeekdayDayMonth(lv.From, longWeekday: false, shift: false)} · {Fmt.Time(lv.From, shift: false)}–{Fmt.Time(lv.To, shift: false)}" : $"{Fmt.WeekdayDayMonth(lv.From, longWeekday: false, shift: false)} – {Fmt.WeekdayDayMonth(lv.To, longWeekday: false, shift: false)}")
                                 @if (!string.IsNullOrEmpty(lv.Reason)) { <text> · @lv.Reason</text> }
                             </small>
                             @if (lv.Status != "pending" && !string.IsNullOrEmpty(lv.DecisionNote))
@@ -185,8 +185,8 @@ else
     private bool _leaveOpen;
     private string _kind = "hourly";
     // Blazor binds date/time inputs to typed values (DateTime / TimeOnly), not strings.
-    private DateTime _date = DateTime.Today;
-    private DateTime _toDate = DateTime.Today;
+    private DateTime _date = Fmt.ServerToday;
+    private DateTime _toDate = Fmt.ServerToday;
     private TimeOnly _fromTime = new(10, 0);
     private TimeOnly _toTime = new(12, 0);
     private string _reason = "";
@@ -211,7 +211,7 @@ else
 
     private string Elapsed(DateTime since)
     {
-        var span = DateTime.Now - since;
+        var span = Fmt.ServerNow - since;
         return span.TotalHours >= 1 ? $"{(int)span.TotalHours} {L["att.h"]} {span.Minutes:00}" : $"{span.Minutes} min";
     }
 
@@ -260,7 +260,7 @@ else
     private void ResetLeaveForm()
     {
         _kind = "hourly"; _leaveError = null; _reason = "";
-        _date = DateTime.Today; _toDate = DateTime.Today; _fromTime = new(10, 0); _toTime = new(12, 0);
+        _date = Fmt.ServerToday; _toDate = Fmt.ServerToday; _fromTime = new(10, 0); _toTime = new(12, 0);
     }
 
     private async Task SendLeave()

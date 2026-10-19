@@ -23,7 +23,7 @@ else
                     <MudText Typo="Typo.h6" Class="mb-4">@L["partner.profile"]</MudText>
                     @* The same open/closed switch the top bar carries — here too, where
                        every other decision about the shop is made. *@
-                    <MudSwitch T="bool" Value="_isOpen" ValueChanged="ToggleOpenNow" Color="Color.Success" Size="Size.Small" Class="mb-3"
+                    <MudSwitch Color="Color.Success" T="bool" Value="_isOpen" ValueChanged="ToggleOpenNow" Size="Size.Small" Class="mb-3"
                                Label="@(_isOpen ? L["partner.open"] : L["partner.closed"])" />
                     @* The TYPE leads: what it is decides what everything below is called. *@
                     <MudSelect T="StoreType" Value="_storeType" ValueChanged="OnStoreTypeChanged" Label="@L["partner.storeType"]" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3">
@@ -105,7 +105,7 @@ else
                                 <div class="d-flex align-center mb-3" style="gap: 8px;">
                                     <span class="ph-kind">@(_phoneEntries[idx].IsMobile ? "📱" : "☎️")</span>
                                     <div style="flex: 1;">
-                                        <PhoneField Value="@_phoneEntries[idx].Number" ValueChanged="@(v => _phoneEntries[idx].Number = v)"
+                                        <PhoneField Value="@_phoneEntries[idx].Number" ValueChanged="@(v => _phoneEntries[idx].Number = v)" DefaultCountry="@_country"
                                             Label="@(_phoneEntries[idx].IsMobile ? L["rg.mobile"] : L["common.phone"])" />
                                     </div>
                                     @if (idx > 0)
@@ -131,6 +131,79 @@ else
                                     </ChildContent>
                                 </MudMenu>
                             }
+                        </MudPaper>
+
+                        @* ---------- The Windows till ----------
+                           Majed 2026-10-02: "in partner add WPF download link". The desktop till
+                           (LocalHandler) prints receipts and kitchen tickets and runs the counter
+                           offline-tolerant; it updates itself from api/till afterwards, so this is
+                           the one download a shop ever makes. *@
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mt-4 st-till">
+                            <div class="d-flex align-center" style="gap: 12px;">
+                                <MudIcon Icon="@Icons.Material.Filled.DesktopWindows" Color="Color.Primary" Style="font-size: 34px;" />
+                                <div class="flex-grow-1">
+                                    <MudText Typo="Typo.h6" Class="mb-0">@L["till.title"]</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@L["till.sub"]</MudText>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap align-center mt-4" style="gap: 10px;">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                                           Href="@($"{Api.ApiBase}/api/till/download")" Target="_blank" Disabled="@(_till is null)">
+                                    @L["till.download"]
+                                </MudButton>
+                                @if (_till is not null)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default" Class="mf-ltr">
+                                        @string.Format(L["till.version"], _till.Version)
+                                    </MudChip>
+                                }
+                            </div>
+                            @if (_till?.Notes is { Length: > 0 } notes)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-3">
+                                    <b>@L["till.notes"]:</b> @notes
+                                </MudText>
+                            }
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["till.reqs"]</MudText>
+                        </MudPaper>
+
+                        @* ---------- The Android till ----------
+                           Majed 2026-10-15: "add it in vps for download in partner". The same till
+                           for a shop that runs on an Android POS terminal instead of a PC: prints
+                           the receipt on the terminal's own printer and kitchen/bar tickets on the
+                           Wi-Fi printers, with the designs and routing set here. Side-loaded APK. *@
+                        <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mt-4 st-till">
+                            <div class="d-flex align-center" style="gap: 12px;">
+                                <MudIcon Icon="@Icons.Material.Filled.PhoneAndroid" Color="Color.Primary" Style="font-size: 34px;" />
+                                <div class="flex-grow-1">
+                                    <MudText Typo="Typo.h6" Class="mb-0">@L["till.android.title"]</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@L["till.android.sub"]</MudText>
+                                </div>
+                            </div>
+                            <div class="d-flex flex-wrap align-center mt-4" style="gap: 10px;">
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                                           Href="@($"{Api.ApiBase}/api/till/android/download")" Target="_blank" Disabled="@(_android is null)">
+                                    @L["till.android.download"]
+                                </MudButton>
+                                @if (_android is not null)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default" Class="mf-ltr">
+                                        @string.Format(L["till.version"], _android.Version)
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    @* No APK published yet: say so instead of a mute grey button. *@
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">@L["till.android.soon"]</MudChip>
+                                }
+                            </div>
+                            @if (_android?.Notes is { Length: > 0 } anotes)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-3">
+                                    <b>@L["till.notes"]:</b> @anotes
+                                </MudText>
+                            }
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["till.android.reqs"]</MudText>
                         </MudPaper>
 
                         @* Where the shop stands is its own subject — a map deserves its own card,
@@ -216,9 +289,9 @@ else
                     <MudItem xs="12" md="5">
                         <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mb-4">
                             <MudText Typo="Typo.h6" Class="mb-4">@L["partner.deliveryTerms"]</MudText>
-                            <MudNumericField @bind-Value="_deliveryFee" Label="@L["partner.deliveryFeeOmr"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                            <MudNumericField @bind-Value="_deliveryFee" Label="@L["common.deliveryFee"]" Variant="Variant.Outlined" Margin="Margin.Dense"
                                 Format="0.000" Min="0m" Step="0.100m" Class="mb-3" />
-                            <MudNumericField @bind-Value="_minOrder" Label="@L["partner.minOrderOmr"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                            <MudNumericField @bind-Value="_minOrder" Label="@L["partner.minOrder"]" Variant="Variant.Outlined" Margin="Margin.Dense"
                                 Format="0.000" Min="0m" Step="0.500m" Class="mb-3" />
                             <MudNumericField @bind-Value="_prepMinutes" Label="@L["partner.prepTime"]" Variant="Variant.Outlined" Margin="Margin.Dense"
                                 Min="5" Max="120" Class="mb-3" />
@@ -227,7 +300,7 @@ else
                                 HelperText="@L["partner.taxHint"]" />
                             @* Collection costs the shop no delivery at all, so it is on by default;
                             turn it off only if customers genuinely cannot come to the counter. *@
-                            <MudSwitch T="bool" @bind-Value="_allowsPickup" Color="Color.Primary"
+                            <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_allowsPickup"
                                 Label="@L["partner.allowPickup"]" />
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                                 @L["partner.allowPickupHint"]
@@ -236,19 +309,19 @@ else
                             platform's riders — the shop runs them from its Deliveries page. *@
                             @* Locked ON platform-wide: every store carries its own orders for
                                now, so the switch shows the fact and refuses the finger. *@
-                            <MudSwitch T="bool" @bind-Value="_selfDelivery" Color="Color.Primary" Class="mt-2"
+                            <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_selfDelivery" Class="mt-2"
                                 Label="@L["partner.selfDelivery"]" Disabled="true" />
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                                 @L["partner.selfDeliveryHint"]
                             </MudText>
                             @* Which ending the POS save button offers first: park the bill, or settle it. *@
-                            <MudSwitch T="bool" @bind-Value="_posDefaultOpen" Color="Color.Primary" Class="mt-2"
+                            <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_posDefaultOpen" Class="mt-2"
                                 Label="@L["partner.posDefaultOpen"]" />
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                                 @L["partner.posDefaultOpenHint"]
                             </MudText>
                             @* The paper follows the money: settle a bill, get a receipt — no extra tap. *@
-                            <MudSwitch T="bool" @bind-Value="_directPrint" Color="Color.Primary" Class="mt-2"
+                            <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_directPrint" Class="mt-2"
                                 Label="@L["partner.directPrint"]" />
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                                 @L["partner.directPrintHint"]
@@ -265,6 +338,12 @@ else
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                                 @L["partner.kitchenLangHint"]
                             </MudText>
+                            @* Where the shop trades — first asked right after registration. *@
+                            <div class="d-flex align-center mt-3" style="gap: 10px;">
+                                <Flag Region="@StoreRegions.Find(_country)" Width="28" />
+                                <CountryPicker @bind-Value="_country" Label="@L["region.country"]" Class="flex-grow-1" />
+                            </div>
+                            <ClockFields @bind-TimeZone="_timeZone" @bind-DateFormat="_dateFormat" @bind-TimeFormat="_timeFormat" Zones="_zones" Class="mt-3" />
                             @* What money is called on every screen and printout of this shop. *@
                             <div class="st-cur mt-3">
                                 <MudSelect T="string" Value="_currency" ValueChanged="OnCurrency" Label="@L["partner.currency"]"
@@ -283,13 +362,13 @@ else
                             </MudText>
                             @* Photo-less dishes borrow a stock picture guessed from the name; a shop the
                                guesser serves badly turns it off and gets clean emoji tiles. *@
-                            <MudSwitch T="bool" @bind-Value="_dishStockPhotos" Color="Color.Primary" Class="mt-2"
+                            <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_dishStockPhotos" Class="mt-2"
                                 Label="@L["set.stockPhotos"]" />
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                                 @L["set.stockPhotosHint"]
                             </MudText>
                             @* Table bookings from the store's public page — each one waits for this house's yes. *@
-                            <MudSwitch T="bool" @bind-Value="_onlineReservations" Color="Color.Primary" Class="mt-2"
+                            <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" @bind-Value="_onlineReservations" Class="mt-2"
                                 Label="@L["partner.onlineReservations"]" />
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
                                 @L["partner.onlineReservationsHint"]
@@ -325,10 +404,13 @@ else
                                 <MudNumericField T="int" @bind-Value="_smtpPort" Label="@L["partner.mailPort"]" Min="1" Max="65535"
                                                  Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-3" Style="flex: 1;" />
                             </div>
+                            @* The mailbox login is NOT the portal login: browsers saw a username + password
+                               pair and filled in the owner's own sign-in ("farid"). These attributes tell
+                               Chrome, Safari and password managers to keep their hands off. *@
                             <MudTextField @bind-Value="_smtpUser" Label="@L["partner.mailUser"]" Variant="Variant.Outlined"
-                                          Margin="Margin.Dense" Class="mb-3 mf-ltr" MaxLength="200" />
+                                          Margin="Margin.Dense" Class="mb-3 mf-ltr" MaxLength="200" UserAttributes="@NoAutofillMailUser" />
                             <MudTextField @bind-Value="_smtpPassword" Label="@L["partner.mailPassword"]" Variant="Variant.Outlined"
-                                          Margin="Margin.Dense" Class="mb-3 mf-ltr" MaxLength="200"
+                                          Margin="Margin.Dense" Class="mb-3 mf-ltr" MaxLength="200" UserAttributes="@NoAutofillMailPassword"
                                           InputType="InputType.Password" HelperText="@L["partner.mailPasswordHint"]" />
                             <MudTextField @bind-Value="_smtpFrom" Label="@L["partner.mailFrom"]" Variant="Variant.Outlined"
                                           Margin="Margin.Dense" Class="mf-ltr" MaxLength="200" />
@@ -343,7 +425,7 @@ else
                                 var h = day;
                                 <div class="ph-row mb-1">
                                     <span class="d">@DayNames[h.Day]</span>
-                                    <MudSwitch T="bool" @bind-Value="h.Closed" Color="Color.Error" Size="Size.Small" />
+                                    <MudSwitch Color="Color.Success" T="bool" @bind-Value="h.Closed" Size="Size.Small" />
                                     @if (!h.Closed)
                                     {
                                         <MfTimePicker @bind-Time="h.Open" Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -437,6 +519,8 @@ else
                     [CascadingParameter] private Layout.MainLayout? Shell { get; set; }
 
                     private MyRestaurantDto? _restaurant;
+                    private TillVersionDto? _till;          // the Windows till release on offer
+                    private TillVersionDto? _android;       // the Android till (APK) on offer
                     private List<RestaurantPhotoDto>? _photos;
                         private bool _uploadingPhoto;
 
@@ -490,6 +574,11 @@ else
                                                     var data = await PullChunks(parked.RootElement.GetProperty("id").GetString()!,
                                                     parked.RootElement.GetProperty("size").GetInt32());
                                                     if (string.IsNullOrEmpty(data)) return;
+                                                    // Let the owner crop, zoom and turn it first (Majed 2026-10-14). PNG, because
+                                                    // the till's Windows print path cannot read WebP.
+                                                    var edited = await EditLogoAsync(data, 512, 330_000);
+                                                    if (edited is null) return;
+                                                    data = edited;
                                                     var (ok, error) = await Api.SetMyStoreLogoAsync(data);
                                                     if (!ok) { Snackbar.Add(error ?? L["common.uploadFail"], Severity.Error); return; }
                                                     _logoData = data;
@@ -501,6 +590,18 @@ else
                                                     _photoPct = -1;
                                                     StateHasChanged();
                                                 }
+                                            }
+
+                                            private async Task<string?> EditLogoAsync(string source, int size, int maxChars)
+                                            {
+                                                var parameters = new DialogParameters<LogoEditorDialog>
+                                                {
+                                                    { d => d.Source, source }, { d => d.OutputSize, size }, { d => d.Mime, "image/png" }, { d => d.MaxChars, maxChars },
+                                                };
+                                                var dialog = await Dialogs.ShowAsync<LogoEditorDialog>(null, parameters,
+                                                    new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true, CloseButton = true });
+                                                var result = await dialog.Result;
+                                                return result is { Canceled: false, Data: string url } ? url : null;
                                             }
 
                                             private async Task ClearLogo()
@@ -595,7 +696,7 @@ else
 
 
                                                             private string NamesSummary =>
-                                                            _names.Count == 0 ? _name : string.Join(" · ", new[] { "ar", "en" }
+                                                            _names.Count == 0 ? _name : string.Join(" · ", new[] { "en", "ar" }
                                                             .Where(_names.ContainsKey).Select(c => _names[c])
                                                             .Concat(_names.Count > 2 ? [$"+{_names.Count - 2}"] : Array.Empty<string>()));
 
@@ -638,7 +739,7 @@ else
                                                                         private int _prepMinutes;
                                                                         private bool _allowsPickup = true;
                                                                         private bool _selfDelivery;
-                                                                        private decimal _taxPercent = 5m;
+                                                                        private decimal _taxPercent = 0m;
                                                                         private bool _posDefaultOpen = true;
                                                                         private bool _directPrint;
                                                                         private string _kitchenLanguage = "";
@@ -656,6 +757,12 @@ else
                                                                         }
 
                                                                         private string _currency = Fmt.DefaultSymbol;
+                                                                        /// <summary>ISO country the shop trades in, from the post-registration question.</summary>
+                                                                        private string _country = "";
+                                                                        private string _timeZone = "";
+                                                                        private string _dateFormat = "dmy";
+                                                                        private string _timeFormat = "24";
+                                                                        private List<TimeZoneOptionDto> _zones = [];
 
                                                                         /// <summary>The symbols shops here actually ask for; anything else goes in the box beside it.</summary>
                                                                         private static readonly (string, string)[] Currencies =
@@ -672,6 +779,16 @@ else
                                                                         private bool _onlineReservations;
                                                                         private decimal _reservePricePerTable;
                                                                         private decimal _reservePricePerMinute;
+                                                                        // "new-password" is the one value Chrome honours for not filling a saved password;
+                                                                        // the odd names stop it pairing the fields with the portal's own login.
+                                                                        private static readonly Dictionary<string, object?> NoAutofillMailUser = new()
+                                                                        {
+                                                                            ["autocomplete"] = "off", ["name"] = "oo-mailbox-account", ["data-lpignore"] = "true", ["data-1p-ignore"] = "true", ["data-form-type"] = "other",
+                                                                        };
+                                                                        private static readonly Dictionary<string, object?> NoAutofillMailPassword = new()
+                                                                        {
+                                                                            ["autocomplete"] = "new-password", ["name"] = "oo-mailbox-secret", ["data-lpignore"] = "true", ["data-1p-ignore"] = "true", ["data-form-type"] = "other",
+                                                                        };
                                                                         private string _smtpHost = "";
                                                                         private int _smtpPort = 587;
                                                                         private string _smtpUser = "";
@@ -691,6 +808,9 @@ else
                                                                         protected override async Task OnInitializedAsync()
                                                                         {
                                                                             _cuisines = await Api.GetCuisinesAsync();
+                                                                            _till = await Api.GetTillVersionAsync();
+                                                                            _android = await Api.GetAndroidTillVersionAsync();
+                                                                            _zones = await Api.GetTimeZonesAsync() ?? [];
                                                                             _hours = (await Api.GetMyHoursAsync() ?? []).Select(d => new HoursRow
                                                                             {
                                                                                 Day = d.Day,
@@ -731,6 +851,10 @@ else
                                                                             _directPrint = _restaurant.DirectPrint;
                                                                             _kitchenLanguage = _restaurant.KitchenLanguage ?? "";
                                                                             _currency = _restaurant.Currency is { Length: > 0 } cur ? cur : Fmt.DefaultSymbol;
+                                                                            _country = _restaurant.Country ?? "";
+                                                                            _timeZone = _restaurant.TimeZone ?? "";
+                                                                            _dateFormat = _restaurant.DateFormat is "mdy" or "ymd" ? _restaurant.DateFormat : "dmy";
+                                                                            _timeFormat = _restaurant.TimeFormat == "12" ? "12" : "24";
                                                                             _dishStockPhotos = _restaurant.DishStockPhotos;
                                                                             _onlineReservations = _restaurant.OnlineReservations;
                                                                             _reservePricePerTable = _restaurant.ReservePricePerTable;
@@ -865,7 +989,11 @@ else
                                                                                 SmtpPassword: _smtpPassword, SmtpFrom: _smtpFrom,
                                                                                 DishStockPhotos: _dishStockPhotos,
                                                                                 KitchenLanguage: _kitchenLanguage,
-                                                                                Currency: _currency));
+                                                                                Currency: _currency,
+                                                                                Country: _country,
+                                                                                TimeZone: _timeZone,
+                                                                                DateFormat: _dateFormat,
+                                                                                TimeFormat: _timeFormat));
                                                                                 if (ok)
                                                                                 {
                                                                                     Snackbar.Add(L["partner.settingsSaved"], Severity.Success);

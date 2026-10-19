@@ -1,0 +1,15 @@
+@* One country's flag as a small picture; a globe for "Other country". *@
+@if (Region?.FlagUrl is { } src)
+{
+    <img src="@src" srcset="@($"{Region.FlagUrl2x} 2x")" width="@Width" height="@(Width * 3 / 4)" alt="@Region.Code"
+         loading="lazy" style="border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.08); flex: none; object-fit: cover;" />
+}
+else
+{
+    <span style="font-size: @(Width * 0.8)px; line-height: 1; flex: none;">🌍</span>
+}
+
+@code {
+    [Parameter] public StoreRegion? Region { get; set; }
+    [Parameter] public int Width { get; set; } = 24;
+}

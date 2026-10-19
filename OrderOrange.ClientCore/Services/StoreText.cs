@@ -51,6 +51,25 @@ public static class StoreText
             return own;
         return Name(name, locale);
     }
+    /// <summary>
+    /// The store page's headline in TWO languages (Majed 2026-10-15: "in title add two first
+    /// languages, for example english title - arabic title"): the English name first, then
+    /// the reader's own language when the owner wrote one, otherwise the first other
+    /// language the owner entered. A store with one name shows just that one.
+    /// </summary>
+    public static (string Main, string? Alt) Title(string? name, Dictionary<string, string>? names, string locale)
+    {
+        var main = names is not null && names.TryGetValue("en", out var en) && !string.IsNullOrWhiteSpace(en)
+            ? en.Trim()
+            : Name(name, names, "en");
+        if (names is null) return (main, null);
+
+        string? alt = null;
+        if (names.TryGetValue(locale, out var own) && !string.IsNullOrWhiteSpace(own) && locale != "en") alt = own.Trim();
+        alt ??= names.Where(kv => kv.Key != "en" && !string.IsNullOrWhiteSpace(kv.Value)).Select(kv => kv.Value.Trim()).FirstOrDefault();
+        return string.Equals(alt, main, StringComparison.OrdinalIgnoreCase) ? (main, null) : (main, alt);
+    }
+
     public static string Description(string? text, LanguageService lang) => Description(text, lang.Locale);
     public static string Area(string? area, LanguageService lang) => Area(area, lang.Locale);
 

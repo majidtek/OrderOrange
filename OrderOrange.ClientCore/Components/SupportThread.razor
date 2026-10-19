@@ -41,7 +41,7 @@
                 <div class="who">
                     <span class="av">@(msg.From == "support" ? "🎧" : "🏪")</span>
                     <b>@(mine ? L["tk.you"] : msg.From == "support" ? L["tk.support"] : msg.AuthorName)</b>
-                    <small title="@msg.At.ToString("yyyy-MM-dd HH:mm")">@Fmt.TimeAgo(msg.At, L)</small>
+                    <small title="@Fmt.DateTimeText(msg.At)">@Fmt.TimeAgo(msg.At, L)</small>
                 </div>
                 @if (!string.IsNullOrWhiteSpace(msg.Text))
                 {

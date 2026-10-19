@@ -13,7 +13,7 @@
                  Icon="@Icons.Material.Filled.Verified">@Lang["pay.paid"]</MudChip>
     }
     <MudSpacer />
-    <MudText Typo="Typo.caption" Color="Color.Secondary">@Order.PlacedAt.ToString("dd MMM yyyy, HH:mm")</MudText>
+    <MudText Typo="Typo.caption" Color="Color.Secondary">@Fmt.DayMonthYearTime(Order.PlacedAt)</MudText>
 </div>
 
 @* A turned-away order always says so. The shop may give no reason — that is allowed —
@@ -54,7 +54,7 @@
     {
         <MudItem xs="12">
             <MudAlert Severity="Severity.Info" Dense="true">
-                🗓️ @string.Format(Lang["track.scheduledFor"], scheduled.ToString("dddd, dd MMM"))
+                🗓️ @string.Format(Lang["track.scheduledFor"], Fmt.WeekdayDayMonth(scheduled))
             </MudAlert>
         </MudItem>
     }
@@ -144,7 +144,7 @@
         {
             <MudTimelineItem Color="@Fmt.StatusColor(step.Status)" Size="Size.Small" Variant="Variant.Filled">
                 <MudText Typo="Typo.body2">@Lang[$"status.{step.Status}"]</MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">@step.At.ToString("HH:mm") · @step.By</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@Fmt.Time(step.At) · @step.By</MudText>
             </MudTimelineItem>
         }
     </MudTimeline>

@@ -3,6 +3,7 @@
 @inject LanguageService L
 @inject IJSRuntime JS
 @inject AppState State
+@implements IDisposable
 
 <PageTitle>Partner — Dashboard</PageTitle>
 
@@ -16,6 +17,18 @@
 else
 {
     <AutoRefresh OnRefresh="Reload" Seconds="10" />
+
+    @* The floating door to the OrderOrange team (Majed 2026-10-15: "make this fixed in
+       home page with animation … in bottom … and add number of unread"). Bottom end
+       corner — the order assistant's button owns the start corner. *@
+    <a href="/admin-chat" class="oo-chat-fab" title="@L["achat.title"]" aria-label="@L["achat.title"]">
+        <span class="ic"><MudIcon Icon="@Icons.Material.Filled.HeadsetMic" /></span>
+        <span class="tx">@L["achat.title"]</span>
+        @if (State.AdminChatUnread > 0)
+        {
+            <i class="n">@(State.AdminChatUnread > 99 ? "99+" : State.AdminChatUnread.ToString())</i>
+        }
+    </a>
 
     <div class="db">
         @* ---------- The hero: the store greets its owner ---------- *@
@@ -34,7 +47,7 @@ else
                 <div class="tx">
                     <b>@string.Format(L["db.welcome"], _restaurant.Name)</b>
                     <small>
-                        @DateTime.Now.ToString("dddd · dd MMM")
+                        @($"{Fmt.Weekday(Fmt.ServerNow)} · {Fmt.DayMonth(Fmt.ServerNow)}")
                         <i class="pill @(_restaurant.IsOpen ? "on" : "off")">@(_restaurant.IsOpen ? L["partner.open"] : L["partner.closed"])</i>
                         @if (_restaurant.RatingCount > 0)
                         {
@@ -309,12 +322,12 @@ else
                 <div class="db-bars">
                     @foreach (var (day, total) in _week)
                     {
-                        var isToday = day.Date == DateTime.Today;
+                        var isToday = day.Date == Fmt.ServerToday;
                         var pct = wkMax > 0 ? (int)Math.Round((double)(total / wkMax) * 100) : 0;
                         <div class="col @(isToday ? "today" : "") @(day == best.Day && total > 0 ? "best" : "")">
                             <b>@(total > 0 ? Fmt.Amount(total) : "")</b>
                             <i style="height:@(Math.Max(total > 0 ? 6 : 0, pct))%"></i>
-                            <span>@day.ToString("ddd")</span>
+                            <span>@Fmt.Weekday(day, false, shift: false)</span>
                         </div>
                     }
                 </div>
@@ -348,6 +361,11 @@ else
 
     protected override Task OnInitializedAsync() => Reload();
 
+    // The chat badge follows the layout's poll the moment it changes, not on the next refresh.
+    protected override void OnInitialized() => State.Changed += OnStateChanged;
+    private void OnStateChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => State.Changed -= OnStateChanged;
+
     /// <summary>The numbers roll up from zero once, when the page first paints.</summary>
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -376,7 +394,7 @@ else
         _pending = _board.Count(o => o.Status == OrderStatus.Pending);
         _inKitchen = _board.Count(o => o.Status is OrderStatus.Accepted or OrderStatus.Preparing);
 
-        var today = DateTime.Today;
+        var today = Fmt.ServerToday;
         var todayOrders = _board.Concat(_history)
             .Where(o => o.PlacedAt >= today && o.Status is not (OrderStatus.Cancelled or OrderStatus.Rejected))
             .ToList();

@@ -49,6 +49,7 @@ public partial class MainWindow : MetroWindow
 
     /// <summary>The receipt the owner designed in the partner panel — refreshed on sign-in.</summary>
     private ReceiptDesignDto _design = ReceiptDesignDto.Default;
+    private KitchenDesignDto _kitchenDesign = KitchenDesignDto.Default;
 
     /// <summary>The store facts printed on the bill (name, address, CR/VAT) + the QR host.</summary>
     private StoreProfile _store = StoreProfile.Fallback("", "https://orderorange.com");
@@ -207,6 +208,7 @@ public partial class MainWindow : MetroWindow
     private async Task LoadDesignAsync()
     {
         _design = await _api.ReceiptDesignAsync();
+        _kitchenDesign = await _api.KitchenDesignAsync();
         var clientUrl = string.IsNullOrWhiteSpace(_setup.ClientUrl) ? "https://orderorange.com" : _setup.ClientUrl;
         var profile = await _api.ProfileAsync();
         _serverKitchenLang = profile?.KitchenLanguage ?? "";
@@ -584,7 +586,8 @@ public partial class MainWindow : MetroWindow
         try
         {
             _webPrinter ??= new WebReceiptPrinter(this);
-            var html = HtmlReceipt.BuildTicket(order, items, descs, _design.PaperWidth == 58 ? 58 : 80, names, changes, strings);
+            var html = HtmlReceipt.BuildTicket(order, items, descs, _design.PaperWidth == 58 ? 58 : 80, names, changes, strings,
+                _kitchenDesign, station.Name);
             var err = await _webPrinter.PrintAsync(html, station.PrinterName, _design.PaperWidth == 58 ? 58 : 80);
             if (err is not null)
             {
@@ -640,10 +643,17 @@ public partial class MainWindow : MetroWindow
             : [];
         if (stations.Count == 0 && _serverRoutes.TryGetValue(pid, out var role))
         {
+            // "both" = every enabled kitchen and bar station; otherwise the one role, with a fallback
+            // to any work station so a dish is never silently unprinted.
             var wanted = role == "bar" ? Models.StationRole.Bar : Models.StationRole.Kitchen;
-            var s = _setup.Stations.FirstOrDefault(x => x.Enabled && x.Role == wanted)
-                 ?? _setup.Stations.FirstOrDefault(x => x.Enabled && x.Role is Models.StationRole.Kitchen or Models.StationRole.Bar);
-            if (s is not null) stations = [s];
+            if (role == "both")
+                stations = _setup.Stations.Where(x => x.Enabled && x.Role is Models.StationRole.Kitchen or Models.StationRole.Bar).ToList();
+            else
+            {
+                var s = _setup.Stations.FirstOrDefault(x => x.Enabled && x.Role == wanted)
+                     ?? _setup.Stations.FirstOrDefault(x => x.Enabled && x.Role is Models.StationRole.Kitchen or Models.StationRole.Bar);
+                if (s is not null) stations = [s];
+            }
         }
         if (stations.Count == 0) stations = _setup.StationsFor(pid, CategoryOf(item.Name));
         return stations;

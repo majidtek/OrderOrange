@@ -1,0 +1,385 @@
+@page "/mailbox"
+@inject ApiClient Api
+@inject LanguageService L
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+
+@* The platform mailbox inside the admin panel (Majed 2026-10-15: "link my email
+   info@orderorange.com to the admin panel … I can manage my email and add notification").
+   Folders on the left, the list in the middle, the open message on the right; reply,
+   forward, compose, delete, mark unread, download attachments. New mail rings the admin
+   bell and pushes to the phone through the API's MailWatcher. *@
+
+<PageTitle>Admin — Mailbox</PageTitle>
+
+<div class="mb-page @(_open is null ? "list" : "read")">
+    <div class="mb-side">
+        <div class="mb-top">
+            <b>📧 @L["mail.title"]</b>
+            <small class="mf-ltr">@(_status?.Account ?? "")</small>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" StartIcon="@Icons.Material.Filled.Edit"
+                   Class="mb-3" OnClick="@(() => Compose(null, null))">@L["mail.compose"]</MudButton>
+        @if (_folders is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            @foreach (var f in _folders)
+            {
+                var folder = f;
+                <button type="button" class="mb-folder @(folder.Path == _folder ? "on" : "")" @onclick="@(() => OpenFolder(folder.Path))">
+                    <span>@FolderIcon(folder.Kind) @FolderName(folder)</span>
+                    @if (folder.Unread > 0 && folder.Kind != "trash" && folder.Kind != "sent")
+                    {
+                        <i>@folder.Unread</i>
+                    }
+                </button>
+            }
+        }
+        @if (_status is not null)
+        {
+            <div class="mb-status">
+                @if (!_status.Configured)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true">@L["mail.notConfigured"]</MudAlert>
+                }
+                else if (_status.LastError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="mf-ltr">@_status.LastError</MudAlert>
+                }
+                else
+                {
+                    <small>@string.Format(L["mail.watch"], _status.PollMinutes)</small>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="mb-list">
+        <div class="mb-tools">
+            <MudTextField T="string" Value="_search" ValueChanged="OnSearch" Immediate="true" DebounceInterval="400" Clearable="true"
+                          Placeholder="@L["mail.search"]" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+            <MudIconButton Icon="@(_unreadOnly ? Icons.Material.Filled.MarkEmailUnread : Icons.Material.Outlined.MarkEmailUnread)"
+                           Color="@(_unreadOnly ? Color.Primary : Color.Default)" title="@L["mail.unreadOnly"]" OnClick="ToggleUnread" />
+            <MudIconButton Icon="@Icons.Material.Filled.Refresh" title="@L["mail.refresh"]" OnClick="@(() => LoadList(true))" Disabled="_loading" />
+        </div>
+        @if (_page is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else if (_page.Items.Count == 0)
+        {
+            <div class="mb-empty"><div style="font-size: 40px;">📭</div>@L["mail.none"]</div>
+        }
+        else
+        {
+            <div class="mb-rows">
+                @foreach (var m in _page.Items)
+                {
+                    var msg = m;
+                    <button type="button" class="mb-row @(msg.Seen ? "" : "unread") @(_open?.Uid == msg.Uid ? "on" : "")" @onclick="@(() => OpenMessage(msg))">
+                        <span class="av">@Initial(msg.From)</span>
+                        <span class="mid">
+                            <span class="top"><b>@msg.From</b><small>@Clock(msg.Date)</small></span>
+                            <span class="sub">@(string.IsNullOrWhiteSpace(msg.Subject) ? L["mail.noSubject"] : msg.Subject) @if (msg.HasAttachments) { <MudIcon Icon="@Icons.Material.Filled.AttachFile" Style="width:14px;height:14px;vertical-align:-2px;" /> }</span>
+                            <span class="pv">@msg.Preview</span>
+                        </span>
+                    </button>
+                }
+            </div>
+            @if (_page.Items.Count < _page.Total)
+            {
+                <div class="text-center my-3">
+                    <MudButton Variant="Variant.Outlined" OnClick="LoadMore" Disabled="_loading">@L["mail.loadMore"] (@_page.Items.Count / @_page.Total)</MudButton>
+                </div>
+            }
+        }
+    </div>
+
+    <div class="mb-read">
+        @if (_open is null)
+        {
+            <div class="mb-pick"><div style="font-size: 56px;">✉️</div><b>@L["mail.pick"]</b></div>
+        }
+        else if (_message is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            var msg = _message;
+            <div class="mb-head">
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Class="mb-back" OnClick="@(() => { _open = null; _message = null; })" />
+                <div class="tx">
+                    <h2>@(string.IsNullOrWhiteSpace(msg.Subject) ? L["mail.noSubject"] : msg.Subject)</h2>
+                    <div class="who"><b>@msg.From</b> <span class="mf-ltr">&lt;@msg.FromAddress&gt;</span> · @Fmt.DateTimeText(msg.Date, shift: false)</div>
+                    <div class="who"><small>@L["mail.to"]: <span class="mf-ltr">@string.Join(", ", msg.To)</span>@(msg.Cc.Count > 0 ? $" · {L["mail.cc"]}: {string.Join(", ", msg.Cc)}" : "")</small></div>
+                </div>
+                <div class="acts">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Reply" OnClick="@(() => Compose(msg, "reply"))">@L["mail.reply"]</MudButton>
+                    <MudIconButton Icon="@Icons.Material.Filled.ReplyAll" title="@L["mail.replyAll"]" OnClick="@(() => Compose(msg, "replyAll"))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Forward" title="@L["mail.forward"]" OnClick="@(() => Compose(msg, "forward"))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.MarkEmailUnread" title="@L["mail.markUnread"]" OnClick="MarkUnread" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" title="@L["common.delete"]" OnClick="DeleteOpen" />
+                </div>
+            </div>
+            @if (msg.Attachments.Count > 0)
+            {
+                <div class="mb-atts">
+                    @foreach (var a in msg.Attachments)
+                    {
+                        var att = a;
+                        <button type="button" class="mb-att" @onclick="@(() => Download(att))" disabled="@(_downloading == att.Index)">
+                            📎 <span>@att.Name</span> <small>@HumanSize(att.Size)</small>
+                        </button>
+                    }
+                </div>
+            }
+            @if (msg.Html is not null)
+            {
+                @* Sandboxed: no scripts, no forms, no reach into the admin page. The CSP lets
+                   pictures and inline styles through and nothing else. *@
+                <iframe class="mb-body" sandbox="" srcdoc="@Framed(msg.Html)" title="message"></iframe>
+            }
+            else
+            {
+                <pre class="mb-text">@(msg.Text ?? "")</pre>
+            }
+        }
+    </div>
+</div>
+
+<style>
+    .mb-page { display: grid; grid-template-columns: 220px 360px 1fr; height: calc(100vh - 120px); min-height: 480px;
+               border: 1px solid var(--mud-palette-lines-default); border-radius: 16px; overflow: hidden; background: var(--mud-palette-surface); }
+    .mb-side { padding: 14px 12px; border-inline-end: 1px solid var(--mud-palette-lines-default); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+    .mb-top { display: flex; flex-direction: column; margin-bottom: 12px; }
+    .mb-top b { font-size: 16px; }
+    .mb-top small { font-size: 11.5px; color: var(--mud-palette-text-secondary); overflow: hidden; text-overflow: ellipsis; }
+    .mb-folder { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 9px 12px; border: 0; border-radius: 10px;
+                 background: none; cursor: pointer; font: inherit; font-size: 13.5px; color: inherit; text-align: start; }
+    .mb-folder:hover { background: rgba(255, 90, 0, .06); }
+    .mb-folder.on { background: rgba(255, 90, 0, .12); font-weight: 800; }
+    .mb-folder i { font-style: normal; background: #FF5A00; color: #fff; border-radius: 999px; font-size: 11px; font-weight: 800; padding: 1px 7px; }
+    .mb-status { margin-top: auto; padding-top: 10px; font-size: 11.5px; color: var(--mud-palette-text-secondary); }
+    .mb-list { display: flex; flex-direction: column; min-height: 0; border-inline-end: 1px solid var(--mud-palette-lines-default); }
+    .mb-tools { display: flex; align-items: center; gap: 4px; padding: 10px 10px 4px; }
+    .mb-tools .mud-input-control { flex: 1; }
+    .mb-rows { overflow-y: auto; flex: 1; min-height: 0; }
+    .mb-row { display: flex; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--mud-palette-lines-default); background: none;
+              cursor: pointer; font: inherit; color: inherit; text-align: start; }
+    .mb-row:hover { background: rgba(255, 90, 0, .05); }
+    .mb-row.on { background: rgba(255, 90, 0, .10); }
+    .mb-row .av { width: 36px; height: 36px; border-radius: 50%; background: #fff3ea; color: #FF5A00; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none; }
+    .mb-row .mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .mb-row .top { display: flex; justify-content: space-between; gap: 8px; }
+    .mb-row .top b { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mb-row .top small { font-size: 11px; color: var(--mud-palette-text-secondary); flex: none; }
+    .mb-row .sub { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mb-row .pv { font-size: 12px; color: var(--mud-palette-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mb-row.unread .top b, .mb-row.unread .sub { font-weight: 800; }
+    .mb-row.unread .av { background: #FF5A00; color: #fff; }
+    .mb-empty, .mb-pick { margin: auto; padding: 30px; text-align: center; color: var(--mud-palette-text-secondary); display: flex; flex-direction: column; gap: 8px; }
+    .mb-read { display: flex; flex-direction: column; min-height: 0; }
+    .mb-head { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px 10px; border-bottom: 1px solid var(--mud-palette-lines-default); }
+    .mb-head .tx { flex: 1; min-width: 0; }
+    .mb-head h2 { font-size: 17px; font-weight: 800; margin: 0 0 4px; overflow-wrap: anywhere; }
+    .mb-head .who { font-size: 12.5px; color: var(--mud-palette-text-secondary); overflow-wrap: anywhere; }
+    .mb-head .acts { display: flex; align-items: center; gap: 2px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+    .mb-back { display: none; }
+    .mb-atts { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 0; }
+    .mb-att { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--mud-palette-lines-default);
+              background: var(--mud-palette-background-gray); cursor: pointer; font: inherit; font-size: 12.5px; color: inherit; }
+    .mb-att small { color: var(--mud-palette-text-secondary); }
+    .mb-body { flex: 1; min-height: 0; border: 0; width: 100%; background: #fff; margin-top: 8px; }
+    .mb-text { flex: 1; min-height: 0; overflow: auto; margin: 0; padding: 16px; font: 14px/1.6 inherit; white-space: pre-wrap; overflow-wrap: anywhere; }
+    @@media (max-width: 1099px) {
+        .mb-page { grid-template-columns: 1fr; height: calc(100vh - 96px); }
+        .mb-side { flex-direction: row; flex-wrap: wrap; gap: 4px; align-items: center; border-inline-end: 0; border-bottom: 1px solid var(--mud-palette-lines-default); padding: 8px; overflow: visible; }
+        .mb-side .mud-button-root { width: auto !important; margin: 0 !important; }
+        .mb-folder { width: auto; padding: 6px 10px; }
+        .mb-top, .mb-status { display: none; }
+        .mb-page.read .mb-side, .mb-page.read .mb-list { display: none; }
+        .mb-page.list .mb-read { display: none; }
+        .mb-back { display: inline-flex; }
+    }
+</style>
+
+@code {
+    private MailStatusDto? _status;
+    private List<MailFolderDto>? _folders;
+    private MailPageDto? _page;
+    private MailSummaryDto? _open;
+    private MailMessageDto? _message;
+    private string _folder = "INBOX";
+    private string _search = "";
+    private bool _unreadOnly;
+    private bool _loading;
+    private int? _downloading;
+    private const int PageSize = 25;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _status = await Api.GetMailStatusAsync();
+        if (_status?.Configured != true) { _folders = []; _page = new MailPageDto([], 0, 0); return; }
+        await LoadList(true);
+        _folders = await Api.GetMailFoldersAsync() ?? [];
+    }
+
+    private async Task LoadList(bool reset)
+    {
+        _loading = true;
+        try
+        {
+            var skip = reset ? 0 : _page?.Items.Count ?? 0;
+            var page = await Api.GetMailMessagesAsync(_folder, skip, PageSize, _search, _unreadOnly);
+            if (page is null) { if (reset) _page = new MailPageDto([], 0, 0); return; }
+            if (reset || _page is null) _page = page;
+            else _page = page with { Items = [.. _page.Items, .. page.Items] };
+        }
+        finally { _loading = false; }
+    }
+
+    private Task LoadMore() => LoadList(false);
+
+    private async Task OpenFolder(string path)
+    {
+        _folder = path;
+        _open = null;
+        _message = null;
+        _page = null;
+        await LoadList(true);
+    }
+
+    private async Task OnSearch(string value)
+    {
+        _search = value ?? "";
+        _page = null;
+        await LoadList(true);
+    }
+
+    private async Task ToggleUnread()
+    {
+        _unreadOnly = !_unreadOnly;
+        _page = null;
+        await LoadList(true);
+    }
+
+    private async Task OpenMessage(MailSummaryDto m)
+    {
+        _open = m;
+        _message = null;
+        _message = await Api.GetMailMessageAsync(m.Folder, m.Uid);
+        if (_message is null) { Snackbar.Add(L["common.error"], Severity.Error); _open = null; return; }
+        if (!m.Seen && _page is not null)
+        {
+            var i = _page.Items.FindIndex(x => x.Uid == m.Uid);
+            if (i >= 0) _page.Items[i] = m with { Seen = true };
+            _page = _page with { Unread = Math.Max(0, _page.Unread - 1) };
+            BumpFolder(m.Folder, -1);
+        }
+    }
+
+    private void BumpFolder(string path, int delta)
+    {
+        if (_folders is null) return;
+        var i = _folders.FindIndex(f => f.Path == path);
+        if (i >= 0) _folders[i] = _folders[i] with { Unread = Math.Max(0, _folders[i].Unread + delta) };
+    }
+
+    private async Task MarkUnread()
+    {
+        if (_open is null) return;
+        var (ok, error) = await Api.MarkMailAsync(new MailMarkRequest(_open.Folder, [_open.Uid], false));
+        if (!ok) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+        if (_page is not null)
+        {
+            var i = _page.Items.FindIndex(x => x.Uid == _open.Uid);
+            if (i >= 0) _page.Items[i] = _page.Items[i] with { Seen = false };
+            BumpFolder(_open.Folder, +1);
+        }
+        _open = null;
+        _message = null;
+    }
+
+    private async Task DeleteOpen()
+    {
+        if (_open is null) return;
+        var sure = await Dialogs.ShowMessageBox(L["common.delete"], L["mail.confirmDelete"], yesText: L["common.delete"], cancelText: L["common.cancel"]);
+        if (sure != true) return;
+        var (ok, error) = await Api.DeleteMailAsync(new MailDeleteRequest(_open.Folder, [_open.Uid]));
+        if (!ok) { Snackbar.Add(error ?? L["common.error"], Severity.Error); return; }
+        Snackbar.Add(L["mail.deleted"], Severity.Success);
+        _page?.Items.RemoveAll(x => x.Uid == _open.Uid);
+        if (_page is not null) _page = _page with { Total = Math.Max(0, _page.Total - 1) };
+        _open = null;
+        _message = null;
+    }
+
+    private async Task Download(MailAttachmentDto att)
+    {
+        if (_open is null) return;
+        _downloading = att.Index;
+        try
+        {
+            var f = await Api.GetMailAttachmentAsync(_open.Folder, _open.Uid, att.Index);
+            if (f is null) { Snackbar.Add(L["common.error"], Severity.Error); return; }
+            await JS.InvokeVoidAsync("mfSupport.download", $"data:{f.ContentType};base64,{f.Data}", f.Name);
+        }
+        finally { _downloading = null; }
+    }
+
+    private async Task Compose(MailMessageDto? original, string? mode)
+    {
+        var parameters = new DialogParameters<MailComposeDialog>
+        {
+            { x => x.Original, original },
+            { x => x.Mode, mode ?? "new" },
+        };
+        var dialog = await Dialogs.ShowAsync<MailComposeDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseButton = true, BackdropClick = false });
+        var result = await dialog.Result;
+        if (result is { Canceled: false }) Snackbar.Add(L["mail.sent"], Severity.Success);
+    }
+
+    /// <summary>The mail's HTML in its own little document, locked down.</summary>
+    private static string Framed(string html) =>
+        "<!doctype html><html><head><meta charset=\"utf-8\">" +
+        "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; img-src data: https: http: cid:; style-src 'unsafe-inline'; font-src https: data:;\">" +
+        "<base target=\"_blank\"><style>body{margin:16px;font-family:Segoe UI,Tahoma,Arial,sans-serif;font-size:14px;color:#222;overflow-wrap:anywhere}img{max-width:100%;height:auto}</style></head><body>" +
+        html + "</body></html>";
+
+    private string FolderName(MailFolderDto f) => f.Kind switch
+    {
+        "inbox" => L["mail.inbox"],
+        "sent" => L["mail.sentFolder"],
+        "drafts" => L["mail.drafts"],
+        "trash" => L["mail.trash"],
+        "junk" => L["mail.junk"],
+        _ => f.Name,
+    };
+
+    private static string FolderIcon(string kind) => kind switch
+    {
+        "inbox" => "📥", "sent" => "📤", "drafts" => "📝", "trash" => "🗑️", "junk" => "🚫", _ => "📁",
+    };
+
+    private static string Initial(string s) => string.IsNullOrWhiteSpace(s) ? "?" : s.Trim()[..1].ToUpperInvariant();
+
+    private string Clock(DateTime at) =>
+        at.Date == DateTime.Today ? at.ToString("HH:mm")
+        : at.Date == DateTime.Today.AddDays(-1) ? L["qc.yesterday"]
+        : at.Year == DateTime.Today.Year ? at.ToString("dd MMM") : at.ToString("yyyy-MM-dd");
+
+    private static string HumanSize(long bytes) => bytes switch
+    {
+        <= 0 => "",
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024d:0} KB",
+        _ => $"{bytes / 1024d / 1024:0.0} MB",
+    };
+}

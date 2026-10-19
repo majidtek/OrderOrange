@@ -178,7 +178,7 @@
     private int _tab;
 
     private string RangeLabel => _range is { Start: not null, End: not null }
-        ? $"{_range.Start:d MMM yyyy} – {_range.End:d MMM yyyy}"
+        ? $"{Fmt.DayMonthYear(_range.Start, shift: false)} – {Fmt.DayMonthYear(_range.End, shift: false)}"
         : L["billrep.last12"];
 
     // ---------- Export ----------

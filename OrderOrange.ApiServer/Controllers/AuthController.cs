@@ -49,6 +49,15 @@ public class AuthController(
     private bool PasswordLoginAllowed => !string.Equals(config["Auth:AllowPasswordLogin"], "false", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// The emailed one-time code. Majed 2026-10-02: "remove login by code" — the codes leave
+    /// from the Workspace mailbox, and a door that depends on a bill being paid is a door
+    /// that can shut on everyone at once. Off = Google (and the legacy password) only; the
+    /// apps read this from api/auth/methods, so no app redeploy is needed to flip it.
+    /// </summary>
+    private bool EmailCodeAllowed =>
+        email.IsConfigured && !string.Equals(config["Auth:AllowEmailCodeLogin"], "false", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The administrator allowlist. An ADMIN session may only be minted for the emails
     /// named in Admin:AllowedEmails — checked on every route in (password, Google, email
     /// code), because a gate on one door is decoration if the others stay open. Role
@@ -79,7 +88,7 @@ public class AuthController(
             return Unauthorized(new { code = "auth.bad", message = "Invalid username or password." });
         if (!user.IsActive)
             return Unauthorized(new { code = user.Role == UserRole.Driver ? "auth.driverPending" : "auth.disabled", message = user.Role == UserRole.Driver
-                ? "Your rider application is awaiting approval — you'll be able to sign in once the MajidFood team activates your account."
+                ? "Your rider application is awaiting approval — you'll be able to sign in once the OrderOrange team activates your account."
                 : "This account has been deactivated. Contact support." });
 
         if (AdminGate(user) is { } refusal) return Unauthorized(new { code = "auth.notAdmin", message = refusal });
@@ -95,7 +104,7 @@ public class AuthController(
     [HttpGet("methods")]
     [AllowAnonymous]
     public ActionResult<AuthMethods> Methods() =>
-        Ok(new AuthMethods(google.ClientId, email.IsConfigured, PasswordLoginAllowed));
+        Ok(new AuthMethods(google.ClientId, EmailCodeAllowed, PasswordLoginAllowed));
 
     // ---------- Sign in with a code sent to your email ----------
 
@@ -108,8 +117,8 @@ public class AuthController(
     [AllowAnonymous]
     public async Task<ActionResult<OtpRequestResult>> RequestCode(OtpRequest req)
     {
-        if (!email.IsConfigured)
-            return StatusCode(503, new OtpRequestResult(false, 0, "Email sign-in is not configured on this server."));
+        if (!EmailCodeAllowed)
+            return StatusCode(503, new OtpRequestResult(false, 0, "Email sign-in is turned off. Please continue with Google."));
 
         var address = (req.Email ?? "").Trim().ToLower();
         if (address.Length < 5 || !address.Contains('@') || !address.Contains('.'))
@@ -141,6 +150,8 @@ public class AuthController(
     [AllowAnonymous]
     public async Task<ActionResult<LoginResponse>> VerifyCode(OtpVerifyRequest req)
     {
+        if (!EmailCodeAllowed)
+            return StatusCode(503, new { message = "Email sign-in is turned off. Please continue with Google." });
         var address = (req.Email ?? "").Trim().ToLower();
         // Belt and braces to the client's own normalisation: a code typed on a Farsi or
         // Arabic keyboard arrives as Eastern digits — the same six digits, other glyphs.
@@ -300,9 +311,10 @@ public class AuthController(
             // exactly like a brand-new partner. A returning owner just resumes.
             if (!await db.Restaurants.AnyAsync(r => r.OwnerUserId == user.Id))
             {
-                var firstCuisine = await db.Cuisines.OrderBy(c => c.Id).FirstAsync();
+                var firstCuisine = await PlaceholderCuisineAsync(StoreType.Restaurant);
                 var newStore = new Restaurant
                 {
+                    TaxPercent = 0m,   // new businesses start with no tax; the owner sets it in Settings (Majed 2026-10-11)
                     Owner = user,
                     Name = email.Split('@')[0],
                     CuisineId = firstCuisine.Id,
@@ -311,7 +323,7 @@ public class AuthController(
                     Area = "",
                     Phone = "",
                     IsOpen = false,
-                    IsApproved = false,
+                    IsApproved = true,    // live at once (Majed 2026-10-16: "after registering automatically make partner active")
                     CreatedAt = DateTime.Now
                 };
                 db.Restaurants.Add(newStore);
@@ -341,9 +353,10 @@ public class AuthController(
         };
         db.Users.Add(user);
 
-        var cuisine = await db.Cuisines.OrderBy(c => c.Id).FirstAsync();
+        var cuisine = await PlaceholderCuisineAsync(StoreType.Restaurant);
         var store = new Restaurant
         {
+            TaxPercent = 0m,   // new businesses start with no tax; the owner sets it in Settings (Majed 2026-10-11)
             Owner = user,
             Name = email.Split('@')[0],
             CuisineId = cuisine.Id,
@@ -352,7 +365,7 @@ public class AuthController(
             Area = "",
             Phone = "",
             IsOpen = false,
-            IsApproved = false,
+            IsApproved = true,    // live at once (Majed 2026-10-16: "after registering automatically make partner active")
             CreatedAt = DateTime.Now
         };
         db.Restaurants.Add(store);
@@ -400,6 +413,27 @@ public class AuthController(
         return await BuildResponse(user);
     }
 
+    /// <summary>
+    /// The category a brand-new store is born with. A vertical (grocery, pharmacy…) IS its
+    /// category; a restaurant gets a stand-in only because the column cannot be empty — the
+    /// welcome dialog makes the owner pick the real one before anything else (Majed
+    /// 2026-10-15: "do not make this default, user has to set it after register").
+    /// </summary>
+    private async Task<Cuisine> PlaceholderCuisineAsync(StoreType type)
+    {
+        string? wanted = type switch
+        {
+            StoreType.Grocery => "Grocery",
+            StoreType.Pharmacy => "Pharmacy",
+            StoreType.Flowers => "Flowers & Gifts",
+            StoreType.Shop => "Shopping",
+            _ => null,
+        };
+        if (wanted is not null && await db.Cuisines.FirstOrDefaultAsync(c => c.Name == wanted) is { } vertical) return vertical;
+        if (type == StoreType.Flowers && await db.Cuisines.FirstOrDefaultAsync(c => c.Name == "Flowers") is { } flowers) return flowers;
+        return await db.Cuisines.OrderBy(c => c.Id).FirstAsync();
+    }
+
     [HttpPost("register-driver")]
     [AllowAnonymous]
     public async Task<IActionResult> RegisterDriver(RegisterDriverRequest req)
@@ -409,13 +443,13 @@ public class AuthController(
             return BadRequest(new { message = "The page has expired — reload it and try again." });
         var email = req.Email.Trim().ToLower();
         if (string.IsNullOrWhiteSpace(req.FullName) || string.IsNullOrWhiteSpace(email))
-            return BadRequest(new { message = "Name and email are required." });
+            return BadRequest(new { message = "Name and username are required." });
         if (string.IsNullOrWhiteSpace(req.Phone))
             return BadRequest(new { message = "A phone number is required — dispatch needs to reach you." });
         if (req.Password.Length < 6)
             return BadRequest(new { message = "Password must be at least 6 characters." });
         if (await db.Users.AnyAsync(u => u.Email == email))
-            return BadRequest(new { message = "An account with this email already exists." });
+            return BadRequest(new { message = "An account with this username already exists." });
         if (!throttle.TryRegister(HttpContext))
             return StatusCode(429, new { code = "auth.tooMany", message = "Too many new accounts from this network today. Try again tomorrow." });
 
@@ -458,8 +492,8 @@ public class AuthController(
         if (!throttle.TryRegister(HttpContext))
             return StatusCode(429, new { code = "auth.tooMany", message = "Too many new accounts from this network today. Try again tomorrow." });
 
-        // The owner can sign in right away to prepare the menu; the store itself
-        // stays invisible to customers until an admin approves it.
+        // The owner can sign in right away, and the store is live from the first minute —
+        // an administrator can still take it off the site afterwards.
         var user = new User
         {
             FullName = req.FullName.Trim(),
@@ -472,12 +506,13 @@ public class AuthController(
         };
         db.Users.Add(user);
 
-        var cuisine = await db.Cuisines.OrderBy(c => c.Id).FirstAsync();
+        var cuisine = await PlaceholderCuisineAsync(req.StoreType);
         var names = RestaurantsController.CleanNames(req.Names);
-        if (req.Names is not null && !names.ContainsKey("ar"))
-            return BadRequest(new { message = "The Arabic name is required." });
+        if (req.Names is not null && !names.ContainsKey("en"))
+            return BadRequest(new { message = "The English name is required." });
         var store = new Restaurant
         {
+            TaxPercent = 0m,   // new businesses start with no tax; the owner sets it in Settings (Majed 2026-10-11)
             Owner = user,
             Name = RestaurantsController.CanonicalName(names) ?? req.RestaurantName.Trim(),
             NameLocalized = RestaurantsController.NamesToJson(names),
@@ -491,7 +526,7 @@ public class AuthController(
             Lat = req.Lat,
             Lng = req.Lng,
             IsOpen = false,
-            IsApproved = false,
+            IsApproved = true,    // live at once (Majed 2026-10-16: "after registering automatically make partner active")
             CreatedAt = DateTime.Now
         };
         db.Restaurants.Add(store);

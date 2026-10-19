@@ -31,7 +31,7 @@ else if (_open is not null)
                     @(_open.InvoiceNumber is null
                         ? L["ch.noInvoice"]
                         : string.Format(L["ch.invoice"], _open.InvoiceNumber))
-                    · @_open.ClosedAt.ToString("dd/MM/yyyy HH:mm")
+                    · @Fmt.DateTimeText(_open.ClosedAt)
                 </small>
             </div>
         </div>
@@ -50,7 +50,7 @@ else if (_open is not null)
                     @if (lastDay != msg.At.Date)
                     {
                         lastDay = msg.At.Date;
-                        <div class="wa-date"><span>@msg.At.ToString("dd/MM/yyyy")</span></div>
+                        <div class="wa-date"><span>@Fmt.Date(msg.At)</span></div>
                     }
                     <div class="qc-bubble @(own ? "me" : "them") @(msg.Deleted ? "gone" : "")">
                         @if (msg.Deleted)
@@ -80,7 +80,7 @@ else if (_open is not null)
                                 <span>@msg.Text</span>
                             }
                         }
-                        <small>@msg.At.ToString("HH:mm")</small>
+                        <small>@Fmt.Time(msg.At)</small>
                     </div>
                 }
             }
@@ -179,7 +179,7 @@ else
                             · @string.Format(L["ch.msgs"], session.Count)
                         </small>
                     </span>
-                    <small class="when">@session.ClosedAt.ToString("dd/MM/yyyy HH:mm")</small>
+                    <small class="when">@Fmt.DateTimeText(session.ClosedAt)</small>
                 </button>
             }
         </div>
@@ -318,8 +318,8 @@ else
 
             if (_days > 0)
             {
-                var since = DateTime.Now.Date.AddDays(-(_days - 1));
-                query = query.Where(s => s.ClosedAt.ToLocalTime() >= since);
+                var since = Fmt.ServerToday.AddDays(-(_days - 1));
+                query = query.Where(s => s.ClosedAt >= since);
             }
 
             if (_tables.Count > 0)

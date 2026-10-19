@@ -61,7 +61,7 @@
                     {
                         <MudText Typo="Typo.body2">@message.Text</MudText>
                     }
-                    <div class="mf-chat-time">@message.At.ToString("HH:mm")</div>
+                    <div class="mf-chat-time">@Fmt.Time(message.At)</div>
                 </div>
             </div>
         }

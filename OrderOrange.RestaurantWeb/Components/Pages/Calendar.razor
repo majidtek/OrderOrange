@@ -37,7 +37,7 @@
                          @onclick="@(() => Open(item.Source, null))" @onclick:stopPropagation="true">
                         @if (!item.AllDay)
                         {
-                            <span class="t" dir="ltr">@item.Start.ToString("HH:mm")</span>
+                            <span class="t" dir="ltr">@Fmt.Time(item.Start, shift: false)</span>
                         }
                         @if (item.Source.RemindMinutes is not null)
                         {
@@ -81,7 +81,7 @@
     private List<CalendarEventDto>? _events;
     private List<CalItem> _items = [];
     private CalendarView _view = CalendarView.Month;
-    private DateTime _day = DateTime.Today;
+    private DateTime _day = Fmt.ServerToday;
 
     private bool CanWrite => Perm.Allows(State.StoreRole, State.Perms, Perm.Calendar);
 
@@ -109,13 +109,13 @@
     }
 
     private List<CalendarEventDto> Upcoming =>
-        (_events ?? []).Where(e => (e.EndAt ?? e.StartAt) >= DateTime.Now.AddHours(-1)).OrderBy(e => e.StartAt).Take(40).ToList();
+        (_events ?? []).Where(e => (e.EndAt ?? e.StartAt) >= Fmt.ServerNow.AddHours(-1)).OrderBy(e => e.StartAt).Take(40).ToList();
 
     private string When(CalendarEventDto e)
     {
-        if (e.AllDay) return e.StartAt.ToString("ddd d MMM");
-        var day = e.StartAt.Date == DateTime.Today ? L["att.today"] : e.StartAt.ToString("ddd d MMM");
-        return $"{day} · {e.StartAt:HH:mm}{(e.EndAt is DateTime end ? $"–{end:HH:mm}" : "")}";
+        if (e.AllDay) return Fmt.WeekdayDayMonth(e.StartAt, longWeekday: false, shift: false);
+        var day = e.StartAt.Date == Fmt.ServerToday ? L["att.today"] : Fmt.WeekdayDayMonth(e.StartAt, longWeekday: false, shift: false);
+        return $"{day} · {Fmt.Time(e.StartAt, shift: false)}{(e.EndAt is DateTime end ? $"–{Fmt.Time(end, shift: false)}" : "")}";
     }
 
     private string RemindLabel(int minutes) => minutes switch

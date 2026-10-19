@@ -460,10 +460,11 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
 
                 db.Restaurants.Add(new Restaurant
                 {
+                    TaxPercent = 0m,   // new businesses start with no tax; the owner sets it in Settings (Majed 2026-10-11)
                     OwnerUserId = existing.Id, Name = req.RestaurantName.Trim(), CuisineId = req.CuisineId.Value,
                     StoreType = req.StoreType,
                     Description = "", Area = "", Street = "", Phone = req.Phone.Trim(),
-                    DeliveryFee = 0.500m, MinOrder = 1.000m, AvgPrepMinutes = 20,
+                    DeliveryFee = 0m, MinOrder = 0m, AvgPrepMinutes = 0,
                     IsOpen = false, IsApproved = false, CommissionPercent = 0m, CreatedAt = DateTime.Now
                 });
                 await db.SaveChangesAsync();
@@ -495,10 +496,11 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
                 // Starts unapproved and closed — the admin flips the switch when onboarding is done.
                 db.Restaurants.Add(new Restaurant
                 {
+                    TaxPercent = 0m,   // new businesses start with no tax; the owner sets it in Settings (Majed 2026-10-11)
                     Owner = user, Name = req.RestaurantName.Trim(), CuisineId = req.CuisineId.Value,
                     StoreType = req.StoreType,
                     Description = "", Area = "", Street = "", Phone = req.Phone.Trim(),
-                    DeliveryFee = 0.500m, MinOrder = 1.000m, AvgPrepMinutes = 20,
+                    DeliveryFee = 0m, MinOrder = 0m, AvgPrepMinutes = 0,
                     IsOpen = false, IsApproved = false, CommissionPercent = 0m, CreatedAt = DateTime.Now
                 });
                 break;
@@ -711,7 +713,7 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
         db.Restaurants
             .Where(r => r.SuggestedOrder != null)
             .OrderBy(r => r.SuggestedOrder).ThenBy(r => r.Id)
-            .Select(r => new AdminSuggestedDto(r.Id, r.Name, r.LogoEmoji, r.IsApproved))
+            .Select(r => new AdminSuggestedDto(r.Id, r.Name, r.LogoEmoji, r.IsApproved, r.LogoData, r.Area))
             .ToListAsync();
 
     /// <summary>
@@ -1001,66 +1003,12 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
     /// same product, which means IDENTITY_INSERT rather than plain EF adds.
     /// </summary>
     [HttpPost("restaurants/{id:int}/menu/sync-search")]
-    public async Task<IActionResult> SyncMenuToSearch(int id)
+    public async Task<IActionResult> SyncMenuToSearch(int id, [FromServices] MenuSearchMirror mirror)
     {
         if (!await db.Restaurants.AnyAsync(r => r.Id == id)) return NotFound();
-
-        var categories = await catalog.CategoriesAsync(id);
-        var items = (await catalog.OwnerMenuAsync(id))
-            .SelectMany(c => c.Items.Select(i => (Category: c.Id, Item: i)))
-            .Where(x => x.Item.Status == ProductStatus.Approved && !x.Item.InStoreOnly)
-            .ToList();
-
-        await using var tx = await db.Database.BeginTransactionAsync();
-
-        // Out with the old rows first — a dish the partner has since deleted must not linger
-        // in search, and clearing by store keeps this idempotent.
-        await db.MenuItems.Where(i => i.RestaurantId == id).ExecuteDeleteAsync();
-        await db.MenuCategories.Where(c => c.RestaurantId == id).ExecuteDeleteAsync();
-
-        // One table at a time: SQL Server permits IDENTITY_INSERT on a single table per
-        // session, so categories are written and committed to the context before items.
-        foreach (var c in categories)
-            db.MenuCategories.Add(new MenuCategory
-            {
-                Id = c.Id, RestaurantId = id, Name = c.Name, SortOrder = c.SortOrder,
-            });
-        await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT MenuCategories ON;");
-        await db.SaveChangesAsync();
-        await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT MenuCategories OFF;");
-
-        foreach (var (categoryId, i) in items)
-            db.MenuItems.Add(new MenuItem
-            {
-                Id = i.Id,
-                RestaurantId = id,
-                CategoryId = categoryId,
-                Name = i.Name,
-                Description = i.Description,
-                Price = i.Price,
-                IsAvailable = i.IsAvailable,
-                ImageEmoji = i.ImageEmoji,
-                IsPopular = i.IsPopular,
-                DiscountPercent = i.DiscountPercent,
-                // Every tongue the partner filled is searchable, not just the canonical name —
-                // a customer typing «شیشلیک» has to land on the same dish as one typing "shishlik".
-                SearchKeywords = SearchAliases.KeywordsFor(
-                    string.Join(' ', new[] { i.Name }
-                        .Concat(i.Names?.Values ?? Enumerable.Empty<string>()).Distinct())),
-                AvailableFromMinutes = i.AvailableFromMinutes,
-                AvailableToMinutes = i.AvailableToMinutes,
-                AvailableDays = i.AvailableDays,
-                LeadTimeDays = i.LeadTimeDays,
-                Ingredients = i.Ingredients,
-                Unit = i.Unit,
-            });
-
-        await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT MenuItems ON;");
-        await db.SaveChangesAsync();
-        await db.Database.ExecuteSqlRawAsync("SET IDENTITY_INSERT MenuItems OFF;");
-        await tx.CommitAsync();
-
-        return Ok(new { categories = categories.Count, items = items.Count });
+        // The same mirror the background service keeps; here it runs at once, on demand.
+        var (categories, items) = await mirror.SyncAsync(db, id);
+        return Ok(new { categories, items });
     }
 
     private async Task<string?> ValidateMenuItem(int restaurantId, SaveMenuItemRequest req)
@@ -1200,18 +1148,28 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
 
     // ---------- Driver document verification ----------
 
+    /// <summary>
+    /// One tab's riders. Pending also holds fresh applications from the rider form: they
+    /// start inactive with no documents, can't sign in to upload any, and so never reached
+    /// this page before (Majed 2026-10-14: "delivery can not login … in admin can not see it").
+    /// </summary>
+    private IQueryable<DriverProfile> DriverTab(DriverVerificationStatus status) =>
+        status == DriverVerificationStatus.Pending
+            ? db.DriverProfiles.Where(d => d.Verification == DriverVerificationStatus.Pending
+                || (d.Verification == DriverVerificationStatus.NotSubmitted && !d.User.IsActive))
+            : db.DriverProfiles.Where(d => d.Verification == status);
+
     [HttpGet("driver-verifications/count")]
     public async Task<int> DriverVerificationsCount(DriverVerificationStatus status = DriverVerificationStatus.Pending)
-        => await db.DriverProfiles.CountAsync(d => d.Verification == status);
+        => await DriverTab(status).CountAsync();
 
     /// <summary>Submissions for one tab (Pending / Approved / Rejected), newest first.</summary>
     [HttpGet("driver-verifications")]
     public async Task<List<AdminDriverDocsDto>> DriverVerifications(
         DriverVerificationStatus status = DriverVerificationStatus.Pending, int skip = 0, int take = 30)
     {
-        return await db.DriverProfiles
-            .Where(d => d.Verification == status)
-            .OrderByDescending(d => d.DocsSubmittedAt ?? DateTime.MinValue).ThenByDescending(d => d.Id)
+        return await DriverTab(status)
+            .OrderByDescending(d => d.DocsSubmittedAt ?? d.User.CreatedAt).ThenByDescending(d => d.Id)
             .Skip(Math.Max(0, skip)).Take(Math.Clamp(take, 1, 60))
             .Select(d => new AdminDriverDocsDto(
                 d.UserId, d.User.FullName, d.User.Email, d.User.Phone, d.VehicleType,
@@ -1223,10 +1181,12 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
     [HttpPost("driver-verifications/{userId:int}/approve")]
     public async Task<IActionResult> ApproveDriverDocs(int userId)
     {
-        var profile = await db.DriverProfiles.FirstOrDefaultAsync(d => d.UserId == userId);
+        var profile = await db.DriverProfiles.Include(d => d.User).FirstOrDefaultAsync(d => d.UserId == userId);
         if (profile is null) return NotFound();
         profile.Verification = DriverVerificationStatus.Approved;
         profile.VerificationReason = null;
+        // Approving an application is what lets the rider sign in at all.
+        profile.User.IsActive = true;
         await db.SaveChangesAsync();
         return Ok(new { status = profile.Verification.ToString() });
     }

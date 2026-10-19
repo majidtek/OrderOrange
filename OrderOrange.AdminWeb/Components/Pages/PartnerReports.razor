@@ -1,0 +1,271 @@
+﻿@page "/partner-reports"
+@inject ApiClient Api
+@inject LanguageService L
+@inject NavigationManager Nav
+
+@* Admin → Partner reports (Majed 2026-10-14: "in admin I can see all today report of all
+   partner", "select partner then I see today report", "select partner then I can see list of
+   product"). Today by default; any span to the minute. All partners at once, or one partner's
+   full report — the very numbers the partner sees on their own daily report. *@
+
+<PageTitle>Admin — Partner reports</PageTitle>
+<PageHeader Title="@L["ptr.title"]" Subtitle="@L["ptr.sub"]" />
+
+<div class="dr-page">
+    <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-4 dr-filter">
+        <MudAutocomplete Margin="Margin.Dense" T="AdminRestaurantDto" Value="_selected" ValueChanged="OnStoreChanged"
+                         SearchFunc="SearchStores" Label="@L["prep.partner"]" Placeholder="@L["prep.allPartners"]"
+                         ToStringFunc="@(r => r is null ? "" : $"{r.LogoEmoji} {r.Name}")"
+                         Variant="Variant.Outlined" Dense="true" Clearable="true" MinCharacters="0"
+                         DebounceInterval="300" ResetValueOnEmptyText="true" Class="mb-3" />
+        <div class="pv-seg dr-presets">
+            @foreach (var (key, label) in Presets)
+            {
+                var k = key;
+                <button type="button" class="@(_preset == k ? "on" : "")" @onclick="@(() => ApplyPreset(k))">@L[label]</button>
+            }
+        </div>
+        <div class="dr-range">
+            <div class="dr-end">
+                <span class="dr-lbl">@L["drep.from"]</span>
+                <div class="dr-pair">
+                    <MfDatePicker DateFormat="yyyy-MM-dd" Date="_fromDate" DateChanged="@(d => { _fromDate = d?.Date ?? _fromDate; _preset = "custom"; })"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    @* MudBlazor's own clock, not the browser's dropdown (Majed 2026-10-15: "use Mud in all reports"). *@
+                    <MudTimePicker Time="@ParseTime(_fromTime, TimeSpan.Zero)" TimeChanged="SetFromTime" AmPm="@Fmt.Clock12"
+                                   PickerVariant="PickerVariant.Dialog" Variant="Variant.Outlined" Margin="Margin.Dense" Class="dr-time" />
+                </div>
+            </div>
+            <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Class="dr-arrow mf-flip-rtl" />
+            <div class="dr-end">
+                <span class="dr-lbl">@L["drep.to"]</span>
+                <div class="dr-pair">
+                    <MfDatePicker DateFormat="yyyy-MM-dd" Date="_toDate" DateChanged="@(d => { _toDate = d?.Date ?? _toDate; _preset = "custom"; })"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTimePicker Time="@ParseTime(_toTime, new TimeSpan(23, 59, 0))" TimeChanged="SetToTime" AmPm="@Fmt.Clock12"
+                                   PickerVariant="PickerVariant.Dialog" Variant="Variant.Outlined" Margin="Margin.Dense" Class="dr-time" />
+                </div>
+            </div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.FilterAlt"
+                       Disabled="_loading" OnClick="Load" Class="dr-apply">@L["drep.apply"]</MudButton>
+        </div>
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@_error</MudAlert>
+        }
+    </MudPaper>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" Class="mx-auto d-block my-8" />
+    }
+    else if (_storeId == 0 && _all is { } all)
+    {
+        @* ---------- every partner ---------- *@
+        <div class="dr-span mb-3"><MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" /><b>@Span(all.From, all.To)</b></div>
+        <div class="pr-tiles mb-4">
+            <div><span>@L["prep.partners"]</span><b>@all.Stores.Count</b></div>
+            <div><span>@L["drep.invoices"]</span><b>@all.Stores.Sum(s => s.Invoices)</b></div>
+            <div><span>@L["drep.totalQty"]</span><b>@all.Stores.Sum(s => s.Quantity)</b></div>
+            <div class="strong"><span>@L["inv.total"]</span><b class="mf-ltr">@Fmt.Rial(all.Stores.Sum(s => s.Total))</b></div>
+            <div><span>@L["drep.taxCollected"]</span><b class="mf-ltr">@Fmt.Rial(all.Stores.Sum(s => s.Tax))</b></div>
+            <div><span>@L["drep.credit"]</span><b class="mf-ltr">@Fmt.Rial(all.Stores.Sum(s => s.Credit))</b></div>
+        </div>
+        @if (all.Stores.Count == 0)
+        {
+            <EmptyState Emoji="🧾" Title="@L["prep.noSales"]" />
+        }
+        else
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow-x: auto;">
+                <div class="pr-table">
+                    <div class="hd"><span>@L["prep.partner"]</span><span>@L["drep.invoices"]</span><span>@L["drep.qty"]</span><span>@L["drep.discounts"]</span><span>@L["drep.credit"]</span><span>@L["drep.claimAmount"]</span><span>@L["inv.total"]</span></div>
+                    @foreach (var row in all.Stores)
+                    {
+                        var r = row;
+                        <div class="rw" @onclick="@(() => OpenStore(r.StoreId, r.Name, r.Emoji))" title="@L["prep.openHint"]">
+                            <span class="nm">@r.Emoji @r.Name</span>
+                            <span class="mf-ltr">@r.Invoices@(r.Cancelled > 0 ? $" (−{r.Cancelled})" : "")</span>
+                            <span class="mf-ltr">@r.Quantity</span>
+                            <span class="mf-ltr">@Fmt.Rial(r.Discounts)</span>
+                            <span class="mf-ltr">@Fmt.Rial(r.Credit)</span>
+                            <span class="mf-ltr">@Fmt.Rial(r.CancelledTotal)</span>
+                            <b class="mf-ltr">@Fmt.Rial(r.Total)</b>
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+        }
+    }
+    else if (_storeId != 0 && _one is { } one)
+    {
+        @* ---------- one partner ---------- *@
+        var s = one.Summary;
+        <div class="d-flex align-center flex-wrap mb-3" style="gap: 10px;">
+            <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="AllPartners">@L["prep.allPartners"]</MudButton>
+            <span class="pr-store">@_storeLabel</span>
+            <span class="dr-span"><MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Small" /><b>@Span(one.From, one.To)</b></span>
+            <span style="flex: 1;"></span>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.MenuBook"
+                       Href="@($"/products?store={_storeId}&name={Uri.EscapeDataString(_storeLabel)}")">@L["prep.products"]</MudButton>
+        </div>
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-4">
+            <div class="dr-h">@L["drep.summary"]</div>
+            <div class="dr-sum">
+                <div><span>@L["drep.claimQty"]</span><b class="mf-ltr">@s.ClaimQuantity</b></div>
+                <div><span>@L["drep.claimAmount"]</span><b class="mf-ltr">@Fmt.Rial(s.CancelledTotal)</b></div>
+                <div><span>@L["drep.taxCollected"]</span><b class="mf-ltr">@Fmt.Rial(s.Tax)</b></div>
+                <div><span>@L["drep.discounts"]</span><b class="mf-ltr">@Fmt.Rial(s.Discounts)</b></div>
+                <div class="strong"><span>@L["inv.total"]</span><b class="mf-ltr">@Fmt.Rial(s.Total)</b></div>
+                <div><span>@L["drep.totalQty"]</span><b class="mf-ltr">@s.Quantity</b></div>
+                <div><span>@L["drep.credit"]</span><b class="mf-ltr">@Fmt.Rial(s.Credit)</b></div>
+                <div><span>@L["drep.deliveryFee"]</span><b class="mf-ltr">@Fmt.Rial(s.DeliveryFees)</b></div>
+                <div><span>@L["drep.invoices"]</span><b class="mf-ltr">@s.Live</b></div>
+                <div><span>@L["drep.cancelledInv"]</span><b class="mf-ltr">@s.Cancelled</b></div>
+                <div><span>@L["drep.cash"]</span><b class="mf-ltr">@Fmt.Rial(s.Cash)</b></div>
+                <div><span>@L["drep.card"]</span><b class="mf-ltr">@Fmt.Rial(s.Card)</b></div>
+            </div>
+            <div class="dr-note">@L["drep.claimHint"]</div>
+        </MudPaper>
+
+        <MudPaper Elevation="0" Outlined="true" Class="pa-4 rounded-xl mb-4">
+            <div class="dr-h">@L["drep.salesItems"]</div>
+            @if (one.Items is not { Count: > 0 })
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="my-4">@L["prep.noSales"]</MudText>
+            }
+            else
+            {
+                <div class="dr-items">
+                    <div class="hd"><span>@L["drep.item"]</span><span>@L["drep.qty"]</span><span>@L["drep.amount"]</span></div>
+                    @foreach (var it in one.Items)
+                    {
+                        <div class="rw"><span class="nm">@it.Name</span><span class="mf-ltr">@it.Quantity</span><b class="mf-ltr">@Fmt.Rial(it.Amount)</b></div>
+                    }
+                    <div class="ft"><span>@L["inv.total"]</span><span class="mf-ltr">@one.Items.Sum(i => i.Quantity)</span><b class="mf-ltr">@Fmt.Rial(one.Items.Sum(i => i.Amount))</b></div>
+                </div>
+            }
+        </MudPaper>
+
+        <div class="dr-h mb-2">@L["drep.invoices"] (@one.Rows.Count)</div>
+        @if (one.Rows.Count > 0)
+        {
+            <MudPaper Elevation="0" Outlined="true" Class="rounded-xl" Style="overflow-x: auto;">
+                @foreach (var r in one.Rows)
+                {
+                    <div class="drep-row @(r.Status == "Cancelled" ? "dead" : "")">
+                        <span class="no mf-ascii">@r.Number</span>
+                        <span class="tm">@Fmt.DayMonthTime(r.PlacedAt, shift: false)</span>
+                        <span class="cu">@r.CustomerName@(r.TableName is not null ? $" · {r.TableName}" : "")</span>
+                        <span class="ct">@r.ItemCount @L["inv.items"]</span>
+                        <span class="st">
+                            @if (r.Status == "Cancelled") { <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">@L["inv.cancelled"]</MudChip> }
+                            else if (r.IsPaid) { <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">@L["w.paid"]</MudChip> }
+                            else { <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@L["w.unpaid"]</MudChip> }
+                        </span>
+                        <b class="tt">@Fmt.Rial(r.Total)</b>
+                    </div>
+                }
+            </MudPaper>
+        }
+    }
+</div>
+
+@code {
+    private static readonly (string Key, string Label)[] Presets =
+    [
+        ("today", "inv.today"), ("yesterday", "drep.yesterday"), ("week", "drep.last7"), ("month", "drep.thisMonth"), ("custom", "drep.custom"),
+    ];
+
+    private string _preset = "today";
+    private DateTime _fromDate = Fmt.ServerToday;
+    private string _fromTime = "00:00";
+    private DateTime _toDate = Fmt.ServerToday;
+    private string _toTime = "23:59";
+    private bool _loading;
+    private string? _error;
+
+    private AdminRestaurantDto? _selected;
+    private int _storeId;
+    private string _storeLabel = "";
+    private AllStoresReportDto? _all;
+    private DailyInvoicesDto? _one;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task<IEnumerable<AdminRestaurantDto>> SearchStores(string value, CancellationToken _) =>
+        await Api.GetAdminRestaurantsAsync(string.IsNullOrWhiteSpace(value) ? null : value.Trim(), null, 0, 20) ?? [];
+
+    private async Task OnStoreChanged(AdminRestaurantDto? store)
+    {
+        _selected = store;
+        _storeId = store?.Id ?? 0;
+        _storeLabel = store is null ? "" : $"{store.LogoEmoji} {store.Name}".Trim();
+        await Load();
+    }
+
+    private async Task OpenStore(int id, string name, string emoji)
+    {
+        _selected = null;
+        _storeId = id;
+        _storeLabel = $"{emoji} {name}".Trim();
+        await Load();
+    }
+
+    private async Task AllPartners()
+    {
+        _selected = null;
+        _storeId = 0;
+        _storeLabel = "";
+        await Load();
+    }
+
+    private void ApplyPreset(string key)
+    {
+        _preset = key;
+        var today = Fmt.ServerToday;
+        (_fromDate, _toDate) = key switch
+        {
+            "yesterday" => (today.AddDays(-1), today.AddDays(-1)),
+            "week" => (today.AddDays(-6), today),
+            "month" => (new DateTime(today.Year, today.Month, 1), today),
+            "custom" => (_fromDate, _toDate),
+            _ => (today, today),
+        };
+        if (key != "custom") { _fromTime = "00:00"; _toTime = "23:59"; _ = Load(); }
+    }
+
+    private void SetFromTime(TimeSpan? t) { _fromTime = Hhmm(t ?? TimeSpan.Zero); _preset = "custom"; }
+    private void SetToTime(TimeSpan? t) { _toTime = Hhmm(t ?? new TimeSpan(23, 59, 0)); _preset = "custom"; }
+    private static string Hhmm(TimeSpan t) => $"{t.Hours:00}:{t.Minutes:00}";
+
+    private static TimeSpan ParseTime(string? hhmm, TimeSpan fallback) =>
+        TimeSpan.TryParse(hhmm, System.Globalization.CultureInfo.InvariantCulture, out var t) ? t : fallback;
+
+    private DateTime From => _fromDate.Date + ParseTime(_fromTime, TimeSpan.Zero);
+    private DateTime To => _toDate.Date + ParseTime(_toTime, new TimeSpan(23, 59, 0)) + TimeSpan.FromMinutes(1);
+
+    private static string Span(DateTime? f, DateTime? t) => f is { } a && t is { } b
+        ? $"{Fmt.DayMonthYear(a, shift: false)} {a:HH:mm} → {Fmt.DayMonthYear(b.AddMinutes(-1), shift: false)} {b.AddMinutes(-1):HH:mm}"
+        : "";
+
+    private async Task Load()
+    {
+        _error = null;
+        if (To <= From) { _error = L["drep.badRange"]; return; }
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            if (_storeId == 0) { _one = null; _all = await Api.GetAllStoresReportAsync(From, To); if (_all is null) _error = L["drep.loadFail"]; }
+            else { _all = null; _one = await Api.GetStoreReportAsync(_storeId, From, To); if (_one is null) _error = L["drep.loadFail"]; }
+        }
+        finally
+        {
+            // Never leave the spinner up (Majed 2026-10-14: "not coming").
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+}

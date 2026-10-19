@@ -16,7 +16,11 @@ public class TillController(IConfiguration config, IWebHostEnvironment env) : Co
 {
     private string Dir => config["Till:Dir"] ?? Path.Combine(env.ContentRootPath, "till");
 
+    // Both manifests are tiny and change exactly when a release lands — a browser must never
+    // show yesterday's version (Majed 2026-10-18: partner Settings still said 1.0.0 after 1.2.0
+    // was published; without Cache-Control the browser kept the old JSON by heuristic).
     [HttpGet("version")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public IActionResult Version()
     {
         var path = Path.Combine(Dir, "version.json");
@@ -25,15 +29,34 @@ public class TillController(IConfiguration config, IWebHostEnvironment env) : Co
     }
 
     [HttpGet("download")]
-    public IActionResult Download()
+    public IActionResult Download() => Serve("version.json", "application/zip");
+
+    // ---------- The Android till (OrderOrange.AndroidTill) ----------
+    // Same folder, its own manifest: android.json → { "version", "file", "sha256", "notes" }
+    // next to the APK. The partner Settings page links here; the terminal side-loads it.
+
+    [HttpGet("android/version")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public IActionResult AndroidVersion()
     {
-        var manifest = Path.Combine(Dir, "version.json");
+        var path = Path.Combine(Dir, "android.json");
+        if (!System.IO.File.Exists(path)) return NotFound();
+        return PhysicalFile(path, "application/json");
+    }
+
+    [HttpGet("android/download")]
+    public IActionResult AndroidDownload() => Serve("android.json", "application/vnd.android.package-archive");
+
+    /// <summary>The file a manifest names, from the till folder only — never a path of the caller's choosing.</summary>
+    private IActionResult Serve(string manifestName, string contentType)
+    {
+        var manifest = Path.Combine(Dir, manifestName);
         if (!System.IO.File.Exists(manifest)) return NotFound();
         using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(manifest));
         var file = doc.RootElement.TryGetProperty("file", out var f) ? f.GetString() : null;
         if (string.IsNullOrEmpty(file) || file.Contains("..") || file.Contains('/') || file.Contains('\\')) return NotFound();
         var path = Path.Combine(Dir, file);
         if (!System.IO.File.Exists(path)) return NotFound();
-        return PhysicalFile(path, "application/zip", file, enableRangeProcessing: true);
+        return PhysicalFile(path, contentType, file, enableRangeProcessing: true);
     }
 }

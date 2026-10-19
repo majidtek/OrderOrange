@@ -63,6 +63,29 @@
             }
             <div class="mf-loader-bar"><i></i></div>
             <div class="mf-loader-dots"><span></span><span></span><span></span></div>
+            @* The partner portal's modern loader (Majed: "make page loader in partner modern").
+               Hidden everywhere else by CSS; under body.pf it replaces the hopper: a slim
+               progress line + a shimmering outline of a page while inside the app, and a
+               logo-in-a-spinning-ring splash before the app frame exists. *@
+            <div class="mf-ml" aria-hidden="true">
+                <div class="mf-ml-line"><i></i></div>
+                <div class="mf-ml-splash">
+                    <div class="mf-ml-mark">
+                        <span class="ring"></span>
+                        <img src="_content/OrderOrange.ClientCore/logo.svg?v=4" alt="" />
+                    </div>
+                    <div class="mf-ml-name">OrderOrange <b>Partner</b></div>
+                </div>
+                <div class="mf-ml-skel">
+                    <div class="hd"><i class="t"></i><i class="a"></i></div>
+                    <div class="cards"><i></i><i></i><i></i><i></i></div>
+                    <div class="panels">
+                        <div class="p big"><i class="l w40"></i><i class="chart"></i></div>
+                        <div class="p"><i class="l w60"></i><i class="r"></i><i class="r"></i><i class="r"></i><i class="r"></i></div>
+                    </div>
+                    <div class="rows"><i></i><i></i><i></i></div>
+                </div>
+            </div>
             @if (Label is not null)
             {
                 <div class="mf-loader-label">@Label</div>
@@ -96,6 +119,8 @@ else
                 </div>
             </div>
             <div class="mf-loader-bar mf-loader-bar-sm"><i></i></div>
+            @* Partner (body.pf): a calm three-line shimmer instead of the logo ring. *@
+            <div class="mf-ml-inline" aria-hidden="true"><i></i><i></i><i></i></div>
         }
     </div>
 }

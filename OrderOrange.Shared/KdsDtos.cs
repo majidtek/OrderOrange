@@ -1,7 +1,7 @@
 namespace OrderOrange.Shared;
 
 /// <summary>One thing to cook, as the kitchen sees it.</summary>
-/// <param name="Station">"kitchen", "bar", or null when the product was never routed.</param>
+/// <param name="Station">"kitchen", "bar", "both" (both stations), or null when the product was never routed.</param>
 public record KdsLineDto(int Id, string Name, int Quantity, string? Notes, string? Station, bool Done);
 
 /// <summary>

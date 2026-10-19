@@ -210,7 +210,7 @@ else
 
     private string _supplier = "";
     private string _number = "";
-    private DateTime? _date = DateTime.Today;
+    private DateTime? _date = Fmt.ServerToday;
     private bool _busy;
 
 
@@ -467,7 +467,7 @@ else
 
     private string ChoiceSummary => _choice.Timing switch
     {
-        "later" => string.Format(L["pay.sumLater2"], Fmt.Money(Total), _choice.DueDate?.ToString("dd MMM") ?? ""),
+        "later" => string.Format(L["pay.sumLater2"], Fmt.Money(Total), Fmt.DayMonth(_choice.DueDate, shift: false)),
         "plan" => $"📆 {L["pay.plan"]} · {_choice.Plan?.Count ?? 0} × {Fmt.Money((_choice.Plan?.FirstOrDefault()?.Amount) ?? 0)}",
         _ => $"✅ {L["pay.now"]} · {L[$"pay.m.{_choice.Method}"]}",
     };
@@ -504,7 +504,7 @@ else
 
         _busy = true;
         var (ok, error) = await Api.CreatePurchaseAsync(new SavePurchaseRequest(
-            _number, _supplier, _date ?? DateTime.Today,
+            _number, _supplier, _date ?? Fmt.ServerToday,
             IsPaid: choice.Timing == "now",
             lines.Select(l => new SavePurchaseLineRequest(l.ItemId, l.Quantity, l.UnitCost, l.IsProduct)).ToList(),
             null,
@@ -518,7 +518,7 @@ else
         _lines.Clear();
         _supplier = "";
         _number = "";
-        _date = DateTime.Today;
+        _date = Fmt.ServerToday;
         _choice = new PaymentDialog.Choice("now", "cash", null, null);   // back to the common case
         _materials = await Api.GetMaterialsAsync();
         _page = await Api.GetPurchasesAsync();

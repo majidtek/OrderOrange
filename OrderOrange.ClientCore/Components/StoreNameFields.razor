@@ -1,16 +1,31 @@
 @namespace OrderOrange.ClientCore.Components
 @inject LanguageService Lang
 @inject IDialogService Dialogs
+@inject ApiClient Api
 
-@* The business name in every tongue — Arabic always stands in the form; every
-   other language (English included) is added by choice and can be removed. *@
+@* The business name in every tongue — English is the main language and always stands
+   in the form (Majed 2026-10-09: "english not arabic main language"); every other
+   language, Arabic included, is added by choice and can be removed. *@
 
 <div class="nf">
+    @if (Translate)
+    {
+        @* One tap fills every empty language from the name already typed (Grok); each
+           row stays editable. Majed 2026-10-13: "in product group we need all language". *@
+        <div class="d-flex align-center flex-wrap mb-2" style="gap: 8px;">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Translate"
+                       Disabled="@(_translating || string.IsNullOrWhiteSpace(SourceText))" OnClick="TranslateAll">
+                @(_translating ? Lang["nf.translating"] : Lang["nf.translateAll"])
+            </MudButton>
+            @if (_translating) { <MudProgressCircular Indeterminate="true" Size="Size.Small" Color="Color.Primary" /> }
+            @if (_translateError is not null) { <span class="nf-err">@_translateError</span> }
+        </div>
+    }
     @foreach (var language in Visible)
     {
         var lang = language;
         <div class="d-flex align-center" style="gap: 8px;">
-            <div class="nm-row @(lang.Code == "ar" ? "req" : "")" style="flex: 1;">
+            <div class="nm-row @(lang.Code == "en" ? "req" : "")" style="flex: 1;">
                 @if (AddressIcon)
                 {
                     <MudIcon Icon="@Icons.Material.Filled.Place" Class="nf-loc" />
@@ -21,17 +36,17 @@
                 }
                 <MudTextField Value="@ValueOf(lang.Code)" T="string"
                               ValueChanged="@(v => SetName(lang.Code, v))"
-                              Label="@(lang.NativeName + (lang.Code == "ar" && RequireArabic ? " *" : $" — {Lang["nm.optional"]}"))"
+                              Label="@(lang.NativeName + (lang.Code == "en" && RequireMain ? " *" : $" — {Lang["nm.optional"]}"))"
                               Variant="Variant.Outlined" Margin="Margin.Dense" />
             </div>
-            @if (!Lead.Contains(lang.Code))
+            @if (!ShowAll && !Lead.Contains(lang.Code))
             {
                 <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Size="Size.Small" Color="Color.Error"
                                OnClick="@(() => RemoveLanguage(lang.Code))" />
             }
         </div>
     }
-    @if (Remaining.Any())
+    @if (!ShowAll && Remaining.Any())
     {
         <button type="button" class="nf-more" @onclick="OpenLanguageDialog">
             <MudIcon Icon="@Icons.Material.Filled.Translate" Style="width:15px;height:15px;" />
@@ -42,13 +57,45 @@
 
 @code {
     [Parameter] public Dictionary<string, string> Value { get; set; } = [];
-    [Parameter] public bool RequireArabic { get; set; } = true;
+    [Parameter] public bool RequireMain { get; set; } = true;
     [Parameter] public bool AddressIcon { get; set; }
+    /// <summary>Every language stands in the form at once (menu groups) instead of "add language".</summary>
+    [Parameter] public bool ShowAll { get; set; }
+    /// <summary>Offer "Translate to all languages" (fills only the empty rows).</summary>
+    [Parameter] public bool Translate { get; set; }
+
+    private bool _translating;
+    private string? _translateError;
+
+    /// <summary>The name to translate from: English first, otherwise any filled row.</summary>
+    private string? SourceText => Value.GetValueOrDefault("en") is { Length: > 0 } en ? en : Value.Values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+    private string? SourceCode => Value.ContainsKey("en") ? "en" : Value.FirstOrDefault(kv => !string.IsNullOrWhiteSpace(kv.Value)).Key;
+
+    private async Task TranslateAll()
+    {
+        if (string.IsNullOrWhiteSpace(SourceText)) return;
+        _translating = true;
+        _translateError = null;
+        var targets = LanguageService.SupportedLanguages.Select(l => l.Code)
+            .Where(c => string.IsNullOrWhiteSpace(Value.GetValueOrDefault(c))).ToList();
+        var (data, error) = await Api.TranslateNamesAsync(new TranslateNamesRequest(SourceText!, SourceCode, targets));
+        _translating = false;
+        if (data is null || data.Count == 0) { _translateError = error ?? Lang["nf.translateFail"]; return; }
+        var next = new Dictionary<string, string>(Value);
+        foreach (var pair in data)
+            if (string.IsNullOrWhiteSpace(next.GetValueOrDefault(pair.Key)))
+            {
+                next[pair.Key] = pair.Value;
+                _added.Add(pair.Key);
+            }
+        Value = next;
+        await ValueChanged.InvokeAsync(next);
+    }
     [Parameter] public EventCallback<Dictionary<string, string>> ValueChanged { get; set; }
 
-    // Only Arabic stands in the form by itself — every other tongue, English
+    // Only English stands in the form by itself — every other tongue, Arabic
     // included, is added by choice from the dialog.
-    private static readonly string[] Lead = ["ar"];
+    private static readonly string[] Lead = ["en"];
     private readonly HashSet<string> _added = [];
     private bool _seeded;
 
@@ -62,10 +109,10 @@
 
     private IEnumerable<LanguageService.LanguageOption> Ordered =>
         LanguageService.SupportedLanguages
-            .OrderBy(l => l.Code switch { "ar" => 0, "en" => 1, _ => 2 });
+            .OrderBy(l => l.Code switch { "en" => 0, "ar" => 1, _ => 2 });
 
     private IEnumerable<LanguageService.LanguageOption> Visible =>
-        Ordered.Where(l => Lead.Contains(l.Code) || _added.Contains(l.Code));
+        ShowAll ? Ordered : Ordered.Where(l => Lead.Contains(l.Code) || _added.Contains(l.Code));
 
     private IEnumerable<LanguageService.LanguageOption> Remaining =>
         Ordered.Where(l => !Lead.Contains(l.Code) && !_added.Contains(l.Code));

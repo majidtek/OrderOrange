@@ -266,11 +266,16 @@ public record TableChatSyncDto(
 public record CommunityChatMessageDto(
     int Id, int UserId, string UserName, string Text, DateTime At,
     string? Audio = null, string? Image = null, bool Deleted = false, DateTime? EditedAt = null,
-    string? ReplyPreview = null, string? File = null, string? FileName = null);
+    string? ReplyPreview = null, string? File = null, string? FileName = null, bool FromAdmin = false);
 public record CommunityChatSyncDto(
     List<CommunityChatMessageDto> New,
     List<CommunityChatMessageDto> Changed,
     long Stamp);
+
+/// <summary>A store in the admin's partner-chat inbox (or in the "start a chat" search).</summary>
+public record PartnerChatThreadDto(
+    int RestaurantId, string StoreName, string LogoEmoji, string OwnerName,
+    string LastText, string LastFrom, DateTime? LastAt, int Unread);
 
 /// <summary>One teammate you can message, with a preview of your last exchange.</summary>
 public record TeamContactDto(

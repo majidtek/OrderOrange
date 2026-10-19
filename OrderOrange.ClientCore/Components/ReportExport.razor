@@ -64,7 +64,7 @@
                     {
                         <span>@string.Format(L["exp.preparedBy"], State.FullName)</span>
                     }
-                    <span>@DateTime.Now.ToString("dd MMM yyyy · HH:mm")</span>
+                    <span>@Fmt.DayMonthYear(Fmt.ServerNow) · @Fmt.Time(Fmt.ServerNow)</span>
                 </div>
             </div>
         </header>
@@ -168,7 +168,7 @@
                 return;
             }
 
-            var name = $"{Title}-{DateTime.Now:yyyyMMdd-HHmm}.xlsx";
+            var name = $"{Title}-{Fmt.ServerNow:yyyyMMdd-HHmm}.xlsx";
             await JS.InvokeVoidAsync("mfExport.saveBase64", Convert.ToBase64String(bytes), name,
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
             Snackbar.Add(string.Format(L["exp.saved"], got.Value.rows.Count), Severity.Success);

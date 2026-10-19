@@ -14,7 +14,7 @@
         <MudText Typo="Typo.h5" Style="font-weight: 800;">@L["rsv.partnerTitle"]</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">@L["rsv.partnerSub"]</MudText>
     </div>
-    <MudSwitch T="bool" Value="_history" ValueChanged="ToggleHistory" Color="Color.Primary" Label="@L["rsv.history"]" />
+    <MudSwitch Color="Color.Success" T="bool" Size="Size.Small" Value="_history" ValueChanged="ToggleHistory" Label="@L["rsv.history"]" />
 </div>
 
 @if (!_history)
@@ -44,9 +44,9 @@ else
                 @* The hour they arrive AND the hour the table frees up again — the
                    guest said how long they mean to stay, so the floor can plan. *@
                 <div class="when">
-                    <b>@res.At.ToString("HH:mm")</b>
-                    <small>→ @res.Until.ToString("HH:mm")</small>
-                    <small>@res.At.ToString("dd/MM")</small>
+                    <b>@Fmt.Time(res.At)</b>
+                    <small>→ @Fmt.Time(res.Until)</small>
+                    <small>@Fmt.DayMonth(res.At)</small>
                 </div>
                 <div class="who">
                     <b>@res.Name</b>
