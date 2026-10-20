@@ -47,6 +47,35 @@ public class TillController(IConfiguration config, IWebHostEnvironment env) : Co
     [HttpGet("android/download")]
     public IActionResult AndroidDownload() => Serve("android.json", "application/vnd.android.package-archive");
 
+    // ---------- The OrderOrange Partner app (OrderOrange.PartnerApp) ----------
+    // The partner portal as an app with its printers built in, for Android and Windows; it
+    // replaces the separate Android till in partner Settings. Same folder, one manifest per
+    // platform: partner-android.json (APK) and partner-windows.json (zip), written by
+    // tools/publish-partner-app.ps1.
+
+    [HttpGet("partner/{platform}/version")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public IActionResult PartnerAppVersion(string platform)
+    {
+        if (PartnerManifest(platform) is not { } name) return NotFound();
+        var path = Path.Combine(Dir, name);
+        if (!System.IO.File.Exists(path)) return NotFound();
+        return PhysicalFile(path, "application/json");
+    }
+
+    [HttpGet("partner/{platform}/download")]
+    public IActionResult PartnerAppDownload(string platform) => PartnerManifest(platform) is { } name
+        ? Serve(name, platform == "android" ? "application/vnd.android.package-archive" : "application/zip")
+        : NotFound();
+
+    /// <summary>Only the two known platforms map to a manifest — never a name of the caller's choosing.</summary>
+    private static string? PartnerManifest(string platform) => platform switch
+    {
+        "android" => "partner-android.json",
+        "windows" => "partner-windows.json",
+        _ => null,
+    };
+
     /// <summary>The file a manifest names, from the till folder only — never a path of the caller's choosing.</summary>
     private IActionResult Serve(string manifestName, string contentType)
     {

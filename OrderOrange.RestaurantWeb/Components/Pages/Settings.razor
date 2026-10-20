@@ -167,43 +167,57 @@ else
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["till.reqs"]</MudText>
                         </MudPaper>
 
-                        @* ---------- The Android till ----------
-                           Majed 2026-10-15: "add it in vps for download in partner". The same till
-                           for a shop that runs on an Android POS terminal instead of a PC: prints
-                           the receipt on the terminal's own printer and kitchen/bar tickets on the
-                           Wi-Fi printers, with the designs and routing set here. Side-loaded APK. *@
+                        @* ---------- The OrderOrange Partner app ----------
+                           Majed 2026-10-20: "make it downloadable for windows and android" and "remove
+                           till android". This very portal as an app for Android and Windows, with the
+                           shop's printers built in (kitchen/bar tickets, receipts, open-table rounds) —
+                           it replaces the separate Android till. Inside the app this card opens the
+                           Printers screen instead of offering a download. *@
                         <MudPaper Elevation="0" Outlined="true" Class="pa-5 rounded-xl mt-4 st-till">
                             <div class="d-flex align-center" style="gap: 12px;">
-                                <MudIcon Icon="@Icons.Material.Filled.PhoneAndroid" Color="Color.Primary" Style="font-size: 34px;" />
+                                <MudIcon Icon="@(HostInfo.IsNativeApp ? Icons.Material.Filled.Print : Icons.Material.Filled.Devices)" Color="Color.Primary" Style="font-size: 34px;" />
                                 <div class="flex-grow-1">
-                                    <MudText Typo="Typo.h6" Class="mb-0">@L["till.android.title"]</MudText>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@L["till.android.sub"]</MudText>
+                                    <MudText Typo="Typo.h6" Class="mb-0">@L[HostInfo.IsNativeApp ? "papp.printers" : "papp.title"]</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@L[HostInfo.IsNativeApp ? "papp.printersSub" : "papp.sub"]</MudText>
                                 </div>
                             </div>
-                            <div class="d-flex flex-wrap align-center mt-4" style="gap: 10px;">
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
-                                           Href="@($"{Api.ApiBase}/api/till/android/download")" Target="_blank" Disabled="@(_android is null)">
-                                    @L["till.android.download"]
-                                </MudButton>
-                                @if (_android is not null)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default" Class="mf-ltr">
-                                        @string.Format(L["till.version"], _android.Version)
-                                    </MudChip>
-                                }
-                                else
-                                {
-                                    @* No APK published yet: say so instead of a mute grey button. *@
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">@L["till.android.soon"]</MudChip>
-                                }
-                            </div>
-                            @if (_android?.Notes is { Length: > 0 } anotes)
+                            @if (HostInfo.IsNativeApp)
                             {
-                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-3">
-                                    <b>@L["till.notes"]:</b> @anotes
-                                </MudText>
+                                <div class="d-flex flex-wrap align-center mt-4" style="gap: 10px;">
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print"
+                                               OnClick="@(() => Nav.NavigateTo("/device/printers"))">@L["papp.open"]</MudButton>
+                                </div>
                             }
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["till.android.reqs"]</MudText>
+                            else
+                            {
+                                <div class="d-flex flex-wrap align-center mt-4" style="gap: 10px;">
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Android"
+                                               Href="@($"{Api.ApiBase}/api/till/partner/android/download")" Target="_blank" Disabled="@(_appAndroid is null)">
+                                        @L["papp.android"]
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.DesktopWindows"
+                                               Href="@($"{Api.ApiBase}/api/till/partner/windows/download")" Target="_blank" Disabled="@(_appWindows is null)">
+                                        @L["papp.windows"]
+                                    </MudButton>
+                                    @if ((_appAndroid ?? _appWindows) is { } v)
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Default" Class="mf-ltr">
+                                            @string.Format(L["till.version"], v.Version)
+                                        </MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Warning">@L["till.android.soon"]</MudChip>
+                                    }
+                                </div>
+                                @if ((_appAndroid ?? _appWindows)?.Notes is { Length: > 0 } pnotes)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-3">
+                                        <b>@L["till.notes"]:</b> @pnotes
+                                    </MudText>
+                                }
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["papp.reqs"]</MudText>
+                            }
                         </MudPaper>
 
                         @* Where the shop stands is its own subject — a map deserves its own card,
@@ -520,7 +534,8 @@ else
 
                     private MyRestaurantDto? _restaurant;
                     private TillVersionDto? _till;          // the Windows till release on offer
-                    private TillVersionDto? _android;       // the Android till (APK) on offer
+                    private TillVersionDto? _appAndroid;    // the OrderOrange Partner app for Android (APK) on offer
+                    private TillVersionDto? _appWindows;    // … and for Windows (zip)
                     private List<RestaurantPhotoDto>? _photos;
                         private bool _uploadingPhoto;
 
@@ -809,7 +824,11 @@ else
                                                                         {
                                                                             _cuisines = await Api.GetCuisinesAsync();
                                                                             _till = await Api.GetTillVersionAsync();
-                                                                            _android = await Api.GetAndroidTillVersionAsync();
+                                                                            if (!HostInfo.IsNativeApp)
+                                                                            {
+                                                                                _appAndroid = await Api.GetPartnerAppVersionAsync("android");
+                                                                                _appWindows = await Api.GetPartnerAppVersionAsync("windows");
+                                                                            }
                                                                             _zones = await Api.GetTimeZonesAsync() ?? [];
                                                                             _hours = (await Api.GetMyHoursAsync() ?? []).Select(d => new HoursRow
                                                                             {

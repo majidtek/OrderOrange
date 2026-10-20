@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!-- The app's host page: the browser portal's index.html (OrderOrange.RestaurantWeb/wwwroot)
+     with the WebView runtime in place of the WebAssembly one. Keep the stylesheet and script
+     list in step with that file when a version stamp there changes. -->
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>OrderOrange Partner</title>
+    <base href="/" />
+    <link href="_content/OrderOrange.ClientCore/fonts.css" rel="stylesheet" />
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
+    <link rel="stylesheet" href="_content/Heron.MudCalendar/Heron.MudCalendar.min.css" />
+    <link rel="stylesheet" href="_content/OrderOrange.ClientCore/food.css" />
+    <link rel="icon" type="image/svg+xml" href="_content/OrderOrange.ClientCore/logo.svg" />
+    <script src="_content/OrderOrange.ClientCore/mf-viewport.js"></script>
+    <script>
+        // The portal fetches two map helpers from its own web host (/placesearch, /maplink).
+        // The app has no such host: hand those two to .NET, which forwards them to the
+        // partner host (AppConfig.PartnerHost). Every other request is left alone.
+        (function () {
+            var native = window.fetch.bind(window);
+            window.fetch = function (input, init) {
+                var url = typeof input === 'string' ? input : (input && input.url) || '';
+                var path = url.replace(/^https?:\/\/[^/]+/, '');
+                if (/^\/(placesearch|maplink)\?/.test(path) && window.DotNet) {
+                    return DotNet.invokeMethodAsync('OrderOrange.PartnerApp', 'HostFetch', path).then(function (r) {
+                        return new Response(r.body, { status: r.status || 502, headers: { 'Content-Type': 'application/json' } });
+                    });
+                }
+                return native(input, init);
+            };
+        })();
+    </script>
+</head>
+
+<body class="pf">
+    <div id="app">
+        <div class="mf-boot mf-boot2">
+            <div class="mk"><span class="ring"></span><svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="oo-b-paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8A3D"/><stop offset="0.55" stop-color="#FF5A00"/><stop offset="1" stop-color="#E64500"/></linearGradient><linearGradient id="oo-b-leaf" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2E9E4F"/><stop offset="1" stop-color="#57C97A"/></linearGradient></defs><path fill="url(#oo-b-paper)" d="M20 15h24a5 5 0 0 1 5 5v38l-5.8-4.2L37.4 58l-5.8-4.2L25.8 58 20 53.8 14.2 58V20a5 5 0 0 1 5-5z"/><path fill="#1F7A3C" d="M32 16.6c-.7 0-1.2-.6-1.2-1.2V11c0-.7.5-1.2 1.2-1.2s1.2.5 1.2 1.2v4.4c0 .6-.5 1.2-1.2 1.2z"/><path fill="url(#oo-b-leaf)" d="M33.4 12.2c2.9-4.3 8-5.9 12-5.3.8.1 1.3 1 1 1.7-1.4 3.8-4.8 7.9-10 8.2-1.4.1-2.6-.4-3.4-1.2-.9-.9-.8-2.3.4-3.4z"/><rect x="20.5" y="27" width="23" height="4" rx="2" fill="#FFFFFF" opacity=".95"/><rect x="20.5" y="35" width="16" height="4" rx="2" fill="#FFFFFF" opacity=".95"/><rect x="20.5" y="43" width="23" height="5" rx="2.5" fill="#FFD8BF"/></svg></div>
+            <div class="nm">OrderOrange <b>Partner</b></div>
+            <div class="bar"><i></i></div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" data-nosnippet>
+        <span class="msg">Something went wrong.</span>
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-infinite.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-lang.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-export.js"></script>
+    <script src="_content/OrderOrange.ClientCore/html2canvas.min.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-palette.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-chat.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-qr.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-google.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-floor.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-barcode.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-courier.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-geo.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-nav.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-tour.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-menucard.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-kds.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-whmap.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-loyalty.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-voice.js"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-logoedit.js"></script>
+    <script>
+        // Printing inside the app (no RawBT, no separate till app, no print dialog).
+        // • A settled invoice ("print direct") is printed by .NET from the order itself
+        //   (HybridRoot → the built-in printer engine), so the page's own paths stand down.
+        // • The Print button on a page that shows a receipt draws that receipt (html2canvas,
+        //   as the browser portal already does for thermal printers) and sends the picture to
+        //   the cashier printer.
+        (function () {
+            if (!window.mfPrint) window.mfPrint = {};
+            window.mfPrint.isAndroid = function () { return false; };
+            window.mfPrint.rawbtNow = function () { };
+            window.mfPrint.direct = function () { };
+            window.mfPrint.auto = function () { };
+
+            var nativePrint = window.print ? window.print.bind(window) : null;
+
+            async function printSlip(slip) {
+                var dots = 0;
+                try { dots = await DotNet.invokeMethodAsync('OrderOrange.PartnerApp', 'CashierDots'); } catch (e) { }
+                // No cashier printer set up in the app: the system print dialog (Windows) as before.
+                if (!dots) { if (nativePrint) nativePrint(); return; }
+                // Draw at twice the paper width; the app scales it down to the printer's dots.
+                var canvas = await html2canvas(slip, {
+                    backgroundColor: '#ffffff', scale: (dots * 2) / slip.offsetWidth, logging: false,
+                    onclone: function (doc) { doc.querySelectorAll('.rcpt').forEach(function (r) { r.classList.add('rawbt-bold'); }); }
+                });
+                var reply = await DotNet.invokeMethodAsync('OrderOrange.PartnerApp', 'PrintSlip', canvas.toDataURL('image/png'));
+                if (reply.noPrinter) { if (nativePrint) nativePrint(); return; }
+                if (!reply.ok) alert(reply.error || 'Printing failed');
+            }
+
+            window.print = function () {
+                var slip = document.querySelector('.rcpt');
+                if (slip && typeof html2canvas !== 'undefined' && window.DotNet) {
+                    printSlip(slip).catch(function (e) { alert(String(e && e.message || e)); });
+                    return;
+                }
+                if (nativePrint) nativePrint();
+            };
+
+            // Windows: the printer engine draws kitchen tickets and receipts here, inside the
+            // app's own WebView2: the ticket HTML goes into an invisible frame and comes back as
+            // a PNG at the printer's width. (Android draws them off-screen natively instead.)
+            window.ooRenderHtml = function (html, dots, cssWidth) {
+                return new Promise(function (resolve, reject) {
+                    var frame = document.createElement('iframe');
+                    frame.setAttribute('aria-hidden', 'true');
+                    frame.style.cssText = 'position:fixed;left:-20000px;top:0;border:0;background:#fff;width:' + (cssWidth + 40) + 'px;height:200px';
+                    var finished = false;
+                    function done(err, value) {
+                        if (finished) return; finished = true;
+                        setTimeout(function () { frame.remove(); }, 0);
+                        if (err) reject(err); else resolve(value);
+                    }
+                    setTimeout(function () { done(new Error('The ticket page did not render.')); }, 15000);
+                    frame.onload = async function () {
+                        try {
+                            var doc = frame.contentDocument;
+                            if (doc.fonts && doc.fonts.ready) await doc.fonts.ready;
+                            await Promise.all(Array.prototype.map.call(doc.images, function (img) {
+                                return img.complete ? null : new Promise(function (r) { img.onload = img.onerror = r; });
+                            }));
+                            var root = doc.body.firstElementChild || doc.body;
+                            // A kitchen ticket sizes its text with CSS zoom (width = base / zoom). Drawing it
+                            // without the zoom at the matching wider scale gives the same paper and lets
+                            // html2canvas measure plain CSS pixels.
+                            root.style.zoom = '1';
+                            frame.style.height = (Math.ceil(doc.documentElement.scrollHeight) + 20) + 'px';
+                            await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+                            var width = root.offsetWidth || cssWidth;
+                            var canvas = await html2canvas(root, { backgroundColor: '#ffffff', scale: (dots * 2) / width, logging: false });
+                            done(null, canvas.toDataURL('image/png'));
+                        } catch (e) { done(e); }
+                    };
+                    frame.srcdoc = html;
+                    document.body.appendChild(frame);
+                });
+            };
+        })();
+    </script>
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+</body>
+
+</html>

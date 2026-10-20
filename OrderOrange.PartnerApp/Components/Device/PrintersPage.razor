@@ -1,0 +1,466 @@
+@page "/device/printers"
+@namespace OrderOrange.PartnerApp.Components.Device
+@using OrderOrange.PartnerApp.Till.Localization
+@using OrderOrange.PartnerApp.Till.Models
+@using OrderOrange.PartnerApp.Till.Printing
+@using OrderOrange.PartnerApp.Till.Services
+@implements IDisposable
+@inject LanguageService Lang
+@inject ISnackbar Snackbar
+
+@* The app's own printers, inside the partner app (no separate till). The engine behind it is
+   the Android till's: kitchen/bar tickets per product route, the designed receipt when the
+   bill is due, open-table rounds — run by the partner's own sign-in, also in the background. *@
+
+<PageTitle>@T("printers")</PageTitle>
+
+<div class="pa-3 pa-sm-5" dir="@(L.Rtl ? "rtl" : "ltr")" style="max-width: 980px; margin: 0 auto;">
+    <MudText Typo="Typo.h5" Class="mb-1">@T("printers")</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+        @(E.Running ? T("running") : T("stopped")) · @(string.IsNullOrEmpty(E.Status) ? T("notSignedIn") : E.Status)
+    </MudText>
+
+    @if (E.Banner is { } banner)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3" Dense="true">@banner</MudAlert>
+    }
+    @if (S.Cashier is null && S.Printers.Count > 0)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" Dense="true">@T("noCashierPrinter")</MudAlert>
+    }
+
+    <div class="d-flex flex-wrap mb-4" style="gap: 8px;">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Search" OnClick="FindAsync" Disabled="_scanning">@T("findPrinters")</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => Edit(null))">@T("addPrinter")</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh" OnClick="@(() => Run(E.RefreshAsync))">@T("checkNow")</MudButton>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Receipt" OnClick="@(() => Report(E.ReprintLastReceiptAsync))">@T("reprintReceipt")</MudButton>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Restaurant" OnClick="@(() => Report(E.ReprintLastTicketsAsync))">@T("reprintKitchen")</MudButton>
+    </div>
+
+    @* ---------- Find printers ---------- *@
+    @if (_scanning || _found is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4 rounded-xl">
+            <MudText Typo="Typo.subtitle1" Class="mb-2">@T("findPrinters")</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">@_scanStatus</MudText>
+            @if (_scanning) { <MudProgressLinear Color="Color.Primary" Value="_scanProgress" Class="mb-3" /> }
+            @foreach (var f in _found ?? [])
+            {
+                var known = S.Printers.Any(p => p.PhysicalKey == f.Config.PhysicalKey);
+                <div class="d-flex align-center pa-3 mb-2 rounded-lg" style="background:#FFF4EC; gap: 10px;">
+                    <div class="flex-grow-1">
+                        <MudText Typo="Typo.body1"><b>@f.Title</b></MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="direction:ltr; unicode-bidi:isolate;">@f.Detail @(known ? " · " + T("alreadyAdded") : "")</MudText>
+                    </div>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="@(() => Edit(null, f.Config))">@T("useThis")</MudButton>
+                </div>
+            }
+        </MudPaper>
+    }
+
+    @* ---------- Add / edit one printer ---------- *@
+    @if (_edit is not null)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4 rounded-xl">
+            <MudText Typo="Typo.subtitle1" Class="mb-3">@(_editingExisting ? T("printer") : T("addPrinter"))</MudText>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6"><MudTextField @bind-Value="_edit.Name" Label="@T("name")" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="PrinterConnection" @bind-Value="_edit.Connection" Label="@T("connection")" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @if (PlatformHost.IsAndroid)
+                        {
+                            <MudSelectItem Value="PrinterConnection.BuiltIn">@T("builtIn")</MudSelectItem>
+                            <MudSelectItem Value="PrinterConnection.Bluetooth">@T("bluetooth")</MudSelectItem>
+                        }
+                        else
+                        {
+                            <MudSelectItem Value="PrinterConnection.WindowsPrinter">@T("windowsPrinter")</MudSelectItem>
+                        }
+                        <MudSelectItem Value="PrinterConnection.WiFi">@T("wifi")</MudSelectItem>
+                        @if (PlatformHost.IsAndroid)
+                        {
+                            <MudSelectItem Value="PrinterConnection.Usb">@T("usb")</MudSelectItem>
+                            <MudSelectItem Value="PrinterConnection.Serial">@T("serial")</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                @switch (_edit.Connection)
+                {
+                    case PrinterConnection.BuiltIn:
+                        <MudItem xs="12"><MudText Typo="Typo.caption" Color="Color.Secondary">@T("builtInHint")</MudText></MudItem>
+                        break;
+                    case PrinterConnection.WiFi:
+                        <MudItem xs="8" sm="6"><MudTextField @bind-Value="_edit.Host" Label="@T("host")" Placeholder="192.168.1.50" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                        <MudItem xs="4" sm="2"><MudNumericField T="int" @bind-Value="_edit.Port" Label="@T("port")" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="65535" /></MudItem>
+                        <MudItem xs="12" sm="4" Class="d-flex align-center"><MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Wifi" OnClick="FindOnNetworkAsync" Disabled="_scanning">@T("findOnNetwork")</MudButton></MudItem>
+                        break;
+                    case PrinterConnection.Bluetooth:
+                        <MudItem xs="12" sm="8">
+                            <MudSelect T="string" Value="_edit.BluetoothAddress" ValueChanged="PickBluetooth" Label="@T("btDevice")" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                       OnOpen="LoadBluetoothAsync" HelperText="@T("btHint")">
+                                @foreach (var d in _bt)
+                                {
+                                    <MudSelectItem Value="@d.Address">@d.Label</MudSelectItem>
+                                }
+                                @if (_bt.Count == 0 && _edit.BluetoothAddress.Length > 0)
+                                {
+                                    <MudSelectItem Value="@_edit.BluetoothAddress">@(_edit.BluetoothName.Length > 0 ? $"{_edit.BluetoothName} ({_edit.BluetoothAddress})" : _edit.BluetoothAddress)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        break;
+                    case PrinterConnection.Usb:
+                        <MudItem xs="12" sm="8">
+                            <MudSelect T="string" Value="@UsbKey(_edit.UsbVendorId, _edit.UsbProductId)" ValueChanged="PickUsb" Label="@T("usbDevice")" Variant="Variant.Outlined" Margin="Margin.Dense" OnOpen="LoadUsb">
+                                <MudSelectItem Value="@("0:0")">@T("anyUsbPrinter")</MudSelectItem>
+                                @foreach (var d in _usb)
+                                {
+                                    <MudSelectItem Value="@d.Key">@d.Label</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        break;
+                    case PrinterConnection.WindowsPrinter:
+                        <MudItem xs="12" sm="8">
+                            <MudSelect T="string" @bind-Value="_edit.PrinterName" Label="@T("windowsPrinter")" Variant="Variant.Outlined" Margin="Margin.Dense" OnOpen="LoadWindowsPrinters">
+                                @foreach (var d in _win)
+                                {
+                                    <MudSelectItem Value="@d.Key">@d.Label</MudSelectItem>
+                                }
+                                @if (_win.Count == 0 && _edit.PrinterName.Length > 0)
+                                {
+                                    <MudSelectItem Value="@_edit.PrinterName">@_edit.PrinterName</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                        break;
+                    case PrinterConnection.Serial:
+                        <MudItem xs="12" sm="8"><MudTextField @bind-Value="_edit.SerialPath" Label="@T("serialPath")" Placeholder="/dev/ttyS1" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                        break;
+                }
+
+                <MudItem xs="12" sm="4">
+                    <MudSelect T="PrinterRole" @bind-Value="_edit.Role" Label="@T("role")" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="PrinterRole.Cashier">@T("cashier")</MudSelectItem>
+                        <MudSelectItem Value="PrinterRole.Kitchen">@T("kitchen")</MudSelectItem>
+                        <MudSelectItem Value="PrinterRole.Bar">@T("bar")</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="4">
+                    <MudSelect T="int" @bind-Value="_edit.Paper" Label="@T("paper")" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        <MudSelectItem Value="58">58 mm</MudSelectItem>
+                        <MudSelectItem Value="80">80 mm</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="6" sm="4"><MudNumericField T="int" @bind-Value="_edit.Copies" Label="@T("copies")" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="5" /></MudItem>
+                <MudItem xs="12" sm="4" Class="d-flex align-center"><MudSwitch T="bool" @bind-Value="_edit.Cut" Color="Color.Primary" Label="@T("cut")" /></MudItem>
+                @if (_edit.Cut)
+                {
+                    <MudItem xs="12" sm="8">
+                        <MudSelect T="CutMode" @bind-Value="_edit.CutMode" Label="@T("cutMode")" Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@T("cutHint")">
+                            <MudSelectItem Value="CutMode.Partial">@T("cutPartial")</MudSelectItem>
+                            <MudSelectItem Value="CutMode.Full">@T("cutFull")</MudSelectItem>
+                            <MudSelectItem Value="CutMode.PartialA">@T("cutPartialA")</MudSelectItem>
+                            <MudSelectItem Value="CutMode.FullA">@T("cutFullA")</MudSelectItem>
+                            <MudSelectItem Value="CutMode.EscI">@T("cutEscI")</MudSelectItem>
+                            <MudSelectItem Value="CutMode.EscM">@T("cutEscM")</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                }
+                <MudItem xs="12"><MudSwitch T="bool" @bind-Value="_edit.Enabled" Color="Color.Primary" Label="@T("enabled")" /></MudItem>
+            </MudGrid>
+            <div class="d-flex flex-wrap mt-3" style="gap: 8px;">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveEdit">@T("save")</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" OnClick="@(() => TestAsync(_edit))" Disabled="_testing">@T("testPrint")</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="@(() => _edit = null)">@T("cancel")</MudButton>
+                @if (_editingExisting)
+                {
+                    <MudSpacer />
+                    <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteEdit">@T("delete")</MudButton>
+                }
+            </div>
+        </MudPaper>
+    }
+
+    @* ---------- The printers ---------- *@
+    <MudPaper Outlined="true" Class="pa-4 mb-4 rounded-xl">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@T("printers")</MudText>
+        @if (S.Printers.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@T("noPrinters")</MudText>
+        }
+        @foreach (var p in S.Printers)
+        {
+            <div class="d-flex align-center py-2" style="gap: 10px; border-bottom: 1px dashed #e5e0da;">
+                <MudIcon Icon="@(p.Role == PrinterRole.Cashier ? Icons.Material.Filled.PointOfSale : p.Role == PrinterRole.Bar ? Icons.Material.Filled.LocalBar : Icons.Material.Filled.SoupKitchen)"
+                         Color="@(p.Enabled ? Color.Primary : Color.Default)" />
+                <div class="flex-grow-1" style="min-width: 0;">
+                    <MudText Typo="Typo.body1"><b>@p.Name</b></MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Style="direction:ltr; unicode-bidi:isolate;">@p.Summary</MudText>
+                </div>
+                <MudIconButton Icon="@Icons.Material.Filled.Print" Size="Size.Small" title="@T("testPrint")" OnClick="@(() => TestAsync(p))" Disabled="_testing" />
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => Edit(p))" />
+            </div>
+        }
+    </MudPaper>
+
+    @* ---------- What prints automatically ---------- *@
+    <MudPaper Outlined="true" Class="pa-4 mb-4 rounded-xl">
+        <MudText Typo="Typo.subtitle1" Class="mb-1">@T("settings")</MudText>
+        <MudSwitch T="bool" Value="S.AutoPrintReceipt" ValueChanged="@(v => Set(() => S.AutoPrintReceipt = v))" Color="Color.Primary" Label="@T("autoReceipt")" />
+        <MudSwitch T="bool" Value="S.ReceiptOnTabSave" ValueChanged="@(v => Set(() => S.ReceiptOnTabSave = v))" Color="Color.Primary" Label="@T("receiptOnSave")" />
+        <MudSwitch T="bool" Value="S.AutoPrintKitchen" ValueChanged="@(v => Set(() => S.AutoPrintKitchen = v))" Color="Color.Primary" Label="@T("autoKitchen")" />
+        <MudSwitch T="bool" Value="S.UnroutedToKitchen" ValueChanged="@(v => Set(() => S.UnroutedToKitchen = v))" Color="Color.Primary" Label="@T("unroutedToKitchen")" />
+        <MudSwitch T="bool" Value="S.Dither" ValueChanged="@(v => Set(() => S.Dither = v))" Color="Color.Primary" Label="@T("dither")" />
+        <div class="d-flex flex-wrap mt-2" style="gap: 12px;">
+            <MudNumericField T="int" Value="S.PollSeconds" ValueChanged="@(v => Set(() => S.PollSeconds = Math.Clamp(v, 3, 300)))" Label="@T("pollSeconds")" Variant="Variant.Outlined" Margin="Margin.Dense" Min="3" Max="300" Style="max-width: 220px;" />
+            <MudNumericField T="int" Value="S.Threshold" ValueChanged="@(v => Set(() => S.Threshold = Math.Clamp(v, 1, 254)))" Label="@T("threshold")" Variant="Variant.Outlined" Margin="Margin.Dense" Min="1" Max="254" Style="max-width: 220px;" />
+        </div>
+    </MudPaper>
+
+    @* ---------- Keep printing when the screen is off (Android) ---------- *@
+    @if (PlatformHost.IsAndroid)
+    {
+    <MudPaper Outlined="true" Class="pa-4 mb-4 rounded-xl">
+        <MudText Typo="Typo.subtitle1" Class="mb-1">@T("background")</MudText>
+        <MudText Typo="Typo.body2" Class="mb-2">@(PlatformHost.BackgroundAllowed() ? T("backgroundOn") : T("backgroundOff"))</MudText>
+        @if (!PlatformHost.BackgroundAllowed())
+        {
+            <MudButton Variant="Variant.Outlined" Class="mb-3" OnClick="@(() => { PlatformHost.RequestBackgroundAllowed(); })">@T("allowBackground")</MudButton>
+        }
+        <MudText Typo="Typo.body2" Class="mb-2">@(PlatformHost.CanUseOverlay() ? T("overlayOn") : T("overlayOff"))</MudText>
+        @if (!PlatformHost.CanUseOverlay())
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => { PlatformHost.RequestOverlay(); })">@T("allowOverlay")</MudButton>
+        }
+    </MudPaper>
+    }
+
+    @* ---------- The last jobs ---------- *@
+    <MudPaper Outlined="true" Class="pa-4 mb-4 rounded-xl">
+        <MudText Typo="Typo.subtitle1" Class="mb-2">@T("jobs")</MudText>
+        @if (Jobs.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@T("noJobs")</MudText>
+        }
+        @foreach (var j in Jobs)
+        {
+            <div class="d-flex py-1" style="gap: 10px;">
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="min-width: 64px; direction:ltr;">@j.Time</MudText>
+                <div>
+                    <MudText Typo="Typo.body2"><b>@j.Title</b> · @j.Printer</MudText>
+                    <MudText Typo="Typo.caption" Style="@($"color:{(j.Ok ? "#2E7D32" : "#C62828")}")">@j.Result</MudText>
+                </div>
+            </div>
+        }
+        <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-2" OnClick="@(() => _showLog = !_showLog)">@T("viewLog")</MudButton>
+        @if (_showLog)
+        {
+            <pre style="direction:ltr; white-space:pre-wrap; font-size:11px; max-height:360px; overflow:auto; background:#faf8f6; padding:8px; border-radius:8px;">@TillLog.Tail()</pre>
+        }
+    </MudPaper>
+</div>
+
+@code {
+    private static TillEngine E => TillEngine.Instance;
+    private static AppSettings S => AppSettings.Current;
+
+    private PrinterConfig? _edit;
+    private bool _editingExisting;
+    private bool _testing;
+    private bool _scanning;
+    private int _scanProgress;
+    private string _scanStatus = "";
+    private List<PrinterDiscovery.Found>? _found;
+    private bool _showLog;
+    private List<(string Address, string Name, string Label)> _bt = [];
+    private List<(string Key, string Label)> _usb = [];
+
+    /// <summary>The printer's words follow the portal's language (English, Arabic, Persian; others fall back to English).</summary>
+    private string T(string key)
+    {
+        L.Lang = Lang.Locale is "ar" or "fa" ? Lang.Locale : "en";
+        return L.T(key);
+    }
+
+    private List<PrintJob> Jobs { get { lock (E.Jobs) return E.Jobs.ToList(); } }
+
+    protected override void OnInitialized() => E.Changed += OnEngineChanged;
+    private void OnEngineChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => E.Changed -= OnEngineChanged;
+
+    private void Set(Action change)
+    {
+        change();
+        S.Save();
+    }
+
+    private async Task Run(Func<Task> action)
+    {
+        try { await action(); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private async Task Report(Func<Task<string?>> action)
+    {
+        var err = await action();
+        Snackbar.Add(err ?? T("printed"), err is null ? Severity.Success : Severity.Warning);
+    }
+
+    // ---------- find ----------
+
+    private async Task FindAsync()
+    {
+        _scanning = true; _found = []; _scanProgress = 0;
+        _scanStatus = T("scanningDevice");
+        StateHasChanged();
+        try
+        {
+            _found.AddRange(await PrinterDiscovery.FindBuiltInAsync());
+            StateHasChanged();
+            var local = PrinterDiscovery.LocalIPv4();
+            if (local is null) _scanStatus = T("noWifi");
+            else
+            {
+                _scanStatus = string.Format(T("scanningNet"), $"{local.Value.Address}/{local.Value.Prefix}");
+                StateHasChanged();
+                var progress = new Progress<int>(p => { _scanProgress = p; _ = InvokeAsync(StateHasChanged); });
+                _found.AddRange(await PrinterDiscovery.ScanNetworkAsync(progress));
+                _scanStatus = _found.Count == 0 ? T("foundNone") : string.Format(T("foundCount"), _found.Count);
+            }
+        }
+        catch (Exception ex) { _scanStatus = ex.Message; }
+        finally { _scanning = false; }
+    }
+
+    private async Task FindOnNetworkAsync()
+    {
+        if (_edit is null) return;
+        _scanning = true;
+        try
+        {
+            var hits = await PrinterDiscovery.ScanNetworkAsync(null, CancellationToken.None, _edit.Port > 0 ? _edit.Port : 9100);
+            if (hits.Count == 0) { Snackbar.Add(T("foundNone"), Severity.Info); return; }
+            _found = hits;
+            _scanStatus = string.Format(T("foundCount"), hits.Count);
+            if (hits.Count == 1) { _edit.Host = hits[0].Config.Host; _edit.Port = hits[0].Config.Port; }
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _scanning = false; }
+    }
+
+    // ---------- edit ----------
+
+    private void Edit(PrinterConfig? existing, PrinterConfig? template = null)
+    {
+        _editingExisting = existing is not null;
+        var from = existing ?? template ?? new PrinterConfig
+        {
+            Connection = PlatformHost.IsAndroid ? PrinterConnection.WiFi : PrinterConnection.WindowsPrinter,
+            Role = PlatformHost.IsAndroid ? PrinterRole.Kitchen : PrinterRole.Cashier, Paper = 80,
+        };
+        _edit = Clone(from, existing?.Id ?? Guid.NewGuid().ToString("N")[..8]);
+        if (_edit.Connection == PrinterConnection.Bluetooth && _edit.BluetoothAddress.Length > 0)
+            _bt = [(_edit.BluetoothAddress, _edit.BluetoothName, _edit.BluetoothName.Length > 0 ? $"{_edit.BluetoothName} ({_edit.BluetoothAddress})" : _edit.BluetoothAddress)];
+    }
+
+    private static PrinterConfig Clone(PrinterConfig p, string id) => new()
+    {
+        Id = id, Name = p.Name, Connection = p.Connection, Host = p.Host, Port = p.Port <= 0 ? 9100 : p.Port,
+        SerialPath = p.SerialPath, UsbVendorId = p.UsbVendorId, UsbProductId = p.UsbProductId,
+        BluetoothAddress = p.BluetoothAddress, BluetoothName = p.BluetoothName, PrinterName = p.PrinterName, Role = p.Role,
+        Paper = p.Paper is 58 or 80 ? p.Paper : 80, Copies = Math.Clamp(p.Copies, 1, 5), Cut = p.Cut, CutMode = p.CutMode, Enabled = p.Enabled,
+    };
+
+    private string? Validate(PrinterConfig p)
+    {
+        if (string.IsNullOrWhiteSpace(p.Name)) return T("name") + "?";
+        if (p.Connection == PrinterConnection.WiFi && string.IsNullOrWhiteSpace(p.Host)) return T("host") + "?";
+        if (p.Connection == PrinterConnection.Serial && string.IsNullOrWhiteSpace(p.SerialPath)) return T("serialPath") + "?";
+        if (p.Connection == PrinterConnection.Bluetooth && string.IsNullOrWhiteSpace(p.BluetoothAddress)) return T("noBtChosen");
+        if (p.Connection == PrinterConnection.WindowsPrinter && string.IsNullOrWhiteSpace(p.PrinterName)) return T("windowsPrinter") + "?";
+        return null;
+    }
+
+    private void SaveEdit()
+    {
+        if (_edit is null) return;
+        _edit.Name = _edit.Name.Trim(); _edit.Host = _edit.Host.Trim(); _edit.SerialPath = _edit.SerialPath.Trim();
+        if (Validate(_edit) is { } problem) { Snackbar.Add(problem, Severity.Warning); return; }
+        var at = S.Printers.FindIndex(x => x.Id == _edit.Id);
+        if (at >= 0) S.Printers[at] = _edit; else S.Printers.Add(_edit);
+        S.Save();
+        _edit = null;
+        _found = null;
+        Snackbar.Add(T("saved"), Severity.Success);
+    }
+
+    private void DeleteEdit()
+    {
+        if (_edit is null) return;
+        S.Printers.RemoveAll(x => x.Id == _edit.Id);
+        S.Save();
+        _edit = null;
+    }
+
+    private async Task TestAsync(PrinterConfig p)
+    {
+        if (Validate(p) is { } problem) { Snackbar.Add(problem, Severity.Warning); return; }
+        _testing = true;
+        try
+        {
+            var err = await E.TestPrintAsync(p);
+            Snackbar.Add(err ?? T("printed"), err is null ? Severity.Success : Severity.Error);
+        }
+        finally { _testing = false; }
+    }
+
+    // ---------- Bluetooth / USB pickers ----------
+
+    private async Task LoadBluetoothAsync()
+    {
+        try
+        {
+            var (devices, problem) = await DevicePickers.BluetoothAsync();
+            _bt = devices.Select(d => (d.Key, d.Name, d.Label)).ToList();
+            if (problem is not null) Snackbar.Add(T(problem), _bt.Count == 0 ? Severity.Warning : Severity.Info);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private void PickBluetooth(string address)
+    {
+        if (_edit is null) return;
+        var d = _bt.FirstOrDefault(x => x.Address == address);
+        _edit.BluetoothAddress = address;
+        _edit.BluetoothName = d.Name ?? "";
+        var inner = _edit.BluetoothName.Contains("InnerPrinter", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(_edit.Name)) _edit.Name = inner ? T("builtIn") : _edit.BluetoothName;
+        if (inner && !_editingExisting) { _edit.Role = PrinterRole.Cashier; _edit.Paper = 58; _edit.Cut = false; }
+    }
+
+    private static string UsbKey(int vendor, int product) => $"{vendor}:{product}";
+
+    private void LoadUsb()
+    {
+        try { _usb = DevicePickers.Usb().Select(d => (d.Key, d.Label)).ToList(); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private List<DevicePickers.Device> _win = [];
+
+    private void LoadWindowsPrinters()
+    {
+        try { _win = DevicePickers.WindowsPrinters(); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private void PickUsb(string key)
+    {
+        if (_edit is null) return;
+        var parts = key.Split(':');
+        _edit.UsbVendorId = int.TryParse(parts[0], out var v) ? v : 0;
+        _edit.UsbProductId = parts.Length > 1 && int.TryParse(parts[1], out var p) ? p : 0;
+    }
+}

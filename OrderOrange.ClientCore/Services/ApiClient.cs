@@ -546,6 +546,10 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     /// <summary>The Android till (APK) on offer, or null when none has been published. The query
     /// string defeats a browser copy of the manifest, so a new release shows the moment it lands.</summary>
     public Task<TillVersionDto?> GetAndroidTillVersionAsync() => GetAsync<TillVersionDto>($"api/till/android/version?t={DateTime.UtcNow.Ticks}");
+
+    /// <summary>The OrderOrange Partner app on offer for one platform ("android" | "windows"); null when none is published.</summary>
+    public Task<TillVersionDto?> GetPartnerAppVersionAsync(string platform) =>
+        GetAsync<TillVersionDto>($"api/till/partner/{platform}/version?t={DateTime.UtcNow.Ticks}");
     /// <summary>The partner assistant: Grok with store-scoped MCP tools (reads and the two store actions).</summary>
     public Task<(AnalystReplyDto? data, string? error)> AskPartnerAssistantAsync(AnalystAskRequest req) =>
         SendForAsync<AnalystReplyDto>(HttpMethod.Post, "api/assistant/partner", req);

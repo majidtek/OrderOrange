@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+	<application android:allowBackup="true" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true" android:label="OrderOrange Partner"></application>
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+	<uses-permission android:name="android.permission.INTERNET" />
+	<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+	<uses-permission android:name="android.permission.WAKE_LOCK" />
+	<!-- The built-in printer service: keeps printing kitchen tickets and receipts in the background.
+	     "Connected device" (printers over Bluetooth / USB / LAN) has no 6-hour cap on Android 14+. -->
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+	<!-- Keep printing with the screen off and come back after a reboot -->
+	<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+	<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+	<!-- Tickets are drawn by an off-screen WebView; with the app in the background it paints in a
+	     near-invisible overlay window of its own -->
+	<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+	<!-- Bluetooth printers, incl. the terminal's own "InnerPrinter": classic permissions up to Android 11, CONNECT from 12 -->
+	<uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+	<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+	<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+	<uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+	<uses-feature android:name="android.hardware.usb.host" android:required="false" />
+</manifest>

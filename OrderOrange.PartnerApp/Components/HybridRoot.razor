@@ -1,0 +1,123 @@
+@namespace OrderOrange.PartnerApp.Components
+@using Microsoft.AspNetCore.Components.Routing
+@using OrderOrange.ClientCore.Services
+@using OrderOrange.PartnerApp.Services
+@using OrderOrange.PartnerApp.Till.Printing
+@using OrderOrange.PartnerApp.Till.Services
+@using OrderOrange.Shared
+@implements IDisposable
+@inject LanguageService Lang
+@inject PackageTranslationLoader Translations
+@inject AppState State
+@inject OrderOrange.RestaurantWeb.Services.ReceiptPrinter Printer
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@* The app's root: what OrderOrange.RestaurantWeb/Program.cs does before the first paint
+   (language list, English as the fallback, the language chosen last time), then the very same
+   router as the browser portal's Routes.razor — pointed at this app's assembly, where the
+   linked pages are compiled.
+   It also wires the app's built-in printer to the portal: the partner's own sign-in drives it,
+   and every invoice the portal settles prints on the cashier printer (no separate till app).
+   The Printers screen opens from the portal's Settings page (a card shown only in the app). *@
+@if (_ready)
+{
+    <Router AppAssembly="typeof(MauiProgram).Assembly">
+        <Found Context="routeData">
+            <RouteView RouteData="routeData" DefaultLayout="typeof(OrderOrange.RestaurantWeb.Components.Layout.MainLayout)" />
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+    </Router>
+}
+
+
+@code {
+    private static TillEngine Engine => TillEngine.Instance;
+    private bool _ready;
+    private string? _attachedToken;
+    private int? _attachedStore;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Translations.LoadIndexAsync();
+            await Translations.EnsureAsync(TranslationCatalog.DefaultLocale);
+            await Lang.EnsureLoadedAsync();
+        }
+        catch { /* English keys still render; the language switch tries again */ }
+
+        State.Changed += OnSessionChanged;
+        Printer.Fire += OnSettled;
+        Engine.Changed += OnEngineChanged;
+        _ready = true;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender) return;
+#if WINDOWS
+        // Windows draws tickets inside this window's WebView2 (wwwroot/index.html: ooRenderHtml).
+        PlatformImaging.JsRenderer = (html, dots, css) =>
+        {
+            var done = new TaskCompletionSource<string?>();
+            _ = InvokeAsync(async () =>
+            {
+                try { done.TrySetResult(await JS.InvokeAsync<string?>("ooRenderHtml", TimeSpan.FromSeconds(20), html, dots, css)); }
+                catch (Exception ex) { done.TrySetException(ex); }
+            });
+            return done.Task;
+        };
+#endif
+        OnSessionChanged();   // a session restored from the WebView's storage
+    }
+
+    /// <summary>Sign-in, store switch or sign-out in the portal → the printer follows.</summary>
+    private void OnSessionChanged() => _ = InvokeAsync(async () =>
+    {
+        try
+        {
+            if (State.IsAuthenticated && State.Role == UserRole.RestaurantOwner && State.RestaurantId is int store)
+            {
+                if (_attachedToken == State.Token && _attachedStore == store) return;
+                _attachedToken = State.Token;
+                _attachedStore = store;
+                await Engine.AttachPortalSessionAsync(State.Token!, store, State.RestaurantName ?? "");
+                PlatformHost.StartService();
+            }
+            else if (!State.IsAuthenticated && _attachedToken is not null)
+            {
+                _attachedToken = null;
+                _attachedStore = null;
+                await Engine.DetachPortalSessionAsync();
+                PlatformHost.StopService();
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex) { TillLog.Write($"session hand-over failed: {ex.Message}"); }
+    });
+
+    /// <summary>An invoice the portal settled: on paper at once when the store prints direct.</summary>
+    private async Task OnSettled(OrderDto order)
+    {
+        try
+        {
+            if (!Engine.DirectPrint) return;
+            var err = await Engine.PrintReceiptForAsync(order);
+            if (err is not null) TillLog.Write($"direct print #{order.Number}: {err}");
+        }
+        catch (Exception ex) { TillLog.Write($"direct print threw: {ex.Message}"); }
+    }
+
+    private void OnEngineChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+#if WINDOWS
+        PlatformImaging.JsRenderer = null;
+#endif
+        State.Changed -= OnSessionChanged;
+        Printer.Fire -= OnSettled;
+        Engine.Changed -= OnEngineChanged;
+    }
+}

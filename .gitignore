@@ -58,3 +58,6 @@ doc-src/*.png
 doc-src/frames.json
 doc-src/src/
 
+
+# OrderOrange.PartnerApp copies the stock food photos into its wwwroot at build time
+OrderOrange.PartnerApp/wwwroot/img/

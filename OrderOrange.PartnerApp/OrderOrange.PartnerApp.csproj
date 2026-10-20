@@ -1,0 +1,108 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <!--
+    The OrderOrange partner portal as a native app (.NET MAUI Blazor Hybrid): the very same
+    pages, layouts and services as the browser portal (OrderOrange.RestaurantWeb), compiled
+    into this app by file link, so there is one copy of every page and no drift. Only the
+    browser-host pieces are swapped for native ones (translations from the app package, the
+    two map helpers bridged through .NET, settings in AppConfig).
+  -->
+  <PropertyGroup>
+    <!-- Android tablets/terminals and Windows PCs. The app carries its own printers on both:
+         Android — built-in, Bluetooth, Wi-Fi, USB, serial; Windows — Wi-Fi/LAN and any printer
+         installed in Windows (raw ESC/POS). -->
+    <TargetFrameworks>net10.0-android</TargetFrameworks>
+    <TargetFrameworks Condition="$([MSBuild]::IsOSPlatform('windows'))">$(TargetFrameworks);net10.0-windows10.0.19041.0</TargetFrameworks>
+
+    <OutputType>Exe</OutputType>
+    <AssemblyName>OrderOrange.PartnerApp</AssemblyName>
+    <!-- The linked .razor files take their namespace from the root namespace + folder, and the
+         portal's code expects OrderOrange.RestaurantWeb.Components(.Pages/.Layout). This app's
+         own types declare OrderOrange.PartnerApp explicitly. -->
+    <RootNamespace>OrderOrange.RestaurantWeb</RootNamespace>
+    <UseMaui>true</UseMaui>
+    <SingleProject>true</SingleProject>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCssItems>false</EnableDefaultCssItems>
+
+    <!-- MAUI's implicit usings (Microsoft.Maui.Graphics.Color, Colors, Size…) collide with
+         MudBlazor's types in every page, so they are off; the portal's own set is listed below. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+
+    <!-- Same as the browser build: every label, month name and digit form comes from the app's
+         language files, so the culture database is not needed. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <ApplicationTitle>OrderOrange Partner</ApplicationTitle>
+    <ApplicationId>com.orderorange.partner</ApplicationId>
+    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+
+    <WindowsPackageType>None</WindowsPackageType>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
+    <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
+    <!-- Side-loaded on tablets and phones, so a plain APK rather than an app bundle. -->
+    <AndroidPackageFormat Condition="'$(Configuration)' == 'Release'">apk</AndroidPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System" />
+    <Using Include="System.Collections.Generic" />
+    <Using Include="System.IO" />
+    <Using Include="System.Linq" />
+    <Using Include="System.Net.Http" />
+    <Using Include="System.Net.Http.Json" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <!-- ===== The portal itself, linked from OrderOrange.RestaurantWeb (one source of truth) ===== -->
+  <ItemGroup>
+    <!-- Routes.razor points its router at the browser app's Program; this app has its own (Components/HybridRoot.razor). -->
+    <!-- RazorComponent, not Content: the Razor compiler only reads its own items, and
+         AssignTargetPath honours Link, so each page keeps its folder namespace. -->
+    <RazorComponent Include="..\OrderOrange.RestaurantWeb\Components\**\*.razor"
+                    Exclude="..\OrderOrange.RestaurantWeb\Components\Routes.razor"
+                    Link="Components\%(RecursiveDir)%(Filename)%(Extension)" />
+    <Compile Include="..\OrderOrange.RestaurantWeb\Services\**\*.cs"
+             Link="Services\Portal\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OrderOrange.ClientCore\OrderOrange.ClientCore.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)" />
+    <PackageReference Include="Heron.MudCalendar" Version="3.4.0" />
+    <PackageReference Include="MudBlazor" Version="8.15.0" />
+    <PackageReference Include="QRCoder" Version="1.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The OrderOrange mark (orange invoice + leaf) on white. -->
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" Color="#FFFFFF" />
+    <MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#FFFFFF" BaseSize="128,128" />
+    <!-- tillnotif: the monochrome glyph of the printer service's notification. -->
+    <MauiImage Include="Resources\Images\*" />
+    <!-- Optional Arabic/Persian font for printed tickets when the terminal has none (drop arabic.ttf here). -->
+    <MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- The fourteen language files, read from the app package one language at a time. -->
+    <MauiAsset Include="..\OrderOrange.ClientCore\Localization\*.json" LogicalName="i18n\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- The stock food photos (FoodPhoto.cs points at img/rest/*, img/dishes/*) live in the browser
+       app's wwwroot; mirror them into this app's wwwroot before static assets are collected. -->
+  <Target Name="CopyPortalImages" BeforeTargets="ResolveProjectStaticWebAssets;BeforeBuild">
+    <ItemGroup>
+      <PortalImage Include="..\OrderOrange.RestaurantWeb\wwwroot\img\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PortalImage)" DestinationFiles="@(PortalImage->'wwwroot\img\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
