@@ -439,6 +439,9 @@
             new("nav.tableQr", "/table-qr", Icons.Material.Filled.QrCode, () => Can(Perm.TablesView)),
             new("lbl.title", "/labels", Icons.Material.Filled.QrCode2, () => Can(Perm.MenuView)),
             new("nav.storeQr", "/qr", Icons.Material.Filled.QrCode2, () => Can(Perm.Settings)),
+            // Inside the OrderOrange Partner app only: the printers this device drives
+            // (Majed 2026-10-20: "I can not find printer setting" — searching the menu found nothing).
+            new("papp.printers", "/device/printers", Icons.Material.Filled.Print, () => HostInfo.IsNativeApp && Can(Perm.Settings)),
         ], () => Can(Perm.MenuView) || Can(Perm.CustomersView) || Can(Perm.InventoryView)
               || Can(Perm.SuppliersView) || Can(Perm.TablesView) || Can(Perm.Settings), "#0EA5E9"),
         new("nav.reports", Icons.Material.Filled.Assessment,
