@@ -33,6 +33,77 @@
             };
         })();
     </script>
+    <style>
+        /* The app's own error screen (replaces the portal's dark bar): full page, branded, with
+           Reload and the error's details, so a partner can send a screenshot that says something. */
+        body #blazor-error-ui { position: fixed !important; inset: 0 !important; width: auto !important; height: auto !important;
+            border-radius: 0 !important; padding: 24px !important; margin: 0 !important; z-index: 100000 !important;
+            background: #FFF8F3 !important; color: #2b211a !important; box-shadow: none !important;
+            font: 15px/1.5 "Segoe UI", system-ui, sans-serif !important; overflow: auto; }
+        #blazor-error-ui .oo-err { max-width: 520px; margin: 8vh auto 0; text-align: center; }
+        #blazor-error-ui .oo-err svg { width: 72px; height: 72px; }
+        #blazor-error-ui .oo-err h2 { margin: 14px 0 6px; font-size: 22px; font-weight: 800; color: #2b211a; }
+        #blazor-error-ui .oo-err p { margin: 0 0 18px; color: #6b5d52; font-weight: 500; }
+        #blazor-error-ui .oo-err .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        #blazor-error-ui .oo-err .reload, #blazor-error-ui .oo-err button { display: inline-block; border: 0; border-radius: 12px; padding: 11px 22px;
+            font: 700 15px/1 "Segoe UI", system-ui, sans-serif; cursor: pointer; text-decoration: none; }
+        #blazor-error-ui .oo-err .reload { background: #FF5A00; color: #fff !important; border-bottom: 0 !important; }
+        #blazor-error-ui .oo-err button { background: #fff; color: #2b211a; box-shadow: inset 0 0 0 1.5px #e7d9cd; }
+        #blazor-error-ui .oo-err pre { display: none; text-align: left; direction: ltr; white-space: pre-wrap; word-break: break-word;
+            margin: 18px 0 0; padding: 12px; max-height: 45vh; overflow: auto; background: #fff; border: 1px solid #eadfd5;
+            border-radius: 10px; font: 12px/1.45 Consolas, monospace; color: #5b3a2a; }
+        #blazor-error-ui .oo-err.open pre { display: block; }
+        #blazor-error-ui .dismiss { display: none !important; }
+    </style>
+    <script>
+        // Keep the last errors the runtime reports (it writes the .NET exception to console.error just
+        // before it shows #blazor-error-ui), and put them under "Details" on the error screen.
+        (function () {
+            var errors = [];
+            var original = console.error.bind(console);
+            console.error = function () {
+                try {
+                    errors.push(Array.prototype.map.call(arguments, function (a) { return a && a.stack ? a.stack : String(a); }).join(' '));
+                    if (errors.length > 6) errors.shift();
+                } catch (e) { }
+                original.apply(console, arguments);
+            };
+            window.addEventListener('error', function (e) { errors.push(String(e.message) + (e.error && e.error.stack ? '\n' + e.error.stack : '')); });
+            window.ooErrors = function () { return errors.slice(); };
+
+            var words = {
+                en: ['Something went wrong', 'The app ran into a problem on this screen. Reload to carry on — nothing on the server is lost.', 'Reload', 'Details', 'Copy', 'Copied'],
+                ar: ['حدث خطأ ما', 'واجه التطبيق مشكلة في هذه الشاشة. أعد التحميل للمتابعة — لم يُفقد شيء على الخادم.', 'إعادة التحميل', 'التفاصيل', 'نسخ', 'تم النسخ'],
+                fa: ['مشکلی پیش آمد', 'برنامه در این صفحه به مشکل خورد. برای ادامه دوباره بارگذاری کنید — چیزی روی سرور از دست نرفته است.', 'بارگذاری مجدد', 'جزئیات', 'کپی', 'کپی شد'],
+                ur: ['کچھ غلط ہو گیا', 'ایپ کو اس اسکرین پر مسئلہ پیش آیا۔ جاری رکھنے کے لیے دوبارہ لوڈ کریں — سرور پر کچھ ضائع نہیں ہوا۔', 'دوبارہ لوڈ کریں', 'تفصیلات', 'کاپی', 'کاپی ہو گیا'],
+            };
+            function lang() { try { var l = (localStorage.getItem('mf.lang') || 'en').toLowerCase(); return words[l] ? l : 'en'; } catch (e) { return 'en'; } }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                var ui = document.getElementById('blazor-error-ui');
+                if (!ui) return;
+                function fill() {
+                    if (getComputedStyle(ui).display === 'none') return;
+                    var l = lang(), w = words[l];
+                    ui.setAttribute('dir', l === 'en' ? 'ltr' : 'rtl');
+                    ui.querySelector('.t').textContent = w[0];
+                    ui.querySelector('.s').textContent = w[1];
+                    ui.querySelector('.reload').textContent = w[2];
+                    ui.querySelector('.d').textContent = w[3];
+                    ui.querySelector('.c').textContent = w[4];
+                    ui.querySelector('pre').textContent = (errors.length ? errors.join('\n\n') : '(no details)') +
+                        '\n\n' + navigator.userAgent + '\n' + location.href;
+                }
+                new MutationObserver(fill).observe(ui, { attributes: true, attributeFilter: ['style', 'class'] });
+                ui.querySelector('.d').addEventListener('click', function () { ui.querySelector('.oo-err').classList.toggle('open'); });
+                ui.querySelector('.c').addEventListener('click', function () {
+                    var text = ui.querySelector('pre').textContent, btn = this;
+                    function done() { btn.textContent = words[lang()][5]; }
+                    try { navigator.clipboard.writeText(text).then(done, function () { }); } catch (e) { }
+                });
+            });
+        })();
+    </script>
 </head>
 
 <body class="pf">
@@ -45,8 +116,17 @@
     </div>
 
     <div id="blazor-error-ui" data-nosnippet>
-        <span class="msg">Something went wrong.</span>
-        <a href="." class="reload">Reload</a>
+        <div class="oo-err">
+            <svg viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="oo-e-paper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF8A3D"/><stop offset="0.55" stop-color="#FF5A00"/><stop offset="1" stop-color="#E64500"/></linearGradient><linearGradient id="oo-e-leaf" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2E9E4F"/><stop offset="1" stop-color="#57C97A"/></linearGradient></defs><path fill="url(#oo-e-paper)" d="M20 15h24a5 5 0 0 1 5 5v38l-5.8-4.2L37.4 58l-5.8-4.2L25.8 58 20 53.8 14.2 58V20a5 5 0 0 1 5-5z"/><path fill="#1F7A3C" d="M32 16.6c-.7 0-1.2-.6-1.2-1.2V11c0-.7.5-1.2 1.2-1.2s1.2.5 1.2 1.2v4.4c0 .6-.5 1.2-1.2 1.2z"/><path fill="url(#oo-e-leaf)" d="M33.4 12.2c2.9-4.3 8-5.9 12-5.3.8.1 1.3 1 1 1.7-1.4 3.8-4.8 7.9-10 8.2-1.4.1-2.6-.4-3.4-1.2-.9-.9-.8-2.3.4-3.4z"/><rect x="20.5" y="27" width="23" height="4" rx="2" fill="#FFFFFF" opacity=".95"/><rect x="20.5" y="35" width="16" height="4" rx="2" fill="#FFFFFF" opacity=".95"/><rect x="20.5" y="43" width="23" height="5" rx="2.5" fill="#FFD8BF"/></svg>
+            <h2 class="t">Something went wrong</h2>
+            <p class="s">The app ran into a problem on this screen. Reload to carry on — nothing on the server is lost.</p>
+            <div class="row">
+                <a href="." class="reload">Reload</a>
+                <button type="button" class="d">Details</button>
+                <button type="button" class="c">Copy</button>
+            </div>
+            <pre></pre>
+        </div>
         <span class="dismiss">🗙</span>
     </div>
 

@@ -35,8 +35,8 @@
 
     <ApplicationTitle>OrderOrange Partner</ApplicationTitle>
     <ApplicationId>com.orderorange.partner</ApplicationId>
-    <ApplicationDisplayVersion>1.1.0</ApplicationDisplayVersion>
-    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationDisplayVersion>1.1.1</ApplicationDisplayVersion>
+    <ApplicationVersion>3</ApplicationVersion>
 
     <WindowsPackageType>None</WindowsPackageType>
     <SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">24.0</SupportedOSPlatformVersion>
@@ -44,6 +44,15 @@
     <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
     <!-- Side-loaded on tablets and phones, so a plain APK rather than an app bundle. -->
     <AndroidPackageFormat Condition="'$(Configuration)' == 'Release'">apk</AndroidPackageFormat>
+    <!-- No trimming on Android: Blazor and MudBlazor reach components, JS callbacks and converters
+         by reflection, and the trimmed release build (MudBlazor 9.5 MB → 1.3 MB) opened on a blank
+         page with "Something went wrong" while the untrimmed Windows build of the same pages ran
+         (2026-10-20). A bigger APK is the price of the pages behaving like on Windows. -->
+    <PublishTrimmed Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</PublishTrimmed>
+    <AndroidLinkMode Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">None</AndroidLinkMode>
+    <!-- AOT needs trimming, so the Android build runs on the JIT like Windows (start-up is a little slower). -->
+    <RunAOTCompilation Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</RunAOTCompilation>
+    <AndroidEnableProfiledAot Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</AndroidEnableProfiledAot>
   </PropertyGroup>
 
   <ItemGroup>

@@ -22,18 +22,82 @@
    The Printers screen opens from the portal's Settings page (a card shown only in the app). *@
 @if (_ready)
 {
-    <Router AppAssembly="typeof(MauiProgram).Assembly">
-        <Found Context="routeData">
-            <RouteView RouteData="routeData" DefaultLayout="typeof(OrderOrange.RestaurantWeb.Components.Layout.MainLayout)" />
-            <FocusOnNavigate RouteData="routeData" Selector="h1" />
-        </Found>
-    </Router>
+    @* An error inside a page shows a card here instead of taking the whole app down. *@
+    <AppErrorBoundary @ref="_boundary">
+        <ChildContent>
+            <Router AppAssembly="typeof(MauiProgram).Assembly">
+                <Found Context="routeData">
+                    <RouteView RouteData="routeData" DefaultLayout="typeof(OrderOrange.RestaurantWeb.Components.Layout.MainLayout)" />
+                    <FocusOnNavigate RouteData="routeData" Selector="h1" />
+                </Found>
+            </Router>
+        </ChildContent>
+        <ErrorContent Context="ex">
+            <div class="oo-page-err" dir="@(Lang.IsRtl ? "rtl" : "ltr")">
+                <div class="card">
+                    <div class="ic">!</div>
+                    <h2>@Word(0)</h2>
+                    <p>@Word(1)</p>
+                    <div class="row">
+                        <button type="button" class="pri" @onclick="Recover">@Word(2)</button>
+                        <button type="button" @onclick="GoHome">@Word(3)</button>
+                        <button type="button" @onclick="() => _showDetails = !_showDetails">@Word(4)</button>
+                    </div>
+                    @if (_showDetails)
+                    {
+                        <pre>@ex.GetType().Name: @ex.Message@("\n\n")@ex.StackTrace</pre>
+                    }
+                </div>
+            </div>
+        </ErrorContent>
+    </AppErrorBoundary>
 }
+
+<style>
+    .oo-page-err{min-height:70vh;display:flex;align-items:flex-start;justify-content:center;padding:8vh 16px 24px;background:#FFF8F3}
+    .oo-page-err .card{max-width:520px;width:100%;background:#fff;border:1px solid #f0e3d8;border-radius:18px;padding:26px 22px;text-align:center;
+        box-shadow:0 10px 30px rgba(60,30,10,.08);font-family:"Segoe UI",system-ui,sans-serif;color:#2b211a}
+    .oo-page-err .ic{width:54px;height:54px;margin:0 auto 10px;border-radius:50%;background:#FFE7D6;color:#E64500;font:900 28px/54px "Segoe UI",sans-serif}
+    .oo-page-err h2{margin:0 0 6px;font-size:20px;font-weight:800}
+    .oo-page-err p{margin:0 0 18px;color:#6b5d52}
+    .oo-page-err .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+    .oo-page-err button{border:0;border-radius:12px;padding:10px 18px;font:700 14px/1 "Segoe UI",sans-serif;cursor:pointer;background:#fff;color:#2b211a;box-shadow:inset 0 0 0 1.5px #e7d9cd}
+    .oo-page-err button.pri{background:#FF5A00;color:#fff;box-shadow:none}
+    .oo-page-err pre{margin:16px 0 0;text-align:left;direction:ltr;white-space:pre-wrap;word-break:break-word;max-height:40vh;overflow:auto;
+        background:#faf6f2;border:1px solid #eadfd5;border-radius:10px;padding:10px;font:12px/1.45 Consolas,monospace;color:#5b3a2a}
+</style>
 
 
 @code {
     private static TillEngine Engine => TillEngine.Instance;
     private bool _ready;
+    private AppErrorBoundary? _boundary;
+    private bool _showDetails;
+
+    private static readonly Dictionary<string, string[]> ErrorWords = new()
+    {
+        ["en"] = ["This page ran into a problem", "Something on this screen did not work. Try again, or go back to the dashboard — nothing on the server is lost.", "Try again", "Go to dashboard", "Details"],
+        ["ar"] = ["واجهت هذه الصفحة مشكلة", "لم يعمل شيء في هذه الشاشة. حاول مرة أخرى أو ارجع إلى لوحة التحكم — لم يُفقد شيء على الخادم.", "حاول مرة أخرى", "لوحة التحكم", "التفاصيل"],
+        ["fa"] = ["این صفحه به مشکل خورد", "بخشی از این صفحه کار نکرد. دوباره امتحان کنید یا به داشبورد برگردید — چیزی روی سرور از دست نرفته است.", "دوباره امتحان کنید", "رفتن به داشبورد", "جزئیات"],
+        ["ur"] = ["اس صفحے میں مسئلہ آیا", "اس اسکرین پر کچھ کام نہیں کیا۔ دوبارہ کوشش کریں یا ڈیش بورڈ پر جائیں — سرور پر کچھ ضائع نہیں ہوا۔", "دوبارہ کوشش کریں", "ڈیش بورڈ", "تفصیلات"],
+    };
+
+    private string Word(int i) => (ErrorWords.TryGetValue(Lang.Locale, out var w) ? w : ErrorWords["en"])[i];
+
+    private void Recover()
+    {
+        _showDetails = false;
+        _boundary?.Recover();
+    }
+
+    private void GoHome()
+    {
+        Recover();
+        Nav.NavigateTo("/");
+    }
+
+    // Leaving the broken page by any link brings the app back too.
+    private void OnNavigated(object? sender, LocationChangedEventArgs e) => _ = InvokeAsync(Recover);
     private string? _attachedToken;
     private int? _attachedStore;
 
@@ -50,6 +114,7 @@
         State.Changed += OnSessionChanged;
         Printer.Fire += OnSettled;
         Engine.Changed += OnEngineChanged;
+        Nav.LocationChanged += OnNavigated;
         _ready = true;
     }
 
@@ -119,5 +184,6 @@
         State.Changed -= OnSessionChanged;
         Printer.Fire -= OnSettled;
         Engine.Changed -= OnEngineChanged;
+        Nav.LocationChanged -= OnNavigated;
     }
 }
