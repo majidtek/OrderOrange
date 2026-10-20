@@ -1,7 +1,10 @@
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
+using Android.Graphics.Drawables;
 using Android.OS;
+using Android.Views;
+using AndroidX.Core.View;
 using Microsoft.Maui;
 
 namespace OrderOrange.PartnerApp;
@@ -11,6 +14,41 @@ namespace OrderOrange.PartnerApp;
         | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.Density)]
 public class MainActivity : MauiAppCompatActivity
 {
+    protected override void OnCreate(Bundle? savedInstanceState)
+    {
+        base.OnCreate(savedInstanceState);
+        // Android 15 draws every app edge to edge, so the status bar sat on top of the portal's
+        // menu bar (Majed 2026-10-20: "top menu is over"). Keep the page below the system bars
+        // and paint the strip behind the status bar in the portal's orange, white behind the
+        // navigation bar; the clock and icons go white on the orange.
+        if (FindViewById(Android.Resource.Id.Content) is ViewGroup content)
+            ViewCompat.SetOnApplyWindowInsetsListener(content, new SystemBarsPadding());
+        if (Window is { } window)
+        {
+            var controller = WindowCompat.GetInsetsController(window, window.DecorView);
+            controller.AppearanceLightStatusBars = false;
+            controller.AppearanceLightNavigationBars = true;
+        }
+    }
+
+    /// <summary>Pads the activity's content by the system bars and colours the two strips.</summary>
+    private sealed class SystemBarsPadding : Java.Lang.Object, IOnApplyWindowInsetsListener
+    {
+        private static readonly Android.Graphics.Color Orange = Android.Graphics.Color.ParseColor("#FF5A00");
+
+        public WindowInsetsCompat OnApplyWindowInsets(View v, WindowInsetsCompat insets)
+        {
+            var bars = insets.GetInsets(WindowInsetsCompat.Type.SystemBars() | WindowInsetsCompat.Type.DisplayCutout());
+            v.SetPadding(bars.Left, bars.Top, bars.Right, bars.Bottom);
+            // Orange underneath everything; white laid over it from the top inset down, so only
+            // the status-bar strip shows orange.
+            var layers = new LayerDrawable([new ColorDrawable(Orange), new ColorDrawable(Android.Graphics.Color.White)]);
+            layers.SetLayerInset(1, 0, bars.Top, 0, 0);
+            v.Background = layers;
+            return WindowInsetsCompat.Consumed;
+        }
+    }
+
     /// <summary>Starts (or pokes) the foreground service that keeps the printers working while the app is in the background.</summary>
     public static void StartTillService()
     {
@@ -39,7 +77,7 @@ public class MainActivity : MauiAppCompatActivity
     }
 
     /// <summary>
-    /// Asks Android to leave the till out of battery optimisation. Without it, Doze cuts the
+    /// Asks Android to leave the app out of battery optimisation. Without it, Doze cuts the
     /// network a while after the screen goes dark and the poll loop silently stops seeing
     /// orders — a foreground service and a wake lock do not override Doze; this does.
     /// </summary>

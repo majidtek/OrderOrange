@@ -12,9 +12,9 @@ public class MainApplication : MauiApplication
 
     public override void OnCreate()
     {
-        // Must run before the first WebView exists: lets the printer's off-screen WebView draw a
-        // WHOLE ticket into a bitmap, not just the part that would fit on screen.
-        Android.Webkit.WebView.EnableSlowWholeDocumentDraw();
+        // No WebView.EnableSlowWholeDocumentDraw() here: it is process-wide and would also change
+        // how the portal's own WebView paints and scrolls. The printer's off-screen WebView is
+        // laid out to the full height of the ticket instead, so it draws the whole ticket anyway.
         base.OnCreate();
     }
 
