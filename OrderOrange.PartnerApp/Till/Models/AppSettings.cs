@@ -207,6 +207,57 @@ public sealed class AppSettings
         return work.Count > 0 || Printers.Any(p => p.Enabled && p.Role != PrinterRole.Cashier) ? work : picked;
     }
 
+    /// <summary>The products a printer prints: its own ticks, else (dishes with no ticks yet) its category ticks.</summary>
+    public HashSet<int> ProductsOf(string printerId, IEnumerable<OrderOrange.Shared.MenuCategoryDto> menu)
+    {
+        var set = new HashSet<int>();
+        foreach (var c in menu)
+            foreach (var i in c.Items)
+            {
+                var ids = ProductPrinters.TryGetValue(i.Id, out var own) && own.Count > 0 ? own
+                        : CategoryPrinters.GetValueOrDefault(c.Id) ?? [];
+                if (ids.Contains(printerId)) set.Add(i.Id);
+            }
+        return set;
+    }
+
+    /// <summary>
+    /// Saves which products a printer prints. Every product records its own printers; a
+    /// category whose products are ALL ticked also remembers the printer, so a dish added to
+    /// that category later prints there without a visit to this screen.
+    /// </summary>
+    public void SetProductsOf(string printerId, IEnumerable<OrderOrange.Shared.MenuCategoryDto> menu, IReadOnlySet<int> ticked)
+    {
+        foreach (var c in menu)
+        {
+            foreach (var i in c.Items)
+            {
+                // Freeze what the category rule gave this dish before the rule changes.
+                if (!ProductPrinters.TryGetValue(i.Id, out var list) || list.Count == 0)
+                    list = [.. CategoryPrinters.GetValueOrDefault(c.Id) ?? []];
+                list.Remove(printerId);
+                if (ticked.Contains(i.Id)) list.Add(printerId);
+                if (list.Count > 0) ProductPrinters[i.Id] = list; else ProductPrinters.Remove(i.Id);
+            }
+            var rule = CategoryPrinters.GetValueOrDefault(c.Id) ?? [];
+            rule.Remove(printerId);
+            if (c.Items.Count > 0 && c.Items.All(i => ticked.Contains(i.Id))) rule.Add(printerId);
+            if (rule.Count > 0) CategoryPrinters[c.Id] = rule; else CategoryPrinters.Remove(c.Id);
+        }
+    }
+
+    /// <summary>A printer was deleted: it prints nothing any more.</summary>
+    public void ForgetPrinter(string printerId)
+    {
+        foreach (var key in ProductPrinters.Keys.ToList())
+            if (ProductPrinters[key].Remove(printerId) && ProductPrinters[key].Count == 0) ProductPrinters.Remove(key);
+        foreach (var key in CategoryPrinters.Keys.ToList())
+            if (CategoryPrinters[key].Remove(printerId) && CategoryPrinters[key].Count == 0) CategoryPrinters.Remove(key);
+    }
+
+    /// <summary>How many products carry a tick for this printer (for the printers list).</summary>
+    public int ProductCountOf(string printerId) => ProductPrinters.Values.Count(l => l.Contains(printerId));
+
     private const string Key = "settings";
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     private static AppSettings? _current;

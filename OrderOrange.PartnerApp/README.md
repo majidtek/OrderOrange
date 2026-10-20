@@ -15,15 +15,16 @@ the separate Android till in partner Settings.
 
 | Event | What prints, where |
 |---|---|
-| An order appears on the board | Kitchen/bar ticket on the kitchen and bar printers, per the portal's **Print routing** map (unrouted products: kitchen, switchable) |
+| An order appears on the board | Kitchen/bar ticket on every printer that ticked the product in its **Products this printer prints** list (products no printer ticked: the Kitchen printers, switchable) |
 | A round is rung onto an open table / a line is edited | Round ticket ("1 → 3", "removed") on the kitchen/bar printers |
 | The bill is due (dine-in/counter paid, delivery/pickup ready) | The designed receipt on the **Cashier** printer |
 | An invoice is settled in the portal and Settings has **Print direct** on | The receipt at once on the Cashier printer (and not again by the poll) |
 | **Print** on a page that shows a receipt | That receipt, as drawn on screen, on the Cashier printer (no cashier printer set up → the system print dialog) |
 
 Printers are set up in **Settings → Printers** (inside the app the "OrderOrange Partner app" card
-opens the Printers screen): find printers, add/edit, test print, cut command, copies, the
-auto-print switches, the last jobs and the log.
+opens the Printers screen): find printers, add/edit, test print, cut command, copies, **the products
+each printer prints** (pick the printer, then tick its categories/products), the auto-print
+switches, the last jobs and the log. The portal's old "Product printers" page is gone.
 
 | | Android | Windows |
 |---|---|---|

@@ -4,6 +4,7 @@
 @using OrderOrange.PartnerApp.Till.Models
 @using OrderOrange.PartnerApp.Till.Printing
 @using OrderOrange.PartnerApp.Till.Services
+@using OrderOrange.Shared
 @implements IDisposable
 @inject LanguageService Lang
 @inject ISnackbar Snackbar
@@ -170,6 +171,53 @@
                 }
                 <MudItem xs="12"><MudSwitch T="bool" @bind-Value="_edit.Enabled" Color="Color.Primary" Label="@T("enabled")" /></MudItem>
             </MudGrid>
+
+            @* ---------- What this printer prints (Majed 2026-10-20: pick the printer, then its products) ---------- *@
+            @if (_edit.Role != PrinterRole.Cashier)
+            {
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle2">@T("products")</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">@T("productsHint")</MudText>
+                @if (_menu is null)
+                {
+                    <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="my-2" />
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@T("productsLoading")</MudText>
+                }
+                else if (_menu.Count == 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">@T("productsSignIn")</MudText>
+                }
+                else
+                {
+                    <div class="d-flex flex-wrap align-center mb-2" style="gap: 8px;">
+                        <MudTextField @bind-Value="_productSearch" Immediate="true" Placeholder="@T("productsSearch")" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Style="max-width: 320px;" />
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => TickAll(true))">@T("productsAll")</MudButton>
+                        <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="@(() => TickAll(false))">@T("productsNone")</MudButton>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary">@string.Format(T("productsCount"), _ticked.Count)</MudChip>
+                    </div>
+                    <div style="max-height: 460px; overflow: auto; border: 1px solid #eee5dd; border-radius: 10px; padding: 4px 10px;">
+                        @foreach (var c in VisibleCategories())
+                        {
+                            var items = VisibleItems(c).ToList();
+                            var on = c.Items.Count(i => _ticked.Contains(i.Id));
+                            <div class="d-flex align-center pt-2" style="gap: 6px; border-bottom: 1px solid #f3ede7;">
+                                <MudCheckBox T="bool?" Value="@(on == 0 ? false : on == c.Items.Count ? true : (bool?)null)" TriState="true" Color="Color.Primary"
+                                             ValueChanged="@(_ => TickCategory(c, on != c.Items.Count))" />
+                                <MudText Typo="Typo.body2"><b>@c.NameFor(Lang.Locale)</b></MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@on / @c.Items.Count</MudText>
+                            </div>
+                            <div class="d-flex flex-wrap pb-2" style="column-gap: 14px;">
+                                @foreach (var i in items)
+                                {
+                                    <MudCheckBox T="bool" Value="@_ticked.Contains(i.Id)" ValueChanged="@(v => Tick(i.Id, v))" Color="Color.Primary" Dense="true"
+                                                 Label="@i.NameFor(Lang.Locale)" Style="min-width: 210px;" />
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
             <div class="d-flex flex-wrap mt-3" style="gap: 8px;">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveEdit">@T("save")</MudButton>
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" OnClick="@(() => TestAsync(_edit))" Disabled="_testing">@T("testPrint")</MudButton>
@@ -198,6 +246,10 @@
                 <div class="flex-grow-1" style="min-width: 0;">
                     <MudText Typo="Typo.body1"><b>@p.Name</b></MudText>
                     <MudText Typo="Typo.caption" Color="Color.Secondary" Style="direction:ltr; unicode-bidi:isolate;">@p.Summary</MudText>
+                    @if (p.Role != PrinterRole.Cashier && S.ProductCountOf(p.Id) is var n && n > 0)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Primary">@string.Format(T("productsCount"), n)</MudText>
+                    }
                 </div>
                 <MudIconButton Icon="@Icons.Material.Filled.Print" Size="Size.Small" title="@T("testPrint")" OnClick="@(() => TestAsync(p))" Disabled="_testing" />
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" OnClick="@(() => Edit(p))" />
@@ -363,6 +415,57 @@
         _edit = Clone(from, existing?.Id ?? Guid.NewGuid().ToString("N")[..8]);
         if (_edit.Connection == PrinterConnection.Bluetooth && _edit.BluetoothAddress.Length > 0)
             _bt = [(_edit.BluetoothAddress, _edit.BluetoothName, _edit.BluetoothName.Length > 0 ? $"{_edit.BluetoothName} ({_edit.BluetoothAddress})" : _edit.BluetoothAddress)];
+        _menu = null;
+        _ticked = [];
+        _productSearch = "";
+        _ = LoadProductsAsync(_edit.Id);
+    }
+
+    // ---------- the printer's products ----------
+
+    private List<MenuCategoryDto>? _menu;
+    private HashSet<int> _ticked = [];
+    private string _productSearch = "";
+
+    private async Task LoadProductsAsync(string printerId)
+    {
+        List<MenuCategoryDto> menu;
+        try { menu = await E.MenuForPickingAsync(); }
+        catch { menu = []; }
+        if (_edit?.Id != printerId) return;   // another printer was opened meanwhile
+        _menu = menu;
+        _ticked = S.ProductsOf(printerId, menu);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private bool Matches(MenuItemDto i) =>
+        _productSearch.Length == 0
+        || i.Name.Contains(_productSearch, StringComparison.OrdinalIgnoreCase)
+        || i.NameFor(Lang.Locale).Contains(_productSearch, StringComparison.OrdinalIgnoreCase);
+
+    private IEnumerable<MenuCategoryDto> VisibleCategories() =>
+        (_menu ?? []).Where(c => c.Items.Count > 0 && (_productSearch.Length == 0
+            || c.NameFor(Lang.Locale).Contains(_productSearch, StringComparison.OrdinalIgnoreCase) || c.Items.Any(Matches)))
+        .OrderBy(c => c.SortOrder);
+
+    private IEnumerable<MenuItemDto> VisibleItems(MenuCategoryDto c) =>
+        _productSearch.Length == 0 || c.NameFor(Lang.Locale).Contains(_productSearch, StringComparison.OrdinalIgnoreCase)
+            ? c.Items : c.Items.Where(Matches);
+
+    private void Tick(int productId, bool on)
+    {
+        if (on) _ticked.Add(productId); else _ticked.Remove(productId);
+    }
+
+    private void TickCategory(MenuCategoryDto c, bool on)
+    {
+        foreach (var i in c.Items) Tick(i.Id, on);
+    }
+
+    private void TickAll(bool on)
+    {
+        foreach (var c in VisibleCategories())
+            foreach (var i in VisibleItems(c)) Tick(i.Id, on);
     }
 
     private static PrinterConfig Clone(PrinterConfig p, string id) => new()
@@ -390,6 +493,8 @@
         if (Validate(_edit) is { } problem) { Snackbar.Add(problem, Severity.Warning); return; }
         var at = S.Printers.FindIndex(x => x.Id == _edit.Id);
         if (at >= 0) S.Printers[at] = _edit; else S.Printers.Add(_edit);
+        if (_menu is { Count: > 0 })
+            S.SetProductsOf(_edit.Id, _menu, _edit.Role == PrinterRole.Cashier ? new HashSet<int>() : _ticked);
         S.Save();
         _edit = null;
         _found = null;
@@ -400,6 +505,7 @@
     {
         if (_edit is null) return;
         S.Printers.RemoveAll(x => x.Id == _edit.Id);
+        S.ForgetPrinter(_edit.Id);
         S.Save();
         _edit = null;
     }

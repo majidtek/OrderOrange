@@ -49,7 +49,6 @@ public sealed class TillEngine
     private KitchenDesignDto _kitchenDesign = KitchenDesignDto.Default;
     private StoreProfile _store = StoreProfile.Fallback("", "https://orderorange.com");
     private string _kitchenLang = "";
-    private Dictionary<int, string> _routes = [];
     private readonly Dictionary<string, MenuItemDto> _menuByName = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _menuIdByName = new(StringComparer.OrdinalIgnoreCase);
     private DateTime _storeLoadedAt = DateTime.MinValue;
@@ -207,9 +206,9 @@ public sealed class TillEngine
         _store = profile is not null
             ? StoreProfile.From(profile, clientUrl)
             : StoreProfile.Fallback(Api.StoreName ?? Settings.StoreName, clientUrl);
-        _routes = await Api.PrintRoutesAsync();
         _menuByName.Clear(); _menuIdByName.Clear();
-        foreach (var category in await Api.MenuAsync())
+        Menu = await Api.MenuAsync();
+        foreach (var category in Menu)
             foreach (var item in category.Items)
             {
                 _menuByName[item.Name] = item;
@@ -627,11 +626,11 @@ public sealed class TillEngine
     }
 
     /// <summary>
-    /// Which printers a line goes to. The ticks made on this terminal's Product printers
-    /// screen win (product rule, else category rule — like the Windows till); otherwise the
-    /// web portal's route ("bar" → bar printers, "both" → kitchen AND bar printers, anything
-    /// else → kitchen printers). No printer of that role → the first kitchen/bar printer, so
-    /// a dish is never silently unprinted. Cashier printers get work tickets only when ticked.
+    /// Which printers a line goes to: the printers that ticked this product in the Printers
+    /// screen (the product's own ticks, else its category's for dishes added later). A product
+    /// no printer ticked goes to the Kitchen printers, or nowhere when the owner switched that
+    /// off. (Majed 2026-10-20: "Product printers should be removed: select the printer, then
+    /// select its products" — the portal's Kitchen/Bar map is no longer used.)
     /// </summary>
     private List<PrinterConfig> PrintersFor(OrderItemDto item)
     {
@@ -641,19 +640,23 @@ public sealed class TillEngine
         if (local.Count > 0) return local;
         if (!Settings.UnroutedToKitchen) return [];   // the owner chose: no tick, no ticket
 
-        var station = _routes.GetValueOrDefault(pid);
-        var list = station switch
-        {
-            "bar" => Settings.WithRole(PrinterRole.Bar),
-            "both" => [.. Settings.WithRole(PrinterRole.Kitchen), .. Settings.WithRole(PrinterRole.Bar)],
-            _ => Settings.WithRole(PrinterRole.Kitchen),
-        };
+        var list = Settings.WithRole(PrinterRole.Kitchen);
         if (list.Count == 0)
         {
             var any = Settings.Printers.FirstOrDefault(p => p.Enabled && p.Role is PrinterRole.Kitchen or PrinterRole.Bar);
             if (any is not null) list = [any];
         }
         return list;
+    }
+
+    /// <summary>The store's menu (no photos), for picking a printer's products. Loaded with the store.</summary>
+    public List<MenuCategoryDto> Menu { get; private set; } = [];
+
+    /// <summary>The menu for the Printers screen; fetched now if the store has not loaded it yet.</summary>
+    public async Task<List<MenuCategoryDto>> MenuForPickingAsync()
+    {
+        if (Menu.Count == 0 && Api.SignedIn) Menu = await Api.MenuAsync();
+        return Menu;
     }
 
     /// <summary>Product name → its name in the store's kitchen language (empty = as ordered).</summary>

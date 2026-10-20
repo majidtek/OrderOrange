@@ -438,7 +438,6 @@
             new("nav.tables", "/tables", Icons.Material.Filled.TableRestaurant, () => Can(Perm.TablesView)),
             new("nav.tableQr", "/table-qr", Icons.Material.Filled.QrCode, () => Can(Perm.TablesView)),
             new("lbl.title", "/labels", Icons.Material.Filled.QrCode2, () => Can(Perm.MenuView)),
-            new("pr.title", "/print-routing", Icons.Material.Filled.Print, () => Can(Perm.Settings)),
             new("nav.storeQr", "/qr", Icons.Material.Filled.QrCode2, () => Can(Perm.Settings)),
         ], () => Can(Perm.MenuView) || Can(Perm.CustomersView) || Can(Perm.InventoryView)
               || Can(Perm.SuppliersView) || Can(Perm.TablesView) || Can(Perm.Settings), "#0EA5E9"),
