@@ -573,8 +573,9 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     /// <summary>The language model's answer, or null when it has none (no key, outage, throttled).</summary>
     public async Task<AssistantReplyDto?> AskAssistantAsync(AssistantAskRequest req) =>
         (await SendForAsync<AssistantReplyDto>(HttpMethod.Post, "api/assistant/reply", req)).data;
-    public Task<BotChatIpsDto?> AdminBotChatsAsync(int skip = 0, int take = 50, string? search = null) =>
-        GetAsync<BotChatIpsDto>($"api/admin/bot-chats?skip={skip}&take={take}&search={Uri.EscapeDataString(search ?? "")}");
+    /// <param name="who">"partner", "customer", or null for everyone.</param>
+    public Task<BotChatIpsDto?> AdminBotChatsAsync(int skip = 0, int take = 50, string? search = null, string? who = null) =>
+        GetAsync<BotChatIpsDto>($"api/admin/bot-chats?skip={skip}&take={take}&search={Uri.EscapeDataString(search ?? "")}&who={Uri.EscapeDataString(who ?? "")}");
     public Task<BotChatTurnsDto?> AdminBotChatTurnsAsync(string ip, int limit = 500) =>
         GetAsync<BotChatTurnsDto>($"api/admin/bot-chats/turns?ip={Uri.EscapeDataString(ip)}&limit={limit}");
 

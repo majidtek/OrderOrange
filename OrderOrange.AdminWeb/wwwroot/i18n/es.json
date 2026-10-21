@@ -4059,5 +4059,22 @@
     "admin.suggestedHint":  "Arrastra una tarjeta para cambiar el orden o usa las flechas. La primera tarjeta encabeza la página de inicio del cliente.",
     "admin.suggestedCount":  "{0} tiendas en la página de inicio",
     "app.updateReady":  "Hay una nueva versión de la app lista.",
-    "app.reload":  "Recargar"
+    "app.reload":  "Recargar",
+    "till.android.title":  "App de caja para Android",
+    "till.android.sub":  "La caja OrderOrange para un terminal POS Android: recibos en la impresora integrada, comandas de cocina y barra en impresoras Wi-Fi, con tus propios diseños de recibo y comanda.",
+    "till.android.download":  "Descargar para Android (APK)",
+    "till.android.reqs":  "Android 8 o posterior. Permite instalar desde este origen, abre el APK e inicia sesión con tu cuenta de socio.",
+    "till.android.soon":  "Próximamente",
+    "pr.both":  "Ambos",
+    "pr.bothHint":  "Activa Cocina y Barra a la vez para imprimir un producto en ambas impresoras.",
+    "pos.photosOn":  "Mostrar fotos de productos",
+    "pos.photosOff":  "Ocultar fotos de productos",
+    "pos.viewPhoto":  "Ver foto",
+    "bots.who":  "Quién preguntó",
+    "bots.whoAll":  "Todos",
+    "bots.whoPartners":  "Socios",
+    "bots.whoCustomers":  "Clientes",
+    "bots.kindPartner":  "Socio",
+    "bots.kindPos":  "Socio · TPV",
+    "bots.kindCustomer":  "Cliente"
 }

@@ -28183,3 +28183,18 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
 @keyframes ptWait{ 0%, 100%{ opacity:.5; } 50%{ opacity:1; } }
 @keyframes ptLanded{ from{ opacity:0; } to{ opacity:1; } }
 @media (prefers-reduced-motion: reduce){ .pos-tile .pt-wait, .pos-tile .pt-landed{ animation:none; } }
+
+/* v828 - the assistant report says WHO asked (Majed 2026-10-21 "show this partner or user ask"):
+   partner-side assistants in orange (portal) and violet (POS), the public site's in blue. */
+.bc-who-filter{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.bc-who-filter button{border:1.5px solid #E3D9CC;background:#fff;color:#5A4E42;border-radius:999px;padding:4px 12px;
+    font-size:12px;font-weight:800;cursor:pointer}
+.bc-who-filter button.on{background:#2B2118;border-color:#2B2118;color:#fff}
+.bc-who-filter button:focus-visible{outline:2px solid #FF5A00;outline-offset:2px}
+.bc-who{display:flex;flex-wrap:wrap;align-items:center;gap:4px}
+.bc-who small{flex-basis:100%;font-size:11.5px;color:#6B5D4F;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px}
+.bc-kind{display:inline-block;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:800;letter-spacing:0;text-transform:none;white-space:nowrap}
+.bc-kind.k-partner{background:#FFE9DB;color:#C44300}
+.bc-kind.k-pos{background:#EDE7FF;color:#5B3CC4}
+.bc-kind.k-customer{background:#E4F0FF;color:#1565C0}
+.bc-whois{letter-spacing:0;text-transform:none;color:#3A322B;font-weight:800}

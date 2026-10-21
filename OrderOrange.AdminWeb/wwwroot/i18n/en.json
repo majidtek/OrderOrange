@@ -4059,5 +4059,22 @@
     "admin.suggestedHint":  "Drag a card to change the order, or use the arrows. The first card leads the customer home page.",
     "admin.suggestedCount":  "{0} stores on the home page",
     "app.updateReady":  "A new version of the app is ready.",
-    "app.reload":  "Reload"
+    "app.reload":  "Reload",
+    "till.android.title":  "Till app for Android",
+    "till.android.sub":  "The OrderOrange till for an Android POS terminal: receipts on the built-in printer, kitchen and bar tickets on Wi-Fi printers, your own receipt and ticket designs.",
+    "till.android.download":  "Download for Android (APK)",
+    "till.android.reqs":  "Android 8 or later. Allow installing from this source, open the APK, sign in with your partner account.",
+    "till.android.soon":  "Coming soon",
+    "pr.both":  "Both",
+    "pr.bothHint":  "Tap Kitchen and Bar together to print a product on both printers.",
+    "pos.photosOn":  "Show product photos",
+    "pos.photosOff":  "Hide product photos",
+    "pos.viewPhoto":  "View photo",
+    "bots.who":  "Who asked",
+    "bots.whoAll":  "Everyone",
+    "bots.whoPartners":  "Partners",
+    "bots.whoCustomers":  "Customers",
+    "bots.kindPartner":  "Partner",
+    "bots.kindPos":  "Partner · POS",
+    "bots.kindCustomer":  "Customer"
 }

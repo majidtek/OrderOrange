@@ -4059,5 +4059,22 @@
     "admin.suggestedHint":  "カードをドラッグするか矢印で順番を変更します。先頭のカードがお客様のホームの先頭になります。",
     "admin.suggestedCount":  "ホームに {0} 店舗",
     "app.updateReady":  "アプリの新しいバージョンが準備できました。",
-    "app.reload":  "再読み込み"
+    "app.reload":  "再読み込み",
+    "till.android.title":  "Android 用レジアプリ",
+    "till.android.sub":  "Android POS 端末向け OrderOrange レジ：レシートは内蔵プリンター、キッチン・バー伝票は Wi-Fi プリンターへ。レシートと伝票のデザインは自由に設定できます。",
+    "till.android.download":  "Android 版をダウンロード (APK)",
+    "till.android.reqs":  "Android 8 以降。この提供元からのインストールを許可し、APK を開いてパートナーアカウントでサインインしてください。",
+    "till.android.soon":  "近日公開",
+    "pr.both":  "両方",
+    "pr.bothHint":  "キッチンとバーを両方オンにすると、その商品は両方のプリンターに印刷されます。",
+    "pos.photosOn":  "商品写真を表示",
+    "pos.photosOff":  "商品写真を非表示",
+    "pos.viewPhoto":  "写真を見る",
+    "bots.who":  "質問者",
+    "bots.whoAll":  "すべて",
+    "bots.whoPartners":  "パートナー",
+    "bots.whoCustomers":  "お客様",
+    "bots.kindPartner":  "パートナー",
+    "bots.kindPos":  "パートナー · POS",
+    "bots.kindCustomer":  "お客様"
 }

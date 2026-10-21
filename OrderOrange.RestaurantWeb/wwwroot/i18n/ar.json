@@ -5162,5 +5162,12 @@
     "pr.bothHint":  "اضغط «المطبخ» و«البار» معًا لطباعة الصنف على الطابعتين.",
     "pos.photosOn":  "إظهار صور المنتجات",
     "pos.photosOff":  "إخفاء صور المنتجات",
-    "pos.viewPhoto":  "عرض الصورة"
+    "pos.viewPhoto":  "عرض الصورة",
+    "bots.who":  "من سأل",
+    "bots.whoAll":  "الجميع",
+    "bots.whoPartners":  "الشركاء",
+    "bots.whoCustomers":  "العملاء",
+    "bots.kindPartner":  "شريك",
+    "bots.kindPos":  "شريك · نقطة البيع",
+    "bots.kindCustomer":  "عميل"
 }

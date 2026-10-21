@@ -4069,5 +4069,12 @@
     "pr.bothHint":  "Küche und Bar zusammen antippen, damit ein Produkt auf beiden Druckern gedruckt wird.",
     "pos.photosOn":  "Produktfotos anzeigen",
     "pos.photosOff":  "Produktfotos ausblenden",
-    "pos.viewPhoto":  "Foto ansehen"
+    "pos.viewPhoto":  "Foto ansehen",
+    "bots.who":  "Wer fragte",
+    "bots.whoAll":  "Alle",
+    "bots.whoPartners":  "Partner",
+    "bots.whoCustomers":  "Kunden",
+    "bots.kindPartner":  "Partner",
+    "bots.kindPos":  "Partner · Kasse",
+    "bots.kindCustomer":  "Kunde"
 }

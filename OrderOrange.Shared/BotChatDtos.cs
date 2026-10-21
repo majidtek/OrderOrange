@@ -22,7 +22,13 @@ public record BotChatIpDto(
     DateTime First,
     DateTime Last,
     string LastText,
-    string? Country);
+    string? Country,
+    /// <summary>Which assistants this address used: "customer", "partner", "pos".</summary>
+    List<string>? Bots = null,
+    /// <summary>A signed-in name seen from this address, when anyone was signed in.</summary>
+    string? UserName = null,
+    /// <summary>The business a partner or POS turn from this address came from.</summary>
+    string? StoreName = null);
 
 public record BotChatIpsDto(List<BotChatIpDto> Items, int Total);
 
@@ -37,6 +43,7 @@ public record BotChatTurnDto(
     string? Lang,
     int? StoreId,
     string? UserName,
-    DateTime At);
+    DateTime At,
+    string? StoreName = null);
 
 public record BotChatTurnsDto(string Ip, List<BotChatTurnDto> Items);

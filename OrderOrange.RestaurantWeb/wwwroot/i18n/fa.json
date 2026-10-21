@@ -5162,5 +5162,12 @@
     "pr.bothHint":  "برای چاپ یک محصول روی هر دو چاپگر، «آشپزخانه» و «بار» را با هم روشن کنید.",
     "pos.photosOn":  "نمایش عکس محصولات",
     "pos.photosOff":  "پنهان کردن عکس محصولات",
-    "pos.viewPhoto":  "دیدن عکس"
+    "pos.viewPhoto":  "دیدن عکس",
+    "bots.who":  "چه کسی پرسید",
+    "bots.whoAll":  "همه",
+    "bots.whoPartners":  "شرکا",
+    "bots.whoCustomers":  "مشتریان",
+    "bots.kindPartner":  "شریک",
+    "bots.kindPos":  "شریک · صندوق",
+    "bots.kindCustomer":  "مشتری"
 }

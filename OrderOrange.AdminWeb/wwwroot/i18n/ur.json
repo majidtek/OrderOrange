@@ -5152,5 +5152,22 @@
     "admin.suggestedHint":  "ترتیب بدلنے کے لیے کارڈ گھسیٹیں یا تیر استعمال کریں۔ پہلا کارڈ گاہک کے ہوم پیج پر سب سے آگے ہوتا ہے۔",
     "admin.suggestedCount":  "ہوم پیج پر {0} دکانیں",
     "app.updateReady":  "ایپ کا نیا ورژن تیار ہے۔",
-    "app.reload":  "دوبارہ لوڈ کریں"
+    "app.reload":  "دوبارہ لوڈ کریں",
+    "till.android.title":  "اینڈرائیڈ کے لیے ٹِل ایپ",
+    "till.android.sub":  "اینڈرائیڈ POS ٹرمینل کے لیے OrderOrange ٹِل: رسیدیں بلٹ اِن پرنٹر پر، کچن اور بار ٹکٹ Wi-Fi پرنٹرز پر، آپ کے اپنے رسید اور ٹکٹ ڈیزائن کے ساتھ۔",
+    "till.android.download":  "اینڈرائیڈ کے لیے ڈاؤن لوڈ (APK)",
+    "till.android.reqs":  "اینڈرائیڈ 8 یا بعد کا۔ اس ذریعے سے انسٹال کی اجازت دیں، APK کھولیں، پارٹنر اکاؤنٹ سے سائن اِن کریں۔",
+    "till.android.soon":  "جلد آ رہا ہے",
+    "pr.both":  "دونوں",
+    "pr.bothHint":  "کسی پروڈکٹ کو دونوں پرنٹرز پر چھاپنے کے لیے کچن اور بار دونوں کو آن کریں۔",
+    "pos.photosOn":  "پروڈکٹ کی تصاویر دکھائیں",
+    "pos.photosOff":  "پروڈکٹ کی تصاویر چھپائیں",
+    "pos.viewPhoto":  "تصویر دیکھیں",
+    "bots.who":  "کس نے پوچھا",
+    "bots.whoAll":  "سب",
+    "bots.whoPartners":  "پارٹنرز",
+    "bots.whoCustomers":  "گاہک",
+    "bots.kindPartner":  "پارٹنر",
+    "bots.kindPos":  "پارٹنر · POS",
+    "bots.kindCustomer":  "گاہک"
 }

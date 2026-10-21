@@ -5162,5 +5162,12 @@
     "pr.bothHint":  "کسی پروڈکٹ کو دونوں پرنٹرز پر چھاپنے کے لیے کچن اور بار دونوں کو آن کریں۔",
     "pos.photosOn":  "پروڈکٹ کی تصاویر دکھائیں",
     "pos.photosOff":  "پروڈکٹ کی تصاویر چھپائیں",
-    "pos.viewPhoto":  "تصویر دیکھیں"
+    "pos.viewPhoto":  "تصویر دیکھیں",
+    "bots.who":  "کس نے پوچھا",
+    "bots.whoAll":  "سب",
+    "bots.whoPartners":  "پارٹنرز",
+    "bots.whoCustomers":  "گاہک",
+    "bots.kindPartner":  "پارٹنر",
+    "bots.kindPos":  "پارٹنر · POS",
+    "bots.kindCustomer":  "گاہک"
 }

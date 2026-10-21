@@ -4069,5 +4069,12 @@
     "pr.bothHint":  "Tap Kitchen and Bar together to print a product on both printers.",
     "pos.photosOn":  "Show product photos",
     "pos.photosOff":  "Hide product photos",
-    "pos.viewPhoto":  "View photo"
+    "pos.viewPhoto":  "View photo",
+    "bots.who":  "Who asked",
+    "bots.whoAll":  "Everyone",
+    "bots.whoPartners":  "Partners",
+    "bots.whoCustomers":  "Customers",
+    "bots.kindPartner":  "Partner",
+    "bots.kindPos":  "Partner · POS",
+    "bots.kindCustomer":  "Customer"
 }

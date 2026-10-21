@@ -4069,5 +4069,12 @@
     "pr.bothHint":  "キッチンとバーを両方オンにすると、その商品は両方のプリンターに印刷されます。",
     "pos.photosOn":  "商品写真を表示",
     "pos.photosOff":  "商品写真を非表示",
-    "pos.viewPhoto":  "写真を見る"
+    "pos.viewPhoto":  "写真を見る",
+    "bots.who":  "質問者",
+    "bots.whoAll":  "すべて",
+    "bots.whoPartners":  "パートナー",
+    "bots.whoCustomers":  "お客様",
+    "bots.kindPartner":  "パートナー",
+    "bots.kindPos":  "パートナー · POS",
+    "bots.kindCustomer":  "お客様"
 }

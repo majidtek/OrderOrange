@@ -4069,5 +4069,12 @@
     "pr.bothHint":  "Activez Cuisine et Bar ensemble pour imprimer un produit sur les deux imprimantes.",
     "pos.photosOn":  "Afficher les photos des produits",
     "pos.photosOff":  "Masquer les photos des produits",
-    "pos.viewPhoto":  "Voir la photo"
+    "pos.viewPhoto":  "Voir la photo",
+    "bots.who":  "Qui a demandé",
+    "bots.whoAll":  "Tous",
+    "bots.whoPartners":  "Partenaires",
+    "bots.whoCustomers":  "Clients",
+    "bots.kindPartner":  "Partenaire",
+    "bots.kindPos":  "Partenaire · caisse",
+    "bots.kindCustomer":  "Client"
 }

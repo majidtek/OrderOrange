@@ -4059,5 +4059,22 @@
     "admin.suggestedHint":  "Faites glisser une carte pour changer l'ordre, ou utilisez les flèches. La première carte ouvre la page d'accueil client.",
     "admin.suggestedCount":  "{0} boutiques sur la page d'accueil",
     "app.updateReady":  "Une nouvelle version de l'application est prête.",
-    "app.reload":  "Recharger"
+    "app.reload":  "Recharger",
+    "till.android.title":  "Appli caisse pour Android",
+    "till.android.sub":  "La caisse OrderOrange pour un terminal POS Android : tickets sur l'imprimante intégrée, bons cuisine et bar sur imprimantes Wi-Fi, avec vos propres modèles de ticket.",
+    "till.android.download":  "Télécharger pour Android (APK)",
+    "till.android.reqs":  "Android 8 ou plus récent. Autorisez l'installation depuis cette source, ouvrez l'APK, connectez-vous avec votre compte partenaire.",
+    "till.android.soon":  "Bientôt disponible",
+    "pr.both":  "Les deux",
+    "pr.bothHint":  "Activez Cuisine et Bar ensemble pour imprimer un produit sur les deux imprimantes.",
+    "pos.photosOn":  "Afficher les photos des produits",
+    "pos.photosOff":  "Masquer les photos des produits",
+    "pos.viewPhoto":  "Voir la photo",
+    "bots.who":  "Qui a demandé",
+    "bots.whoAll":  "Tous",
+    "bots.whoPartners":  "Partenaires",
+    "bots.whoCustomers":  "Clients",
+    "bots.kindPartner":  "Partenaire",
+    "bots.kindPos":  "Partenaire · caisse",
+    "bots.kindCustomer":  "Client"
 }

@@ -4059,5 +4059,22 @@
     "admin.suggestedHint":  "拖动卡片或使用箭头调整顺序。第一张卡片在顾客首页排在最前。",
     "admin.suggestedCount":  "首页上有 {0} 家店铺",
     "app.updateReady":  "应用的新版本已就绪。",
-    "app.reload":  "重新加载"
+    "app.reload":  "重新加载",
+    "till.android.title":  "Android 收银应用",
+    "till.android.sub":  "适用于 Android POS 终端的 OrderOrange 收银：小票用内置打印机，厨房和吧台单用 Wi-Fi 打印机，支持您自己的小票和单据设计。",
+    "till.android.download":  "下载 Android 版 (APK)",
+    "till.android.reqs":  "Android 8 或更高。允许从此来源安装，打开 APK，用合作伙伴账号登录。",
+    "till.android.soon":  "即将推出",
+    "pr.both":  "两者",
+    "pr.bothHint":  "同时选中“厨房”和“吧台”，该商品会在两台打印机上打印。",
+    "pos.photosOn":  "显示商品图片",
+    "pos.photosOff":  "隐藏商品图片",
+    "pos.viewPhoto":  "查看图片",
+    "bots.who":  "提问者",
+    "bots.whoAll":  "全部",
+    "bots.whoPartners":  "商家",
+    "bots.whoCustomers":  "顾客",
+    "bots.kindPartner":  "商家",
+    "bots.kindPos":  "商家 · 收银",
+    "bots.kindCustomer":  "顾客"
 }

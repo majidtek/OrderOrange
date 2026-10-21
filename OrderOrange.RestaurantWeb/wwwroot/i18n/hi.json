@@ -4069,5 +4069,12 @@
     "pr.bothHint":  "किसी उत्पाद को दोनों प्रिंटर पर छापने के लिए किचन और बार दोनों चुनें।",
     "pos.photosOn":  "उत्पाद फ़ोटो दिखाएँ",
     "pos.photosOff":  "उत्पाद फ़ोटो छिपाएँ",
-    "pos.viewPhoto":  "फ़ोटो देखें"
+    "pos.viewPhoto":  "फ़ोटो देखें",
+    "bots.who":  "किसने पूछा",
+    "bots.whoAll":  "सभी",
+    "bots.whoPartners":  "पार्टनर",
+    "bots.whoCustomers":  "ग्राहक",
+    "bots.kindPartner":  "पार्टनर",
+    "bots.kindPos":  "पार्टनर · POS",
+    "bots.kindCustomer":  "ग्राहक"
 }

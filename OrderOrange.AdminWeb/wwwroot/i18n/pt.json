@@ -4059,5 +4059,22 @@
     "admin.suggestedHint":  "Arraste um cartão para mudar a ordem ou use as setas. O primeiro cartão lidera a página inicial do cliente.",
     "admin.suggestedCount":  "{0} lojas na página inicial",
     "app.updateReady":  "Está pronta uma nova versão da app.",
-    "app.reload":  "Recarregar"
+    "app.reload":  "Recarregar",
+    "till.android.title":  "App de caixa para Android",
+    "till.android.sub":  "A caixa OrderOrange para um terminal POS Android: recibos na impressora integrada, talões de cozinha e bar em impressoras Wi-Fi, com os seus próprios modelos de recibo e talão.",
+    "till.android.download":  "Transferir para Android (APK)",
+    "till.android.reqs":  "Android 8 ou superior. Permita instalar desta origem, abra o APK e inicie sessão com a conta de parceiro.",
+    "till.android.soon":  "Em breve",
+    "pr.both":  "Ambos",
+    "pr.bothHint":  "Ative Cozinha e Bar em conjunto para imprimir um produto nas duas impressoras.",
+    "pos.photosOn":  "Mostrar fotos dos produtos",
+    "pos.photosOff":  "Ocultar fotos dos produtos",
+    "pos.viewPhoto":  "Ver foto",
+    "bots.who":  "Quem perguntou",
+    "bots.whoAll":  "Todos",
+    "bots.whoPartners":  "Parceiros",
+    "bots.whoCustomers":  "Clientes",
+    "bots.kindPartner":  "Parceiro",
+    "bots.kindPos":  "Parceiro · PDV",
+    "bots.kindCustomer":  "Cliente"
 }

@@ -15,6 +15,15 @@
                   Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true" Style="max-width: 420px;"
                   Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                   Immediate="true" DebounceInterval="450" OnDebounceIntervalElapsed="Reload" />
+    @* Who was asking (Majed 2026-10-21: "show this partner or user ask"): the partner portal's
+       assistants (partner, POS) or the public site's customer assistant. *@
+    <div class="bc-who-filter">
+        @foreach (var (key, label) in WhoOptions)
+        {
+            var k = key;
+            <button type="button" class="@(_who == k ? "on" : "")" @onclick="@(() => SetWho(k))">@label</button>
+        }
+    </div>
 </MudPaper>
 
 @if (_data is null)
@@ -32,6 +41,7 @@ else
                   OnRowClick="OnRow" RowClass="bc-row">
             <HeaderContent>
                 <MudTh>@L["bots.ip"]</MudTh>
+                <MudTh>@L["bots.who"]</MudTh>
                 <MudTh>@L["bots.lastSaid"]</MudTh>
                 <MudTh Style="text-align:center">@L["bots.turns"]</MudTh>
                 <MudTh Style="text-align:center">@L["bots.sessions"]</MudTh>
@@ -44,6 +54,18 @@ else
                     {
                         <span class="bc-cc">@context.Country</span>
                     }
+                </MudTd>
+                <MudTd DataLabel="@L["bots.who"]">
+                    <div class="bc-who">
+                        @foreach (var bot in (context.Bots ?? []).OrderBy(BotOrder))
+                        {
+                            <span class="bc-kind k-@BotKey(bot)" title="@BotName(bot)">@KindName(bot)</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(context.UserName) || !string.IsNullOrWhiteSpace(context.StoreName))
+                        {
+                            <small>@Joined(context.UserName, context.StoreName)</small>
+                        }
+                    </div>
                 </MudTd>
                 <MudTd DataLabel="@L["bots.lastSaid"]"><span class="bc-said">@context.LastText</span></MudTd>
                 <MudTd DataLabel="@L["bots.turns"]" Style="text-align:center">@context.Turns</MudTd>
@@ -87,7 +109,15 @@ else
                     <div class="bc-session">
                         <div class="bc-session-h">
                             <span>@group.Last().At.ToLocalTime().ToString("g")</span>
-                            <span class="bc-bot">@BotName(group.First().Bot)</span>
+                            <span class="bc-kind k-@BotKey(group.First().Bot)" title="@BotName(group.First().Bot)">@KindName(group.First().Bot)</span>
+                            @{
+                                var whoName = group.Select(t => t.UserName).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
+                                var whoStore = group.Select(t => t.StoreName).FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
+                            }
+                            @if (whoName is not null || whoStore is not null)
+                            {
+                                <span class="bc-whois">@Joined(whoName, whoStore)</span>
+                            }
                             @if (group.First().Lang is { Length: > 0 } lc)
                             {
                                 <span class="bc-lang">@lc</span>
@@ -124,6 +154,22 @@ else
     private List<BotChatTurnDto>? _turns;
     private string _search = "";
     private string _openIp = "";
+    /// <summary>"partner", "customer", or null for everyone.</summary>
+    private string? _who;
+
+    private IEnumerable<(string? Key, string Label)> WhoOptions =>
+    [
+        (null, L["bots.whoAll"]),
+        ("partner", L["bots.whoPartners"]),
+        ("customer", L["bots.whoCustomers"]),
+    ];
+
+    private async Task SetWho(string? who)
+    {
+        _who = who;
+        _page = 0;
+        await Reload();
+    }
     private int _page;
     private bool _open;
 
@@ -142,7 +188,7 @@ else
     {
         _data = null;
         StateHasChanged();
-        _data = await Api.AdminBotChatsAsync(_page * PageSize, PageSize, _search)
+        _data = await Api.AdminBotChatsAsync(_page * PageSize, PageSize, _search, _who)
                 ?? new BotChatIpsDto([], 0);
     }
 
@@ -168,4 +214,20 @@ else
         "partner" => L["bots.botPartner"],
         _ => L["bots.botCustomer"],
     };
+
+    /// <summary>Who was asking, as the chip says it: a partner (portal or POS) or a customer.</summary>
+    private string KindName(string bot) => bot switch
+    {
+        "pos" => L["bots.kindPos"],
+        "partner" => L["bots.kindPartner"],
+        _ => L["bots.kindCustomer"],
+    };
+
+    /// <summary>The colour family of a chip: partner side or customer side.</summary>
+    private static string BotKey(string bot) => bot is "pos" or "partner" ? bot : "customer";
+
+    private static int BotOrder(string bot) => bot switch { "partner" => 0, "pos" => 1, _ => 2 };
+
+    private static string Joined(string? name, string? store) =>
+        string.Join(" · ", new[] { name, store }.Where(x => !string.IsNullOrWhiteSpace(x)));
 }

@@ -4059,5 +4059,22 @@
     "admin.suggestedHint":  "Перетащите карточку, чтобы изменить порядок, или используйте стрелки. Первая карточка открывает главную страницу клиента.",
     "admin.suggestedCount":  "{0} магазинов на главной",
     "app.updateReady":  "Готова новая версия приложения.",
-    "app.reload":  "Обновить"
+    "app.reload":  "Обновить",
+    "till.android.title":  "Приложение кассы для Android",
+    "till.android.sub":  "Касса OrderOrange для Android-терминала: чеки на встроенном принтере, кухонные и барные талоны на Wi-Fi-принтерах, с вашими дизайнами чека и талона.",
+    "till.android.download":  "Скачать для Android (APK)",
+    "till.android.reqs":  "Android 8 или новее. Разрешите установку из этого источника, откройте APK, войдите с партнёрским аккаунтом.",
+    "till.android.soon":  "Скоро",
+    "pr.both":  "Оба",
+    "pr.bothHint":  "Включите «Кухня» и «Бар» вместе, чтобы печатать товар на обоих принтерах.",
+    "pos.photosOn":  "Показать фото товаров",
+    "pos.photosOff":  "Скрыть фото товаров",
+    "pos.viewPhoto":  "Показать фото",
+    "bots.who":  "Кто спросил",
+    "bots.whoAll":  "Все",
+    "bots.whoPartners":  "Партнёры",
+    "bots.whoCustomers":  "Клиенты",
+    "bots.kindPartner":  "Партнёр",
+    "bots.kindPos":  "Партнёр · касса",
+    "bots.kindCustomer":  "Клиент"
 }

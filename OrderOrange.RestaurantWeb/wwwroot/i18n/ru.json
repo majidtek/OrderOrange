@@ -4069,5 +4069,12 @@
     "pr.bothHint":  "Включите «Кухня» и «Бар» вместе, чтобы печатать товар на обоих принтерах.",
     "pos.photosOn":  "Показать фото товаров",
     "pos.photosOff":  "Скрыть фото товаров",
-    "pos.viewPhoto":  "Показать фото"
+    "pos.viewPhoto":  "Показать фото",
+    "bots.who":  "Кто спросил",
+    "bots.whoAll":  "Все",
+    "bots.whoPartners":  "Партнёры",
+    "bots.whoCustomers":  "Клиенты",
+    "bots.kindPartner":  "Партнёр",
+    "bots.kindPos":  "Партнёр · касса",
+    "bots.kindCustomer":  "Клиент"
 }
