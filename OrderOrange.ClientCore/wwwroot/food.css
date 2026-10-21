@@ -28175,3 +28175,11 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
 .pos-peek-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
 .pos-peek-grid.one{ grid-template-columns:1fr; }
 .pos-peek-grid img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:14px; background:#faf7f2; }
+/* v826 - POS photos arrive one tile at a time (Majed 2026-10-21 "first load all products then load
+   images one by one"): every tile is painted from the outline at once; until its picture lands the
+   photo stage waits empty with a soft pulse, and the picture fades in when it arrives. */
+.pos-tile .pt-wait{ animation:ptWait 1.2s ease-in-out infinite; }
+.pos-tile .pt-landed{ animation:ptLanded .28s ease-out both; }
+@keyframes ptWait{ 0%, 100%{ opacity:.5; } 50%{ opacity:1; } }
+@keyframes ptLanded{ from{ opacity:0; } to{ opacity:1; } }
+@media (prefers-reduced-motion: reduce){ .pos-tile .pt-wait, .pos-tile .pt-landed{ animation:none; } }

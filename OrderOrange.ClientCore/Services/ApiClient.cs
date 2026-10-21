@@ -1065,6 +1065,8 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     // ---------- Product photos (max 4 per dish, one main) ----------
     public Task<List<DishPhotoDto>?> GetDishPhotosAsync(int itemId) => GetAsync<List<DishPhotoDto>>($"api/restaurants/menu-items/{itemId}/photos");
     public Task<List<DishPhotoDto>?> GetMyDishPhotosAsync(int itemId) => GetAsync<List<DishPhotoDto>>($"api/menu/items/{itemId}/photos");
+    /// <summary>Just the main photo of one of the shop's own products; null when the call fails.</summary>
+    public Task<DishMainPhotoDto?> GetMyDishMainPhotoAsync(int itemId) => GetAsync<DishMainPhotoDto>($"api/menu/items/{itemId}/photo");
 
     // ---------- The shop's own Instagram ----------
     public Task<InstagramStatusDto?> GetInstagramAsync() => GetAsync<InstagramStatusDto>("api/instagram");
