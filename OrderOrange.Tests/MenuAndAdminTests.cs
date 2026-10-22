@@ -31,6 +31,31 @@ public class MenuAndAdminTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Till_GetsOneProductsMainPhoto_ButNotAnotherStoresProduct()
+    {
+        // The POS paints its tiles from the outline, then asks for each photo on its own.
+        const string photo = "data:image/png;base64,iVBORw0KGgo=";
+        var sara = _factory.CreateClient();
+        await sara.SignInAsync("sara@majidfood.com"); // Burger Bros
+        var menu = await sara.GetFromJsonAsync<List<MenuCategoryDto>>("api/menu?light=true");
+        var created = await (await sara.PostAsJsonAsync("api/menu/items",
+            new SaveMenuItemRequest(menu![0].Id, "Photo Burger", "", 1.000m, "🍔", false, true, photo)))
+            .EnsureSuccessStatusCode().Content.ReadFromJsonAsync<MenuItemDto>();
+        var plain = await (await sara.PostAsJsonAsync("api/menu/items",
+            new SaveMenuItemRequest(menu[0].Id, "Plain Burger", "", 1.000m, "🍔", false, true)))
+            .EnsureSuccessStatusCode().Content.ReadFromJsonAsync<MenuItemDto>();
+
+        var got = await sara.GetFromJsonAsync<DishMainPhotoDto>($"api/menu/items/{created!.Id}/photo");
+        Assert.Equal(photo, got!.Photo);
+        var none = await sara.GetFromJsonAsync<DishMainPhotoDto>($"api/menu/items/{plain!.Id}/photo");
+        Assert.Null(none!.Photo);
+
+        var marco = _factory.CreateClient();
+        await marco.SignInAsync("marco@majidfood.com"); // Bella Napoli
+        Assert.Equal(HttpStatusCode.NotFound, (await marco.GetAsync($"api/menu/items/{created.Id}/photo")).StatusCode);
+    }
+
+    [Fact]
     public async Task Owner_CannotTouchAnotherRestaurantsMenu()
     {
         var marco = _factory.CreateClient();

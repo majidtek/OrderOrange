@@ -366,6 +366,9 @@ public record AddStorePhotoRequest(string Data);
 
 public record DishPhotoDto(int Id, string Data, bool IsMain);
 
+/// <summary>One product's main photo, or null when it has none. The till fills its tiles one at a time with it.</summary>
+public record DishMainPhotoDto(string? Photo);
+
 /// <summary>
 /// Printed-receipt design. Font: mono|sans|serif|cairo · FontSize: small|normal|large ·
 /// PaperWidth: 80|58 (mm) · Separator: dash|dots|stars|solid · TotalStyle: plain|invert ·

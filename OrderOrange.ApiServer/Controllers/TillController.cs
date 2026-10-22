@@ -6,8 +6,10 @@ namespace OrderOrange.ApiServer.Controllers;
 /// <summary>
 /// The shop till (LocalHandler) keeps itself current from here. A folder on the server
 /// (<c>Till:Dir</c>, default <c>&lt;content root&gt;/till</c>) holds the latest build as a zip
-/// plus <c>version.json</c> — <c>{ "version", "file", "sha256", "notes" }</c>. Drop a new
+/// plus <c>version.json</c> — <c>{ "version", "file", "sha256", "notes", "setup" }</c>. Drop a new
 /// pair in and every till picks it up on its next check; nothing else to deploy.
+/// <c>setup</c>, when present, names the one-file installer partners download first
+/// (tools/publish-windows.ps1 writes all of it).
 /// </summary>
 [ApiController]
 [Route("api/till")]
@@ -30,6 +32,10 @@ public class TillController(IConfiguration config, IWebHostEnvironment env) : Co
 
     [HttpGet("download")]
     public IActionResult Download() => Serve("version.json", "application/zip");
+
+    /// <summary>The Windows installer: one exe that installs the till for the current user.</summary>
+    [HttpGet("setup")]
+    public IActionResult Setup() => Serve("version.json", "application/vnd.microsoft.portable-executable", "setup");
 
     // ---------- The Android till (OrderOrange.AndroidTill) ----------
     // Same folder, its own manifest: android.json → { "version", "file", "sha256", "notes" }
@@ -77,12 +83,12 @@ public class TillController(IConfiguration config, IWebHostEnvironment env) : Co
     };
 
     /// <summary>The file a manifest names, from the till folder only — never a path of the caller's choosing.</summary>
-    private IActionResult Serve(string manifestName, string contentType)
+    private IActionResult Serve(string manifestName, string contentType, string field = "file")
     {
         var manifest = Path.Combine(Dir, manifestName);
         if (!System.IO.File.Exists(manifest)) return NotFound();
         using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(manifest));
-        var file = doc.RootElement.TryGetProperty("file", out var f) ? f.GetString() : null;
+        var file = doc.RootElement.TryGetProperty(field, out var f) ? f.GetString() : null;
         if (string.IsNullOrEmpty(file) || file.Contains("..") || file.Contains('/') || file.Contains('\\')) return NotFound();
         var path = Path.Combine(Dir, file);
         if (!System.IO.File.Exists(path)) return NotFound();

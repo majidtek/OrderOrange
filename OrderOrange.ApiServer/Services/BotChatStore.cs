@@ -74,23 +74,30 @@ public sealed class BotChatStore
 
     public Task<long> CountAsync(string? search) => _turns.CountDocumentsAsync(Where(search));
 
-    private static FilterDefinition<BotChatDoc> Where(string? search)
+    private static FilterDefinition<BotChatDoc> Where(string? search, string? who = null)
     {
-        if (string.IsNullOrWhiteSpace(search)) return FilterDefinition<BotChatDoc>.Empty;
-        var rx = new BsonRegularExpression(Regex.Escape(search.Trim()), "i");
-        return Builders<BotChatDoc>.Filter.Or(
-            Builders<BotChatDoc>.Filter.Regex(t => t.Text, rx),
-            Builders<BotChatDoc>.Filter.Regex(t => t.Reply, rx),
-            Builders<BotChatDoc>.Filter.Regex(t => t.Ip, rx));
+        var f = Builders<BotChatDoc>.Filter;
+        var filter = FilterDefinition<BotChatDoc>.Empty;
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var rx = new BsonRegularExpression(Regex.Escape(search.Trim()), "i");
+            filter = f.Or(f.Regex(t => t.Text, rx), f.Regex(t => t.Reply, rx), f.Regex(t => t.Ip, rx),
+                f.Regex(t => t.UserName, rx));
+        }
+        // "partner" is everything said inside the partner portal, its POS assistant included;
+        // "customer" is the public site's assistant.
+        if (who == "partner") filter &= f.In(t => t.Bot, ["partner", "pos"]);
+        else if (who == "customer") filter &= f.Eq(t => t.Bot, "customer");
+        return filter;
     }
 
     /// <summary>
     /// The report's front page: one row per address, with how much was said, when, and the
     /// last thing typed. Grouped in Mongo so a busy month does not travel over the wire.
     /// </summary>
-    public async Task<List<BotChatIpRow>> ByIpSummaryAsync(int skip, int take, string? search)
+    public async Task<List<BotChatIpRow>> ByIpSummaryAsync(int skip, int take, string? search, string? who = null)
     {
-        var match = Where(search);
+        var match = Where(search, who);
         var pipeline = _turns.Aggregate().Match(match)
             .Group(new BsonDocument
             {
@@ -101,6 +108,10 @@ public sealed class BotChatStore
                 { "sessions", new BsonDocument("$addToSet", "$Session") },
                 { "lastText", new BsonDocument("$last", "$Text") },
                 { "country", new BsonDocument("$last", "$Country") },
+                // Who was asking: which assistants, and the signed-in name and store if any.
+                { "bots", new BsonDocument("$addToSet", "$Bot") },
+                { "userName", new BsonDocument("$max", "$UserName") },
+                { "storeId", new BsonDocument("$max", "$StoreId") },
             })
             .Sort(new BsonDocument("last", -1))
             .Skip(skip).Limit(take);
@@ -113,13 +124,16 @@ public sealed class BotChatStore
             d["first"].ToUniversalTime(),
             d["last"].ToUniversalTime(),
             d.Contains("lastText") && !d["lastText"].IsBsonNull ? d["lastText"].AsString : "",
-            d.Contains("country") && !d["country"].IsBsonNull ? d["country"].AsString : null)).ToList();
+            d.Contains("country") && !d["country"].IsBsonNull ? d["country"].AsString : null,
+            d.Contains("bots") ? d["bots"].AsBsonArray.Where(b => b.IsString).Select(b => b.AsString).ToList() : [],
+            d.Contains("userName") && d["userName"].IsString ? d["userName"].AsString : null,
+            d.Contains("storeId") && d["storeId"].IsNumeric ? d["storeId"].ToInt32() : null)).ToList();
     }
 
     /// <summary>How many distinct addresses the report has to page through.</summary>
-    public async Task<int> IpCountAsync(string? search)
+    public async Task<int> IpCountAsync(string? search, string? who = null)
     {
-        var docs = await _turns.Aggregate().Match(Where(search))
+        var docs = await _turns.Aggregate().Match(Where(search, who))
             .Group(new BsonDocument { { "_id", "$Ip" } }).ToListAsync();
         return docs.Count;
     }
@@ -127,4 +141,4 @@ public sealed class BotChatStore
 
 /// <summary>One address's line on the report's front page.</summary>
 public record BotChatIpRow(string Ip, int Turns, int Sessions, DateTime First, DateTime Last,
-    string LastText, string? Country);
+    string LastText, string? Country, List<string> Bots, string? UserName, int? StoreId);

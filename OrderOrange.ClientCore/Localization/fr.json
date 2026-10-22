@@ -4077,5 +4077,18 @@
     "pr.bothHint":  "Activez Cuisine et Bar ensemble pour imprimer un produit sur les deux imprimantes.",
     "pos.photosOn":  "Afficher les photos des produits",
     "pos.photosOff":  "Masquer les photos des produits",
-    "pos.viewPhoto":  "Voir la photo"
+    "pos.viewPhoto":  "Voir la photo",
+    "bots.who":  "Qui a demandé",
+    "bots.whoAll":  "Tous",
+    "bots.whoPartners":  "Partenaires",
+    "bots.whoCustomers":  "Clients",
+    "bots.kindPartner":  "Partenaire",
+    "bots.kindPos":  "Partenaire · caisse",
+    "bots.kindCustomer":  "Client",
+    "login.embedTitle":  "Ouvrez dans Chrome pour vous connecter",
+    "login.embedText":  "Cette application ne permet pas la connexion avec Google. Ouvrez cette adresse dans Chrome : vous pourrez vous connecter avec Google ou votre identifiant, et l\u0027installer comme application depuis le menu.",
+    "login.embedOpen":  "Ouvrir dans Chrome",
+    "login.embedCopy":  "Copier l\u0027adresse",
+    "login.embedCopied":  "Copié",
+    "till.reqsSetup":  "Windows 10 ou plus récent. Lancez le fichier téléchargé : il installe la caisse, l\u0027ajoute au menu Démarrer et au bureau, et la tient à jour."
 }

@@ -4077,5 +4077,18 @@
     "pr.bothHint":  "Activa Cocina y Barra a la vez para imprimir un producto en ambas impresoras.",
     "pos.photosOn":  "Mostrar fotos de productos",
     "pos.photosOff":  "Ocultar fotos de productos",
-    "pos.viewPhoto":  "Ver foto"
+    "pos.viewPhoto":  "Ver foto",
+    "bots.who":  "Quién preguntó",
+    "bots.whoAll":  "Todos",
+    "bots.whoPartners":  "Socios",
+    "bots.whoCustomers":  "Clientes",
+    "bots.kindPartner":  "Socio",
+    "bots.kindPos":  "Socio · TPV",
+    "bots.kindCustomer":  "Cliente",
+    "login.embedTitle":  "Abre en Chrome para iniciar sesión",
+    "login.embedText":  "Esta app no permite iniciar sesión con Google. Abre esta dirección en Chrome; allí puedes entrar con Google o con tu usuario e instalarla como app desde el menú.",
+    "login.embedOpen":  "Abrir en Chrome",
+    "login.embedCopy":  "Copiar dirección",
+    "login.embedCopied":  "Copiado",
+    "till.reqsSetup":  "Windows 10 o posterior. Ejecuta el archivo descargado: instala la caja, la añade al menú Inicio y al escritorio, y la mantiene al día."
 }

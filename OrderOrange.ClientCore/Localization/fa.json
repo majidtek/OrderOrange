@@ -5170,5 +5170,18 @@
     "pr.bothHint":  "برای چاپ یک محصول روی هر دو چاپگر، «آشپزخانه» و «بار» را با هم روشن کنید.",
     "pos.photosOn":  "نمایش عکس محصولات",
     "pos.photosOff":  "پنهان کردن عکس محصولات",
-    "pos.viewPhoto":  "دیدن عکس"
+    "pos.viewPhoto":  "دیدن عکس",
+    "bots.who":  "چه کسی پرسید",
+    "bots.whoAll":  "همه",
+    "bots.whoPartners":  "شرکا",
+    "bots.whoCustomers":  "مشتریان",
+    "bots.kindPartner":  "شریک",
+    "bots.kindPos":  "شریک · صندوق",
+    "bots.kindCustomer":  "مشتری",
+    "login.embedTitle":  "برای ورود در Chrome باز کنید",
+    "login.embedText":  "در این برنامه ورود با Google ممکن نیست. این نشانی را در Chrome باز کنید؛ آنجا می‌توانید با Google یا نام کاربری وارد شوید و از منو آن را به‌عنوان برنامه نصب کنید.",
+    "login.embedOpen":  "باز کردن در Chrome",
+    "login.embedCopy":  "کپی نشانی",
+    "login.embedCopied":  "کپی شد",
+    "till.reqsSetup":  "ویندوز ۱۰ یا جدیدتر. فایل دانلودشده را اجرا کنید: صندوق را نصب می‌کند، آن را به منوی Start و دسکتاپ اضافه می‌کند و به‌روز نگه می‌دارد."
 }

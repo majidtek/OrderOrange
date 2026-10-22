@@ -35,6 +35,70 @@ public static class Ui
         Padding = new Thickness(12, 10),
     }, action);
 
+    /// <summary>A white, rounded card on the paper ground: how the home screen groups things.</summary>
+    public static Border Card(View content, double padding = 14, bool shadow = true) => new()
+    {
+        Content = content,
+        BackgroundColor = App.Card,
+        Stroke = App.Line,
+        StrokeThickness = 1,
+        StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 16 },
+        Padding = new Thickness(padding),
+        Shadow = shadow
+            ? new Shadow { Brush = new SolidColorBrush(Color.FromArgb("#2B2118")), Opacity = 0.06f, Radius = 10, Offset = new Point(0, 2) }
+            : null!,
+    };
+
+    /// <summary>
+    /// One entry of the home screen menu: an icon on a tinted square above its name, the whole
+    /// card tappable. Busy while its action runs, so a double tap cannot print twice.
+    /// </summary>
+    public static Border Tile(string icon, string text, Color tint, Func<Task> action)
+    {
+        var glyph = new Border
+        {
+            WidthRequest = 46, HeightRequest = 46,
+            BackgroundColor = tint.WithAlpha(0.14f),
+            StrokeThickness = 0,
+            StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+            HorizontalOptions = LayoutOptions.Start,
+            Content = new Label { Text = icon, FontSize = 22, HorizontalOptions = LayoutOptions.Center, VerticalOptions = LayoutOptions.Center },
+        };
+        var name = new Label
+        {
+            Text = text, FontSize = 15, FontAttributes = FontAttributes.Bold, TextColor = App.Ink,
+            LineBreakMode = LineBreakMode.WordWrap, MaxLines = 2,
+        };
+        var tile = Card(new VerticalStackLayout { Spacing = 10, Children = { glyph, name } }, 14);
+        tile.MinimumHeightRequest = 104;
+
+        var busy = false;
+        var tap = new TapGestureRecognizer();
+        tap.Tapped += async (_, _) =>
+        {
+            if (busy) return;
+            busy = true;
+            tile.Opacity = 0.55;
+            try { await action(); }
+            catch (Exception ex) { await Alert(ex.Message); }
+            finally { tile.Opacity = 1; busy = false; }
+        };
+        tile.GestureRecognizers.Add(tap);
+        SemanticProperties.SetDescription(tile, text);
+        return tile;
+    }
+
+    /// <summary>A small rounded label with a coloured dot: Running, Stopped, a printer's state.</summary>
+    public static Border Pill(Label text, BoxView dot) => new()
+    {
+        BackgroundColor = App.Paper,
+        StrokeThickness = 0,
+        StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 12 },
+        Padding = new Thickness(10, 4),
+        HorizontalOptions = LayoutOptions.Start,
+        Content = new HorizontalStackLayout { Spacing = 6, Children = { dot, text } },
+    };
+
     private static Button Wire(Button b, Func<Task> action)
     {
         b.Clicked += async (_, _) =>

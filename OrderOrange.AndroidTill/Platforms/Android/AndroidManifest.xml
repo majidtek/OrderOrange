@@ -10,6 +10,11 @@
 	<!-- The service talks to printers (Bluetooth / USB / LAN): the "connected device" type has no
 	     6-hour cap on Android 14+, unlike dataSync. -->
 	<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+	<!-- Android 14+ only lets a "connected device" service start when the app holds one of a short
+	     list of permissions. Without these two (granted at install, never asked) a terminal with no
+	     Bluetooth printer was refused, and the till closed right after sign-in (Majed 2026-10-22). -->
+	<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+	<uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 	<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 	<!-- Keep printing with the screen off and come back after a reboot -->
 	<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />

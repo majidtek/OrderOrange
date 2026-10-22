@@ -5,21 +5,24 @@ using OrderOrange.AndroidTill.Services;
 
 namespace OrderOrange.AndroidTill.Pages;
 
-/// <summary>The board: store, connection status, the red banner when a printer fails, and the last 20 jobs.</summary>
+/// <summary>
+/// The home screen: a card with the store and whether the till is running, the green update
+/// strip and the red printer banner when they apply, the menu as a grid of tiles, and the
+/// last 20 print jobs. The whole screen scrolls as one list, so a small phone reaches it all.
+/// </summary>
 public sealed class MainPage : ContentPage
 {
     private static TillEngine E => TillEngine.Instance;
 
-    private readonly Label _store = new() { FontSize = 22, FontAttributes = FontAttributes.Bold };
-    private readonly Label _status = new() { FontSize = 14, TextColor = Colors.Gray };
-    private readonly Label _banner = new()
-    {
-        BackgroundColor = Color.FromArgb("#C62828"), TextColor = Colors.White,
-        Padding = new Thickness(10, 8), IsVisible = false, FontAttributes = FontAttributes.Bold,
-    };
+    private readonly Label _store = new() { FontSize = 22, FontAttributes = FontAttributes.Bold, LineBreakMode = LineBreakMode.TailTruncation };
+    private readonly Label _run = new() { FontSize = 13, FontAttributes = FontAttributes.Bold };
+    private readonly BoxView _runDot = new() { WidthRequest = 8, HeightRequest = 8, CornerRadius = 4, VerticalOptions = LayoutOptions.Center };
+    private readonly Label _status = new() { FontSize = 13, TextColor = App.Muted, LineBreakMode = LineBreakMode.WordWrap };
+    private readonly Label _banner = new() { TextColor = Colors.White, FontAttributes = FontAttributes.Bold, LineBreakMode = LineBreakMode.WordWrap };
+    private readonly Border _bannerCard;
     private readonly Picker _stores = new() { IsVisible = false };
     private readonly CollectionView _jobs = new() { SelectionMode = SelectionMode.None };
-    private readonly Label _noJobs = new() { TextColor = Colors.Gray };
+    private readonly Label _noJobs = new() { TextColor = App.Muted, HorizontalTextAlignment = TextAlignment.Center, Margin = new Thickness(0, 12) };
     private bool _fillingStores;
 
     // Self-update: a green strip with the new version and an Update button, shown when the server has a newer APK.
@@ -27,9 +30,10 @@ public sealed class MainPage : ContentPage
     private readonly Button _updateBtn;
     private readonly Grid _update = new()
     {
-        BackgroundColor = Color.FromArgb("#2E7D32"), Padding = new Thickness(10, 8), ColumnSpacing = 10, IsVisible = false,
+        ColumnSpacing = 10,
         ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
     };
+    private readonly Border _updateCard;
     private bool _updating;
 
     public MainPage()
@@ -37,10 +41,12 @@ public sealed class MainPage : ContentPage
         Title = L.T("appName");
         FlowDirection = Ui.Flow;
 
-        _updateBtn = new Button { Text = L.T("updateNow"), BackgroundColor = Colors.White, TextColor = Color.FromArgb("#2E7D32"), CornerRadius = 8, Padding = new Thickness(12, 6), FontAttributes = FontAttributes.Bold };
+        _updateBtn = new Button { Text = L.T("updateNow"), BackgroundColor = Colors.White, TextColor = App.Good, CornerRadius = 10, Padding = new Thickness(14, 6), FontAttributes = FontAttributes.Bold };
         _updateBtn.Clicked += async (_, _) => await UpdateNowAsync();
         _update.Add(_updateText, 0, 0);
         _update.Add(_updateBtn, 1, 0);
+        _updateCard = Strip(_update, App.Good);
+        _bannerCard = Strip(_banner, App.Bad);
 
         _stores.Title = L.T("switchStore");
         _stores.SelectedIndexChanged += async (_, _) =>
@@ -51,60 +57,90 @@ public sealed class MainPage : ContentPage
             if (err is not null) { await Ui.Alert(err); Render(); }
         };
 
+        // One print job: a dot that says printed or failed, what it was and where it went, and when.
         _jobs.ItemTemplate = new DataTemplate(() =>
         {
-            var time = new Label { FontSize = 12, TextColor = Colors.Gray, VerticalOptions = LayoutOptions.Start, WidthRequest = 64 };
-            time.SetBinding(Label.TextProperty, "Time");
-            var title = new Label { FontAttributes = FontAttributes.Bold };
+            var dot = new BoxView { WidthRequest = 10, HeightRequest = 10, CornerRadius = 5, VerticalOptions = LayoutOptions.Start, Margin = new Thickness(0, 5, 0, 0) };
+            dot.SetBinding(BoxView.ColorProperty, "Ok", converter: new OkColorConverter());
+            var title = new Label { FontAttributes = FontAttributes.Bold, FontSize = 15, LineBreakMode = LineBreakMode.TailTruncation };
             title.SetBinding(Label.TextProperty, "Title");
-            var printer = new Label { FontSize = 12, TextColor = Colors.Gray };
+            var printer = new Label { FontSize = 12, TextColor = App.Muted, LineBreakMode = LineBreakMode.TailTruncation };
             printer.SetBinding(Label.TextProperty, "Printer");
-            var result = new Label { FontSize = 12 };
+            var result = new Label { FontSize = 12, FontAttributes = FontAttributes.Bold };
             result.SetBinding(Label.TextProperty, "Result");
             result.SetBinding(Label.TextColorProperty, "Ok", converter: new OkColorConverter());
+            var time = new Label { FontSize = 12, TextColor = App.Muted, VerticalOptions = LayoutOptions.Start };
+            time.SetBinding(Label.TextProperty, "Time");
             var grid = new Grid
             {
-                ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star) },
-                Padding = new Thickness(0, 5),
+                ColumnDefinitions = { new ColumnDefinition(GridLength.Auto), new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
+                ColumnSpacing = 12,
             };
-            grid.Add(time, 0, 0);
-            grid.Add(new VerticalStackLayout { Children = { title, printer, result } }, 1, 0);
-            return grid;
+            grid.Add(dot, 0, 0);
+            grid.Add(new VerticalStackLayout { Spacing = 1, Children = { title, printer, result } }, 1, 0);
+            grid.Add(time, 2, 0);
+            // Flat rows: a list of shadows reads as noise.
+            var row = Ui.Card(grid, 12, shadow: false);
+            row.Margin = new Thickness(16, 0, 16, 8);
+            return row;
         });
 
-        var buttons = new Grid
+        // The store and whether the till is running.
+        var who = new Grid
+        {
+            ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Auto) },
+            ColumnSpacing = 10,
+        };
+        who.Add(_store, 0, 0);
+        who.Add(Ui.Pill(_run, _runDot), 1, 0);
+        var head = Ui.Card(new VerticalStackLayout { Spacing = 6, Children = { who, _status, _stores } }, 16);
+
+        // The menu: two columns of tiles, the everyday ones first.
+        var menu = new Grid
         {
             ColumnDefinitions = { new ColumnDefinition(GridLength.Star), new ColumnDefinition(GridLength.Star) },
-            RowDefinitions = { new RowDefinition(), new RowDefinition(), new RowDefinition(), new RowDefinition() },
-            ColumnSpacing = 8, RowSpacing = 8,
+            RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto) },
+            ColumnSpacing = 12, RowSpacing = 12,
         };
-        buttons.Add(Ui.Primary(L.T("checkNow"), () => E.RefreshAsync()), 0, 0);
-        buttons.Add(Ui.Primary(L.T("printers"), () => Navigation.PushAsync(new PrintersPage())), 1, 0);
-        buttons.Add(Ui.Primary(L.T("routing"), () => Navigation.PushAsync(new RoutingPage())), 0, 1);
-        buttons.Add(Ui.Secondary(L.T("reprintReceipt"), async () => { var e = await E.ReprintLastReceiptAsync(); if (e is not null) await Ui.Alert(e); }), 1, 1);
-        buttons.Add(Ui.Secondary(L.T("reprintKitchen"), async () => { var e = await E.ReprintLastTicketsAsync(); if (e is not null) await Ui.Alert(e); }), 0, 2);
-        buttons.Add(Ui.Secondary(L.T("settings"), () => Navigation.PushAsync(new SettingsPage())), 1, 2);
-        var signOut = Ui.Danger(L.T("signOut"), SignOutAsync);
-        buttons.Add(signOut, 0, 3);
-        Grid.SetColumnSpan(signOut, 2);
+        menu.Add(Ui.Tile("🔄", L.T("checkNow"), App.Orange, () => E.RefreshAsync()), 0, 0);
+        menu.Add(Ui.Tile("🖨️", L.T("printers"), Color.FromArgb("#0E7FD1"), () => Navigation.PushAsync(new PrintersPage())), 1, 0);
+        menu.Add(Ui.Tile("🧾", L.T("reprintReceipt"), App.Good, async () => { var e = await E.ReprintLastReceiptAsync(); if (e is not null) await Ui.Alert(e); }), 0, 1);
+        menu.Add(Ui.Tile("👨‍🍳", L.T("reprintKitchen"), Color.FromArgb("#D97706"), async () => { var e = await E.ReprintLastTicketsAsync(); if (e is not null) await Ui.Alert(e); }), 1, 1);
+        menu.Add(Ui.Tile("🧭", L.T("routing"), Color.FromArgb("#7C3AED"), () => Navigation.PushAsync(new RoutingPage())), 0, 2);
+        menu.Add(Ui.Tile("⚙️", L.T("settings"), App.Muted, () => Navigation.PushAsync(new SettingsPage())), 1, 2);
 
-        Content = new Grid
+        var jobsTitle = new Label { Text = L.T("jobs"), FontSize = 16, FontAttributes = FontAttributes.Bold, Margin = new Thickness(2, 10, 0, 0) };
+
+        // Sign out sits at the very end, quiet and red: it is rare and it stops the printing.
+        var signOut = new Button
         {
-            Padding = 16,
-            RowSpacing = 8,
-            RowDefinitions = { new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Star) },
-            Children =
-            {
-                new VerticalStackLayout
-                {
-                    Spacing = 6,
-                    Children = { _store, _status, _update, _banner, _stores, buttons, Ui.Caption(L.T("jobs")), _noJobs },
-                },
-                _jobs,
-            },
+            Text = L.T("signOut"), TextColor = App.Bad, BackgroundColor = Colors.Transparent,
+            BorderColor = App.Bad.WithAlpha(0.35f), BorderWidth = 1, CornerRadius = 12, Padding = new Thickness(12, 10),
+            Margin = new Thickness(16, 8, 16, 24),
         };
-        Grid.SetRow(_jobs, 1);
+        signOut.Clicked += async (_, _) => await SignOutAsync();
+
+        // Everything above the jobs scrolls with them, so a small screen still reaches the list.
+        _jobs.Header = new VerticalStackLayout
+        {
+            Padding = new Thickness(16, 16, 16, 8),
+            Spacing = 12,
+            Children = { head, _updateCard, _bannerCard, menu, jobsTitle, _noJobs },
+        };
+        _jobs.Footer = signOut;
+        Content = _jobs;
     }
+
+    /// <summary>A full-width rounded strip in one colour: the update offer, the printer error.</summary>
+    private static Border Strip(View content, Color color) => new()
+    {
+        Content = content,
+        BackgroundColor = color,
+        StrokeThickness = 0,
+        StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 14 },
+        Padding = new Thickness(14, 10),
+        IsVisible = false,
+    };
 
     protected override void OnAppearing()
     {
@@ -156,14 +192,17 @@ public sealed class MainPage : ContentPage
     private void Render()
     {
         _store.Text = E.Api.StoreName ?? L.T("notSignedIn");
-        var run = E.Running ? L.T("running") : L.T("stopped");
-        _status.Text = string.IsNullOrEmpty(E.Status) ? run : $"{run} · {E.Status}";
+        _run.Text = E.Running ? L.T("running") : L.T("stopped");
+        _run.TextColor = E.Running ? App.Good : App.Muted;
+        _runDot.Color = E.Running ? App.Good : App.Muted;
+        _status.Text = E.Status ?? "";
+        _status.IsVisible = !string.IsNullOrEmpty(E.Status);
         _banner.Text = E.Banner ?? "";
-        _banner.IsVisible = E.Banner is not null;
+        _bannerCard.IsVisible = E.Banner is not null;
         if (!_updating)
         {
             var up = UpdateService.Available;
-            _update.IsVisible = up is not null;
+            _updateCard.IsVisible = up is not null;
             if (up is not null) _updateText.Text = string.Format(L.T("updateAvailable"), up.Version, up.Notes ?? "");
         }
 

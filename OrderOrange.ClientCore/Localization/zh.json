@@ -4077,5 +4077,18 @@
     "pr.bothHint":  "同时选中“厨房”和“吧台”，该商品会在两台打印机上打印。",
     "pos.photosOn":  "显示商品图片",
     "pos.photosOff":  "隐藏商品图片",
-    "pos.viewPhoto":  "查看图片"
+    "pos.viewPhoto":  "查看图片",
+    "bots.who":  "提问者",
+    "bots.whoAll":  "全部",
+    "bots.whoPartners":  "商家",
+    "bots.whoCustomers":  "顾客",
+    "bots.kindPartner":  "商家",
+    "bots.kindPos":  "商家 · 收银",
+    "bots.kindCustomer":  "顾客",
+    "login.embedTitle":  "请在 Chrome 中打开以登录",
+    "login.embedText":  "此应用无法使用 Google 登录。请在 Chrome 中打开此地址，即可使用 Google 或用户名登录，并可从菜单将其安装为应用。",
+    "login.embedOpen":  "在 Chrome 中打开",
+    "login.embedCopy":  "复制地址",
+    "login.embedCopied":  "已复制",
+    "till.reqsSetup":  "Windows 10 或更高版本。运行下载的文件即可安装收银程序，并添加到开始菜单和桌面，之后会自动保持最新。"
 }

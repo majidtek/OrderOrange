@@ -4077,5 +4077,18 @@
     "pr.bothHint":  "किसी उत्पाद को दोनों प्रिंटर पर छापने के लिए किचन और बार दोनों चुनें।",
     "pos.photosOn":  "उत्पाद फ़ोटो दिखाएँ",
     "pos.photosOff":  "उत्पाद फ़ोटो छिपाएँ",
-    "pos.viewPhoto":  "फ़ोटो देखें"
+    "pos.viewPhoto":  "फ़ोटो देखें",
+    "bots.who":  "किसने पूछा",
+    "bots.whoAll":  "सभी",
+    "bots.whoPartners":  "पार्टनर",
+    "bots.whoCustomers":  "ग्राहक",
+    "bots.kindPartner":  "पार्टनर",
+    "bots.kindPos":  "पार्टनर · POS",
+    "bots.kindCustomer":  "ग्राहक",
+    "login.embedTitle":  "साइन इन के लिए Chrome में खोलें",
+    "login.embedText":  "इस ऐप में Google से साइन इन नहीं हो सकता। यह पता Chrome में खोलें; वहाँ आप Google या यूज़रनेम से साइन इन कर सकते हैं और मेनू से इसे ऐप की तरह इंस्टॉल कर सकते हैं।",
+    "login.embedOpen":  "Chrome में खोलें",
+    "login.embedCopy":  "पता कॉपी करें",
+    "login.embedCopied":  "कॉपी हो गया",
+    "till.reqsSetup":  "Windows 10 या नया। डाउनलोड की गई फ़ाइल चलाएँ: यह टिल इंस्टॉल करती है, इसे स्टार्ट मेनू और डेस्कटॉप पर जोड़ती है और अपडेट रखती है।"
 }

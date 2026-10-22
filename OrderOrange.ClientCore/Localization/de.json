@@ -4077,5 +4077,18 @@
     "pr.bothHint":  "Küche und Bar zusammen antippen, damit ein Produkt auf beiden Druckern gedruckt wird.",
     "pos.photosOn":  "Produktfotos anzeigen",
     "pos.photosOff":  "Produktfotos ausblenden",
-    "pos.viewPhoto":  "Foto ansehen"
+    "pos.viewPhoto":  "Foto ansehen",
+    "bots.who":  "Wer fragte",
+    "bots.whoAll":  "Alle",
+    "bots.whoPartners":  "Partner",
+    "bots.whoCustomers":  "Kunden",
+    "bots.kindPartner":  "Partner",
+    "bots.kindPos":  "Partner · Kasse",
+    "bots.kindCustomer":  "Kunde",
+    "login.embedTitle":  "In Chrome öffnen, um sich anzumelden",
+    "login.embedText":  "In dieser App ist die Google-Anmeldung nicht möglich. Öffnen Sie diese Adresse in Chrome; dort können Sie sich mit Google oder Benutzername anmelden und sie über das Menü als App installieren.",
+    "login.embedOpen":  "In Chrome öffnen",
+    "login.embedCopy":  "Adresse kopieren",
+    "login.embedCopied":  "Kopiert",
+    "till.reqsSetup":  "Windows 10 oder neuer. Starten Sie die heruntergeladene Datei: Sie installiert die Kasse, legt sie ins Startmenü und auf den Desktop und hält sie aktuell."
 }

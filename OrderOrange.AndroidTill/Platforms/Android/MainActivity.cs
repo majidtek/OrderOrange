@@ -20,10 +20,15 @@ public class MainActivity : MauiAppCompatActivity
     /// <summary>Starts (or pokes) the foreground service that keeps polling while the app is in the background.</summary>
     public static void StartTillService()
     {
-        var ctx = Android.App.Application.Context;
-        var intent = new Intent(ctx, typeof(TillForegroundService));
-        if (OperatingSystem.IsAndroidVersionAtLeast(26)) ctx.StartForegroundService(intent);
-        else ctx.StartService(intent);
+        try
+        {
+            var ctx = Android.App.Application.Context;
+            var intent = new Intent(ctx, typeof(TillForegroundService));
+            if (OperatingSystem.IsAndroidVersionAtLeast(26)) ctx.StartForegroundService(intent);
+            else ctx.StartService(intent);
+        }
+        // Android 12+ refuses a background start in some states: log it, never close the app.
+        catch (Exception ex) { Services.TillLog.Write($"till service not started: {ex.Message}"); }
     }
 
     public static void StopTillService()

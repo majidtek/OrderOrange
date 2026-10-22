@@ -4077,5 +4077,18 @@
     "pr.bothHint":  "キッチンとバーを両方オンにすると、その商品は両方のプリンターに印刷されます。",
     "pos.photosOn":  "商品写真を表示",
     "pos.photosOff":  "商品写真を非表示",
-    "pos.viewPhoto":  "写真を見る"
+    "pos.viewPhoto":  "写真を見る",
+    "bots.who":  "質問者",
+    "bots.whoAll":  "すべて",
+    "bots.whoPartners":  "パートナー",
+    "bots.whoCustomers":  "お客様",
+    "bots.kindPartner":  "パートナー",
+    "bots.kindPos":  "パートナー · POS",
+    "bots.kindCustomer":  "お客様",
+    "login.embedTitle":  "ログインするには Chrome で開いてください",
+    "login.embedText":  "このアプリでは Google でログインできません。このアドレスを Chrome で開いてください。Google またはユーザー名でログインでき、メニューからアプリとしてインストールできます。",
+    "login.embedOpen":  "Chrome で開く",
+    "login.embedCopy":  "アドレスをコピー",
+    "login.embedCopied":  "コピーしました",
+    "till.reqsSetup":  "Windows 10 以降。ダウンロードしたファイルを実行すると、レジがインストールされ、スタートメニューとデスクトップに追加され、自動で最新に保たれます。"
 }

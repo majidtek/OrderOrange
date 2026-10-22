@@ -207,6 +207,18 @@ public class MenuController(CatalogStore catalog) : ApiControllerBase
         string.Join("; ", (raw ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(p => p.Length is > 0 and <= 40).Take(20));
 
+    /// <summary>
+    /// One product's main photo and nothing else. The till paints every tile from the light
+    /// outline first, then asks for the pictures one tile at a time with this
+    /// (Majed 2026-10-21: "first load all products then load images one by one").
+    /// </summary>
+    [HttpGet("items/{id:int}/photo")]
+    public async Task<ActionResult<DishMainPhotoDto>> ItemMainPhoto(int id)
+    {
+        var item = await catalog.OwnedItemAsync(id, CurrentRestaurantId);
+        return item is null ? NotFound() : Ok(new DishMainPhotoDto(item.PhotoData));
+    }
+
     [HttpGet("items/{id:int}/photos")]
     public async Task<ActionResult<List<DishPhotoDto>>> ItemPhotos(int id)
     {

@@ -4077,5 +4077,18 @@
     "pr.bothHint":  "Ative Cozinha e Bar em conjunto para imprimir um produto nas duas impressoras.",
     "pos.photosOn":  "Mostrar fotos dos produtos",
     "pos.photosOff":  "Ocultar fotos dos produtos",
-    "pos.viewPhoto":  "Ver foto"
+    "pos.viewPhoto":  "Ver foto",
+    "bots.who":  "Quem perguntou",
+    "bots.whoAll":  "Todos",
+    "bots.whoPartners":  "Parceiros",
+    "bots.whoCustomers":  "Clientes",
+    "bots.kindPartner":  "Parceiro",
+    "bots.kindPos":  "Parceiro · PDV",
+    "bots.kindCustomer":  "Cliente",
+    "login.embedTitle":  "Abra no Chrome para entrar",
+    "login.embedText":  "Este app não permite entrar com o Google. Abra este endereço no Chrome; lá você pode entrar com o Google ou com seu usuário e instalá-lo como app pelo menu.",
+    "login.embedOpen":  "Abrir no Chrome",
+    "login.embedCopy":  "Copiar endereço",
+    "login.embedCopied":  "Copiado",
+    "till.reqsSetup":  "Windows 10 ou posterior. Execute o arquivo baixado: ele instala o caixa, adiciona ao menu Iniciar e à área de trabalho e o mantém atualizado."
 }

@@ -5170,5 +5170,18 @@
     "pr.bothHint":  "کسی پروڈکٹ کو دونوں پرنٹرز پر چھاپنے کے لیے کچن اور بار دونوں کو آن کریں۔",
     "pos.photosOn":  "پروڈکٹ کی تصاویر دکھائیں",
     "pos.photosOff":  "پروڈکٹ کی تصاویر چھپائیں",
-    "pos.viewPhoto":  "تصویر دیکھیں"
+    "pos.viewPhoto":  "تصویر دیکھیں",
+    "bots.who":  "کس نے پوچھا",
+    "bots.whoAll":  "سب",
+    "bots.whoPartners":  "پارٹنرز",
+    "bots.whoCustomers":  "گاہک",
+    "bots.kindPartner":  "پارٹنر",
+    "bots.kindPos":  "پارٹنر · POS",
+    "bots.kindCustomer":  "گاہک",
+    "login.embedTitle":  "سائن اِن کے لیے Chrome میں کھولیں",
+    "login.embedText":  "اس ایپ میں Google سے سائن اِن ممکن نہیں۔ یہ پتہ Chrome میں کھولیں؛ وہاں آپ Google یا یوزر نیم سے سائن اِن کر سکتے ہیں اور مینو سے اسے ایپ کے طور پر انسٹال کر سکتے ہیں۔",
+    "login.embedOpen":  "Chrome میں کھولیں",
+    "login.embedCopy":  "پتہ کاپی کریں",
+    "login.embedCopied":  "کاپی ہو گیا",
+    "till.reqsSetup":  "ونڈوز 10 یا نیا۔ ڈاؤن لوڈ کی گئی فائل چلائیں: یہ ٹِل انسٹال کرتی ہے، اسے اسٹارٹ مینو اور ڈیسک ٹاپ پر لگاتی ہے اور اپ ڈیٹ رکھتی ہے۔"
 }

@@ -61,3 +61,5 @@ doc-src/src/
 
 # OrderOrange.PartnerApp copies the stock food photos into its wwwroot at build time
 OrderOrange.PartnerApp/wwwroot/img/
+# tools/publish-windows.ps1 build output
+/_publish/

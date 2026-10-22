@@ -5170,5 +5170,18 @@
     "pr.bothHint":  "اضغط «المطبخ» و«البار» معًا لطباعة الصنف على الطابعتين.",
     "pos.photosOn":  "إظهار صور المنتجات",
     "pos.photosOff":  "إخفاء صور المنتجات",
-    "pos.viewPhoto":  "عرض الصورة"
+    "pos.viewPhoto":  "عرض الصورة",
+    "bots.who":  "من سأل",
+    "bots.whoAll":  "الجميع",
+    "bots.whoPartners":  "الشركاء",
+    "bots.whoCustomers":  "العملاء",
+    "bots.kindPartner":  "شريك",
+    "bots.kindPos":  "شريك · نقطة البيع",
+    "bots.kindCustomer":  "عميل",
+    "login.embedTitle":  "افتح في Chrome لتسجيل الدخول",
+    "login.embedText":  "لا يمكن تسجيل الدخول بحساب Google داخل هذا التطبيق. افتح هذا العنوان في Chrome؛ هناك يمكنك تسجيل الدخول بحساب Google أو باسم المستخدم، وتثبيته كتطبيق من القائمة.",
+    "login.embedOpen":  "افتح في Chrome",
+    "login.embedCopy":  "نسخ العنوان",
+    "login.embedCopied":  "تم النسخ",
+    "till.reqsSetup":  "ويندوز 10 أو أحدث. شغّل الملف الذي نزّلته: يثبّت نظام الكاشير ويضيفه إلى قائمة ابدأ وسطح المكتب ويحدّثه تلقائيًا."
 }

@@ -24,6 +24,13 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // The downloaded exe installs itself first; uninstall from Settings › Apps lands here too.
+        if (Services.Installer.HandleStartup(e.Args))
+        {
+            Shutdown();
+            return;
+        }
+
         var profile = "";
         var quiet = false;
         for (var i = 0; i < e.Args.Length; i++)
