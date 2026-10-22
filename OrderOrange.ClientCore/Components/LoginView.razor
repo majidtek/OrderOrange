@@ -570,9 +570,11 @@
         {
             await Lang.EnsureLoadedAsync();
 
+            // The OrderOrange Partner app is itself a web view, but it is the app: no card
+            // sending its user to Chrome (Majed 2026-10-22). It signs in with a username.
             try
             {
-                _embedded = await JS.InvokeAsync<bool>("mfGoogle.embedded");
+                _embedded = !HostInfo.IsNativeApp && await JS.InvokeAsync<bool>("mfGoogle.embedded");
                 if (_embedded)
                 {
                     _chromeLink = await JS.InvokeAsync<string>("mfGoogle.chromeLink");
@@ -650,7 +652,9 @@
             if (methods is null) _googleProblem = "the server did not answer /api/auth/methods";
 
             // Inside a wrapper app the Google button cannot work; the card points to Chrome instead.
-            if (_embedded && methods?.GoogleClientId is { Length: > 0 })
+            // Inside the Partner app it cannot work either (Google refuses embedded web views),
+            // so the button stays away and the username form is the way in.
+            if ((_embedded || HostInfo.IsNativeApp) && methods?.GoogleClientId is { Length: > 0 })
             {
                 _googleSettled = true;
                 StateHasChanged();
