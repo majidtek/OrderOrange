@@ -4090,5 +4090,10 @@
     "login.embedOpen":  "Chrome\u0027da aç",
     "login.embedCopy":  "Adresi kopyala",
     "login.embedCopied":  "Kopyalandı",
+    "login.appGoogle":  "Google ile devam et",
+    "login.appBackWait":  "Giriş tamamlanıyor…",
+    "login.appBackTitle":  "Giriş yaptınız",
+    "login.appBackText":  "Devam etmek için OrderOrange Partner uygulamasına dönün.",
+    "login.appBack":  "Uygulamaya dön",
     "till.reqsSetup":  "Windows 10 veya üstü. İndirilen dosyayı çalıştırın: kasayı kurar, Başlat menüsüne ve masaüstüne ekler ve güncel tutar."
 }

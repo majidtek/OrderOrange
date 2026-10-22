@@ -4090,5 +4090,10 @@
     "login.embedOpen":  "Abrir no Chrome",
     "login.embedCopy":  "Copiar endereço",
     "login.embedCopied":  "Copiado",
+    "login.appGoogle":  "Continuar com o Google",
+    "login.appBackWait":  "A concluir o início de sessão…",
+    "login.appBackTitle":  "Sessão iniciada",
+    "login.appBackText":  "Volte à app OrderOrange Partner para continuar.",
+    "login.appBack":  "Voltar à app",
     "till.reqsSetup":  "Windows 10 ou posterior. Execute o arquivo baixado: ele instala o caixa, adiciona ao menu Iniciar e à área de trabalho e o mantém atualizado."
 }

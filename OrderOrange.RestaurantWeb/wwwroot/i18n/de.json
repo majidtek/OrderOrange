@@ -4090,5 +4090,10 @@
     "login.embedOpen":  "In Chrome öffnen",
     "login.embedCopy":  "Adresse kopieren",
     "login.embedCopied":  "Kopiert",
+    "login.appGoogle":  "Mit Google fortfahren",
+    "login.appBackWait":  "Anmeldung wird abgeschlossen…",
+    "login.appBackTitle":  "Du bist angemeldet",
+    "login.appBackText":  "Kehre zur OrderOrange Partner-App zurück, um weiterzumachen.",
+    "login.appBack":  "Zurück zur App",
     "till.reqsSetup":  "Windows 10 oder neuer. Starten Sie die heruntergeladene Datei: Sie installiert die Kasse, legt sie ins Startmenü und auf den Desktop und hält sie aktuell."
 }

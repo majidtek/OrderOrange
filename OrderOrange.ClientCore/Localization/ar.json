@@ -5183,5 +5183,10 @@
     "login.embedOpen":  "افتح في Chrome",
     "login.embedCopy":  "نسخ العنوان",
     "login.embedCopied":  "تم النسخ",
+    "login.appGoogle":  "المتابعة عبر Google",
+    "login.appBackWait":  "جارٍ إكمال تسجيل الدخول…",
+    "login.appBackTitle":  "تم تسجيل دخولك",
+    "login.appBackText":  "ارجع إلى تطبيق OrderOrange Partner للمتابعة.",
+    "login.appBack":  "العودة إلى التطبيق",
     "till.reqsSetup":  "ويندوز 10 أو أحدث. شغّل الملف الذي نزّلته: يثبّت نظام الكاشير ويضيفه إلى قائمة ابدأ وسطح المكتب ويحدّثه تلقائيًا."
 }

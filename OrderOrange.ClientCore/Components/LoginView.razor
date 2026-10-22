@@ -5,6 +5,8 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject IDialogService Dialogs
+@inject IServiceProvider Services
+@using Microsoft.Extensions.DependencyInjection
 @implements IDisposable
 
 @* The sign-in screen. The customer app shows this full-screen inside a dialog when a
@@ -117,6 +119,13 @@
                 }
             }
 
+            @* The browser half of the app's Google sign-in: this page was opened by the app and
+               the person just signed in — hand the session over and send them back. *@
+            @if (_handoffChallenge is not null && _handoffToken is not null)
+            {
+                <AppHandoff Challenge="@_handoffChallenge" Token="@_handoffToken" />
+            }
+
             @* Inside an Android wrapper app Google refuses to sign in, so instead of a dead
                button the card says where it works: this same address in Chrome, which can
                also install it as an app. *@
@@ -135,6 +144,20 @@
 
             @* Google leads. One tap and done — no typing, no inbox round-trip — so it sits
                first, and the email form is the alternative under the divider. *@
+            @* The OrderOrange Partner app: Google will not sign anyone in inside its web view,
+               so this button takes the sign-in to the device's browser and brings it back. *@
+            @if (_nativeGoogle)
+            {
+                <button type="button" class="mf-app-google" @onclick="NativeGoogleAsync" disabled="@_busy">
+                    <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 6.9-10.3 6.9-17.2z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.7-2.1 15.6-5.7l-7.7-6c-2.1 1.4-4.8 2.3-7.9 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+                    @Lang["login.appGoogle"]
+                </button>
+                <style>
+                    .mf-app-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin:4px 0 14px;padding:12px 16px;border:1.5px solid #e7d9cd;border-radius:12px;background:#fff;color:#2b211a;font:700 15px/1.2 "Segoe UI",system-ui,sans-serif;cursor:pointer}
+                    .mf-app-google:disabled{opacity:.6;cursor:default}
+                </style>
+            }
+
             @if (_googleVisible)
             {
                 <div class="mf-gsi" @ref="_googleHost"></div>
@@ -588,6 +611,11 @@
             }
             catch { _embedded = false; }
 
+            // Opened by the Partner app for its Google sign-in: whoever signs in here is
+            // handed to the app, not signed in on this page.
+            if (!HostInfo.IsNativeApp)
+                _handoffChallenge = UrlQuery.Get(Nav.Uri, "apphandoff") is { Length: 43 } hc ? hc : null;
+
             // Arrivals from the POS sales page (www.orderorange.com/pos) are prospects, not
             // regulars: they land on "Open your business", whichever link they tapped
             // (Majed 2026-10-15). A plain ?open=1 on the address does the same for any link.
@@ -661,6 +689,7 @@
             // so the button stays away and the username form is the way in.
             if ((_embedded || HostInfo.IsNativeApp) && methods?.GoogleClientId is { Length: > 0 })
             {
+                _nativeGoogle = HostInfo.IsNativeApp && HostInfo.SiteBase is { Length: > 0 } && Services.GetService<IBrowserAuth>() is not null;
                 _googleSettled = true;
                 StateHasChanged();
                 return;
@@ -932,8 +961,59 @@
     /// <summary>The last step of every route in — role check, then hand over the session.</summary>
     private bool _remember;
 
+    /// <summary>Shown inside the OrderOrange Partner app in place of Google's own button.</summary>
+    private bool _nativeGoogle;
+    /// <summary>On the web: the PKCE challenge the app put on the address, and the session to hand it.</summary>
+    private string? _handoffChallenge;
+    private string? _handoffToken;
+
+    /// <summary>
+    /// The app's Google sign-in: the portal opens in the device browser, the person signs in
+    /// there, the page comes back with a one-time code, and the code plus this app's secret
+    /// become the app's own session. Nothing of Google's ever runs inside the web view.
+    /// </summary>
+    private async Task NativeGoogleAsync()
+    {
+        if (Services.GetService<IBrowserAuth>() is not { } browser || HostInfo.SiteBase is not { Length: > 0 } site) return;
+        _error = null;
+        _success = null;
+        _busy = true;
+        StateHasChanged();
+        try
+        {
+            var verifier = Pkce.NewVerifier();
+            var start = new Uri($"{site.TrimEnd('/')}/?apphandoff={Pkce.Challenge(verifier)}&lang={Uri.EscapeDataString(Lang.Locale)}");
+            var back = await browser.AuthenticateAsync(start, new Uri(AppHandoff.CallbackUrl));
+            if (back is null || !back.TryGetValue("code", out var code) || string.IsNullOrWhiteSpace(code)) return;   // closed the browser
+            var (user, error) = await Api.AppHandoffRedeemAsync(code, verifier);
+            if (user is null)
+            {
+                _error = error ?? Lang["common.signinFail"];
+                return;
+            }
+            _remember = true;
+            await AcceptAsync(user);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
     private async Task AcceptAsync(LoginResponse user)
     {
+        // Opened by the app: the session goes to the app, this page stays signed out.
+        if (_handoffChallenge is not null)
+        {
+            _handoffToken = user.Token;
+            StateHasChanged();
+            return;
+        }
         // Decided BEFORE SignIn: the gate mirrors the session into storage on that event.
         BrowserSessionPersistence.Remember = _remember;
         if (AllowedRoles.Length > 0 && !AllowedRoles.Contains(user.Role))

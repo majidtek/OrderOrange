@@ -1,6 +1,9 @@
 ﻿using OrderOrange.ApiServer.Data;
 using OrderOrange.ApiServer.Models;
 using OrderOrange.ApiServer.Services;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.Extensions.Caching.Memory;
 using OrderOrange.Shared;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -39,6 +42,49 @@ public class AuthController(
 
         return await BuildResponse(user);
     }
+
+    /// <summary>
+    /// The browser half of the Partner app's "Continue with Google": the session that just
+    /// signed in on the portal (in the device browser) mints a one-time code for the app.
+    /// The code is tied to the PKCE challenge the app put on the address, lives two minutes
+    /// and dies on first use, so a code seen in flight is worthless without the app's secret.
+    /// </summary>
+    [HttpPost("app-handoff")]
+    public ActionResult<AppHandoffCode> CreateAppHandoff(AppHandoffRequest req)
+    {
+        var challenge = (req.Challenge ?? "").Trim();
+        if (challenge.Length != 43 || challenge.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '-' or '_')))
+            return BadRequest(new { message = "Bad challenge." });
+        var code = Base64Url(RandomNumberGenerator.GetBytes(32));
+        cache.Set($"apphandoff:{code}", new AppHandoffTicket(CurrentUserId, challenge), TimeSpan.FromMinutes(2));
+        return new AppHandoffCode(code);
+    }
+
+    /// <summary>The app's half: the code plus the verifier whose hash is the challenge → its own long-lived session.</summary>
+    [HttpPost("app-handoff/redeem")]
+    [AllowAnonymous]
+    public async Task<ActionResult<LoginResponse>> RedeemAppHandoff(AppHandoffRedeemRequest req)
+    {
+        var key = $"apphandoff:{(req.Code ?? "").Trim()}";
+        if (!cache.TryGetValue(key, out object? cached) || cached is not AppHandoffTicket ticket)
+            return Unauthorized(new { message = "This sign-in has expired. Try again from the app." });
+        cache.Remove(key);                      // single use, even if the checks below fail
+
+        var expected = Encoding.ASCII.GetBytes(Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes((req.Verifier ?? "").Trim()))));
+        if (!CryptographicOperations.FixedTimeEquals(expected, Encoding.ASCII.GetBytes(ticket.Challenge)))
+            return Unauthorized(new { message = "This sign-in does not belong to this app." });
+
+        var user = await db.Users.FindAsync(ticket.UserId);
+        if (user is null || !user.IsActive) return Unauthorized(new { message = "This account is not available." });
+        if (AdminGate(user) is { } refusal) return Unauthorized(new { code = "auth.notAdmin", message = refusal });
+        // An app stays signed in, like "keep me signed in" on the web.
+        return await BuildResponse(user, longLived: true);
+    }
+
+    private sealed record AppHandoffTicket(int UserId, string Challenge);
+
+    private static string Base64Url(byte[] bytes) =>
+        Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     /// <summary>
     /// Passwords are no longer offered on any screen. The endpoint stays reachable behind

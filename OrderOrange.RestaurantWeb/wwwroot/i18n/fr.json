@@ -4090,5 +4090,10 @@
     "login.embedOpen":  "Ouvrir dans Chrome",
     "login.embedCopy":  "Copier l\u0027adresse",
     "login.embedCopied":  "Copié",
+    "login.appGoogle":  "Continuer avec Google",
+    "login.appBackWait":  "Finalisation de la connexion…",
+    "login.appBackTitle":  "Vous êtes connecté",
+    "login.appBackText":  "Revenez à l'application OrderOrange Partner pour continuer.",
+    "login.appBack":  "Retour à l'application",
     "till.reqsSetup":  "Windows 10 ou plus récent. Lancez le fichier téléchargé : il installe la caisse, l\u0027ajoute au menu Démarrer et au bureau, et la tient à jour."
 }

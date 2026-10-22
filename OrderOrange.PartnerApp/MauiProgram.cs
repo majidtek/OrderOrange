@@ -37,6 +37,11 @@ public static class MauiProgram
         // … the session lives in the WebView's own storage: "keep me signed in" survives a restart.
         builder.Services.AddScoped<ISessionPersistence, BrowserSessionPersistence>();
         builder.Services.AddScoped<OrderOrange.RestaurantWeb.Services.ReceiptPrinter>();
+#if ANDROID
+        // "Continue with Google" through the device browser (WebAuthenticator needs a
+        // packaged app on Windows, which this is not: there the username form signs in).
+        builder.Services.AddSingleton<IBrowserAuth, MauiBrowserAuth>();
+#endif
 
         // … except the language files, which come from the app package instead of over HTTP.
         builder.Services.AddSingleton<PackageTranslationLoader>();

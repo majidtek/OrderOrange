@@ -5183,5 +5183,10 @@
     "login.embedOpen":  "Chrome میں کھولیں",
     "login.embedCopy":  "پتہ کاپی کریں",
     "login.embedCopied":  "کاپی ہو گیا",
+    "login.appGoogle":  "Google کے ساتھ جاری رکھیں",
+    "login.appBackWait":  "سائن اِن مکمل ہو رہا ہے…",
+    "login.appBackTitle":  "آپ سائن اِن ہو گئے",
+    "login.appBackText":  "جاری رکھنے کے لیے OrderOrange Partner ایپ پر واپس جائیں۔",
+    "login.appBack":  "ایپ پر واپس جائیں",
     "till.reqsSetup":  "ونڈوز 10 یا نیا۔ ڈاؤن لوڈ کی گئی فائل چلائیں: یہ ٹِل انسٹال کرتی ہے، اسے اسٹارٹ مینو اور ڈیسک ٹاپ پر لگاتی ہے اور اپ ڈیٹ رکھتی ہے۔"
 }

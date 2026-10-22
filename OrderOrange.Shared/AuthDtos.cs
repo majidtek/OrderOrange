@@ -54,6 +54,16 @@ public record ImpersonationCodeDto(string Code, int ExpiresInSeconds);
 
 public record ImpersonationRedeemRequest(string Code);
 
+/// <summary>
+/// The Partner app's "Continue with Google". Google refuses to sign anyone in inside an
+/// app's web view, so the app opens the portal in the device browser; the person signs in
+/// there, that browser session mints a one-time code bound to the app's PKCE challenge, and
+/// the app redeems it with the matching verifier for a session of its own.
+/// </summary>
+public record AppHandoffRequest(string Challenge);
+public record AppHandoffCode(string Code);
+public record AppHandoffRedeemRequest(string Code, string Verifier);
+
 /// <summary>Self-service registration — always creates a Customer account.</summary>
 public record RegisterRequest(string FullName, string Email, string Phone, string Password, string? Gate = null);
 

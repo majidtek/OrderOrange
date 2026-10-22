@@ -1,0 +1,70 @@
+@inject ApiClient Api
+@inject LanguageService Lang
+@inject NavigationManager Nav
+
+@*
+    The browser half of the OrderOrange Partner app's "Continue with Google". The app opened
+    this portal in the device browser with ?apphandoff=<challenge>; the person signed in here
+    (Google, or anything else), and this fresh session now mints a one-time code the app
+    redeems for a session of its own. Then back to the app: the address below is the app's
+    own scheme. The browser itself is left signed out.
+*@
+<div class="oo-handoff" dir="@(Lang.IsRtl ? "rtl" : "ltr")">
+    <div class="card">
+        @if (_error is not null)
+        {
+            <div class="ic bad">!</div>
+            <b>@_error</b>
+        }
+        else if (_link is null)
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Medium" />
+            <span>@Lang["login.appBackWait"]</span>
+        }
+        else
+        {
+            <div class="ic">✓</div>
+            <b>@Lang["login.appBackTitle"]</b>
+            <span>@Lang["login.appBackText"]</span>
+            <a class="go" href="@_link">@Lang["login.appBack"]</a>
+        }
+    </div>
+</div>
+
+<style>
+    .oo-handoff{position:fixed;inset:0;z-index:5000;display:flex;align-items:center;justify-content:center;padding:24px;background:#FFF8F3}
+    .oo-handoff .card{display:flex;flex-direction:column;align-items:center;gap:10px;max-width:420px;width:100%;background:#fff;border:1px solid #f0e3d8;border-radius:18px;padding:28px 22px;text-align:center;box-shadow:0 10px 30px rgba(60,30,10,.08);font-family:"Segoe UI",system-ui,sans-serif;color:#2b211a}
+    .oo-handoff .ic{width:54px;height:54px;border-radius:50%;background:#E8F7EC;color:#1E8E3E;font:900 28px/54px "Segoe UI",sans-serif}
+    .oo-handoff .ic.bad{background:#FFE7D6;color:#E64500}
+    .oo-handoff b{font-size:18px;font-weight:800}
+    .oo-handoff span{color:#6b5d52}
+    .oo-handoff .go{display:block;width:100%;margin-top:8px;padding:12px 18px;border-radius:12px;background:#FF5A00;color:#fff;font:700 15px/1.2 "Segoe UI",sans-serif;text-decoration:none}
+</style>
+
+@code {
+    /// <summary>The app's own address; the Android app answers to it.</summary>
+    public const string CallbackUrl = "orderorange-partner://auth";
+
+    /// <summary>The PKCE challenge the app put on the address.</summary>
+    [Parameter, EditorRequired] public string Challenge { get; set; } = "";
+
+    /// <summary>The session just signed in here, which mints the code.</summary>
+    [Parameter, EditorRequired] public string Token { get; set; } = "";
+
+    private string? _link;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var (code, error) = await Api.AppHandoffAsync(Token, Challenge);
+        if (code is null)
+        {
+            _error = error ?? Lang["common.signinFail"];
+            return;
+        }
+        _link = $"{CallbackUrl}?code={Uri.EscapeDataString(code.Code)}";
+        // Chrome may want a tap before it hands a custom address to another app; the
+        // button above is that tap. This covers the browsers that go on their own.
+        try { Nav.NavigateTo(_link, forceLoad: true); } catch { }
+    }
+}

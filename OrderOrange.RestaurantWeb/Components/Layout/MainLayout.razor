@@ -37,6 +37,12 @@
                    WrongRoleMessage="@Lang["login.ptrWrong"]" />
     </SignedOut>
     <SignedIn>
+        @* Opened by the Partner app for its Google sign-in while this browser was already
+           signed in: hand this session to the app straight away. *@
+        @if (HandoffChallenge is { Length: 43 } handoff && State.Token is { Length: > 0 } handoffToken)
+        {
+            <AppHandoff Challenge="@handoff" Token="@handoffToken" />
+        }
         @* One email may own several businesses. Until this session knows which one it is
            working in, the choice screen sits over everything — same pattern as the
            language gate. One store skips it entirely. *@
@@ -366,6 +372,8 @@
 </MudRTLProvider>
 
 @code {
+    private string? HandoffChallenge => UrlQuery.Get(Nav.Uri, "apphandoff");
+
     internal static readonly MudTheme Theme = FoodTheme.Build();
 
     private bool _drawerOpen = true;

@@ -249,6 +249,29 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     public Task<(LoginResponse? user, string? error)> GoogleLoginAsync(string idToken, bool staffOnly, bool remember = false) =>
         PostForAsync<LoginResponse>("api/auth/google", new GoogleLoginRequest(idToken, staffOnly, remember), authCall: true);
 
+    /// <summary>
+    /// The browser half of the app's Google sign-in: the session just signed in on this page
+    /// (its token given here, never stored) mints the one-time code the app will redeem.
+    /// </summary>
+    public async Task<(AppHandoffCode? code, string? error)> AppHandoffAsync(string token, string challenge)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, "api/auth/app-handoff") { Content = JsonContent.Create(new AppHandoffRequest(challenge)) };
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var res = await http.SendAsync(req);
+            if (!res.IsSuccessStatusCode) return (null, await SafeReadError(res));
+            var code = await res.Content.ReadFromJsonAsync<AppHandoffCode>(JsonOpts);
+            return code is null ? (null, lang["common.badResponse"]) : (code, null);
+        }
+        catch (TaskCanceledException) { return (null, lang["common.timedOut"]); }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException) { return (null, lang["common.noServer"]); }
+    }
+
+    /// <summary>The app's half: the code the browser handed back plus the app's own verifier → a session.</summary>
+    public Task<(LoginResponse? user, string? error)> AppHandoffRedeemAsync(string code, string verifier) =>
+        PostForAsync<LoginResponse>("api/auth/app-handoff/redeem", new AppHandoffRedeemRequest(code, verifier), authCall: true);
+
     /// <summary>Null client id — or no answer at all — means "don't offer the Google button".</summary>
     public Task<GoogleAuthConfig?> GetGoogleConfigAsync() => GetAsync<GoogleAuthConfig>("api/auth/google/config");
 

@@ -4090,5 +4090,10 @@
     "login.embedOpen":  "Open in Chrome",
     "login.embedCopy":  "Copy address",
     "login.embedCopied":  "Copied",
+    "login.appGoogle":  "Continue with Google",
+    "login.appBackWait":  "Finishing sign-in…",
+    "login.appBackTitle":  "You're signed in",
+    "login.appBackText":  "Go back to the OrderOrange Partner app to carry on.",
+    "login.appBack":  "Back to the app",
     "till.reqsSetup":  "Windows 10 or later. Run the downloaded file: it installs the till, adds it to the Start menu and the desktop, and keeps it up to date."
 }

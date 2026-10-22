@@ -4090,5 +4090,10 @@
     "login.embedOpen":  "在 Chrome 中打开",
     "login.embedCopy":  "复制地址",
     "login.embedCopied":  "已复制",
+    "login.appGoogle":  "使用 Google 继续",
+    "login.appBackWait":  "正在完成登录…",
+    "login.appBackTitle":  "已登录",
+    "login.appBackText":  "返回 OrderOrange Partner 应用以继续。",
+    "login.appBack":  "返回应用",
     "till.reqsSetup":  "Windows 10 或更高版本。运行下载的文件即可安装收银程序，并添加到开始菜单和桌面，之后会自动保持最新。"
 }

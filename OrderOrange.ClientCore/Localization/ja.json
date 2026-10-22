@@ -4090,5 +4090,10 @@
     "login.embedOpen":  "Chrome で開く",
     "login.embedCopy":  "アドレスをコピー",
     "login.embedCopied":  "コピーしました",
+    "login.appGoogle":  "Google で続行",
+    "login.appBackWait":  "サインインを完了しています…",
+    "login.appBackTitle":  "サインインしました",
+    "login.appBackText":  "OrderOrange Partner アプリに戻って続けてください。",
+    "login.appBack":  "アプリに戻る",
     "till.reqsSetup":  "Windows 10 以降。ダウンロードしたファイルを実行すると、レジがインストールされ、スタートメニューとデスクトップに追加され、自動で最新に保たれます。"
 }

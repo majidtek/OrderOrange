@@ -4090,5 +4090,10 @@
     "login.embedOpen":  "Chrome में खोलें",
     "login.embedCopy":  "पता कॉपी करें",
     "login.embedCopied":  "कॉपी हो गया",
+    "login.appGoogle":  "Google से जारी रखें",
+    "login.appBackWait":  "साइन-इन पूरा हो रहा है…",
+    "login.appBackTitle":  "आप साइन इन हो गए हैं",
+    "login.appBackText":  "जारी रखने के लिए OrderOrange Partner ऐप पर वापस जाएँ।",
+    "login.appBack":  "ऐप पर वापस जाएँ",
     "till.reqsSetup":  "Windows 10 या नया। डाउनलोड की गई फ़ाइल चलाएँ: यह टिल इंस्टॉल करती है, इसे स्टार्ट मेनू और डेस्कटॉप पर जोड़ती है और अपडेट रखती है।"
 }
