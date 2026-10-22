@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "お客様",
     "bots.kindPartner":  "パートナー",
     "bots.kindPos":  "パートナー · POS",
-    "bots.kindCustomer":  "お客様"
+    "bots.kindCustomer":  "お客様",
+    "login.embedTitle":  "ログインするには Chrome で開いてください",
+    "login.embedText":  "このアプリでは Google でログインできません。このアドレスを Chrome で開いてください。Google またはユーザー名でログインでき、メニューからアプリとしてインストールできます。",
+    "login.embedOpen":  "Chrome で開く",
+    "login.embedCopy":  "アドレスをコピー",
+    "login.embedCopied":  "コピーしました"
 }

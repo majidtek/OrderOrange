@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "Clientes",
     "bots.kindPartner":  "Socio",
     "bots.kindPos":  "Socio · TPV",
-    "bots.kindCustomer":  "Cliente"
+    "bots.kindCustomer":  "Cliente",
+    "login.embedTitle":  "Abre en Chrome para iniciar sesión",
+    "login.embedText":  "Esta app no permite iniciar sesión con Google. Abre esta dirección en Chrome; allí puedes entrar con Google o con tu usuario e instalarla como app desde el menú.",
+    "login.embedOpen":  "Abrir en Chrome",
+    "login.embedCopy":  "Copiar dirección",
+    "login.embedCopied":  "Copiado"
 }

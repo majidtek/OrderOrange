@@ -117,6 +117,22 @@
                 }
             }
 
+            @* Inside an Android wrapper app Google refuses to sign in, so instead of a dead
+               button the card says where it works: this same address in Chrome, which can
+               also install it as an app. *@
+            @if (_embedded)
+            {
+                <div class="mf-embed">
+                    <b>@Lang["login.embedTitle"]</b>
+                    <span>@Lang["login.embedText"]</span>
+                    <span class="addr mf-ltr">@_siteAddress</span>
+                    <div class="acts">
+                        <a class="go" href="@_chromeLink">@Lang["login.embedOpen"]</a>
+                        <button type="button" class="cp" @onclick="CopyAddress">@(_copied ? Lang["login.embedCopied"] : Lang["login.embedCopy"])</button>
+                    </div>
+                </div>
+            }
+
             @* Google leads. One tap and done — no typing, no inbox round-trip — so it sits
                first, and the email form is the alternative under the divider. *@
             @if (_googleVisible)
@@ -426,6 +442,17 @@
     /// <summary>The client id, once the API has told us there is one. Null hides the button.</summary>
     private string? _googleClientId;
 
+    /// <summary>Shown inside an Android app's embedded web view, where Google will not sign anyone in.</summary>
+    private bool _embedded;
+    private string _chromeLink = "";
+    private string _siteAddress = "";
+    private bool _copied;
+
+    private async Task CopyAddress()
+    {
+        try { _copied = await JS.InvokeAsync<bool>("mfGoogle.copyAddress"); } catch { _copied = false; }
+    }
+
     /// <summary>Drives the divider and host div — cleared again if Google's script won't load.</summary>
     private bool _googleVisible;
 
@@ -543,6 +570,17 @@
         {
             await Lang.EnsureLoadedAsync();
 
+            try
+            {
+                _embedded = await JS.InvokeAsync<bool>("mfGoogle.embedded");
+                if (_embedded)
+                {
+                    _chromeLink = await JS.InvokeAsync<string>("mfGoogle.chromeLink");
+                    _siteAddress = new Uri(Nav.BaseUri).Host;
+                }
+            }
+            catch { _embedded = false; }
+
             // Arrivals from the POS sales page (www.orderorange.com/pos) are prospects, not
             // regulars: they land on "Open your business", whichever link they tapped
             // (Majed 2026-10-15). A plain ?open=1 on the address does the same for any link.
@@ -610,6 +648,14 @@
             // no emailed codes on the card.
             if (PasswordOnly) _emailCode = false;
             if (methods is null) _googleProblem = "the server did not answer /api/auth/methods";
+
+            // Inside a wrapper app the Google button cannot work; the card points to Chrome instead.
+            if (_embedded && methods?.GoogleClientId is { Length: > 0 })
+            {
+                _googleSettled = true;
+                StateHasChanged();
+                return;
+            }
 
             if (methods?.GoogleClientId is { Length: > 0 } clientId)
             {

@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "Clientes",
     "bots.kindPartner":  "Parceiro",
     "bots.kindPos":  "Parceiro · PDV",
-    "bots.kindCustomer":  "Cliente"
+    "bots.kindCustomer":  "Cliente",
+    "login.embedTitle":  "Abra no Chrome para entrar",
+    "login.embedText":  "Este app não permite entrar com o Google. Abra este endereço no Chrome; lá você pode entrar com o Google ou com seu usuário e instalá-lo como app pelo menu.",
+    "login.embedOpen":  "Abrir no Chrome",
+    "login.embedCopy":  "Copiar endereço",
+    "login.embedCopied":  "Copiado"
 }

@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "Clienti",
     "bots.kindPartner":  "Partner",
     "bots.kindPos":  "Partner · cassa",
-    "bots.kindCustomer":  "Cliente"
+    "bots.kindCustomer":  "Cliente",
+    "login.embedTitle":  "Apri in Chrome per accedere",
+    "login.embedText":  "Questa app non consente l\u0027accesso con Google. Apri questo indirizzo in Chrome: lì puoi accedere con Google o con il nome utente e installarlo come app dal menu.",
+    "login.embedOpen":  "Apri in Chrome",
+    "login.embedCopy":  "Copia indirizzo",
+    "login.embedCopied":  "Copiato"
 }

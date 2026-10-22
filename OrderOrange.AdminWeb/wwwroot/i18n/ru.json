@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "Клиенты",
     "bots.kindPartner":  "Партнёр",
     "bots.kindPos":  "Партнёр · касса",
-    "bots.kindCustomer":  "Клиент"
+    "bots.kindCustomer":  "Клиент",
+    "login.embedTitle":  "Откройте в Chrome, чтобы войти",
+    "login.embedText":  "В этом приложении нельзя войти через Google. Откройте этот адрес в Chrome: там можно войти через Google или по имени пользователя и установить его как приложение из меню.",
+    "login.embedOpen":  "Открыть в Chrome",
+    "login.embedCopy":  "Скопировать адрес",
+    "login.embedCopied":  "Скопировано"
 }

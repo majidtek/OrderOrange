@@ -5169,5 +5169,10 @@
     "bots.whoCustomers":  "مشتریان",
     "bots.kindPartner":  "شریک",
     "bots.kindPos":  "شریک · صندوق",
-    "bots.kindCustomer":  "مشتری"
+    "bots.kindCustomer":  "مشتری",
+    "login.embedTitle":  "برای ورود در Chrome باز کنید",
+    "login.embedText":  "در این برنامه ورود با Google ممکن نیست. این نشانی را در Chrome باز کنید؛ آنجا می‌توانید با Google یا نام کاربری وارد شوید و از منو آن را به‌عنوان برنامه نصب کنید.",
+    "login.embedOpen":  "باز کردن در Chrome",
+    "login.embedCopy":  "کپی نشانی",
+    "login.embedCopied":  "کپی شد"
 }

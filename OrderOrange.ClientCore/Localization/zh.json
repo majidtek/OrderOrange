@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "顾客",
     "bots.kindPartner":  "商家",
     "bots.kindPos":  "商家 · 收银",
-    "bots.kindCustomer":  "顾客"
+    "bots.kindCustomer":  "顾客",
+    "login.embedTitle":  "请在 Chrome 中打开以登录",
+    "login.embedText":  "此应用无法使用 Google 登录。请在 Chrome 中打开此地址，即可使用 Google 或用户名登录，并可从菜单将其安装为应用。",
+    "login.embedOpen":  "在 Chrome 中打开",
+    "login.embedCopy":  "复制地址",
+    "login.embedCopied":  "已复制"
 }

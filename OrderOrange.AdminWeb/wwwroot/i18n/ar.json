@@ -5169,5 +5169,10 @@
     "bots.whoCustomers":  "العملاء",
     "bots.kindPartner":  "شريك",
     "bots.kindPos":  "شريك · نقطة البيع",
-    "bots.kindCustomer":  "عميل"
+    "bots.kindCustomer":  "عميل",
+    "login.embedTitle":  "افتح في Chrome لتسجيل الدخول",
+    "login.embedText":  "لا يمكن تسجيل الدخول بحساب Google داخل هذا التطبيق. افتح هذا العنوان في Chrome؛ هناك يمكنك تسجيل الدخول بحساب Google أو باسم المستخدم، وتثبيته كتطبيق من القائمة.",
+    "login.embedOpen":  "افتح في Chrome",
+    "login.embedCopy":  "نسخ العنوان",
+    "login.embedCopied":  "تم النسخ"
 }

@@ -68,6 +68,27 @@ window.mfGoogle = {
         }
     },
 
+    // True inside an Android app that shows the site in an embedded web view (Majed
+    // 2026-10-22: "Google login does nothing" in such an app). Google refuses to sign
+    // anyone in there, so the screen points to Chrome instead of a button that cannot work.
+    // Android WebView says so in its user agent: "; wv)", or the older "Version/4.0 ... Chrome/".
+    embedded() {
+        const ua = navigator.userAgent || '';
+        if (!/Android/i.test(ua)) return false;
+        return /; wv\)/.test(ua) || (/Version\/\d/.test(ua) && /Chrome\/\d/.test(ua));
+    },
+
+    // The same page in Chrome, from inside a wrapper app. Most wrappers hand intent:
+    // links to Android; the copy button below covers the ones that do not.
+    chromeLink() {
+        const u = location.href.replace(/^https?:\/\//, '');
+        return 'intent://' + u + '#Intent;scheme=https;package=com.android.chrome;end';
+    },
+
+    async copyAddress() {
+        try { await navigator.clipboard.writeText(location.origin); return true; } catch { return false; }
+    },
+
     // Called when the login screen goes away, so a pending prompt does not outlive it.
     cancel() {
         try { window.google?.accounts?.id?.cancel(); } catch { /* nothing to cancel */ }

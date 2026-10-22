@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "Kunden",
     "bots.kindPartner":  "Partner",
     "bots.kindPos":  "Partner · Kasse",
-    "bots.kindCustomer":  "Kunde"
+    "bots.kindCustomer":  "Kunde",
+    "login.embedTitle":  "In Chrome öffnen, um sich anzumelden",
+    "login.embedText":  "In dieser App ist die Google-Anmeldung nicht möglich. Öffnen Sie diese Adresse in Chrome; dort können Sie sich mit Google oder Benutzername anmelden und sie über das Menü als App installieren.",
+    "login.embedOpen":  "In Chrome öffnen",
+    "login.embedCopy":  "Adresse kopieren",
+    "login.embedCopied":  "Kopiert"
 }

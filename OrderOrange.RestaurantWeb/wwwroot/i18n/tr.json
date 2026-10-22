@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "Müşteriler",
     "bots.kindPartner":  "İş ortağı",
     "bots.kindPos":  "İş ortağı · POS",
-    "bots.kindCustomer":  "Müşteri"
+    "bots.kindCustomer":  "Müşteri",
+    "login.embedTitle":  "Giriş için Chrome\u0027da açın",
+    "login.embedText":  "Bu uygulamada Google ile giriş yapılamıyor. Bu adresi Chrome\u0027da açın; orada Google veya kullanıcı adınızla giriş yapabilir ve menüden uygulama olarak yükleyebilirsiniz.",
+    "login.embedOpen":  "Chrome\u0027da aç",
+    "login.embedCopy":  "Adresi kopyala",
+    "login.embedCopied":  "Kopyalandı"
 }

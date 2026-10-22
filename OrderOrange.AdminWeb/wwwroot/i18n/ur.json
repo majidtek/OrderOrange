@@ -5169,5 +5169,10 @@
     "bots.whoCustomers":  "گاہک",
     "bots.kindPartner":  "پارٹنر",
     "bots.kindPos":  "پارٹنر · POS",
-    "bots.kindCustomer":  "گاہک"
+    "bots.kindCustomer":  "گاہک",
+    "login.embedTitle":  "سائن اِن کے لیے Chrome میں کھولیں",
+    "login.embedText":  "اس ایپ میں Google سے سائن اِن ممکن نہیں۔ یہ پتہ Chrome میں کھولیں؛ وہاں آپ Google یا یوزر نیم سے سائن اِن کر سکتے ہیں اور مینو سے اسے ایپ کے طور پر انسٹال کر سکتے ہیں۔",
+    "login.embedOpen":  "Chrome میں کھولیں",
+    "login.embedCopy":  "پتہ کاپی کریں",
+    "login.embedCopied":  "کاپی ہو گیا"
 }

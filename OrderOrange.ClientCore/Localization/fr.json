@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "Clients",
     "bots.kindPartner":  "Partenaire",
     "bots.kindPos":  "Partenaire · caisse",
-    "bots.kindCustomer":  "Client"
+    "bots.kindCustomer":  "Client",
+    "login.embedTitle":  "Ouvrez dans Chrome pour vous connecter",
+    "login.embedText":  "Cette application ne permet pas la connexion avec Google. Ouvrez cette adresse dans Chrome : vous pourrez vous connecter avec Google ou votre identifiant, et l\u0027installer comme application depuis le menu.",
+    "login.embedOpen":  "Ouvrir dans Chrome",
+    "login.embedCopy":  "Copier l\u0027adresse",
+    "login.embedCopied":  "Copié"
 }

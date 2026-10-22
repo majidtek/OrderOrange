@@ -4076,5 +4076,10 @@
     "bots.whoCustomers":  "Customers",
     "bots.kindPartner":  "Partner",
     "bots.kindPos":  "Partner · POS",
-    "bots.kindCustomer":  "Customer"
+    "bots.kindCustomer":  "Customer",
+    "login.embedTitle":  "Open in Chrome to sign in",
+    "login.embedText":  "This app cannot sign you in with Google. Open this address in Chrome; there you can sign in with Google or your username, and install it as an app from the menu.",
+    "login.embedOpen":  "Open in Chrome",
+    "login.embedCopy":  "Copy address",
+    "login.embedCopied":  "Copied"
 }

@@ -9,8 +9,13 @@
     <link href="_content/OrderOrange.ClientCore/fonts.css?v=1" rel="stylesheet" /> <!-- self-hosted fonts: Google Fonts was blocked/slow for some partners (2026-10-16) -->
     <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
     <link rel="stylesheet" href="_content/Heron.MudCalendar/Heron.MudCalendar.min.css" />
-    <link rel="stylesheet" href="_content/OrderOrange.ClientCore/food.css?v=822" />
+    <link rel="stylesheet" href="_content/OrderOrange.ClientCore/food.css?v=823" />
     <link rel="icon" type="image/svg+xml" href="_content/OrderOrange.ClientCore/logo.svg?v=4" />
+    <!-- Installable from Chrome as its own app (Majed 2026-10-22: sign-in did nothing inside a
+         wrapper app; Google refuses to sign in inside embedded web views). -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#FF5A00" />
+    <link rel="apple-touch-icon" href="app/apple-touch-icon.png" />
     <!-- Must run before first paint so the page is never laid out twice. -->
     <script src="_content/OrderOrange.ClientCore/mf-viewport.js?v=6"></script>
 </head>
@@ -43,7 +48,7 @@
     <script src="_content/OrderOrange.ClientCore/mf-palette.js?v=3"></script>
     <script src="_content/OrderOrange.ClientCore/mf-chat.js?v=8"></script>
     <script src="_content/OrderOrange.ClientCore/mf-qr.js"></script>
-    <script src="_content/OrderOrange.ClientCore/mf-google.js?v=2"></script>
+    <script src="_content/OrderOrange.ClientCore/mf-google.js?v=3"></script>
     <script src="_content/OrderOrange.ClientCore/mf-floor.js?v=35"></script>
     <script src="_content/OrderOrange.ClientCore/mf-barcode.js?v=1"></script>
     <script src="_content/OrderOrange.ClientCore/mf-courier.js?v=1"></script>
@@ -57,6 +62,9 @@
     <script src="_content/OrderOrange.ClientCore/mf-voice.js?v=47"></script>
     <script src="_content/OrderOrange.ClientCore/mf-logoedit.js?v=1"></script>
     <script src="_framework/blazor.webassembly.js"></script>
+    <!-- The notification worker, registered on every visit: an installed app needs one, and
+         this one only shows notifications, it never caches or intercepts a request. -->
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('/notify-sw.js').catch(function () { });</script>
 </body>
 
 </html>

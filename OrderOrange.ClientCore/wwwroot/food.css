@@ -28198,3 +28198,17 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
 .bc-kind.k-pos{background:#EDE7FF;color:#5B3CC4}
 .bc-kind.k-customer{background:#E4F0FF;color:#1565C0}
 .bc-whois{letter-spacing:0;text-transform:none;color:#3A322B;font-weight:800}
+
+/* v829 - sign-in inside an Android wrapper app (Majed 2026-10-22: Google sign-in did nothing
+   there). Google refuses embedded web views, so the card points to Chrome instead. */
+.mf-embed{display:flex;flex-direction:column;gap:6px;margin:4px 0 14px;padding:12px 14px;border-radius:14px;
+    background:#FFF4EC;border:1px solid #FFD8BF;color:#5A3A22;font-size:13px;line-height:1.45}
+.mf-embed b{font-size:14px;color:#2B2118}
+.mf-embed .addr{font-weight:800;color:#C44300}
+.mf-embed .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.mf-embed .acts>*{flex:1 1 140px;width:auto}
+.mf-embed .go,.mf-embed .cp{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 16px;
+    border-radius:999px;font-weight:800;font-size:13px;text-decoration:none;cursor:pointer}
+.mf-embed .go{background:#FF5A00;color:#fff;border:0}
+.mf-embed .cp{background:#fff;color:#C44300;border:1.5px solid #FFC7A3}
+.mf-embed .go:focus-visible,.mf-embed .cp:focus-visible{outline:2px solid #2B2118;outline-offset:2px}
