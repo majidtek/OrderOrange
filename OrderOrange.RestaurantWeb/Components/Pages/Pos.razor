@@ -62,9 +62,6 @@ else if (_menu is not null)
                 <MudIconButton Icon="@Icons.Material.Filled.Keyboard" Size="Size.Medium"
                                OnClick="@(() => _hkOpen = !_hkOpen)" title="@L["pos.hk.title"]" />
                 <MudIconButton Icon="@Icons.Material.Filled.HelpOutline" Size="Size.Medium" OnClick="@(() => StartTour())" />
-                @* Product photos on the tiles: off by default (text cards load instantly), remembered per device. *@
-                <MudIconButton Icon="@(_photos ? Icons.Material.Filled.Image : Icons.Material.Outlined.HideImage)" Size="Size.Medium"
-                               OnClick="TogglePhotosAsync" title="@L[_photos ? "pos.photosOff" : "pos.photosOn"]" />
                 <MudIconButton Icon="@Icons.Material.Filled.Search" Size="Size.Medium" OnClick="OpenSearch" />
             </div>
 
@@ -84,7 +81,7 @@ else if (_menu is not null)
                         @onclick="@(() => JS.InvokeVoidAsync("mfPos.slideCats", ".pos-cats", 1))">›</button>
             </div>
 
-            <div class="pos-grid @(_photos ? "" : "noimg")" @key="_categoryId">
+            <div class="pos-grid" @key="_categoryId">
                 @foreach (var item in VisibleItems)
                 {
                     var dish = item;
@@ -98,14 +95,8 @@ else if (_menu is not null)
                             <span class="pt-badge">@qty</span>
                             <span class="pt-minus" @onclick="@(() => Bump(dish, -1))" @onclick:stopPropagation="true">−</span>
                         }
-                        @if (!_photos)
-                        {
-                            @* text card — a tap on the small picture mark shows the product's photos without ringing it up *@
-                            <span class="pt-peek" title="@L["pos.viewPhoto"]" @onclick="@(() => PeekPhotoAsync(dish))" @onclick:stopPropagation="true">
-                                <MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Small" />
-                            </span>
-                        }
-                        else if (!_tilePhotos.TryGetValue(dish.Id, out var tilePhoto))
+                        @* Photos always show (Majed 2026-10-22: "remove hide images from pos"). *@
+                        @if (!_tilePhotos.TryGetValue(dish.Id, out var tilePhoto))
                         {
                             @* the photo is still on its way: an empty stage holds the place so the tile does not jump when it lands *@
                             <span class="pt-emoji pt-wait"></span>
@@ -401,15 +392,6 @@ else if (_menu is not null)
         _posPage = 0;
     }
 
-    /// <summary>Photos on the tiles, off by default; the choice is kept per device (localStorage "pos.photos").</summary>
-    private bool _photos;
-
-    private async Task TogglePhotosAsync()
-    {
-        _photos = !_photos;
-        try { await JS.InvokeVoidAsync("localStorage.setItem", "pos.photos", _photos ? "1" : "0"); } catch { }
-    }
-
     // Product photos arrive one tile at a time (Majed 2026-10-21: "first load all products then
     // load images one by one"). The till opens on the menu OUTLINE only (names, prices, codes,
     // no pictures), so every tile is on screen at once. After each render the tiles on view ask
@@ -426,12 +408,11 @@ else if (_menu is not null)
     private void StartPhotoRun()
     {
         if (_menu is null) return;
-        var key = $"{_photos}|{_categoryId}|{PosPage}|{_search}";
+        var key = $"{_categoryId}|{PosPage}|{_search}";
         if (key == _photoRunKey) return;
         _photoRunKey = key;
         _photoRun?.Cancel();
         _photoRun = null;
-        if (!_photos) return;
 
         var onView = VisibleItems.Select(i => i.Id).ToList();
         // While searching, only the matches; otherwise the rest of the group after the page on view.
@@ -724,15 +705,6 @@ else if (_menu is not null)
             return;
         }
         _keysRef = DotNetObjectReference.Create(this);
-        try
-        {
-            if (await JS.InvokeAsync<string?>("localStorage.getItem", "pos.photos") == "1")
-            {
-                _photos = true;
-                StateHasChanged();   // the render after this starts the photo run
-            }
-        }
-        catch { }
         // The till was fullscreen before a reload? First tap takes it back.
         try { await JS.InvokeVoidAsync("mfPos.restoreFullscreen"); } catch { }
         try
@@ -1183,20 +1155,6 @@ else if (_menu is not null)
     private bool _prefsLoaded;
     private bool _defaultKeepOpen = true;
     private bool _keepOpen = true;
-
-    /// <summary>A look at one product's photos while the tiles run without pictures.</summary>
-    private Task PeekPhotoAsync(MenuItemDto dish)
-    {
-        var parameters = new DialogParameters<PosPhotoDialog>
-        {
-            { d => d.ItemId, dish.Id },
-            { d => d.Name, dish.NameFor(L.Locale) },
-            { d => d.Emoji, string.IsNullOrWhiteSpace(dish.ImageEmoji) ? "🍽️" : dish.ImageEmoji },
-            { d => d.Photo, _tilePhotos.GetValueOrDefault(dish.Id) ?? dish.Photo },
-        };
-        return Dialogs.ShowAsync<PosPhotoDialog>("", parameters,
-            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
-    }
 
     /// <summary>Search lives in its own dialog; whatever it picks lands on the ticket.</summary>
     private async Task OpenSearch()
