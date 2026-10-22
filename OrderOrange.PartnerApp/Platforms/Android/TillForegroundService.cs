@@ -12,7 +12,8 @@ namespace OrderOrange.PartnerApp;
 /// wake lock and a Wi-Fi lock, so Android neither kills the poll loop nor lets the radio
 /// doze while a kitchen printer is waiting for the next ticket.
 /// </summary>
-[Service(Exported = false, ForegroundServiceType = ForegroundService.TypeConnectedDevice)]
+// Both types declared: "connected device" first, "data sync" as the fallback when Android refuses it.
+[Service(Exported = false, ForegroundServiceType = ForegroundService.TypeConnectedDevice | ForegroundService.TypeDataSync)]
 public class TillForegroundService : Service
 {
     private const int NotificationId = 1001;
@@ -25,12 +26,13 @@ public class TillForegroundService : Service
     public override StartCommandResult OnStartCommand(Intent? intent, StartCommandFlags flags, int startId)
     {
         var notification = BuildNotification();
-        // "Connected device" (printers over Bluetooth/USB/LAN): unlike dataSync it is not cut
-        // off after 6 hours on Android 14+, so the till can run all day.
-        if (OperatingSystem.IsAndroidVersionAtLeast(29))
-            StartForeground(NotificationId, notification, ForegroundService.TypeConnectedDevice);
-        else
-            StartForeground(NotificationId, notification);
+        if (!GoForeground(notification))
+        {
+            // Android would not let the service run: the app itself stays open (it polls while
+            // on screen); only the background printing is off until the next start.
+            StopSelf();
+            return StartCommandResult.NotSticky;
+        }
 
         try
         {
@@ -49,6 +51,31 @@ public class TillForegroundService : Service
 
         TillEngine.Instance.Start();
         return StartCommandResult.Sticky;
+    }
+
+    /// <summary>
+    /// "Connected device" (printers over Bluetooth/USB/LAN) first: unlike dataSync it is not cut
+    /// off after 6 hours on Android 14+, so printing runs all day. If Android refuses it,
+    /// "data sync" instead. A refusal used to be an uncaught exception, which closed the whole
+    /// app right after sign-in on Android 14+ (Majed 2026-10-22: "app close auto").
+    /// </summary>
+    private bool GoForeground(Notification notification)
+    {
+        if (!OperatingSystem.IsAndroidVersionAtLeast(29))
+        {
+            try { StartForeground(NotificationId, notification); return true; }
+            catch (Exception ex) { TillLog.Write($"foreground refused: {ex.Message}"); return false; }
+        }
+        foreach (var type in new[] { ForegroundService.TypeConnectedDevice, ForegroundService.TypeDataSync })
+        {
+            try
+            {
+                StartForeground(NotificationId, notification, type);
+                return true;
+            }
+            catch (Exception ex) { TillLog.Write($"foreground as {type} refused: {ex.Message}"); }
+        }
+        return false;
     }
 
     /// <summary>The app was swiped out of Recents: some ROMs kill the process with it — come back in a few seconds.</summary>
