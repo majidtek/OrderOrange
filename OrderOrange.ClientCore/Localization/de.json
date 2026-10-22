@@ -4075,9 +4075,6 @@
     "till.android.soon":  "Demnächst",
     "pr.both":  "Beide",
     "pr.bothHint":  "Küche und Bar zusammen antippen, damit ein Produkt auf beiden Druckern gedruckt wird.",
-    "pos.photosOn":  "Produktfotos anzeigen",
-    "pos.photosOff":  "Produktfotos ausblenden",
-    "pos.viewPhoto":  "Foto ansehen",
     "bots.who":  "Wer fragte",
     "bots.whoAll":  "Alle",
     "bots.whoPartners":  "Partner",
@@ -4095,5 +4092,6 @@
     "login.appBackTitle":  "Du bist angemeldet",
     "login.appBackText":  "Kehre zur OrderOrange Partner-App zurück, um weiterzumachen.",
     "login.appBack":  "Zurück zur App",
-    "till.reqsSetup":  "Windows 10 oder neuer. Starten Sie die heruntergeladene Datei: Sie installiert die Kasse, legt sie ins Startmenü und auf den Desktop und hält sie aktuell."
+    "till.reqsSetup":  "Windows 10 oder neuer. Starten Sie die heruntergeladene Datei: Sie installiert die Kasse, legt sie ins Startmenü und auf den Desktop und hält sie aktuell.",
+    "pos.viewPhoto":  "Foto ansehen"
 }

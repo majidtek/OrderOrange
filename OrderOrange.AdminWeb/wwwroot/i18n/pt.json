@@ -4075,9 +4075,6 @@
     "till.android.soon":  "Em breve",
     "pr.both":  "Ambos",
     "pr.bothHint":  "Ative Cozinha e Bar em conjunto para imprimir um produto nas duas impressoras.",
-    "pos.photosOn":  "Mostrar fotos dos produtos",
-    "pos.photosOff":  "Ocultar fotos dos produtos",
-    "pos.viewPhoto":  "Ver foto",
     "bots.who":  "Quem perguntou",
     "bots.whoAll":  "Todos",
     "bots.whoPartners":  "Parceiros",
@@ -4090,5 +4087,11 @@
     "login.embedOpen":  "Abrir no Chrome",
     "login.embedCopy":  "Copiar endereço",
     "login.embedCopied":  "Copiado",
-    "till.reqsSetup":  "Windows 10 ou posterior. Execute o arquivo baixado: ele instala o caixa, adiciona ao menu Iniciar e à área de trabalho e o mantém atualizado."
+    "login.appGoogle":  "Continuar com o Google",
+    "login.appBackWait":  "A concluir o início de sessão…",
+    "login.appBackTitle":  "Sessão iniciada",
+    "login.appBackText":  "Volte à app OrderOrange Partner para continuar.",
+    "login.appBack":  "Voltar à app",
+    "till.reqsSetup":  "Windows 10 ou posterior. Execute o arquivo baixado: ele instala o caixa, adiciona ao menu Iniciar e à área de trabalho e o mantém atualizado.",
+    "pos.viewPhoto":  "Ver foto"
 }

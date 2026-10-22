@@ -4075,9 +4075,6 @@
     "till.android.soon":  "近日公開",
     "pr.both":  "両方",
     "pr.bothHint":  "キッチンとバーを両方オンにすると、その商品は両方のプリンターに印刷されます。",
-    "pos.photosOn":  "商品写真を表示",
-    "pos.photosOff":  "商品写真を非表示",
-    "pos.viewPhoto":  "写真を見る",
     "bots.who":  "質問者",
     "bots.whoAll":  "すべて",
     "bots.whoPartners":  "パートナー",
@@ -4095,5 +4092,6 @@
     "login.appBackTitle":  "サインインしました",
     "login.appBackText":  "OrderOrange Partner アプリに戻って続けてください。",
     "login.appBack":  "アプリに戻る",
-    "till.reqsSetup":  "Windows 10 以降。ダウンロードしたファイルを実行すると、レジがインストールされ、スタートメニューとデスクトップに追加され、自動で最新に保たれます。"
+    "till.reqsSetup":  "Windows 10 以降。ダウンロードしたファイルを実行すると、レジがインストールされ、スタートメニューとデスクトップに追加され、自動で最新に保たれます。",
+    "pos.viewPhoto":  "写真を見る"
 }

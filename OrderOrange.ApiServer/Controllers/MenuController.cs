@@ -212,11 +212,35 @@ public class MenuController(CatalogStore catalog) : ApiControllerBase
     /// outline first, then asks for the pictures one tile at a time with this
     /// (Majed 2026-10-21: "first load all products then load images one by one").
     /// </summary>
+    /// <param name="small">
+    /// True for the POS tiles: a WebP of at most 240 px, a few KB instead of hundreds
+    /// (Majed 2026-10-22: "make small for all product images and show it in pos"). Made the
+    /// first time it is asked for and kept; remade when the photo changes.
+    /// </param>
     [HttpGet("items/{id:int}/photo")]
-    public async Task<ActionResult<DishMainPhotoDto>> ItemMainPhoto(int id)
+    public async Task<ActionResult<DishMainPhotoDto>> ItemMainPhoto(int id, bool small = false)
     {
         var item = await catalog.OwnedItemAsync(id, CurrentRestaurantId);
-        return item is null ? NotFound() : Ok(new DishMainPhotoDto(item.PhotoData));
+        if (item is null) return NotFound();
+        return Ok(new DishMainPhotoDto(small ? await PhotoThumbs.SmallFor(item, catalog) : item.PhotoData));
+    }
+
+    /// <summary>
+    /// The small photos of a page of products in ONE request (Majed 2026-10-22: "image shown
+    /// with very delay"): the POS asked once per tile, so a page of twenty waited for twenty
+    /// round trips. Id → small photo, or null for a product without one; ids that are not this
+    /// store's are left out. At most 60 per request.
+    /// </summary>
+    [HttpGet("photos/small")]
+    public async Task<ActionResult<Dictionary<int, string?>>> SmallPhotos([FromQuery] string ids = "")
+    {
+        var wanted = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => int.TryParse(x, out var n) ? n : 0).Where(n => n > 0).Distinct().Take(60).ToList();
+        if (wanted.Count == 0) return new Dictionary<int, string?>();
+        var docs = await catalog.PhotoDocsAsync(wanted, CurrentRestaurantId);
+        var result = new Dictionary<int, string?>(docs.Count);
+        foreach (var doc in docs) result[doc.Id] = await PhotoThumbs.SmallFor(doc, catalog);
+        return result;
     }
 
     [HttpGet("items/{id:int}/photos")]

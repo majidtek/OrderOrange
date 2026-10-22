@@ -79,6 +79,16 @@ public sealed class MenuItemDoc
     public string ImageEmoji { get; set; } = "🍽️";
     public bool IsPopular { get; set; }
     public string? PhotoData { get; set; }
+
+    /// <summary>
+    /// A small WebP of <see cref="PhotoData"/> for the POS tiles, made on first request
+    /// (Services.PhotoThumbs). Empty = the photo could not be shrunk and the original is used.
+    /// </summary>
+    public string? PhotoThumb { get; set; }
+
+    /// <summary>Which photo <see cref="PhotoThumb"/> was made from (PhotoThumbs.KeyOf); a mismatch means remake it.</summary>
+    public string? PhotoThumbKey { get; set; }
+
     public decimal DiscountPercent { get; set; }
     public string SearchKeywords { get; set; } = "";
 

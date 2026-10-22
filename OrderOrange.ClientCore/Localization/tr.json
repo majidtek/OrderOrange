@@ -4075,9 +4075,6 @@
     "till.android.soon":  "Çok yakında",
     "pr.both":  "İkisi de",
     "pr.bothHint":  "Bir ürünü iki yazıcıda da yazdırmak için Mutfak ve Bar'ı birlikte seçin.",
-    "pos.photosOn":  "Ürün fotoğraflarını göster",
-    "pos.photosOff":  "Ürün fotoğraflarını gizle",
-    "pos.viewPhoto":  "Fotoğrafı gör",
     "bots.who":  "Kim sordu",
     "bots.whoAll":  "Herkes",
     "bots.whoPartners":  "İş ortakları",
@@ -4095,5 +4092,6 @@
     "login.appBackTitle":  "Giriş yaptınız",
     "login.appBackText":  "Devam etmek için OrderOrange Partner uygulamasına dönün.",
     "login.appBack":  "Uygulamaya dön",
-    "till.reqsSetup":  "Windows 10 veya üstü. İndirilen dosyayı çalıştırın: kasayı kurar, Başlat menüsüne ve masaüstüne ekler ve güncel tutar."
+    "till.reqsSetup":  "Windows 10 veya üstü. İndirilen dosyayı çalıştırın: kasayı kurar, Başlat menüsüne ve masaüstüne ekler ve güncel tutar.",
+    "pos.viewPhoto":  "Fotoğrafı gör"
 }

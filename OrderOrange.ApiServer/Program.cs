@@ -102,6 +102,8 @@ builder.Services.AddHostedService<OrderOrange.ApiServer.Services.InstagramSchedu
 // Admin Settings → Backups: SQL (daily full + hourly differential) and Mongo dumps to a folder.
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.BackupRunner>();
 builder.Services.AddHostedService<OrderOrange.ApiServer.Services.BackupScheduler>();
+// The POS small photo for every product, made in the background after start-up.
+builder.Services.AddHostedService<OrderOrange.ApiServer.Services.PhotoThumbBackfill>();
 // Admin → Disk space: drive usage, folder sizes and fixed cleanups.
 builder.Services.AddSingleton<OrderOrange.ApiServer.Services.DiskManager>();
 // The language model behind the customer assistant (Grok:ApiKey empty = rule-based bot only).

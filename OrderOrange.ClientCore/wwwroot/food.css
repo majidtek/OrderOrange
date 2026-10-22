@@ -28149,32 +28149,6 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
   .oo-hero-plate .tag .mud-icon-root { width: 12px; height: 12px; }
 }
 
-/* v823 - POS without product photos (Majed 2026-10-18 "in pos do not show images"): the
-   photo switch in the POS top bar is OFF by default and remembered per device; the grid then
-   carries .noimg and the tiles become text cards — name + price, no picture, no emoji. */
-.pos-grid.noimg .pos-tile{ padding:14px 10px 12px; min-height:92px; justify-content:center; gap:8px; }
-.pos-grid.noimg .pos-tile .pt-name{ font-size:.92rem; -webkit-line-clamp:3; min-height:0; }
-.pos.tablet .pos-grid.noimg .pos-tile{ padding:12px 8px 10px; min-height:80px; }
-/* v825 - the photo peek mark sits in the top corner (6px + 26px tall), so the text tile keeps a
-   band above its name for it: long names used to run under the mark ("image over text"). */
-.pos-grid.noimg .pos-tile{ padding-top:36px; }
-.pos.tablet .pos-grid.noimg .pos-tile{ padding-top:34px; }
-.pos.tablet .pos-grid.noimg .pos-tile .pt-name{ font-size:.86rem; }
-/* v824 - photo peek on text tiles (Majed 2026-10-18 "user want to see image will click"):
-   a small picture mark in the tile's corner opens PosPhotoDialog; the tap never adds the dish. */
-.pos-grid.noimg .pos-tile .pt-peek{
-  position:absolute; top:6px; inset-inline-start:6px; width:26px; height:26px; border-radius:8px;
-  display:grid; place-items:center; color:#a08b74; background:#f6f0e8; opacity:.85;
-}
-.pos-grid.noimg .pos-tile .pt-peek:hover{ color:#f4511e; background:#fff1e8; opacity:1; }
-.pos-grid.noimg .pos-tile .pt-peek .mud-icon-root{ width:16px; height:16px; }
-.pos-grid.noimg .pos-tile.on .pt-minus{ top:6px; inset-inline-start:38px; }
-.pos-peek{ display:flex; flex-direction:column; gap:12px; }
-.pos-peek-name{ font-weight:800; font-size:1.05rem; color:#2b2118; }
-.pos-peek-wait, .pos-peek-none{ display:grid; place-items:center; min-height:180px; font-size:56px; background:#faf7f2; border-radius:14px; }
-.pos-peek-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
-.pos-peek-grid.one{ grid-template-columns:1fr; }
-.pos-peek-grid img{ width:100%; aspect-ratio:1; object-fit:cover; border-radius:14px; background:#faf7f2; }
 /* v826 - POS photos arrive one tile at a time (Majed 2026-10-21 "first load all products then load
    images one by one"): every tile is painted from the outline at once; until its picture lands the
    photo stage waits empty with a soft pulse, and the picture fades in when it arrives. */
@@ -28212,3 +28186,25 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
 .mf-embed .go{background:#FF5A00;color:#fff;border:0}
 .mf-embed .cp{background:#fff;color:#C44300;border:1.5px solid #FFC7A3}
 .mf-embed .go:focus-visible,.mf-embed .cp:focus-visible{outline:2px solid #2B2118;outline-offset:2px}
+
+/* v830 - POS tiles carry small thumbnails; the corner button opens the big photos
+   (Majed 2026-10-22: "make small for all product images ... show big image when user click").
+   A tap anywhere else on the tile still rings the dish up. */
+.pos-tile .pt-photo{ position:relative; display:flex; justify-content:center; width:100%; }
+.pos-tile .pt-zoom{
+  position:absolute; bottom:4px; inset-inline-end:4px; width:30px; height:30px; border-radius:10px;
+  display:grid; place-items:center; color:#fff; background:rgba(36,28,21,.55);
+  box-shadow:0 2px 6px rgba(0,0,0,.18); cursor:zoom-in;
+}
+.pos-tile .pt-zoom .mud-icon-root{ width:17px; height:17px; }
+.pos-tile .pt-zoom:hover{ background:#f4511e; }
+.pos.tablet .pos-tile .pt-zoom{ width:26px; height:26px; border-radius:8px; }
+.pos.tablet .pos-tile .pt-zoom .mud-icon-root{ width:15px; height:15px; }
+.pos-peek{ display:flex; flex-direction:column; gap:12px; }
+.pos-peek-name{ font-weight:800; font-size:1.05rem; color:#2b2118; }
+.pos-peek-wait, .pos-peek-none{ display:grid; place-items:center; min-height:200px; font-size:56px; background:#faf7f2; border-radius:14px; }
+.pos-peek-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
+.pos-peek-grid.one{ grid-template-columns:1fr; }
+/* The big view shows the whole picture, never cropped. */
+.pos-peek-grid img{ width:100%; aspect-ratio:1; object-fit:contain; border-radius:14px; background:#faf7f2; }
+.pos-peek-grid.one img{ aspect-ratio:auto; max-height:70vh; }

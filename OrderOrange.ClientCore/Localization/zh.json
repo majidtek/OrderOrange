@@ -4075,9 +4075,6 @@
     "till.android.soon":  "即将推出",
     "pr.both":  "两者",
     "pr.bothHint":  "同时选中“厨房”和“吧台”，该商品会在两台打印机上打印。",
-    "pos.photosOn":  "显示商品图片",
-    "pos.photosOff":  "隐藏商品图片",
-    "pos.viewPhoto":  "查看图片",
     "bots.who":  "提问者",
     "bots.whoAll":  "全部",
     "bots.whoPartners":  "商家",
@@ -4095,5 +4092,6 @@
     "login.appBackTitle":  "已登录",
     "login.appBackText":  "返回 OrderOrange Partner 应用以继续。",
     "login.appBack":  "返回应用",
-    "till.reqsSetup":  "Windows 10 或更高版本。运行下载的文件即可安装收银程序，并添加到开始菜单和桌面，之后会自动保持最新。"
+    "till.reqsSetup":  "Windows 10 或更高版本。运行下载的文件即可安装收银程序，并添加到开始菜单和桌面，之后会自动保持最新。",
+    "pos.viewPhoto":  "查看图片"
 }

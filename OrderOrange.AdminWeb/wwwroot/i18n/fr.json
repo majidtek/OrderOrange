@@ -4075,9 +4075,6 @@
     "till.android.soon":  "Bientôt disponible",
     "pr.both":  "Les deux",
     "pr.bothHint":  "Activez Cuisine et Bar ensemble pour imprimer un produit sur les deux imprimantes.",
-    "pos.photosOn":  "Afficher les photos des produits",
-    "pos.photosOff":  "Masquer les photos des produits",
-    "pos.viewPhoto":  "Voir la photo",
     "bots.who":  "Qui a demandé",
     "bots.whoAll":  "Tous",
     "bots.whoPartners":  "Partenaires",
@@ -4090,5 +4087,11 @@
     "login.embedOpen":  "Ouvrir dans Chrome",
     "login.embedCopy":  "Copier l\u0027adresse",
     "login.embedCopied":  "Copié",
-    "till.reqsSetup":  "Windows 10 ou plus récent. Lancez le fichier téléchargé : il installe la caisse, l\u0027ajoute au menu Démarrer et au bureau, et la tient à jour."
+    "login.appGoogle":  "Continuer avec Google",
+    "login.appBackWait":  "Finalisation de la connexion…",
+    "login.appBackTitle":  "Vous êtes connecté",
+    "login.appBackText":  "Revenez à l'application OrderOrange Partner pour continuer.",
+    "login.appBack":  "Retour à l'application",
+    "till.reqsSetup":  "Windows 10 ou plus récent. Lancez le fichier téléchargé : il installe la caisse, l\u0027ajoute au menu Démarrer et au bureau, et la tient à jour.",
+    "pos.viewPhoto":  "Voir la photo"
 }

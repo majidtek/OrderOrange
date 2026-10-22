@@ -4075,9 +4075,6 @@
     "till.android.soon":  "Coming soon",
     "pr.both":  "Both",
     "pr.bothHint":  "Tap Kitchen and Bar together to print a product on both printers.",
-    "pos.photosOn":  "Show product photos",
-    "pos.photosOff":  "Hide product photos",
-    "pos.viewPhoto":  "View photo",
     "bots.who":  "Who asked",
     "bots.whoAll":  "Everyone",
     "bots.whoPartners":  "Partners",
@@ -4090,5 +4087,11 @@
     "login.embedOpen":  "Open in Chrome",
     "login.embedCopy":  "Copy address",
     "login.embedCopied":  "Copied",
-    "till.reqsSetup":  "Windows 10 or later. Run the downloaded file: it installs the till, adds it to the Start menu and the desktop, and keeps it up to date."
+    "login.appGoogle":  "Continue with Google",
+    "login.appBackWait":  "Finishing sign-in…",
+    "login.appBackTitle":  "You're signed in",
+    "login.appBackText":  "Go back to the OrderOrange Partner app to carry on.",
+    "login.appBack":  "Back to the app",
+    "till.reqsSetup":  "Windows 10 or later. Run the downloaded file: it installs the till, adds it to the Start menu and the desktop, and keeps it up to date.",
+    "pos.viewPhoto":  "View photo"
 }

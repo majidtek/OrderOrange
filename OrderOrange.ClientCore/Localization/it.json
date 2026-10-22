@@ -4075,9 +4075,6 @@
     "till.android.soon":  "In arrivo",
     "pr.both":  "Entrambi",
     "pr.bothHint":  "Attiva Cucina e Bar insieme per stampare un prodotto su entrambe le stampanti.",
-    "pos.photosOn":  "Mostra le foto dei prodotti",
-    "pos.photosOff":  "Nascondi le foto dei prodotti",
-    "pos.viewPhoto":  "Vedi foto",
     "bots.who":  "Chi ha chiesto",
     "bots.whoAll":  "Tutti",
     "bots.whoPartners":  "Partner",
@@ -4095,5 +4092,6 @@
     "login.appBackTitle":  "Hai effettuato l'accesso",
     "login.appBackText":  "Torna all'app OrderOrange Partner per continuare.",
     "login.appBack":  "Torna all'app",
-    "till.reqsSetup":  "Windows 10 o successivo. Avvia il file scaricato: installa la cassa, la aggiunge al menu Start e al desktop e la tiene aggiornata."
+    "till.reqsSetup":  "Windows 10 o successivo. Avvia il file scaricato: installa la cassa, la aggiunge al menu Start e al desktop e la tiene aggiornata.",
+    "pos.viewPhoto":  "Vedi foto"
 }

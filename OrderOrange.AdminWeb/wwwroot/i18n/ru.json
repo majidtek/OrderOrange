@@ -4075,9 +4075,6 @@
     "till.android.soon":  "Скоро",
     "pr.both":  "Оба",
     "pr.bothHint":  "Включите «Кухня» и «Бар» вместе, чтобы печатать товар на обоих принтерах.",
-    "pos.photosOn":  "Показать фото товаров",
-    "pos.photosOff":  "Скрыть фото товаров",
-    "pos.viewPhoto":  "Показать фото",
     "bots.who":  "Кто спросил",
     "bots.whoAll":  "Все",
     "bots.whoPartners":  "Партнёры",
@@ -4090,5 +4087,11 @@
     "login.embedOpen":  "Открыть в Chrome",
     "login.embedCopy":  "Скопировать адрес",
     "login.embedCopied":  "Скопировано",
-    "till.reqsSetup":  "Windows 10 или новее. Запустите скачанный файл: он установит кассу, добавит её в меню «Пуск» и на рабочий стол и будет обновлять её сам."
+    "login.appGoogle":  "Продолжить с Google",
+    "login.appBackWait":  "Завершаем вход…",
+    "login.appBackTitle":  "Вы вошли",
+    "login.appBackText":  "Вернитесь в приложение OrderOrange Partner, чтобы продолжить.",
+    "login.appBack":  "Вернуться в приложение",
+    "till.reqsSetup":  "Windows 10 или новее. Запустите скачанный файл: он установит кассу, добавит её в меню «Пуск» и на рабочий стол и будет обновлять её сам.",
+    "pos.viewPhoto":  "Показать фото"
 }

@@ -1,8 +1,9 @@
 @inject ApiClient Api
 @inject LanguageService L
 
-@* A quick look at one product's photos from the POS while the tiles run without pictures
-   (Majed 2026-10-18: "user want to see image will click"). Read-only; nothing is rung up. *@
+@* The big view of one product's photos from the POS: the tiles carry small thumbnails, the
+   enlarge button on a tile opens this (Majed 2026-10-22: "show big image when user click").
+   Read-only; nothing is rung up. *@
 <MudDialog>
     <DialogContent>
         <div class="pos-peek">
@@ -33,16 +34,18 @@
     [Parameter] public int ItemId { get; set; }
     [Parameter] public string Name { get; set; } = "";
     [Parameter] public string Emoji { get; set; } = "🍽️";
+    /// <summary>The tile's thumbnail, shown at once (blurry but instant) while the full photos load.</summary>
     [Parameter] public string? Photo { get; set; }
 
     private List<DishPhotoDto>? _photos;
 
     protected override async Task OnInitializedAsync()
     {
-        // The tile may already carry the main photo (photos switched on) — show it at once.
         if (!string.IsNullOrWhiteSpace(Photo)) _photos = [new DishPhotoDto(0, Photo, true)];
         var all = await Api.GetMyDishPhotosAsync(ItemId);
-        if (all is { Count: > 0 }) _photos = all;
-        else _photos ??= [];
+        if (all is { Count: > 0 }) { _photos = all; return; }
+        // An older product keeps only its main photo, with no gallery: show that, full size.
+        var main = await Api.GetMyDishMainPhotoAsync(ItemId);
+        _photos = string.IsNullOrWhiteSpace(main?.Photo) ? _photos ?? [] : [new DishPhotoDto(0, main.Photo, true)];
     }
 }
