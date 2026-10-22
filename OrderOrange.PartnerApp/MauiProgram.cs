@@ -14,6 +14,7 @@ public static class MauiProgram
     {
         // The shared portal pages ask this to show "Printers" instead of "download the app".
         HostInfo.IsNativeApp = true;
+        HostInfo.SiteBase = AppConfig.PartnerHost;
 
         var builder = MauiApp.CreateBuilder();
         builder.UseMauiApp<App>();

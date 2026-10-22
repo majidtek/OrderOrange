@@ -281,7 +281,7 @@
 
             @if (!string.IsNullOrEmpty(GuideUrl))
             {
-                <a class="mf-guide-link" href="@GuideUrl" target="_blank" rel="noopener">
+                <a class="mf-guide-link" href="@GuideHref" target="_blank" rel="noopener">
                     <MudIcon Icon="@Icons.Material.Filled.MenuBook" Style="width:16px;height:16px;" /> @Lang["login.guide"]
                 </a>
             }
@@ -363,6 +363,11 @@
 
     /// <summary>Optional link under the form to a user guide (the partner app passes its hosted guide page).</summary>
     [Parameter] public string? GuideUrl { get; set; }
+
+    /// <summary>The guide lives on the web host; inside the Partner app the link goes there, not to the app's own address.</summary>
+    private string? GuideHref => GuideUrl is { Length: > 0 } g && HostInfo.IsNativeApp && HostInfo.SiteBase is { Length: > 0 } b
+        ? new Uri(new Uri(b.TrimEnd('/') + "/"), g).ToString()
+        : GuideUrl;
 
     private bool HasRegister => ShowRegister || DriverRegister || PartnerRegister;
 

@@ -31,6 +31,16 @@
                 }
                 return native(input, init);
             };
+
+            // A link that opens a new tab (the partner guide, map links, invoices) does nothing
+            // in the Android web view, which has no tabs: send it through the page instead, and
+            // the app opens any address outside itself in the device's browser.
+            document.addEventListener('click', function (e) {
+                var a = e.target && e.target.closest ? e.target.closest('a[target="_blank"]') : null;
+                if (!a || !a.href || /^(javascript|blob|data):/i.test(a.href)) return;
+                e.preventDefault();
+                window.location.href = a.href;
+            }, true);
         })();
     </script>
     <style>

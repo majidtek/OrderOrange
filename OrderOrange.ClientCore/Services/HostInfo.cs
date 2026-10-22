@@ -10,4 +10,11 @@ public static class HostInfo
 {
     /// <summary>True inside the OrderOrange Partner app.</summary>
     public static bool IsNativeApp { get; set; }
+
+    /// <summary>
+    /// Inside the app: the public address of the portal this app mirrors (https://partner.orderorange.com),
+    /// for pages that link to files the web host serves (the partner guide) — the app's own
+    /// address is private to it. Null in a browser, where relative links already work.
+    /// </summary>
+    public static string? SiteBase { get; set; }
 }
