@@ -4081,5 +4081,6 @@
     "login.embedText":  "Bu uygulamada Google ile giriş yapılamıyor. Bu adresi Chrome\u0027da açın; orada Google veya kullanıcı adınızla giriş yapabilir ve menüden uygulama olarak yükleyebilirsiniz.",
     "login.embedOpen":  "Chrome\u0027da aç",
     "login.embedCopy":  "Adresi kopyala",
-    "login.embedCopied":  "Kopyalandı"
+    "login.embedCopied":  "Kopyalandı",
+    "till.reqsSetup":  "Windows 10 veya üstü. İndirilen dosyayı çalıştırın: kasayı kurar, Başlat menüsüne ve masaüstüne ekler ve güncel tutar."
 }

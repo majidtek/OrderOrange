@@ -58,3 +58,6 @@ doc-src/*.png
 doc-src/frames.json
 doc-src/src/
 
+
+# tools/publish-windows.ps1 build output
+/_publish/

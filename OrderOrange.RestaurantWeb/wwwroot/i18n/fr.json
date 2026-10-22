@@ -4081,5 +4081,6 @@
     "login.embedText":  "Cette application ne permet pas la connexion avec Google. Ouvrez cette adresse dans Chrome : vous pourrez vous connecter avec Google ou votre identifiant, et l\u0027installer comme application depuis le menu.",
     "login.embedOpen":  "Ouvrir dans Chrome",
     "login.embedCopy":  "Copier l\u0027adresse",
-    "login.embedCopied":  "Copié"
+    "login.embedCopied":  "Copié",
+    "till.reqsSetup":  "Windows 10 ou plus récent. Lancez le fichier téléchargé : il installe la caisse, l\u0027ajoute au menu Démarrer et au bureau, et la tient à jour."
 }

@@ -187,6 +187,23 @@ public sealed class Setup
         catch { /* read-only profile: the till still works, it just forgets */ }
     }
 
+    /// <summary>Every profile this PC has settings for: "" (the default window) and the named ones.</summary>
+    public static List<string> KnownProfiles()
+    {
+        var profiles = new List<string> { "" };
+        try
+        {
+            if (!Directory.Exists(Folder)) return profiles;
+            foreach (var file in Directory.GetFiles(Folder, "localhandler-*.json"))
+            {
+                var name = Path.GetFileNameWithoutExtension(file)["localhandler-".Length..];
+                if (name.Length > 0) profiles.Add(name);
+            }
+        }
+        catch { /* unreadable folder: at least the default profile */ }
+        return profiles;
+    }
+
     /// <summary>The first "partner2", "partner3"… name that has no settings file yet.</summary>
     public static string NextFreeProfile()
     {

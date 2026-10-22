@@ -4081,5 +4081,6 @@
     "login.embedText":  "Questa app non consente l\u0027accesso con Google. Apri questo indirizzo in Chrome: lì puoi accedere con Google o con il nome utente e installarlo come app dal menu.",
     "login.embedOpen":  "Apri in Chrome",
     "login.embedCopy":  "Copia indirizzo",
-    "login.embedCopied":  "Copiato"
+    "login.embedCopied":  "Copiato",
+    "till.reqsSetup":  "Windows 10 o successivo. Avvia il file scaricato: installa la cassa, la aggiunge al menu Start e al desktop e la tiene aggiornata."
 }

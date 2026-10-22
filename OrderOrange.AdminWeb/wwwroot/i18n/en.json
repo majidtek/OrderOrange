@@ -4081,5 +4081,6 @@
     "login.embedText":  "This app cannot sign you in with Google. Open this address in Chrome; there you can sign in with Google or your username, and install it as an app from the menu.",
     "login.embedOpen":  "Open in Chrome",
     "login.embedCopy":  "Copy address",
-    "login.embedCopied":  "Copied"
+    "login.embedCopied":  "Copied",
+    "till.reqsSetup":  "Windows 10 or later. Run the downloaded file: it installs the till, adds it to the Start menu and the desktop, and keeps it up to date."
 }

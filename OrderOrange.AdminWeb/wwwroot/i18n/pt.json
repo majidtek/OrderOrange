@@ -4081,5 +4081,6 @@
     "login.embedText":  "Este app não permite entrar com o Google. Abra este endereço no Chrome; lá você pode entrar com o Google ou com seu usuário e instalá-lo como app pelo menu.",
     "login.embedOpen":  "Abrir no Chrome",
     "login.embedCopy":  "Copiar endereço",
-    "login.embedCopied":  "Copiado"
+    "login.embedCopied":  "Copiado",
+    "till.reqsSetup":  "Windows 10 ou posterior. Execute o arquivo baixado: ele instala o caixa, adiciona ao menu Iniciar e à área de trabalho e o mantém atualizado."
 }

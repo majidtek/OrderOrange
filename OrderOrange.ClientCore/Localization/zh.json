@@ -4081,5 +4081,6 @@
     "login.embedText":  "此应用无法使用 Google 登录。请在 Chrome 中打开此地址，即可使用 Google 或用户名登录，并可从菜单将其安装为应用。",
     "login.embedOpen":  "在 Chrome 中打开",
     "login.embedCopy":  "复制地址",
-    "login.embedCopied":  "已复制"
+    "login.embedCopied":  "已复制",
+    "till.reqsSetup":  "Windows 10 或更高版本。运行下载的文件即可安装收银程序，并添加到开始菜单和桌面，之后会自动保持最新。"
 }

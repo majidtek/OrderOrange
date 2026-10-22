@@ -4081,5 +4081,6 @@
     "login.embedText":  "In dieser App ist die Google-Anmeldung nicht möglich. Öffnen Sie diese Adresse in Chrome; dort können Sie sich mit Google oder Benutzername anmelden und sie über das Menü als App installieren.",
     "login.embedOpen":  "In Chrome öffnen",
     "login.embedCopy":  "Adresse kopieren",
-    "login.embedCopied":  "Kopiert"
+    "login.embedCopied":  "Kopiert",
+    "till.reqsSetup":  "Windows 10 oder neuer. Starten Sie die heruntergeladene Datei: Sie installiert die Kasse, legt sie ins Startmenü und auf den Desktop und hält sie aktuell."
 }

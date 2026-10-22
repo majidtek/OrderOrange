@@ -147,8 +147,9 @@ else
                                 </div>
                             </div>
                             <div class="d-flex flex-wrap align-center mt-4" style="gap: 10px;">
+                                @* The installer when one is published (one file, installs itself); the zip otherwise. *@
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
-                                           Href="@($"{Api.ApiBase}/api/till/download")" Target="_blank" Disabled="@(_till is null)">
+                                           Href="@($"{Api.ApiBase}/api/till/{(_till?.Setup is { Length: > 0 } ? "setup" : "download")}")" Target="_blank" Disabled="@(_till is null)">
                                     @L["till.download"]
                                 </MudButton>
                                 @if (_till is not null)
@@ -164,7 +165,7 @@ else
                                     <b>@L["till.notes"]:</b> @notes
                                 </MudText>
                             }
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["till.reqs"]</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L[_till?.Setup is { Length: > 0 } ? "till.reqsSetup" : "till.reqs"]</MudText>
                         </MudPaper>
 
                         @* ---------- The Android till ----------

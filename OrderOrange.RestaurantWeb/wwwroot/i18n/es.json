@@ -4081,5 +4081,6 @@
     "login.embedText":  "Esta app no permite iniciar sesión con Google. Abre esta dirección en Chrome; allí puedes entrar con Google o con tu usuario e instalarla como app desde el menú.",
     "login.embedOpen":  "Abrir en Chrome",
     "login.embedCopy":  "Copiar dirección",
-    "login.embedCopied":  "Copiado"
+    "login.embedCopied":  "Copiado",
+    "till.reqsSetup":  "Windows 10 o posterior. Ejecuta el archivo descargado: instala la caja, la añade al menú Inicio y al escritorio, y la mantiene al día."
 }
