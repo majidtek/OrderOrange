@@ -23,6 +23,11 @@ public class MainActivity : MauiAppCompatActivity
         // navigation bar; the clock and icons go white on the orange.
         if (FindViewById(Android.Resource.Id.Content) is ViewGroup content)
             ViewCompat.SetOnApplyWindowInsetsListener(content, new SystemBarsPadding());
+        // Android 13+ shows nothing in the shade (update ready, printers running) until the app has asked once.
+        if (OperatingSystem.IsAndroidVersionAtLeast(33)
+            && CheckSelfPermission(Android.Manifest.Permission.PostNotifications) != Permission.Granted)
+            RequestPermissions([Android.Manifest.Permission.PostNotifications], 77);
+
         if (Window is { } window)
         {
             var controller = WindowCompat.GetInsetsController(window, window.DecorView);

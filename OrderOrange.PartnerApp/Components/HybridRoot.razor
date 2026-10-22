@@ -12,6 +12,7 @@
 @inject OrderOrange.RestaurantWeb.Services.ReceiptPrinter Printer
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject AppUpdateService Updates
 
 @* The app's root: what OrderOrange.RestaurantWeb/Program.cs does before the first paint
    (language list, English as the fallback, the language chosen last time), then the very same
@@ -22,6 +23,33 @@
    The Printers screen opens from the portal's Settings page (a card shown only in the app). *@
 @if (_ready)
 {
+    @* A newer app on the server: one bar at the foot of every page, until it is installed or put off. *@
+    @if (Updates.Available is { } offer && !Updates.Dismissed)
+    {
+        <div class="oo-update" dir="@(Lang.IsRtl ? "rtl" : "ltr")">
+            <div class="tx">
+                <b>@string.Format(Lang["papp.update.title"], offer.Version)</b>
+                @if (offer.Notes is { Length: > 0 })
+                {
+                    <span>@offer.Notes</span>
+                }
+                @if (Updates.Error is { Length: > 0 })
+                {
+                    <i>@Updates.Error</i>
+                }
+            </div>
+            @if (Updates.Progress >= 0)
+            {
+                <span class="pg">@(Updates.Progress > 100 ? Lang["papp.update.installing"] : string.Format(Lang["papp.update.downloading"], Updates.Progress))</span>
+            }
+            else
+            {
+                <button type="button" class="pri" @onclick="() => Updates.UpdateAsync()">@Lang["papp.update.now"]</button>
+                <button type="button" @onclick="() => Updates.Dismissed = true">@Lang["papp.update.later"]</button>
+            }
+        </div>
+    }
+
     @* An error inside a page shows a card here instead of taking the whole app down. *@
     <AppErrorBoundary @ref="_boundary">
         <ChildContent>
@@ -54,6 +82,15 @@
 }
 
 <style>
+    .oo-update{position:fixed;left:12px;right:12px;bottom:12px;z-index:4000;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+        padding:12px 14px;border-radius:14px;background:#2b211a;color:#fff;box-shadow:0 10px 30px rgba(0,0,0,.25);font-family:"Segoe UI",system-ui,sans-serif}
+    .oo-update .tx{flex:1 1 200px;display:flex;flex-direction:column;gap:2px;min-width:0}
+    .oo-update .tx b{font-size:15px}
+    .oo-update .tx span{font-size:13px;opacity:.85}
+    .oo-update .tx i{font-size:13px;color:#FFB08A;font-style:normal}
+    .oo-update .pg{font-weight:700;color:#FFB08A}
+    .oo-update button{border:0;border-radius:10px;padding:9px 14px;font:700 14px/1 "Segoe UI",sans-serif;cursor:pointer;background:transparent;color:#fff;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.35)}
+    .oo-update button.pri{background:#FF5A00;box-shadow:none}
     .oo-page-err{min-height:70vh;display:flex;align-items:flex-start;justify-content:center;padding:8vh 16px 24px;background:#FFF8F3}
     .oo-page-err .card{max-width:520px;width:100%;background:#fff;border:1px solid #f0e3d8;border-radius:18px;padding:26px 22px;text-align:center;
         box-shadow:0 10px 30px rgba(60,30,10,.08);font-family:"Segoe UI",system-ui,sans-serif;color:#2b211a}
@@ -115,6 +152,8 @@
         Printer.Fire += OnSettled;
         Engine.Changed += OnEngineChanged;
         Nav.LocationChanged += OnNavigated;
+        Updates.Changed += OnEngineChanged;
+        Updates.Start();
         _ready = true;
     }
 
@@ -185,5 +224,6 @@
         Printer.Fire -= OnSettled;
         Engine.Changed -= OnEngineChanged;
         Nav.LocationChanged -= OnNavigated;
+        Updates.Changed -= OnEngineChanged;
     }
 }
