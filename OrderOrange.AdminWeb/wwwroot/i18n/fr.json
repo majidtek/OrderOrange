@@ -4079,5 +4079,6 @@
     "login.embedOpen":  "Ouvrir dans Chrome",
     "login.embedCopy":  "Copier l\u0027adresse",
     "login.embedCopied":  "Copié",
-    "till.reqsSetup":  "Windows 10 ou plus récent. Lancez le fichier téléchargé : il installe la caisse, l\u0027ajoute au menu Démarrer et au bureau, et la tient à jour."
+    "till.reqsSetup":  "Windows 10 ou plus récent. Lancez le fichier téléchargé : il installe la caisse, l\u0027ajoute au menu Démarrer et au bureau, et la tient à jour.",
+    "pos.viewPhoto":  "Voir la photo"
 }

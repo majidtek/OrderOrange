@@ -4079,5 +4079,6 @@
     "login.embedOpen":  "Apri in Chrome",
     "login.embedCopy":  "Copia indirizzo",
     "login.embedCopied":  "Copiato",
-    "till.reqsSetup":  "Windows 10 o successivo. Avvia il file scaricato: installa la cassa, la aggiunge al menu Start e al desktop e la tiene aggiornata."
+    "till.reqsSetup":  "Windows 10 o successivo. Avvia il file scaricato: installa la cassa, la aggiunge al menu Start e al desktop e la tiene aggiornata.",
+    "pos.viewPhoto":  "Vedi foto"
 }

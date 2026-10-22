@@ -296,6 +296,15 @@ public sealed class CatalogStore
 
     // ---------- Item photos ----------
 
+    /// <summary>
+    /// Keeps a product's POS thumbnail. Not a menu change, so no store notification: a till
+    /// asking for thumbnails must not make every other till reload its menu.
+    /// </summary>
+    public Task SetPhotoThumbAsync(int menuItemId, string thumb, string key) =>
+        _items.UpdateOneAsync(i => i.Id == menuItemId, Builders<MenuItemDoc>.Update
+            .Set(i => i.PhotoThumb, thumb)
+            .Set(i => i.PhotoThumbKey, key));
+
     public Task<List<MenuItemPhotoDoc>> ItemPhotosAsync(int menuItemId) =>
         _itemPhotos.Find(p => p.MenuItemId == menuItemId)
             .SortByDescending(p => p.IsMain).ThenBy(p => p.Id).ToListAsync();

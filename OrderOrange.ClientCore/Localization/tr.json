@@ -4079,5 +4079,6 @@
     "login.embedOpen":  "Chrome\u0027da aç",
     "login.embedCopy":  "Adresi kopyala",
     "login.embedCopied":  "Kopyalandı",
-    "till.reqsSetup":  "Windows 10 veya üstü. İndirilen dosyayı çalıştırın: kasayı kurar, Başlat menüsüne ve masaüstüne ekler ve güncel tutar."
+    "till.reqsSetup":  "Windows 10 veya üstü. İndirilen dosyayı çalıştırın: kasayı kurar, Başlat menüsüne ve masaüstüne ekler ve güncel tutar.",
+    "pos.viewPhoto":  "Fotoğrafı gör"
 }

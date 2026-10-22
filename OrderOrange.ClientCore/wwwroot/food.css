@@ -28186,3 +28186,25 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
 .mf-embed .go{background:#FF5A00;color:#fff;border:0}
 .mf-embed .cp{background:#fff;color:#C44300;border:1.5px solid #FFC7A3}
 .mf-embed .go:focus-visible,.mf-embed .cp:focus-visible{outline:2px solid #2B2118;outline-offset:2px}
+
+/* v830 - POS tiles carry small thumbnails; the corner button opens the big photos
+   (Majed 2026-10-22: "make small for all product images ... show big image when user click").
+   A tap anywhere else on the tile still rings the dish up. */
+.pos-tile .pt-photo{ position:relative; display:flex; justify-content:center; width:100%; }
+.pos-tile .pt-zoom{
+  position:absolute; bottom:4px; inset-inline-end:4px; width:30px; height:30px; border-radius:10px;
+  display:grid; place-items:center; color:#fff; background:rgba(36,28,21,.55);
+  box-shadow:0 2px 6px rgba(0,0,0,.18); cursor:zoom-in;
+}
+.pos-tile .pt-zoom .mud-icon-root{ width:17px; height:17px; }
+.pos-tile .pt-zoom:hover{ background:#f4511e; }
+.pos.tablet .pos-tile .pt-zoom{ width:26px; height:26px; border-radius:8px; }
+.pos.tablet .pos-tile .pt-zoom .mud-icon-root{ width:15px; height:15px; }
+.pos-peek{ display:flex; flex-direction:column; gap:12px; }
+.pos-peek-name{ font-weight:800; font-size:1.05rem; color:#2b2118; }
+.pos-peek-wait, .pos-peek-none{ display:grid; place-items:center; min-height:200px; font-size:56px; background:#faf7f2; border-radius:14px; }
+.pos-peek-grid{ display:grid; grid-template-columns:repeat(2, 1fr); gap:10px; }
+.pos-peek-grid.one{ grid-template-columns:1fr; }
+/* The big view shows the whole picture, never cropped. */
+.pos-peek-grid img{ width:100%; aspect-ratio:1; object-fit:contain; border-radius:14px; background:#faf7f2; }
+.pos-peek-grid.one img{ aspect-ratio:auto; max-height:70vh; }

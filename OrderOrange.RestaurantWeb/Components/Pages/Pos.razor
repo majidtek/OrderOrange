@@ -103,7 +103,14 @@ else if (_menu is not null)
                         }
                         else if (tilePhoto is not null)
                         {
-                            <img class="pt-img pt-landed" src="@tilePhoto" alt="" />
+                            @* The small copy on the tile; the corner button opens the big photos without ringing the dish up. *@
+                            <span class="pt-photo">
+                                <img class="pt-img pt-landed" src="@tilePhoto" alt="" />
+                                <span class="pt-zoom" role="button" title="@L["pos.viewPhoto"]" aria-label="@L["pos.viewPhoto"]"
+                                      @onclick="@(() => ShowBigPhotoAsync(dish, tilePhoto))" @onclick:stopPropagation="true">
+                                    <MudIcon Icon="@Icons.Material.Filled.ZoomOutMap" />
+                                </span>
+                            </span>
                         }
                         else if (FoodPhoto.ForDish(dish.Name, _stockPhotos) is string stockPhoto)
                         {
@@ -431,7 +438,7 @@ else if (_menu is not null)
             {
                 if (stop.IsCancellationRequested) return;
                 if (_tilePhotos.ContainsKey(id)) continue;
-                var got = await Api.GetMyDishMainPhotoAsync(id);
+                var got = await Api.GetMyDishMainPhotoAsync(id, small: true);
                 // A failed call counts as "no photo" for this visit: the tile falls back like any
                 // product without a picture, and the next visit to the till asks again.
                 _tilePhotos[id] = string.IsNullOrWhiteSpace(got?.Photo) ? null : got!.Photo;
@@ -1155,6 +1162,20 @@ else if (_menu is not null)
     private bool _prefsLoaded;
     private bool _defaultKeepOpen = true;
     private bool _keepOpen = true;
+
+    /// <summary>The big photos of one product, from the enlarge button on its tile.</summary>
+    private Task ShowBigPhotoAsync(MenuItemDto dish, string thumbnail)
+    {
+        var parameters = new DialogParameters<PosPhotoDialog>
+        {
+            { d => d.ItemId, dish.Id },
+            { d => d.Name, dish.NameFor(L.Locale) },
+            { d => d.Emoji, string.IsNullOrWhiteSpace(dish.ImageEmoji) ? "🍽️" : dish.ImageEmoji },
+            { d => d.Photo, thumbnail },
+        };
+        return Dialogs.ShowAsync<PosPhotoDialog>("", parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true, CloseOnEscapeKey = true });
+    }
 
     /// <summary>Search lives in its own dialog; whatever it picks lands on the ticket.</summary>
     private async Task OpenSearch()

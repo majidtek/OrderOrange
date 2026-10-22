@@ -4079,5 +4079,6 @@
     "login.embedOpen":  "Abrir no Chrome",
     "login.embedCopy":  "Copiar endereço",
     "login.embedCopied":  "Copiado",
-    "till.reqsSetup":  "Windows 10 ou posterior. Execute o arquivo baixado: ele instala o caixa, adiciona ao menu Iniciar e à área de trabalho e o mantém atualizado."
+    "till.reqsSetup":  "Windows 10 ou posterior. Execute o arquivo baixado: ele instala o caixa, adiciona ao menu Iniciar e à área de trabalho e o mantém atualizado.",
+    "pos.viewPhoto":  "Ver foto"
 }

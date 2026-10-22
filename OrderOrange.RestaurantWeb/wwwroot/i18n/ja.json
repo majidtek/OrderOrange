@@ -4079,5 +4079,6 @@
     "login.embedOpen":  "Chrome で開く",
     "login.embedCopy":  "アドレスをコピー",
     "login.embedCopied":  "コピーしました",
-    "till.reqsSetup":  "Windows 10 以降。ダウンロードしたファイルを実行すると、レジがインストールされ、スタートメニューとデスクトップに追加され、自動で最新に保たれます。"
+    "till.reqsSetup":  "Windows 10 以降。ダウンロードしたファイルを実行すると、レジがインストールされ、スタートメニューとデスクトップに追加され、自動で最新に保たれます。",
+    "pos.viewPhoto":  "写真を見る"
 }

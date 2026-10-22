@@ -1067,7 +1067,9 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     public Task<List<DishPhotoDto>?> GetDishPhotosAsync(int itemId) => GetAsync<List<DishPhotoDto>>($"api/restaurants/menu-items/{itemId}/photos");
     public Task<List<DishPhotoDto>?> GetMyDishPhotosAsync(int itemId) => GetAsync<List<DishPhotoDto>>($"api/menu/items/{itemId}/photos");
     /// <summary>Just the main photo of one of the shop's own products; null when the call fails.</summary>
-    public Task<DishMainPhotoDto?> GetMyDishMainPhotoAsync(int itemId) => GetAsync<DishMainPhotoDto>($"api/menu/items/{itemId}/photo");
+    /// <param name="small">The POS tile thumbnail (a few KB) instead of the full photo.</param>
+    public Task<DishMainPhotoDto?> GetMyDishMainPhotoAsync(int itemId, bool small = false) =>
+        GetAsync<DishMainPhotoDto>($"api/menu/items/{itemId}/photo{(small ? "?small=true" : "")}");
 
     // ---------- The shop's own Instagram ----------
     public Task<InstagramStatusDto?> GetInstagramAsync() => GetAsync<InstagramStatusDto>("api/instagram");

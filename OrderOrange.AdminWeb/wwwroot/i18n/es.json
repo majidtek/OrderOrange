@@ -4079,5 +4079,6 @@
     "login.embedOpen":  "Abrir en Chrome",
     "login.embedCopy":  "Copiar dirección",
     "login.embedCopied":  "Copiado",
-    "till.reqsSetup":  "Windows 10 o posterior. Ejecuta el archivo descargado: instala la caja, la añade al menú Inicio y al escritorio, y la mantiene al día."
+    "till.reqsSetup":  "Windows 10 o posterior. Ejecuta el archivo descargado: instala la caja, la añade al menú Inicio y al escritorio, y la mantiene al día.",
+    "pos.viewPhoto":  "Ver foto"
 }

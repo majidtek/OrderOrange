@@ -212,11 +212,26 @@ public class MenuController(CatalogStore catalog) : ApiControllerBase
     /// outline first, then asks for the pictures one tile at a time with this
     /// (Majed 2026-10-21: "first load all products then load images one by one").
     /// </summary>
+    /// <param name="small">
+    /// True for the POS tiles: a WebP of at most 240 px, a few KB instead of hundreds
+    /// (Majed 2026-10-22: "make small for all product images and show it in pos"). Made the
+    /// first time it is asked for and kept; remade when the photo changes.
+    /// </param>
     [HttpGet("items/{id:int}/photo")]
-    public async Task<ActionResult<DishMainPhotoDto>> ItemMainPhoto(int id)
+    public async Task<ActionResult<DishMainPhotoDto>> ItemMainPhoto(int id, bool small = false)
     {
         var item = await catalog.OwnedItemAsync(id, CurrentRestaurantId);
-        return item is null ? NotFound() : Ok(new DishMainPhotoDto(item.PhotoData));
+        if (item is null) return NotFound();
+        if (!small || string.IsNullOrEmpty(item.PhotoData)) return Ok(new DishMainPhotoDto(item.PhotoData));
+
+        var key = PhotoThumbs.KeyOf(item.PhotoData);
+        if (item.PhotoThumbKey != key || item.PhotoThumb is null)
+        {
+            // "" records "could not be shrunk", so a picture the decoder cannot read is not retried on every view.
+            item.PhotoThumb = PhotoThumbs.Make(item.PhotoData) ?? "";
+            await catalog.SetPhotoThumbAsync(item.Id, item.PhotoThumb, key);
+        }
+        return Ok(new DishMainPhotoDto(item.PhotoThumb.Length > 0 ? item.PhotoThumb : item.PhotoData));
     }
 
     [HttpGet("items/{id:int}/photos")]

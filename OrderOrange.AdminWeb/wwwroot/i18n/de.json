@@ -4079,5 +4079,6 @@
     "login.embedOpen":  "In Chrome öffnen",
     "login.embedCopy":  "Adresse kopieren",
     "login.embedCopied":  "Kopiert",
-    "till.reqsSetup":  "Windows 10 oder neuer. Starten Sie die heruntergeladene Datei: Sie installiert die Kasse, legt sie ins Startmenü und auf den Desktop und hält sie aktuell."
+    "till.reqsSetup":  "Windows 10 oder neuer. Starten Sie die heruntergeladene Datei: Sie installiert die Kasse, legt sie ins Startmenü und auf den Desktop und hält sie aktuell.",
+    "pos.viewPhoto":  "Foto ansehen"
 }

@@ -1,0 +1,51 @@
+@inject ApiClient Api
+@inject LanguageService L
+
+@* The big view of one product's photos from the POS: the tiles carry small thumbnails, the
+   enlarge button on a tile opens this (Majed 2026-10-22: "show big image when user click").
+   Read-only; nothing is rung up. *@
+<MudDialog>
+    <DialogContent>
+        <div class="pos-peek">
+            <div class="pos-peek-name">@Name</div>
+            @if (_photos is null)
+            {
+                <div class="pos-peek-wait"><MudProgressCircular Indeterminate="true" Size="Size.Small" /></div>
+            }
+            else if (_photos.Count == 0)
+            {
+                <div class="pos-peek-none">@Emoji</div>
+            }
+            else
+            {
+                <div class="pos-peek-grid @(_photos.Count == 1 ? "one" : "")">
+                    @foreach (var p in _photos.OrderByDescending(p => p.IsMain))
+                    {
+                        <img src="@p.Data" alt="" />
+                    }
+                </div>
+            }
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance Dialog { get; set; } = default!;
+    [Parameter] public int ItemId { get; set; }
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Emoji { get; set; } = "🍽️";
+    /// <summary>The tile's thumbnail, shown at once (blurry but instant) while the full photos load.</summary>
+    [Parameter] public string? Photo { get; set; }
+
+    private List<DishPhotoDto>? _photos;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(Photo)) _photos = [new DishPhotoDto(0, Photo, true)];
+        var all = await Api.GetMyDishPhotosAsync(ItemId);
+        if (all is { Count: > 0 }) { _photos = all; return; }
+        // An older product keeps only its main photo, with no gallery: show that, full size.
+        var main = await Api.GetMyDishMainPhotoAsync(ItemId);
+        _photos = string.IsNullOrWhiteSpace(main?.Photo) ? _photos ?? [] : [new DishPhotoDto(0, main.Photo, true)];
+    }
+}
