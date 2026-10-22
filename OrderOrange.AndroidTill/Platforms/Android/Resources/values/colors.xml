@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Android system colours behind the till (status bar, input underlines, dialogs, the
+     ripple on a tap). Without this file MAUI falls back to its own purple. -->
+<resources>
+    <color name="colorPrimary">#F26B1D</color>
+    <color name="colorPrimaryDark">#C9520F</color>
+    <color name="colorAccent">#F26B1D</color>
+</resources>

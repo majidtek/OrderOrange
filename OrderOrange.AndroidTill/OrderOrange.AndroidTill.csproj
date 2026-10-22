@@ -11,8 +11,8 @@
 
     <ApplicationTitle>OrderOrange Till</ApplicationTitle>
     <ApplicationId>com.orderorange.till</ApplicationId>
-    <ApplicationDisplayVersion>1.4.0</ApplicationDisplayVersion>
-    <ApplicationVersion>8</ApplicationVersion>
+    <ApplicationDisplayVersion>1.4.1</ApplicationDisplayVersion>
+    <ApplicationVersion>9</ApplicationVersion>
 
     <!-- Android 7.0+: every E-POS style terminal sold in the last years runs at least this. -->
     <SupportedOSPlatformVersion>24.0</SupportedOSPlatformVersion>
