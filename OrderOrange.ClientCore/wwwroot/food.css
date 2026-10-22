@@ -28192,14 +28192,15 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
    A tap anywhere else on the tile still rings the dish up. */
 .pos-tile .pt-photo{ position:relative; display:flex; justify-content:center; width:100%; }
 .pos-tile .pt-zoom{
-  position:absolute; bottom:4px; inset-inline-end:4px; width:30px; height:30px; border-radius:10px;
-  display:grid; place-items:center; color:#fff; background:rgba(36,28,21,.55);
-  box-shadow:0 2px 6px rgba(0,0,0,.18); cursor:zoom-in;
+  /* v831: a small badge in the corner, not a second tile (Majed 2026-10-22: "this is very big") */
+  position:absolute; bottom:3px; inset-inline-end:3px; width:20px; height:20px; border-radius:7px;
+  display:grid; place-items:center; color:#fff; background:rgba(36,28,21,.5);
+  box-shadow:0 1px 4px rgba(0,0,0,.18); cursor:zoom-in;
 }
-.pos-tile .pt-zoom .mud-icon-root{ width:17px; height:17px; }
+.pos-tile .pt-zoom .mud-icon-root{ width:12px; height:12px; }
 .pos-tile .pt-zoom:hover{ background:#f4511e; }
-.pos.tablet .pos-tile .pt-zoom{ width:26px; height:26px; border-radius:8px; }
-.pos.tablet .pos-tile .pt-zoom .mud-icon-root{ width:15px; height:15px; }
+.pos.tablet .pos-tile .pt-zoom{ width:16px; height:16px; border-radius:5px; bottom:2px; inset-inline-end:2px; }
+.pos.tablet .pos-tile .pt-zoom .mud-icon-root{ width:10px; height:10px; }
 .pos-peek{ display:flex; flex-direction:column; gap:12px; }
 .pos-peek-name{ font-weight:800; font-size:1.05rem; color:#2b2118; }
 .pos-peek-wait, .pos-peek-none{ display:grid; place-items:center; min-height:200px; font-size:56px; background:#faf7f2; border-radius:14px; }
