@@ -1066,6 +1066,10 @@ public class ApiClient(HttpClient http, AppState state, LanguageService lang)
     // ---------- Product photos (max 4 per dish, one main) ----------
     public Task<List<DishPhotoDto>?> GetDishPhotosAsync(int itemId) => GetAsync<List<DishPhotoDto>>($"api/restaurants/menu-items/{itemId}/photos");
     public Task<List<DishPhotoDto>?> GetMyDishPhotosAsync(int itemId) => GetAsync<List<DishPhotoDto>>($"api/menu/items/{itemId}/photos");
+    /// <summary>The POS small photos of up to 60 of the shop's products in one request: id → photo (null = none); null when the call fails.</summary>
+    public Task<Dictionary<int, string?>?> GetMySmallPhotosAsync(IEnumerable<int> itemIds) =>
+        GetAsync<Dictionary<int, string?>>($"api/menu/photos/small?ids={string.Join(',', itemIds)}");
+
     /// <summary>Just the main photo of one of the shop's own products; null when the call fails.</summary>
     /// <param name="small">The POS tile thumbnail (a few KB) instead of the full photo.</param>
     public Task<DishMainPhotoDto?> GetMyDishMainPhotoAsync(int itemId, bool small = false) =>

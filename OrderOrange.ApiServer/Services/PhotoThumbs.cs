@@ -67,6 +67,25 @@ public static class PhotoThumbs
         }
     }
 
+    /// <summary>
+    /// The small photo for a product, making (and keeping) it when it is missing or was made
+    /// from an older photo. Null when the product has no photo; the original when it cannot
+    /// be shrunk. The doc needs only Id, PhotoData, PhotoThumb and PhotoThumbKey.
+    /// </summary>
+    public static async Task<string?> SmallFor(Data.MenuItemDoc doc, Data.CatalogStore catalog)
+    {
+        if (string.IsNullOrEmpty(doc.PhotoData)) return null;
+        var key = KeyOf(doc.PhotoData);
+        if (doc.PhotoThumbKey != key || doc.PhotoThumb is null)
+        {
+            // "" records "could not be shrunk", so a picture the decoder cannot read is not retried on every view.
+            doc.PhotoThumb = Make(doc.PhotoData) ?? "";
+            doc.PhotoThumbKey = key;
+            await catalog.SetPhotoThumbAsync(doc.Id, doc.PhotoThumb, key);
+        }
+        return doc.PhotoThumb.Length > 0 ? doc.PhotoThumb : doc.PhotoData;
+    }
+
     /// <summary>Phone photos often carry a rotation flag instead of rotated pixels; bake it in.</summary>
     private static SKBitmap? Upright(SKBitmap bitmap, SKEncodedOrigin origin)
     {

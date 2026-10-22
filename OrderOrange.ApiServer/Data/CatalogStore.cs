@@ -300,6 +300,21 @@ public sealed class CatalogStore
     /// Keeps a product's POS thumbnail. Not a menu change, so no store notification: a till
     /// asking for thumbnails must not make every other till reload its menu.
     /// </summary>
+    private static readonly ProjectionDefinition<MenuItemDoc> PhotoFields = Builders<MenuItemDoc>.Projection
+        .Include(i => i.Id).Include(i => i.RestaurantId).Include(i => i.PhotoData)
+        .Include(i => i.PhotoThumb).Include(i => i.PhotoThumbKey);
+
+    /// <summary>Just the photo fields of some of a store's products, for the POS's small photos.</summary>
+    public Task<List<MenuItemDoc>> PhotoDocsAsync(IReadOnlyCollection<int> ids, int restaurantId) =>
+        _items.Find(i => i.RestaurantId == restaurantId && ids.Contains(i.Id))
+            .Project<MenuItemDoc>(PhotoFields).ToListAsync();
+
+    /// <summary>The next products with a photo after <paramref name="afterId"/>, for the thumbnail backfill.</summary>
+    public Task<List<MenuItemDoc>> PhotoDocsAfterAsync(int afterId, int take) =>
+        _items.Find(i => i.Id > afterId && i.PhotoData != null)
+            .SortBy(i => i.Id).Limit(take)
+            .Project<MenuItemDoc>(PhotoFields).ToListAsync();
+
     public Task SetPhotoThumbAsync(int menuItemId, string thumb, string key) =>
         _items.UpdateOneAsync(i => i.Id == menuItemId, Builders<MenuItemDoc>.Update
             .Set(i => i.PhotoThumb, thumb)

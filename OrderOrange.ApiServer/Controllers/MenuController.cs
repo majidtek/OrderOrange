@@ -222,16 +222,25 @@ public class MenuController(CatalogStore catalog) : ApiControllerBase
     {
         var item = await catalog.OwnedItemAsync(id, CurrentRestaurantId);
         if (item is null) return NotFound();
-        if (!small || string.IsNullOrEmpty(item.PhotoData)) return Ok(new DishMainPhotoDto(item.PhotoData));
+        return Ok(new DishMainPhotoDto(small ? await PhotoThumbs.SmallFor(item, catalog) : item.PhotoData));
+    }
 
-        var key = PhotoThumbs.KeyOf(item.PhotoData);
-        if (item.PhotoThumbKey != key || item.PhotoThumb is null)
-        {
-            // "" records "could not be shrunk", so a picture the decoder cannot read is not retried on every view.
-            item.PhotoThumb = PhotoThumbs.Make(item.PhotoData) ?? "";
-            await catalog.SetPhotoThumbAsync(item.Id, item.PhotoThumb, key);
-        }
-        return Ok(new DishMainPhotoDto(item.PhotoThumb.Length > 0 ? item.PhotoThumb : item.PhotoData));
+    /// <summary>
+    /// The small photos of a page of products in ONE request (Majed 2026-10-22: "image shown
+    /// with very delay"): the POS asked once per tile, so a page of twenty waited for twenty
+    /// round trips. Id → small photo, or null for a product without one; ids that are not this
+    /// store's are left out. At most 60 per request.
+    /// </summary>
+    [HttpGet("photos/small")]
+    public async Task<ActionResult<Dictionary<int, string?>>> SmallPhotos([FromQuery] string ids = "")
+    {
+        var wanted = ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(x => int.TryParse(x, out var n) ? n : 0).Where(n => n > 0).Distinct().Take(60).ToList();
+        if (wanted.Count == 0) return new Dictionary<int, string?>();
+        var docs = await catalog.PhotoDocsAsync(wanted, CurrentRestaurantId);
+        var result = new Dictionary<int, string?>(docs.Count);
+        foreach (var doc in docs) result[doc.Id] = await PhotoThumbs.SmallFor(doc, catalog);
+        return result;
     }
 
     [HttpGet("items/{id:int}/photos")]

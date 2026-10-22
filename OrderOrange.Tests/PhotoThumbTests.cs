@@ -56,6 +56,31 @@ public class PhotoThumbTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task SmallPhotos_ComeAPageAtATime_OnlyForTheStoresOwnProducts()
+    {
+        var sara = _factory.CreateClient();
+        await sara.SignInAsync("sara@majidfood.com"); // Burger Bros
+        var menu = await sara.GetFromJsonAsync<List<MenuCategoryDto>>("api/menu?light=true");
+        async Task<int> AddAsync(string name, string? photo) => (await (await sara.PostAsJsonAsync("api/menu/items",
+                new SaveMenuItemRequest(menu![0].Id, name, "", 1.000m, "🍔", false, true, photo)))
+            .EnsureSuccessStatusCode().Content.ReadFromJsonAsync<MenuItemDto>())!.Id;
+        var red = await AddAsync("Batch Red", Photo(800, 800, SKColors.Red));
+        var blue = await AddAsync("Batch Blue", Photo(800, 400, SKColors.Blue));
+        var none = await AddAsync("Batch Plain", null);
+
+        var marco = _factory.CreateClient();
+        await marco.SignInAsync("marco@majidfood.com"); // Bella Napoli
+        var other = (await marco.GetFromJsonAsync<List<MenuCategoryDto>>("api/menu?light=true"))!
+            .SelectMany(c => c.Items).First().Id;
+
+        var got = await sara.GetFromJsonAsync<Dictionary<int, string?>>($"api/menu/photos/small?ids={red},{blue},{none},{other}");
+        Assert.Equal((240, 240), SizeOf(got![red]!));
+        Assert.Equal((240, 120), SizeOf(got[blue]!));
+        Assert.Null(got[none]);
+        Assert.False(got.ContainsKey(other));   // another store's product is simply not there
+    }
+
+    [Fact]
     public async Task SmallPhoto_IsMadeOnce_RemadeWhenThePhotoChanges_AndTheFullPhotoStaysAvailable()
     {
         var sara = _factory.CreateClient();

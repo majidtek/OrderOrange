@@ -407,7 +407,15 @@ else if (_menu is not null)
     // Changing group, page or search stops the run and starts one for what is now on view.
 
     /// <summary>Product id → its main photo, or null once we know it has none (the tile then shows the stock photo or emoji).</summary>
-    private readonly Dictionary<int, string?> _tilePhotos = [];
+    /// <remarks>
+    /// Static so leaving the till and coming back does not fetch them again (Majed 2026-10-22:
+    /// "image shown with very delay"); emptied when the session switches to another store.
+    /// </remarks>
+    private static readonly Dictionary<int, string?> _tilePhotos = [];
+    private static int _tilePhotosStore;
+
+    /// <summary>A page of tiles per request: one round trip for twenty photos, not twenty.</summary>
+    private const int PhotoBatch = 20;
     private CancellationTokenSource? _photoRun;
     private string? _photoRunKey;
 
@@ -434,14 +442,18 @@ else if (_menu is not null)
     {
         try
         {
-            foreach (var id in ids)
+            // The page on view comes first (the queue is in display order), then the rest of the group.
+            foreach (var batch in ids.Chunk(PhotoBatch))
             {
                 if (stop.IsCancellationRequested) return;
-                if (_tilePhotos.ContainsKey(id)) continue;
-                var got = await Api.GetMyDishMainPhotoAsync(id, small: true);
-                // A failed call counts as "no photo" for this visit: the tile falls back like any
-                // product without a picture, and the next visit to the till asks again.
-                _tilePhotos[id] = string.IsNullOrWhiteSpace(got?.Photo) ? null : got!.Photo;
+                var wanted = batch.Where(id => !_tilePhotos.ContainsKey(id)).ToList();
+                if (wanted.Count == 0) continue;
+                var got = await Api.GetMySmallPhotosAsync(wanted);
+                // A failed call records nothing: those tiles keep waiting, and turning the page
+                // or the group asks again.
+                if (got is null) return;
+                foreach (var id in wanted)
+                    _tilePhotos[id] = got.TryGetValue(id, out var photo) && !string.IsNullOrWhiteSpace(photo) ? photo : null;
                 if (stop.IsCancellationRequested) return;
                 await InvokeAsync(StateHasChanged);
             }
@@ -919,6 +931,13 @@ else if (_menu is not null)
 
     protected override async Task OnParametersSetAsync()
     {
+        // The kept small photos belong to one store; another store starts empty.
+        if (_tilePhotosStore != (State.RestaurantId ?? 0))
+        {
+            _tilePhotos.Clear();
+            _tilePhotosStore = State.RestaurantId ?? 0;
+        }
+
         // Crossing between /pos and /pos-tablet starts a clean round: the unsent
         // ring-up is dropped and the shelf turns back to its first page — the other
         // face of the till must not inherit a half-typed ticket. The last face is
