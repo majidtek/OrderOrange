@@ -133,16 +133,11 @@ else if (_menu is not null)
                         }
                     </button>
                 }
-                @if (string.IsNullOrWhiteSpace(_search) && PosPages > 1)
+                @if (string.IsNullOrWhiteSpace(_search) && _shown < PosPool.Count)
                 {
-                    @* Six tiles a page. The bar lives INSIDE the grid as a full-width
-                       row, so it sits right under the last tile — not at the bottom
-                       of a stretched column with a gulf of nothing above it. *@
-                    <div class="pg-bar pos-pg">
-                        <button type="button" disabled="@(PosPage == 0)" @onclick="@(() => _posPage = PosPage - 1)">‹</button>
-                        <span class="pg-info">@(PosPage + 1) / @PosPages</span>
-                        <button type="button" disabled="@(PosPage + 1 >= PosPages)" @onclick="@(() => _posPage = PosPage + 1)">›</button>
-                    </div>
+                    @* The rest of the group is on its way: the next twenty join underneath a
+                       second after the ones above have their photos (no page buttons). *@
+                    <div class="pos-more"><MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Small" /></div>
                 }
             </div>
         </div>
@@ -391,12 +386,50 @@ else if (_menu is not null)
     // Twenty tiles a page, every tab — the ‹ › bar under the grid turns the shelf.
     // A hundred photo tiles at once is what made the till heavy.
     private const int PosSlice = 20;
-    private int _posPage;
 
     private void SetCategory(int id)
     {
         _categoryId = id;
-        _posPage = 0;
+        _shown = PosSlice;
+    }
+
+    // One long shelf per group, filled twenty tiles at a time (Majed 2026-10-23: "make all items
+    // coming in one page, but do not load all at once: first page 1, and when page 1 is finished
+    // bring page 2 after 1 second"). The first twenty render at once; when their photos have
+    // landed (three seconds at most) the next twenty join underneath a second later, and so on
+    // until the whole group is on view. Changing group starts over; search shows every match.
+    private int _shown = PosSlice;
+    private CancellationTokenSource? _reveal;
+    private string? _revealKey;
+
+    private void StartReveal()
+    {
+        if (_menu is null || !string.IsNullOrWhiteSpace(_search)) return;
+        var key = $"{_categoryId}|{_shown}";
+        if (key == _revealKey) return;
+        _revealKey = key;
+        _reveal?.Cancel();
+        _reveal = null;
+        if (_shown >= PosPool.Count) return;
+        var run = _reveal = new CancellationTokenSource();
+        _ = RevealMoreAsync(run.Token);
+    }
+
+    private async Task RevealMoreAsync(CancellationToken stop)
+    {
+        try
+        {
+            var onView = PosPool.Take(_shown).Select(i => i.Id).ToList();
+            var deadline = DateTime.UtcNow.AddSeconds(3);
+            while (DateTime.UtcNow < deadline && onView.Any(id => !_tilePhotos.ContainsKey(id)))
+                await Task.Delay(100, stop);
+            await Task.Delay(1000, stop);
+            if (stop.IsCancellationRequested) return;
+            _shown = Math.Min(PosPool.Count, _shown + PosSlice);
+            await InvokeAsync(StateHasChanged);   // the render after this starts the next step
+        }
+        catch (OperationCanceledException) { }
+        catch (ObjectDisposedException) { }
     }
 
     // Product photos arrive one tile at a time (Majed 2026-10-21: "first load all products then
@@ -423,7 +456,7 @@ else if (_menu is not null)
     private void StartPhotoRun()
     {
         if (_menu is null) return;
-        var key = $"{_categoryId}|{PosPage}|{_search}";
+        var key = $"{_categoryId}|{_search}";
         if (key == _photoRunKey) return;
         _photoRunKey = key;
         _photoRun?.Cancel();
@@ -467,8 +500,6 @@ else if (_menu is not null)
         (_menu!.FirstOrDefault(c => c.Id == _categoryId) ?? _menu!.FirstOrDefault())
             ?.Items.ToList() ?? [];
 
-    private int PosPages => Math.Max(1, (PosPool.Count + PosSlice - 1) / PosSlice);
-    private int PosPage => Math.Clamp(_posPage, 0, PosPages - 1);
     private decimal _storeTaxPercent;
     private bool _stockPhotos = true;
     private PaymentMethod _payment = PaymentMethod.CashOnDelivery;
@@ -699,8 +730,9 @@ else if (_menu is not null)
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // The tiles are on screen now; their photos follow one by one.
+        // The tiles are on screen now; their photos follow one by one, then the next twenty tiles.
         StartPhotoRun();
+        StartReveal();
 
         // The numpad is fixed-position — it must be measured onto its anchor
         // after every render while open, or scrolling strands it.
@@ -741,6 +773,7 @@ else if (_menu is not null)
 
     public void Dispose()
     {
+        _reveal?.Cancel();
         _photoRun?.Cancel();
         try { _ = JS.InvokeVoidAsync("mfKeys.unbind"); } catch { }
         _keysRef?.Dispose();
@@ -909,7 +942,7 @@ else if (_menu is not null)
             if (!string.IsNullOrWhiteSpace(_search))
                 return _menu!.SelectMany(c => c.Items)
                     .Where(i => i.Name.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase));
-            return PosPool.Skip(PosPage * PosSlice).Take(PosSlice);
+            return PosPool.Take(_shown);
         }
     }
 
@@ -946,7 +979,7 @@ else if (_menu is not null)
         {
             _pending.Clear();
             _notes.Clear();
-            _posPage = 0;
+            _shown = PosSlice;
             _ticketOpen = false;
             _search = "";
         }

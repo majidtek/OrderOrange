@@ -28191,6 +28191,8 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
    (Majed 2026-10-22: "make small for all product images ... show big image when user click").
    A tap anywhere else on the tile still rings the dish up. */
 .pos-tile .pt-photo{ position:relative; display:flex; justify-content:center; width:100%; }
+/* v832: the group fills twenty tiles at a time; this row sits under the last tile while more are coming */
+.pos-grid .pos-more{ grid-column:1 / -1; display:flex; justify-content:center; padding:10px 0 4px; }
 .pos-tile .pt-zoom{
   /* v831: a small badge in the corner, not a second tile (Majed 2026-10-22: "this is very big") */
   position:absolute; bottom:3px; inset-inline-end:3px; width:20px; height:20px; border-radius:7px;
