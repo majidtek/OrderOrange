@@ -163,11 +163,13 @@ public sealed class AppSettings
     public bool ReceiptOnTabSave { get; set; }
     public bool AutoPrintKitchen { get; set; } = true;
     /// <summary>
-    /// What happens to a product with no tick on the Product printers screen: true = it still
-    /// prints on the kitchen/bar printers the web map (or the default) says; false = no work
-    /// ticket at all (Majed 2026-10-18: "I did not set those items for kitchen but coming").
+    /// What happens to a product no printer ticked: true = it still prints on the Kitchen
+    /// printers; false = no work ticket at all (Majed 2026-10-18: "I did not set those items
+    /// for kitchen but coming"). Off by default, and switched off by itself the moment the
+    /// owner ticks products for a printer (Majed 2026-10-23: "make this off auto when user
+    /// set product to kitchen, and also by default off").
     /// </summary>
-    public bool UnroutedToKitchen { get; set; } = true;
+    public bool UnroutedToKitchen { get; set; } = false;
     /// <summary>Seconds between polls — also how long a web sale takes to reach the printer.</summary>
     public int PollSeconds { get; set; } = 8;
     /// <summary>Floyd–Steinberg dithering instead of a plain threshold (better for photo logos, speckles text).</summary>

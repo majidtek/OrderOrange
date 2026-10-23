@@ -494,7 +494,12 @@
         var at = S.Printers.FindIndex(x => x.Id == _edit.Id);
         if (at >= 0) S.Printers[at] = _edit; else S.Printers.Add(_edit);
         if (_menu is { Count: > 0 })
-            S.SetProductsOf(_edit.Id, _menu, _edit.Role == PrinterRole.Cashier ? new HashSet<int>() : _ticked);
+        {
+            var ticks = _edit.Role == PrinterRole.Cashier ? new HashSet<int>() : _ticked;
+            S.SetProductsOf(_edit.Id, _menu, ticks);
+            // Products were chosen for this printer: from now on only ticked products print.
+            if (ticks.Count > 0) S.UnroutedToKitchen = false;
+        }
         S.Save();
         _edit = null;
         _found = null;
