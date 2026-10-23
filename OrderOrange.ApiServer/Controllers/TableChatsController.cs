@@ -119,8 +119,8 @@ public class TableChatsController(AppDbContext db, TableChatStore chat) : ApiCon
     public async Task<ActionResult<TableChatMessageDto>> Edit(int tableId, int id, EditTableChatRequest req)
     {
         if (CurrentRestaurantId == 0) return Forbid();
-        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 500)
-            return BadRequest(new { message = "Keep messages under 500 characters." });
+        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 4000)
+            return BadRequest(new { message = "Keep messages under 4000 characters." });
         var message = await chat.EditAsync(CurrentRestaurantId, tableId, id, "store", req.Text.Trim());
         return message is null ? NotFound() : Ok(ReservationsController.ToChatDto(message));
     }

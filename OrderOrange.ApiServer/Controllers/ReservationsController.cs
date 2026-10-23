@@ -612,8 +612,8 @@ public class ReservationsController(AppDbContext db, CatalogStore catalog, PushS
         string code, int id, EditTableChatRequest req, [FromServices] TableChatStore chat)
     {
         if (!TableCode.TryRead(code, out var storeId, out var tableId)) return NotFound();
-        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 500)
-            return BadRequest(new { message = "Keep messages under 500 characters." });
+        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 4000)
+            return BadRequest(new { message = "Keep messages under 4000 characters." });
         var message = await chat.EditAsync(storeId, tableId, id, "guest", req.Text.Trim());
         return message is null ? NotFound() : Ok(ToChatDto(message));
     }
@@ -656,7 +656,7 @@ public class ReservationsController(AppDbContext db, CatalogStore catalog, PushS
         var hasImage = !string.IsNullOrWhiteSpace(req.Image);
         var hasFile = !string.IsNullOrWhiteSpace(req.File);
         if (!hasText && !hasAudio && !hasImage && !hasFile) return "Say something — text, voice, a photo or a file.";
-        if (hasText && req.Text!.Trim().Length > 500) return "Keep messages under 500 characters.";
+        if (hasText && req.Text!.Trim().Length > 4000) return "Keep messages under 4000 characters.";
         if (hasAudio && !req.Audio!.StartsWith("data:audio/", StringComparison.OrdinalIgnoreCase))
             return "Voice notes only.";
         if (hasAudio && req.Audio!.Length > 900_000) return "That voice note is too long.";

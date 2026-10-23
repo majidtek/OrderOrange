@@ -107,8 +107,8 @@ public class CommunityChatController(AppDbContext db, CommunityChatStore chat) :
     public async Task<ActionResult<CommunityChatMessageDto>> Edit(int id, EditTableChatRequest req)
     {
         if (CurrentRestaurantId == 0) return Forbid();
-        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 500)
-            return BadRequest(new { message = "Keep messages under 500 characters." });
+        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 4000)
+            return BadRequest(new { message = "Keep messages under 4000 characters." });
         var message = await chat.EditAsync(CurrentRestaurantId, id, CurrentUserId, req.Text.Trim());
         return message is null ? NotFound() : Ok(ToDto(message));
     }
