@@ -9587,6 +9587,25 @@ html:has(.pos)::-webkit-scrollbar { display: none; }
 
 .qc-input input:focus { border-color: var(--mud-palette-primary); }
 
+/* v833: the admin/partner chat box grows with the text; sent line breaks stay line breaks */
+.qc-input textarea {
+    flex: 1;
+    border: 1.5px solid var(--mud-palette-lines-default);
+    border-radius: 22px;
+    padding: 11px 18px;
+    font: inherit;
+    font-size: 14.5px;
+    line-height: 1.4;
+    outline: none;
+    background: var(--mud-palette-surface);
+    resize: none;
+    max-height: 160px;
+    overflow-y: auto;
+}
+.qc-input textarea:focus { border-color: var(--mud-palette-primary); }
+.tc-full.wa .qc-input textarea { border: none; box-shadow: 0 1px 3px rgba(0, 0, 0, .1); }
+.qc-bubble .qc-txt { white-space: pre-wrap; word-break: break-word; }
+
 .qc-mic {
     width: 48px;
     height: 48px;

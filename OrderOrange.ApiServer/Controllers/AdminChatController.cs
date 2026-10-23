@@ -51,7 +51,7 @@ public class AdminChatController(AdminChatStore chat, PushSender push, AdminAler
     public async Task<ActionResult<CommunityChatMessageDto>> Edit(int id, EditTableChatRequest req)
     {
         if (CurrentRestaurantId == 0) return Forbid();
-        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 500)
+        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 4000)
             return BadRequest(new { message = "Keep messages under 500 characters." });
         var message = await chat.EditAsync(CurrentRestaurantId, id, false, CurrentUserId, req.Text.Trim());
         return message is null ? NotFound() : Ok(ToDto(message));
@@ -137,7 +137,7 @@ public class AdminPartnerChatController(AdminChatStore chat, PushSender push, Ap
     [HttpPut("~/api/admin/chat/{restaurantId:int}/messages/{id:int}")]
     public async Task<ActionResult<CommunityChatMessageDto>> Edit(int restaurantId, int id, EditTableChatRequest req)
     {
-        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 500)
+        if (string.IsNullOrWhiteSpace(req.Text) || req.Text.Trim().Length > 4000)
             return BadRequest(new { message = "Keep messages under 500 characters." });
         var message = await chat.EditAsync(restaurantId, id, true, CurrentUserId, req.Text.Trim());
         return message is null ? NotFound() : Ok(AdminChatController.ToDto(message));

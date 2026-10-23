@@ -37,6 +37,7 @@
         @foreach (var m in _messages)
         {
             var msg = m;
+            if (msg.Deleted) { continue; }   // a removed message leaves no stub behind
             var own = msg.FromAdmin == MineIsAdmin;
             @if (lastDay != msg.At.Date)
             {
@@ -80,7 +81,7 @@
                     @if (!string.IsNullOrWhiteSpace(msg.Text))
                     {
                         @* "§key" is a system line (the welcome) — shown in the reader's own language. *@
-                        <span><LinkText Text="@(msg.Text.StartsWith('§') ? L[msg.Text[1..]] : msg.Text)" /></span>
+                        <span class="qc-txt"><LinkText Text="@(msg.Text.StartsWith('§') ? L[msg.Text[1..]] : msg.Text)" /></span>
                     }
                 }
                 <small>
@@ -167,8 +168,10 @@
                     }
                 </div>
             }
-            <input id="@_inputId" @bind="_text" @bind:event="oninput" maxlength="500" placeholder="@L["qc.placeholder"]"
-                   @onkeydown="@(e => { if (e.Key == "Enter") _ = Send(); })" />
+            @* A box that grows with the text (mfChat.compose): Enter sends, Shift+Enter breaks the
+               line, up to 4000 characters (Majed 2026-10-23: "long message not coming"). *@
+            <textarea id="@_inputId" @bind="_text" @bind:event="oninput" maxlength="4000" rows="1" placeholder="@L["qc.placeholder"]"
+                      @onkeydown="@(e => { if (e.Key == "Enter" && !e.ShiftKey) _ = Send(); })"></textarea>
             @if (string.IsNullOrWhiteSpace(_text) && _editingId is null)
             {
                 <button type="button" class="qc-mic" title="🎤" @onclick="StartVoice"><MudIcon Icon="@Icons.Material.Filled.Mic" Style="width:20px;height:20px;" /></button>
@@ -351,11 +354,17 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try { await JS.InvokeVoidAsync("mfChat.compose", _inputId); } catch { }
+    }
+
     private async Task Send()
     {
         if (string.IsNullOrWhiteSpace(_text)) return;
         var text = _text.Trim();
         _text = "";
+        try { await JS.InvokeVoidAsync("mfChat.composeReset", _inputId); } catch { }
 
         if (_editingId is { } editId)
         {

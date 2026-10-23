@@ -3,6 +3,24 @@ window.mfChat = {
     _recorder: null,
     _chunks: [],
 
+    // The message box grows with its text (six lines at most); Enter sends and Shift+Enter
+    // breaks the line, so the Enter that sends never leaves a stray line break behind.
+    compose(id) {
+        var el = document.getElementById(id);
+        if (!el || el.dataset.compose) return;
+        el.dataset.compose = '1';
+        var grow = function () { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; };
+        el.addEventListener('input', grow);
+        el.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setTimeout(grow, 60); }
+        });
+        grow();
+    },
+    composeReset(id) {
+        var el = document.getElementById(id);
+        if (el) { el.value = ''; el.style.height = 'auto'; }
+    },
+
     // The attach action lives in a dropdown now — it opens the hidden InputFile.
     pickFile(id) {
         var el = document.getElementById(id);
