@@ -102,6 +102,7 @@ else
     private async Task StartPreparing(OrderDto order) => await Do(Api.StartPreparingAsync(order.Id), $"{order.Number} is being prepared ⏳");
     private async Task MarkReady(OrderDto order) => await Do(Api.MarkReadyAsync(order.Id), $"{order.Number} is ready for pickup 🛍️");
     private async Task MarkDelivered(OrderDto order) => await Do(Api.MarkSelfDeliveredAsync(order.Id), $"{order.Number} — {L["deliv.delivered"]} 🎉");
+    private async Task MarkCollected(OrderDto order) => await Do(Api.MarkSelfDeliveredAsync(order.Id), $"{order.Number} — {L["status.PickedUp"]} 🎉");
 
     private async Task Reject(OrderDto order)
     {
@@ -188,7 +189,14 @@ else
                                                OnClick="@(() => MarkReady(context))">@L["partner.markReady"]</MudButton>
                                     break;
                                 default:
-                                    @if (_selfDelivery)
+                                    @if (context.OrderType == OrderType.Pickup)
+                                    {
+                                        @* A collection never gets a driver: the counter closes it when the customer takes the bag. *@
+                                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" DisableElevation="true"
+                                                   StartIcon="@Icons.Material.Filled.CheckCircle"
+                                                   OnClick="@(() => MarkCollected(context))">@L["status.PickedUp"]</MudButton>
+                                    }
+                                    else if (_selfDelivery)
                                     {
                                         <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" DisableElevation="true"
                                                    StartIcon="@Icons.Material.Filled.CheckCircle"
