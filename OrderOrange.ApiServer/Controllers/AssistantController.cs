@@ -217,6 +217,22 @@ public class AssistantController(AppDbContext db, CatalogStore catalog, GrokAssi
         - Money & reports: {p}/invoices all invoices (cancel, edit-as-replace, PDF); {p}/invoice-design receipt design; {p}/bills platform bills; {p}/daily-report; {p}/reports sales reports; {p}/reports/products; {p}/reports/customers; {p}/customers customer list; {p}/reviews ratings.
         - Marketing: {p}/discounts promo codes and rules; {p}/loyalty points and rewards; {p}/surveys questionnaires; {p}/instagram connect and post, {p}/instagram/schedule planner; {p}/contracts supply agreements; {p}/visits store-page visits.
         - {p}/settings store profile, open/closed sign, opening hours, delivery fee and minimum, pickup, self-delivery, online table booking, tax, logo, languages, currency symbol, kitchen language, print routing ({p}/print-routing). {p}/support help desk tickets. {p}/add-business another branch.
+
+        {PrintingGuide(p)}
+        """;
+
+    /// <summary>
+    /// Printers and the two till apps (Majed 2026-10-24: "update ai about new printer in
+    /// android and windows and also about two app when user ask about print"). Shared by the
+    /// partner assistant and the public chat, where shop owners ask too.
+    /// </summary>
+    private static string PrintingGuide(string p) => $"""
+        PRINTING (when someone asks about a printer, receipts, kitchen or bar tickets, or "how do I print"):
+        - The web till {p}/pos prints the customer's receipt through the device's normal print dialog. Automatic printing (the bill and the kitchen/bar tickets come out by themselves the moment an order arrives, from the app, the website, table QR or the till) needs one of the TWO free OrderOrange till apps. Both are downloaded from {p}/settings (the "Till software for Windows" and "Till app for Android" cards, which also show the current version), and both sign in with the partner account.
+        - WINDOWS TILL (for a counter PC, Windows 10 or later): run the downloaded setup; it installs itself with Start-menu and desktop shortcuts and updates itself. It uses any printer installed in Windows (USB, network or Bluetooth with its Windows driver). Under "Print stations" add a station per printer, give it a role (Cashier for bills, Kitchen, Bar) and the number of copies, then "Test print". "Products → printers" decides which dishes go to which printer (tick a whole category at once). Switch on "Automatic printing" so new orders print by themselves.
+        - ANDROID TILL (for an Android POS terminal such as Sunmi/E-POS, or an Android tablet/phone, Android 8 or later): download the APK, allow installing from this source, open it and sign in. Printers → "Find printers" finds the terminal's built-in printer (shown as "InnerPrinter" or Built-in; best for the cashier receipt, 58 mm), Bluetooth printers paired in Android Settings, USB printers and Wi-Fi/LAN printers on port 9100 (best for kitchen and bar, 80 mm); "Use" fills in the printer, then "Test print". "Product printers" on the home screen routes dishes to printers. It keeps running in the background: when the app asks, allow it to ignore battery optimisation, and on some phones also mark it "auto-start".
+        - Both apps use the same designs and rules set on the website: the receipt design at {p}/invoice-design, the kitchen-ticket language in {p}/settings, and Kitchen / Bar / both per product at {p}/print-routing. Paper is 80 mm or 58 mm thermal; ESC/POS receipt printers work best.
+        - Nothing prints? Check: the till app is open and signed in to the right store; the printer is on, has paper and passes "Test print"; for a Wi-Fi printer, the till and the printer are on the same network; on Android, the app is allowed to run in the background (the Android till retries a failed print by itself and shows a red banner until it works). If it still fails, open a ticket at {p}/support with the printer model and a photo.
         """;
 
     private string PublicBase()
@@ -468,6 +484,7 @@ public class AssistantController(AppDbContext db, CatalogStore catalog, GrokAssi
             - {c}/profile name and avatar; {c}/addresses saved delivery addresses; {c}/survey/<storeId> a store's questionnaire; {c}/bill/<code> verifies a printed receipt; {c}/contract/<code> shows a signed supply agreement.
             - Help and contact: the partner guide with a Contact-us form at {c}/guide; each store's own phone/WhatsApp is on its page; the chat buttons are Order, Track, Basket and Help.
             - FOR BUSINESSES (restaurants, cafes, shops): they join free on the partner site {p} ("Join free" / sign up with Google or email), get a free online menu, QR table ordering, POS/till software ({c}/pos), kitchen display, inventory, staff and attendance, loyalty, promotions, Instagram posting and support tickets. Customers cannot register a business from this chat — send them to {p}.
+            {PrintingGuide(p)}
             Delivery is by the platform's riders or the store's own courier; pickup is available where the store enables it. Prices are in Omani rial (OMR). If something is truly not on this list, say you are not sure rather than inventing a page.
             """;
     }
