@@ -322,7 +322,7 @@ public class AuthController(
                     Description = "",
                     Area = "",
                     Phone = "",
-                    IsOpen = false,
+                    IsOpen = true,   // open from day one (Majed 2026-10-24: "by default store is open")
                     IsApproved = true,    // live at once (Majed 2026-10-16: "after registering automatically make partner active")
                     CreatedAt = DateTime.Now
                 };
@@ -364,7 +364,7 @@ public class AuthController(
             Description = "",
             Area = "",
             Phone = "",
-            IsOpen = false,
+            IsOpen = true,   // open from day one (Majed 2026-10-24: "by default store is open")
             IsApproved = true,    // live at once (Majed 2026-10-16: "after registering automatically make partner active")
             CreatedAt = DateTime.Now
         };
@@ -525,7 +525,7 @@ public class AuthController(
             Phone = req.Phone.Trim(),
             Lat = req.Lat,
             Lng = req.Lng,
-            IsOpen = false,
+            IsOpen = true,   // open from day one (Majed 2026-10-24: "by default store is open")
             IsApproved = true,    // live at once (Majed 2026-10-16: "after registering automatically make partner active")
             CreatedAt = DateTime.Now
         };

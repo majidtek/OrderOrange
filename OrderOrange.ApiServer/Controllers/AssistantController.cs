@@ -218,7 +218,21 @@ public class AssistantController(AppDbContext db, CatalogStore catalog, GrokAssi
         - Marketing: {p}/discounts promo codes and rules; {p}/loyalty points and rewards; {p}/surveys questionnaires; {p}/instagram connect and post, {p}/instagram/schedule planner; {p}/contracts supply agreements; {p}/visits store-page visits.
         - {p}/settings store profile, open/closed sign, opening hours, delivery fee and minimum, pickup, self-delivery, online table booking, tax, logo, languages, currency symbol, kitchen language, print routing ({p}/print-routing). {p}/support help desk tickets. {p}/add-business another branch.
 
+        {OpenCloseGuide(p)}
+
         {PrintingGuide(p)}
+        """;
+
+    /// <summary>
+    /// How a store opens and closes (Majed 2026-10-24: "make ai understand how to open and
+    /// close store; also by default store is open").
+    /// </summary>
+    private static string OpenCloseGuide(string p) => $"""
+        OPENING AND CLOSING THE STORE (when someone asks how to open, close, pause or stop orders):
+        - A new store is OPEN by default. Customers can order when two things are true: the Open/Closed switch is on Open AND the time is inside the working hours (with no working hours set, only the switch counts).
+        - The switch: {p}/settings, at the top of the store profile card (Open / Closed). While the store is closed the top bar shows a red "Closed" chip. The POS assistant also has "Open the shop" / "Close the shop" buttons, and the AI assistant inside the partner app opens or closes the store when asked.
+        - Working hours: {p}/settings, "Working hours": a window per day, or a day marked closed. Outside the hours customers cannot order even when the switch is Open; the store reopens by itself when the next window starts. Close before open means overnight (e.g. 18:00–02:00).
+        - Closing for a short break or a busy kitchen: switch to Closed and back to Open later; it stays closed until someone opens it again. Closing does not touch orders already placed, which still have to be finished on {p}/orders. To stop one dish only, mark it sold out at {p}/menu instead of closing the store.
         """;
 
     /// <summary>
@@ -484,6 +498,7 @@ public class AssistantController(AppDbContext db, CatalogStore catalog, GrokAssi
             - {c}/profile name and avatar; {c}/addresses saved delivery addresses; {c}/survey/<storeId> a store's questionnaire; {c}/bill/<code> verifies a printed receipt; {c}/contract/<code> shows a signed supply agreement.
             - Help and contact: the partner guide with a Contact-us form at {c}/guide; each store's own phone/WhatsApp is on its page; the chat buttons are Order, Track, Basket and Help.
             - FOR BUSINESSES (restaurants, cafes, shops): they join free on the partner site {p} ("Join free" / sign up with Google or email), get a free online menu, QR table ordering, POS/till software ({c}/pos), kitchen display, inventory, staff and attendance, loyalty, promotions, Instagram posting and support tickets. Customers cannot register a business from this chat — send them to {p}.
+            {OpenCloseGuide(p)}
             {PrintingGuide(p)}
             Delivery is by the platform's riders or the store's own courier; pickup is available where the store enables it. Prices are in Omani rial (OMR). If something is truly not on this list, say you are not sure rather than inventing a page.
             """;

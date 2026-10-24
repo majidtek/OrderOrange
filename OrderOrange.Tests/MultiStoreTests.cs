@@ -105,9 +105,10 @@ public class MultiStoreTests : IClassFixture<ApiFactory>
         response.EnsureSuccessStatusCode();
         var created = await response.Content.ReadFromJsonAsync<StoreSummaryDto>();
 
-        // Unapproved and closed: self-service creation, admin-controlled visibility.
-        Assert.False(created!.IsApproved);
-        Assert.False(created.IsOpen);
+        // Live and open from the start: a second branch goes live like the first (2026-10-16),
+        // and every new store opens by default (2026-10-24).
+        Assert.True(created!.IsApproved);
+        Assert.True(created.IsOpen);
         Assert.Equal(StoreType.Shop, created.StoreType);
 
         var after = await sara.GetFromJsonAsync<List<StoreSummaryDto>>("api/restaurants/my-stores");

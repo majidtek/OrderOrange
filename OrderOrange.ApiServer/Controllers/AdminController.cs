@@ -465,7 +465,7 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
                     StoreType = req.StoreType,
                     Description = "", Area = "", Street = "", Phone = req.Phone.Trim(),
                     DeliveryFee = 0m, MinOrder = 0m, AvgPrepMinutes = 0,
-                    IsOpen = false, IsApproved = false, CommissionPercent = 0m, CreatedAt = DateTime.Now
+                    IsOpen = true, IsApproved = false, CommissionPercent = 0m, CreatedAt = DateTime.Now
                 });
                 await db.SaveChangesAsync();
                 return NoContent();
@@ -493,7 +493,7 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
                     return BadRequest(new { message = "A restaurant name and cuisine are required for a new owner." });
                 if (!await db.Cuisines.AnyAsync(c => c.Id == req.CuisineId))
                     return BadRequest(new { message = "Unknown cuisine." });
-                // Starts unapproved and closed — the admin flips the switch when onboarding is done.
+                // Starts unapproved (hidden from customers) but open, so approval alone puts it live.
                 db.Restaurants.Add(new Restaurant
                 {
                     TaxPercent = 0m,   // new businesses start with no tax; the owner sets it in Settings (Majed 2026-10-11)
@@ -501,7 +501,7 @@ public class AdminController(AppDbContext db, ChatStore chat, CatalogStore catal
                     StoreType = req.StoreType,
                     Description = "", Area = "", Street = "", Phone = req.Phone.Trim(),
                     DeliveryFee = 0m, MinOrder = 0m, AvgPrepMinutes = 0,
-                    IsOpen = false, IsApproved = false, CommissionPercent = 0m, CreatedAt = DateTime.Now
+                    IsOpen = true, IsApproved = false, CommissionPercent = 0m, CreatedAt = DateTime.Now
                 });
                 break;
         }

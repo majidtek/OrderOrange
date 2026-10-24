@@ -915,7 +915,7 @@ public class RestaurantsController(AppDbContext db, CatalogStore catalog, IConfi
             DeliveryFee = 0.500m,
             MinOrder = 1.000m,
             AvgPrepMinutes = 0,
-            IsOpen = false,
+            IsOpen = true,   // open from day one (Majed 2026-10-24: "by default store is open")
             IsApproved = true,    // a second branch is live at once, like the first (Majed 2026-10-16)
             AllowsPickup = true,
             CommissionPercent = 0m,
