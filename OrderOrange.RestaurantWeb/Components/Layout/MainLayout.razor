@@ -404,6 +404,7 @@
         [
             new("nav.pos", "/pos", Icons.Material.Filled.PointOfSale, () => Can(Perm.Pos)),
             new("nav.posTablet", "/pos-tablet", Icons.Material.Filled.TabletMac, () => Can(Perm.Pos)),
+            new("nav.tabletOld", TabletHelpHref, Icons.Material.Filled.TabletAndroid, () => Can(Perm.Pos)),
             new("nav.liveorders", "/orders", Icons.Material.Filled.ReceiptLong),
             new("kds.title", "/kds", Icons.Material.Filled.Tv, () => Can(Perm.Orders)),
             new("deliv.title", "/deliveries", Icons.Material.Filled.DeliveryDining, () => _restaurant?.SelfDelivery == true && Can(Perm.Deliveries)),
@@ -483,9 +484,18 @@
         return href == "/" ? path == "/" : path.Equals(href, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>The plain tablet page lives on another device, so its menu item opens the how-to (with the link) rather than the page.</summary>
+    private const string TabletHelpHref = "/tablet";
+
     private void GoNav(string href)
     {
         _navOpen = false;
+        if (href == TabletHelpHref)
+        {
+            _ = Dialogs.ShowAsync<OrderOrange.RestaurantWeb.Components.Pages.TabletHelpDialog>(Lang["tabh.title"],
+                new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
+            return;
+        }
         Nav.NavigateTo(href);
     }
 

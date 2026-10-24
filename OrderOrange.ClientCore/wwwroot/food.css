@@ -28208,3 +28208,7 @@ h1.nm .nm-alt[lang="ar"], h1.nm .nm-alt[lang="fa"], h1.nm .nm-alt[lang="ur"] { f
 /* The big view shows the whole picture, never cropped. */
 .pos-peek-grid img{ width:100%; aspect-ratio:1; object-fit:contain; border-radius:14px; background:#faf7f2; }
 .pos-peek-grid.one img{ aspect-ratio:auto; max-height:70vh; }
+
+/* v831 - the menu's "Tablet (old devices)" help: numbered steps and the link to type on the tablet. */
+.tabh-steps{ margin:0; padding-inline-start:20px; display:flex; flex-direction:column; gap:8px; font-size:.9rem; line-height:1.45; }
+.tabh-link{ margin-top:6px; padding:8px 12px; border-radius:10px; background:#fff3eb; color:#c2410c; font-weight:700; font-family:ui-monospace,Consolas,monospace; word-break:break-all; user-select:all; }

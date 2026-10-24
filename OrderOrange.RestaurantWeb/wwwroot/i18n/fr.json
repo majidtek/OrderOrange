@@ -4080,5 +4080,16 @@
     "login.embedCopy":  "Copier l\u0027adresse",
     "login.embedCopied":  "Copié",
     "till.reqsSetup":  "Windows 10 ou plus récent. Lancez le fichier téléchargé : il installe la caisse, l\u0027ajoute au menu Démarrer et au bureau, et la tient à jour.",
-    "pos.viewPhoto":  "Voir la photo"
+    "pos.viewPhoto":  "Voir la photo",
+    "nav.tabletOld":  "Tablette (anciens appareils)",
+    "tabh.title":  "Page tablette pour anciens appareils",
+    "tabh.what":  "Une version légère de la caisse pour les tablettes et téléphones anciens ou lents dont le navigateur ne fait pas tourner l'application complète. Les serveurs prennent les commandes à table et les envoient directement en cuisine.",
+    "tabh.s1":  "Sur la tablette, ouvrez ce lien dans le navigateur :",
+    "tabh.s2":  "Connectez-vous avec un identifiant ou e-mail et un mot de passe (créez-en un par serveur dans {0}), puis choisissez l'établissement.",
+    "tabh.s3":  "Choisissez une table ou Sur place / À emporter et touchez les plats pour les ajouter. Touchez un plat de la commande pour ajouter une note, ex. sans oignon.",
+    "tabh.s4":  "Touchez Envoyer en cuisine, ou Payé · espèces / Payé · carte au paiement. Les factures ouvertes permettent d'ajouter à une commande plus tard.",
+    "tabh.s5":  "Astuce : dans le menu du navigateur, choisissez « Ajouter à l'écran d'accueil » pour l'ouvrir comme une application.",
+    "tabh.copy":  "Copier le lien",
+    "tabh.copied":  "Lien copié",
+    "tabh.open":  "Ouvrir ici"
 }

@@ -4080,5 +4080,16 @@
     "login.embedCopy":  "Copy address",
     "login.embedCopied":  "Copied",
     "till.reqsSetup":  "Windows 10 or later. Run the downloaded file: it installs the till, adds it to the Start menu and the desktop, and keeps it up to date.",
-    "pos.viewPhoto":  "View photo"
+    "pos.viewPhoto":  "View photo",
+    "nav.tabletOld":  "Tablet (old devices)",
+    "tabh.title":  "Tablet page for old devices",
+    "tabh.what":  "A light version of the till for older or slower tablets and phones whose browser cannot run the full app. Waiters take orders at the tables and send them straight to the kitchen.",
+    "tabh.s1":  "On the tablet, open this link in the browser:",
+    "tabh.s2":  "Sign in with a username or email and password (add one for each waiter under {0}), then choose the business.",
+    "tabh.s3":  "Pick a table or Walk-in / Takeaway and tap dishes to add them. Tap a dish in the order to add a note, e.g. no onion.",
+    "tabh.s4":  "Tap Send to kitchen, or Paid · cash / Paid · card when the guest pays. Open invoices lets you add to an order later.",
+    "tabh.s5":  "Tip: in the browser menu choose \"Add to home screen\" so it opens like an app.",
+    "tabh.copy":  "Copy link",
+    "tabh.copied":  "Link copied",
+    "tabh.open":  "Open here"
 }

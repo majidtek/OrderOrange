@@ -4080,5 +4080,16 @@
     "login.embedCopy":  "Copiar dirección",
     "login.embedCopied":  "Copiado",
     "till.reqsSetup":  "Windows 10 o posterior. Ejecuta el archivo descargado: instala la caja, la añade al menú Inicio y al escritorio, y la mantiene al día.",
-    "pos.viewPhoto":  "Ver foto"
+    "pos.viewPhoto":  "Ver foto",
+    "nav.tabletOld":  "Tablet (equipos antiguos)",
+    "tabh.title":  "Página de tablet para equipos antiguos",
+    "tabh.what":  "Una versión ligera de la caja para tablets y teléfonos antiguos o lentos cuyo navegador no puede con la app completa. Los camareros toman el pedido en la mesa y lo envían directo a cocina.",
+    "tabh.s1":  "En la tablet, abre este enlace en el navegador:",
+    "tabh.s2":  "Inicia sesión con usuario o correo y contraseña (crea uno para cada camarero en {0}) y elige el negocio.",
+    "tabh.s3":  "Elige una mesa o Mostrador / Para llevar y toca los platos para añadirlos. Toca un plato del pedido para añadir una nota, p. ej. sin cebolla.",
+    "tabh.s4":  "Toca Enviar a cocina, o Pagado · efectivo / Pagado · tarjeta al cobrar. Las facturas abiertas permiten añadir al pedido más tarde.",
+    "tabh.s5":  "Consejo: en el menú del navegador elige «Añadir a pantalla de inicio» para abrirlo como una app.",
+    "tabh.copy":  "Copiar enlace",
+    "tabh.copied":  "Enlace copiado",
+    "tabh.open":  "Abrir aquí"
 }

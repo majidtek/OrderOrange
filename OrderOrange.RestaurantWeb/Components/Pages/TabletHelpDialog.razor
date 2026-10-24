@@ -1,0 +1,57 @@
+@inject LanguageService L
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+@* The menu's "Tablet (old devices)" item opens this instead of the page itself: the light
+   tablet page (/tablet, plain HTML for old browsers) runs on another device with its own
+   sign-in, so the owner needs the link and the steps more than a jump (Majed 2026-10-24:
+   "in menu add also old tablet link; when user click on it show message to help how to use"). *@
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-2">
+            <MudIcon Icon="@Icons.Material.Filled.TabletAndroid" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">@L["tabh.title"]</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-3">@L["tabh.what"]</MudText>
+        <ol class="tabh-steps">
+            <li>
+                @L["tabh.s1"]
+                <div class="tabh-link">@Link</div>
+            </li>
+            <li>@string.Format(L["tabh.s2"], L["nav.teamUsers"])</li>
+            <li>@L["tabh.s3"]</li>
+            <li>@L["tabh.s4"]</li>
+        </ol>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">@L["tabh.s5"]</MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Text" OnClick="@(() => Dialog.Close())">@L["common.close"]</MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="Copy">@L["tabh.copy"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.OpenInNew"
+                   Href="@Link" Target="_blank">@L["tabh.open"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance Dialog { get; set; } = default!;
+
+    /// <summary>The tablet page on this partner site; the phone app has no web origin of its own, so it gets the public one.</summary>
+    private string Link
+    {
+        get
+        {
+            var origin = new Uri(Nav.BaseUri);
+            var web = origin.Scheme is "http" or "https" && !origin.IsLoopback && origin.Host != "0.0.0.0" && origin.Host != "0.0.0.1";
+            return (web ? origin.GetLeftPart(UriPartial.Authority) : "https://partner.orderorange.com") + "/tablet";
+        }
+    }
+
+    private async Task Copy()
+    {
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", Link); Snackbar.Add(L["tabh.copied"], Severity.Success); }
+        catch (JSException) { Snackbar.Add(Link, Severity.Info); }
+    }
+}

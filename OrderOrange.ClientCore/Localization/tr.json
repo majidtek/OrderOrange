@@ -4080,5 +4080,16 @@
     "login.embedCopy":  "Adresi kopyala",
     "login.embedCopied":  "Kopyalandı",
     "till.reqsSetup":  "Windows 10 veya üstü. İndirilen dosyayı çalıştırın: kasayı kurar, Başlat menüsüne ve masaüstüne ekler ve güncel tutar.",
-    "pos.viewPhoto":  "Fotoğrafı gör"
+    "pos.viewPhoto":  "Fotoğrafı gör",
+    "nav.tabletOld":  "Tablet (eski cihazlar)",
+    "tabh.title":  "Eski cihazlar için tablet sayfası",
+    "tabh.what":  "Tarayıcısı tam uygulamayı çalıştıramayan eski veya yavaş tablet ve telefonlar için kasanın hafif sürümü. Garsonlar siparişi masada alıp doğrudan mutfağa gönderir.",
+    "tabh.s1":  "Tablette bu bağlantıyı tarayıcıda açın:",
+    "tabh.s2":  "Kullanıcı adı veya e-posta ve şifreyle giriş yapın (her garson için {0} bölümünden bir kullanıcı ekleyin), sonra işletmeyi seçin.",
+    "tabh.s3":  "Bir masa veya Gel-al / Paket seçin, eklemek için yemeklere dokunun. Not eklemek için siparişteki yemeğe dokunun, ör. soğansız.",
+    "tabh.s4":  "Mutfağa gönder'e, ödeme alınınca Ödendi · nakit / Ödendi · kart'a dokunun. Açık faturalar ile siparişe sonra ekleme yapabilirsiniz.",
+    "tabh.s5":  "İpucu: tarayıcı menüsünden \"Ana ekrana ekle\"yi seçin, uygulama gibi açılsın.",
+    "tabh.copy":  "Bağlantıyı kopyala",
+    "tabh.copied":  "Bağlantı kopyalandı",
+    "tabh.open":  "Burada aç"
 }

@@ -4080,5 +4080,16 @@
     "login.embedCopy":  "Copiar endereço",
     "login.embedCopied":  "Copiado",
     "till.reqsSetup":  "Windows 10 ou posterior. Execute o arquivo baixado: ele instala o caixa, adiciona ao menu Iniciar e à área de trabalho e o mantém atualizado.",
-    "pos.viewPhoto":  "Ver foto"
+    "pos.viewPhoto":  "Ver foto",
+    "nav.tabletOld":  "Tablet (aparelhos antigos)",
+    "tabh.title":  "Página de tablet para aparelhos antigos",
+    "tabh.what":  "Uma versão leve do caixa para tablets e celulares antigos ou lentos cujo navegador não roda o app completo. Os garçons anotam o pedido na mesa e enviam direto para a cozinha.",
+    "tabh.s1":  "No tablet, abra este link no navegador:",
+    "tabh.s2":  "Entre com usuário ou e-mail e senha (crie um para cada garçom em {0}) e escolha o negócio.",
+    "tabh.s3":  "Escolha uma mesa ou Balcão / Para levar e toque nos pratos para adicionar. Toque num prato do pedido para adicionar uma observação, ex. sem cebola.",
+    "tabh.s4":  "Toque em Enviar para a cozinha, ou Pago · dinheiro / Pago · cartão no pagamento. As faturas abertas permitem adicionar ao pedido depois.",
+    "tabh.s5":  "Dica: no menu do navegador escolha \"Adicionar à tela inicial\" para abrir como um app.",
+    "tabh.copy":  "Copiar link",
+    "tabh.copied":  "Link copiado",
+    "tabh.open":  "Abrir aqui"
 }

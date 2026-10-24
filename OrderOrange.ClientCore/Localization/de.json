@@ -4080,5 +4080,16 @@
     "login.embedCopy":  "Adresse kopieren",
     "login.embedCopied":  "Kopiert",
     "till.reqsSetup":  "Windows 10 oder neuer. Starten Sie die heruntergeladene Datei: Sie installiert die Kasse, legt sie ins Startmenü und auf den Desktop und hält sie aktuell.",
-    "pos.viewPhoto":  "Foto ansehen"
+    "pos.viewPhoto":  "Foto ansehen",
+    "nav.tabletOld":  "Tablet (ältere Geräte)",
+    "tabh.title":  "Tablet-Seite für ältere Geräte",
+    "tabh.what":  "Eine leichte Version der Kasse für ältere oder langsame Tablets und Handys, deren Browser die volle App nicht schafft. Kellner nehmen Bestellungen am Tisch auf und schicken sie direkt in die Küche.",
+    "tabh.s1":  "Auf dem Tablet diesen Link im Browser öffnen:",
+    "tabh.s2":  "Mit Benutzername oder E-Mail und Passwort anmelden (für jeden Kellner unter {0} einen anlegen), dann das Geschäft wählen.",
+    "tabh.s3":  "Einen Tisch oder Laufkunde / Mitnahme wählen und Gerichte antippen. Für eine Notiz das Gericht in der Bestellung antippen, z. B. ohne Zwiebeln.",
+    "tabh.s4":  "„An die Küche senden“ tippen, oder beim Bezahlen „Bezahlt · bar“ / „Bezahlt · Karte“. Über „Offene Rechnungen“ später nachbestellen.",
+    "tabh.s5":  "Tipp: im Browser-Menü „Zum Startbildschirm hinzufügen“ wählen, dann öffnet es sich wie eine App.",
+    "tabh.copy":  "Link kopieren",
+    "tabh.copied":  "Link kopiert",
+    "tabh.open":  "Hier öffnen"
 }

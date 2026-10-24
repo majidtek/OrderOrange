@@ -4080,5 +4080,16 @@
     "login.embedCopy":  "Copia indirizzo",
     "login.embedCopied":  "Copiato",
     "till.reqsSetup":  "Windows 10 o successivo. Avvia il file scaricato: installa la cassa, la aggiunge al menu Start e al desktop e la tiene aggiornata.",
-    "pos.viewPhoto":  "Vedi foto"
+    "pos.viewPhoto":  "Vedi foto",
+    "nav.tabletOld":  "Tablet (dispositivi vecchi)",
+    "tabh.title":  "Pagina tablet per dispositivi vecchi",
+    "tabh.what":  "Una versione leggera della cassa per tablet e telefoni vecchi o lenti il cui browser non regge l'app completa. I camerieri prendono le ordinazioni al tavolo e le mandano subito in cucina.",
+    "tabh.s1":  "Sul tablet, apri questo link nel browser:",
+    "tabh.s2":  "Accedi con nome utente o e-mail e password (creane uno per ogni cameriere in {0}), poi scegli l'attività.",
+    "tabh.s3":  "Scegli un tavolo o Banco / Asporto e tocca i piatti per aggiungerli. Tocca un piatto nell'ordine per aggiungere una nota, es. senza cipolla.",
+    "tabh.s4":  "Tocca Invia in cucina, oppure Pagato · contanti / Pagato · carta al pagamento. Le fatture aperte permettono di aggiungere all'ordine più tardi.",
+    "tabh.s5":  "Consiglio: dal menu del browser scegli «Aggiungi a schermata Home» per aprirla come un'app.",
+    "tabh.copy":  "Copia link",
+    "tabh.copied":  "Link copiato",
+    "tabh.open":  "Apri qui"
 }
